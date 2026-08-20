@@ -1,0 +1,439 @@
+use GFX.Physics
+use STD.Math
+
+test "register a body in the broad phase" {
+    var world = Physics.World2D()
+    var body = world.create_rigid_body()
+
+    assert(world.body_count() == 1)
+    assert(body.position() == Math.Vec2())
+}
+
+test "reduce separated bodies to no candidate pair" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var index = 0
+    while index < 32 {
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(index as float * 2.0, 0.0)
+        )
+        index++
+    }
+
+    world.step(1.0 / 60.0)
+
+    assert(world.body_count() == 32)
+    assert(world.candidate_pair_count() == 0)
+}
+
+test "retain and remove persistent candidate pairs" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(4.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 1)
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 1)
+
+    box.set_position(Math.Vec2(8.0, 0.5))
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 0)
+
+    var cycle = 0
+    while cycle < 32 {
+        box.set_position(Math.Vec2(0.0, 0.5))
+        world.step(0.0)
+        assert(world.candidate_pair_count() == 1)
+        box.set_position(Math.Vec2(8.0, 0.5))
+        world.step(0.0)
+        assert(world.candidate_pair_count() == 0)
+        cycle++
+    }
+    assert(fixed_body.position() == Math.Vec2(0.0, -0.5))
+}
+
+test "advance a dynamic body under gravity" {
+    var world = Physics.World2D()
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 10.0)
+    )
+
+    world.step(0.5)
+
+    assert(body.velocity().nearly_equal(Math.Vec2(0.0, -4.905), 0.000001))
+    assert(body.position().nearly_equal(Math.Vec2(0.0, 7.5475), 0.000001))
+}
+
+test "preserve explicit motion when gravity is disabled for a body" {
+    var world = Physics.World2D()
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 3.0)
+        ..velocity = Math.Vec2(4.0, -2.0)
+        ..gravity_scale = 0.0
+    )
+
+    world.step(0.25)
+
+    assert(body.position().nearly_equal(Math.Vec2(3.0, 2.5), 0.000001))
+    assert(body.velocity().nearly_equal(Math.Vec2(4.0, -2.0), 0.000001))
+    assert(world.body_count() == 1)
+}
+
+test "rest a dynamic box on a fixed box" {
+    var world = Physics.World2D()
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 2.0)
+    )
+
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(box.position().nearly_equal(Math.Vec2(0.0, 0.5), 0.001))
+    assert(box.velocity().nearly_equal(Math.Vec2(), 0.001))
+    assert(ground.position() == Math.Vec2(0.0, -0.5))
+}
+
+test "rest on a wide floor away from the world origin" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(12.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(4.0, 2.0)
+    )
+
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(box.position().nearly_equal(Math.Vec2(4.0, 0.5), 0.002))
+    assert(box.velocity().nearly_equal(Math.Vec2(), 0.002))
+}
+
+test "put a resting body to sleep and wake it on mutation" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(!box.is_awake())
+    assert(world.awake_body_count() == 0)
+    box.set_velocity(Math.Vec2(1.0, 0.0))
+    assert(box.is_awake())
+}
+
+test "keep a buried support asleep below an active neighbour" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var buried = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+    var active = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 1.5)
+        ..allow_sleep = false
+    )
+
+    var step = 0
+    while step < 360 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(!buried.is_awake())
+    assert(active.is_awake())
+    let resting_position = buried.position()
+    step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    assert(buried.position().nearly_equal(resting_position, 0.00001))
+}
+
+test "keep dynamic boxes inside fixed container walls" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var left = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(0.2, 4.0))
+        ..position = Math.Vec2(-1.1, 0.0)
+    )
+    var right = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(0.2, 4.0))
+        ..position = Math.Vec2(1.1, 0.0)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(0.4))
+        ..velocity = Math.Vec2(4.0, 0.0)
+    )
+
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(box.position().x <= 0.801)
+    assert(box.position().x >= -0.801)
+    assert(left.body_type() == Physics.BodyType2D.fixed)
+    assert(right.body_type() == Physics.BodyType2D.fixed)
+}
+
+test "return a fast body from a deep container boundary" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var boundary = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(4.0, 4.0))
+        ..position = Math.Vec2(-3.0, 0.0)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(0.4))
+        ..velocity = Math.Vec2(-20.0, 0.0)
+    )
+
+    world.step(0.1)
+    world.step(0.0)
+    world.step(0.0)
+
+    assert(box.position().x >= -0.801)
+    assert(box.velocity().x >= 0.0)
+    assert(boundary.position() == Math.Vec2(-3.0, 0.0))
+}
+
+test "stack dynamic boxes on each other" {
+    var world = Physics.World2D()
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var lower = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+    var upper = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 2.5)
+    )
+
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(lower.position().nearly_equal(Math.Vec2(0.0, 0.5), 0.002))
+    assert(upper.position().nearly_equal(Math.Vec2(0.0, 1.5), 0.002))
+    assert(ground.position() == Math.Vec2(0.0, -0.5))
+}
+
+test "integrate the rotation of a dynamic body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..rotation = 0.25
+        ..angular_velocity = 2.0
+    )
+
+    world.step(0.5)
+
+    assert(Math.nearly_equal(box.rotation(), 1.25, 0.000001))
+    assert(Math.nearly_equal(box.angular_velocity(), 2.0, 0.000001))
+}
+
+test "slow sliding motion through floor friction" {
+    var world = Physics.World2D()
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 0.5)
+        ..velocity = Math.Vec2(2.0, 0.0)
+        ..friction = 0.9
+    )
+
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(Math.abs(box.velocity().x) < 0.01)
+    assert(Math.abs(box.angular_velocity()) < 0.01)
+    assert(ground.velocity() == Math.Vec2())
+}
+
+test "resolve the floor contact of a rotated box" {
+    var world = Physics.World2D()
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 2.0)
+        ..rotation = 0.35
+        ..friction = 0.9
+        ..angular_damping = 0.2
+    )
+
+    var step = 0
+    while step < 360 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    let vertical_radius = 0.5 * (
+        Math.abs(Math.sin(box.rotation())) + Math.abs(Math.cos(box.rotation()))
+    )
+    assert(box.position().y >= vertical_radius - 0.002)
+    assert(!Math.nearly_equal(box.rotation(), 0.35, 0.01))
+    assert(ground.rotation() == 0.0)
+}
+
+test "sleep a settled dense contact island" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < 60 {
+        let column = index % 10
+        let row = index / 10
+        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Box2D(Math.Vec2(0.5))
+            ..position = Math.Vec2(
+                (column as float - 4.5) * 0.52,
+                0.25 + row as float * 0.52
+            )
+            ..rotation = ((index % 3) as float - 1.0) * 0.02
+            ..friction = 0.8
+        ))
+        index++
+    }
+
+    var step = 0
+    while step < 720 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(world.awake_body_count() == 0)
+    for body in bodies {
+        assert(!body.is_awake())
+        assert(body.position().y >= 0.24)
+    }
+}
+
+test "wake a sleeping contact island on a meaningful impact" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+    var upper = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 1.5)
+    )
+
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    assert(!upper.is_awake())
+
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 4.0)
+        ..velocity = Math.Vec2(0.0, -4.0)
+        ..allow_sleep = false
+    )
+    step = 0
+    while step < 50 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(upper.is_awake())
+}
+
+test "advance hundreds of bodies through the parallel broad phase" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(2)
+    var first:Physics.RigidBody2D? = null
+    var last:Physics.RigidBody2D? = null
+    var index = 0
+    while index < 300 {
+        var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(index as float * 2.0, 0.0)
+            ..velocity = Math.Vec2(1.0, 0.0)
+            ..allow_sleep = false
+        )
+        if index == 0 { first = body }
+        if index == 299 { last = body }
+        index++
+    }
+
+    world.step(0.25)
+
+    if let body = first {
+        assert(body.position().nearly_equal(Math.Vec2(0.25, 0.0), 0.000001))
+    } else { panic("parallel test did not retain its first body") }
+    if let body = last {
+        assert(body.position().nearly_equal(Math.Vec2(598.25, 0.0), 0.000001))
+    } else { panic("parallel test did not retain its last body") }
+    assert(world.candidate_pair_count() == 0)
+}

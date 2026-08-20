@@ -1,0 +1,9 @@
+{
+  "name": "GFX.Physics",
+  "version": "0.1.0",
+  "requires": { "silex": ">=0.38.34" },
+  "dependencies": {
+    "GFX": "^0.36.0",
+    "STD": "^0.16.0"
+  }
+}

@@ -1,0 +1,105 @@
+use GFX.Physics.BroadPhase2D.AABB2D
+use GFX.Physics.BroadPhase2D.BodyPair2D
+use GFX.Physics.BroadPhase2D.BroadPhase2D
+use STD.Math
+
+test "retain a touched broad phase proxy" {
+    var broad_phase = BroadPhase2D()
+    let proxy = broad_phase.create_proxy(
+        AABB2D(Math.Vec2(), Math.Vec2(0.5)),
+        0
+    )
+
+    broad_phase.touch_proxy(proxy)
+    assert(proxy == 0)
+}
+
+test "collect no pair from one broad phase proxy" {
+    var broad_phase = BroadPhase2D()
+    let proxy = broad_phase.create_proxy(
+        AABB2D(Math.Vec2(), Math.Vec2(0.5)),
+        0
+    )
+
+    broad_phase.touch_proxy(proxy)
+    var pairs:BodyPair2D[] = []
+    broad_phase.collect_pairs(pairs)
+    assert(pairs.count() == 0)
+}
+
+test "collect one overlapping proxy pair only once" {
+    var broad_phase = BroadPhase2D()
+    broad_phase.create_proxy(AABB2D(Math.Vec2(), Math.Vec2(0.5)), 0)
+    broad_phase.create_proxy(AABB2D(Math.Vec2(0.75, 0.0), Math.Vec2(0.5)), 1)
+
+    var pairs:BodyPair2D[] = []
+    broad_phase.collect_pairs(pairs)
+
+    assert(pairs.count() == 1)
+    assert(pairs[0].first == 0)
+    assert(pairs[0].second == 1)
+}
+
+test "exclude separated proxies from candidate pairs" {
+    var broad_phase = BroadPhase2D()
+    broad_phase.create_proxy(AABB2D(Math.Vec2(-4.0, 0.0), Math.Vec2(0.5)), 0)
+    broad_phase.create_proxy(AABB2D(Math.Vec2(4.0, 0.0), Math.Vec2(0.5)), 1)
+
+    var pairs:BodyPair2D[] = []
+    broad_phase.collect_pairs(pairs)
+
+    assert(pairs.count() == 0)
+}
+
+test "reinsert a proxy that escapes its fat bounds" {
+    var broad_phase = BroadPhase2D()
+    broad_phase.create_proxy(AABB2D(Math.Vec2(), Math.Vec2(0.5)), 0)
+    let moving = broad_phase.create_proxy(
+        AABB2D(Math.Vec2(4.0, 0.0), Math.Vec2(0.5)),
+        1
+    )
+    var pairs:BodyPair2D[] = []
+    broad_phase.collect_pairs(pairs)
+
+    assert(broad_phase.move_proxy(
+        moving,
+        AABB2D(Math.Vec2(0.75, 0.0), Math.Vec2(0.5)),
+        Math.Vec2(-3.25, 0.0)
+    ))
+    broad_phase.collect_pairs(pairs)
+
+    assert(pairs.count() == 1)
+}
+
+test "balance sequential proxy insertions" {
+    var broad_phase = BroadPhase2D()
+    var index = 0
+    while index < 64 {
+        broad_phase.create_proxy(
+            AABB2D(Math.Vec2(index as float * 2.0, 0.0), Math.Vec2(0.5)),
+            index
+        )
+        index++
+    }
+
+    assert(broad_phase.height() <= 12)
+}
+
+test "sort newly discovered pairs deterministically" {
+    var broad_phase = BroadPhase2D()
+    var pairs:BodyPair2D[] = [
+        BodyPair2D(7, 12),
+        BodyPair2D(2, 9),
+        BodyPair2D(2, 5),
+        BodyPair2D(7, 8),
+        BodyPair2D(1, 12)
+    ]
+
+    broad_phase.sort_pairs(pairs)
+
+    assert(pairs[0].first == 1 && pairs[0].second == 12)
+    assert(pairs[1].first == 2 && pairs[1].second == 5)
+    assert(pairs[2].first == 2 && pairs[2].second == 9)
+    assert(pairs[3].first == 7 && pairs[3].second == 8)
+    assert(pairs[4].first == 7 && pairs[4].second == 12)
+}

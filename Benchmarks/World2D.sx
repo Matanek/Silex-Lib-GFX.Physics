@@ -1,0 +1,143 @@
+use GFX.Physics
+use STD.Math
+use STD.Time.Clock
+
+func run_case(
+    body_count:int,
+    step_count:int,
+    columns:int,
+    square_size:float,
+    spacing:float
+) {
+    var world = Physics.World2D()
+    world.enable_parallelism(4)
+    world.set_profiling_enabled(true)
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(13.2, 4.0))
+        ..position = Math.Vec2(0.0, -5.0)
+        ..friction = 0.9
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(4.0, 6.0))
+        ..position = Math.Vec2(-6.6, 0.0)
+        ..friction = 0.9
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(4.0, 6.0))
+        ..position = Math.Vec2(6.6, 0.0)
+        ..friction = 0.9
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(13.2, 4.0))
+        ..position = Math.Vec2(0.0, 5.0)
+        ..friction = 0.9
+    )
+
+    var bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < body_count {
+        let column = index % columns
+        let row = index / columns
+        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Box2D(Math.Vec2(square_size))
+            ..position = Math.Vec2(
+                (
+                    column as float -
+                    (columns - 1) as float * 0.5
+                ) * spacing,
+                -2.82 + row as float * spacing
+            )
+            ..rotation = ((index % 3) as float - 1.0) * 0.04
+            ..friction = 0.75
+            ..angular_damping = 0.12
+        ))
+        index++
+    }
+
+    var clock = Clock()
+    clock.tick()
+    var candidate_total = 0
+    var candidate_maximum = 0
+    var motion_total = 0.0
+    var broad_phase_total = 0.0
+    var pair_collection_total = 0.0
+    var pair_maintenance_total = 0.0
+    var pair_filter_total = 0.0
+    var solve_total = 0.0
+    var sleep_total = 0.0
+    var step = 0
+    while step < step_count {
+        world.step(1.0 / 60.0)
+        let candidates = world.candidate_pair_count()
+        candidate_total += candidates
+        if candidates > candidate_maximum { candidate_maximum = candidates }
+        let profile = world.step_profile()
+        motion_total += profile.motion_ms
+        broad_phase_total += profile.broad_phase_ms
+        pair_collection_total += world.pair_collection_ms()
+        pair_maintenance_total += world.pair_maintenance_ms()
+        pair_filter_total += world.pair_filter_ms()
+        solve_total += profile.solve_ms
+        sleep_total += profile.sleep_ms
+        step++
+    }
+    let elapsed = clock.tick()
+    var maximum_speed = 0.0
+    var maximum_angular_speed = 0.0
+    var quiet_strict = 0
+    var quiet_regular = 0
+    var quiet_buried = 0
+    var quiet_visual = 0
+    for body in bodies {
+        let speed = body.velocity().length()
+        let angular_speed = Math.abs(body.angular_velocity())
+        maximum_speed = Math.max(maximum_speed, speed)
+        maximum_angular_speed = Math.max(
+            maximum_angular_speed,
+            angular_speed
+        )
+        if body.is_awake() {
+            if speed <= 0.015 && angular_speed <= 0.015 { quiet_strict++ }
+            if speed <= 0.03 && angular_speed <= 0.03 { quiet_regular++ }
+            if speed <= 0.06 && angular_speed <= 0.06 { quiet_buried++ }
+            if speed <= 0.06 && angular_speed <= 0.2 { quiet_visual++ }
+        }
+    }
+    print("$(body_count) dynamic Box2D, $(step_count) steps")
+    print("elapsed: $(elapsed * 1000.0) ms")
+    print("candidate average: $(candidate_total as float / step_count as float)")
+    print("candidate maximum: $(candidate_maximum)")
+    print("persistent pairs at end: $(world.persistent_pair_count())")
+    print("candidate slots at end: $(world.candidate_pair_slot_count())")
+    print("collisions at end: $(world.collision_count())")
+    print("awake at end: $(world.awake_body_count())")
+    print("buried at end: $(world.buried_body_count())")
+    print("stable buried at end: $(world.stable_buried_body_count())")
+    print("quiet buried at end: $(world.quiet_buried_body_count())")
+    print("sleep progressing at end: $(world.sleeping_progress_body_count())")
+    print("sleep eligible at end: $(world.sleep_eligible_body_count())")
+    print("sleep ready at end: $(world.sleep_ready_body_count())")
+    print("maximum speed at end: $(maximum_speed)")
+    print("maximum angular speed at end: $(maximum_angular_speed)")
+    print("awake below strict threshold: $(quiet_strict)")
+    print("awake below regular threshold: $(quiet_regular)")
+    print("awake below buried threshold: $(quiet_buried)")
+    print("awake below visual threshold: $(quiet_visual)")
+    print("motion/step: $(motion_total / step_count as float) ms")
+    print("broad phase/step: $(broad_phase_total / step_count as float) ms")
+    print("pair collection/step: $(pair_collection_total / step_count as float) ms")
+    print("pair maintenance/step: $(pair_maintenance_total / step_count as float) ms")
+    print("pair filter/step: $(pair_filter_total / step_count as float) ms")
+    print("solve/step: $(solve_total / step_count as float) ms")
+    print("sleep/step: $(sleep_total / step_count as float) ms")
+}
+
+func main() {
+    run_case(35, 600, 15, 0.28, 0.36)
+    run_case(120, 240, 15, 0.28, 0.36)
+    run_case(600, 600, 30, 0.21, 0.225)
+}

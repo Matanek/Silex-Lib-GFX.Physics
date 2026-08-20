@@ -1,0 +1,28 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..position = Math.Vec2(0.0, 2.0)
+    )
+
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    let position = box.position()
+    let velocity = box.velocity()
+    print("position: $(position.x), $(position.y)")
+    print("velocity: $(velocity.x), $(velocity.y)")
+    print("pairs: $(world.candidate_pair_count())")
+    assert(box.position().nearly_equal(Math.Vec2(0.0, 0.5), 0.001))
+}

@@ -1,0 +1,549 @@
+use GFX.Application
+use GFX.Color
+use GFX.Canvas
+use GFX.Components
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Rendering
+use GFX.Resources
+use STD.Math
+use STD.Process
+use STD.Randomizer
+
+static struct Constants {
+    let window_width:int = 960
+    let window_height:int = 640
+    let pixels_per_meter:float = 100.0
+    let container_width:float = 9.2
+    let container_height:float = 6.0
+    let boundary_depth:float = 4.0
+    let square_size:float = 0.21
+    let emission_interval:float = 0.025
+    let fixed_delta:float = 1.0 / 60.0
+    let maximum_physics_substeps:int = 4
+    let maximum_squares:int = 600
+}
+
+struct SimulatedSquare {
+    var body:Physics.RigidBody2D
+    let entity:ECS.Entity
+}
+
+struct Simulation {
+    var physics:Physics.World2D
+    var squares:SimulatedSquare[]
+    var randomizer:Randomizer
+    var accumulator:float
+    var emission_elapsed:float
+    var rendered_frames:int
+    var stats_display:ECS.Entity
+    var stats_elapsed:float
+    var smoke_elapsed:float
+    var smoke_physics_ms:float
+    var smoke_physics_steps:int
+    var maximum_substeps:int
+    var warmup_remaining:int
+    let smoke_frames:int
+    let stress_count:int
+
+    init(smoke_frames:int, stress_count:int) {
+        self.physics = Physics.World2D()
+        self.physics.enable_parallelism(4)
+        self.physics.set_profiling_enabled(true)
+        self.squares = []
+        self.randomizer = Randomizer(0x51_1E_20_2D)
+        self.accumulator = 0.0
+        self.emission_elapsed = Constants.emission_interval
+        self.rendered_frames = 0
+        self.stats_display = ECS.Entity()
+        self.stats_elapsed = 0.0
+        self.smoke_elapsed = 0.0
+        self.smoke_physics_ms = 0.0
+        self.smoke_physics_steps = 0
+        self.maximum_substeps = 0
+        self.warmup_remaining = 0
+        if smoke_frames > 0 { self.warmup_remaining = 60 }
+        self.smoke_frames = smoke_frames
+        self.stress_count = stress_count
+    }
+}
+
+func requested_stress_count() int {
+    if option_requested("--stress-600") { return 600 }
+    if option_requested("--stress-400") { return 400 }
+    if option_requested("--stress-300") { return 300 }
+    if option_requested("--stress") { return 120 }
+    return 0
+}
+
+func requested_smoke_frames() int {
+    if option_requested("--smoke-long") { return 600 }
+    if option_requested("--smoke") { return 120 }
+    return 0
+}
+
+func option_requested(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == expected { return true }
+            }
+        }
+    }
+    return false
+}
+
+func square_drawing() Canvas {
+    return Canvas()
+        ..paint(func(painter:&Canvas.Painter) {
+            painter.fill(
+                Canvas.Rect(Math.Vec2(1.0), Math.Vec2(19.0)),
+                Canvas.Fill.solid(Color.white())
+            )
+            painter.stroke(
+                Canvas.Rect(Math.Vec2(1.0), Math.Vec2(19.0)),
+                Canvas.Stroke(Color.white().with_alpha(0.35), 1.0)
+            )
+        })
+}
+
+func container_drawing() Canvas {
+    return Canvas()
+        ..paint(func(painter:&Canvas.Painter) {
+            painter.stroke(
+                Canvas.Rect(
+                    Math.Vec2(2.0),
+                    Math.Vec2(
+                        Constants.container_width * Constants.pixels_per_meter - 4.0,
+                        Constants.container_height * Constants.pixels_per_meter - 4.0
+                    )
+                ),
+                Canvas.Stroke(Color.slate_500(), 3.0)
+            )
+        })
+}
+
+func box_stats_drawing(
+    box_count:int,
+    dynamic_count:int,
+    candidate_pair_count:int,
+    awake_count:int,
+    profile:Physics.World2DStepProfile
+) Canvas {
+    var canvas = Canvas()
+    canvas.paint(func(painter:&Canvas.Painter) {
+        painter.fill(
+            Canvas.Rect(Math.Vec2(), Math.Vec2(252.0, 190.0), 9.0),
+            Canvas.Fill.solid(Color.black().with_alpha(0.82))
+        )
+        painter.stroke(
+            Canvas.Rect(Math.Vec2(0.5), Math.Vec2(251.0, 189.0), 9.0),
+            Canvas.Stroke(Color.cyan_400().with_alpha(0.48), 1.0)
+        )
+        painter.text(
+            "PHYSICS 2D",
+            Math.Vec2(16.0, 10.0),
+            Canvas.TextStyle(
+                size:14.0,
+                color:Color.cyan_300(),
+                weight:Canvas.TextWeight.bold
+            )
+        )
+        painter.text(
+            "BOX2D",
+            Math.Vec2(16.0, 38.0),
+            Canvas.TextStyle(size:13.0, color:Color.slate_300())
+        )
+        painter.text(
+            "$(box_count)  ($(dynamic_count) dynamic)",
+            Math.Vec2(236.0, 38.0),
+            Canvas.TextStyle(
+                size:13.0,
+                color:Color.white(),
+                alignment:Canvas.TextAlignment.end
+            )
+        )
+        painter.text(
+            "ACTIVE PAIRS",
+            Math.Vec2(16.0, 57.0),
+            Canvas.TextStyle(size:13.0, color:Color.slate_300())
+        )
+        painter.text(
+            "$(candidate_pair_count)",
+            Math.Vec2(236.0, 57.0),
+            Canvas.TextStyle(
+                size:13.0,
+                color:Color.white(),
+                alignment:Canvas.TextAlignment.end
+            )
+        )
+        painter.text(
+            "AWAKE",
+            Math.Vec2(16.0, 76.0),
+            Canvas.TextStyle(size:13.0, color:Color.slate_300())
+        )
+        painter.text(
+            "$(awake_count)",
+            Math.Vec2(236.0, 76.0),
+            Canvas.TextStyle(
+                size:13.0,
+                color:Color.white(),
+                alignment:Canvas.TextAlignment.end
+            )
+        )
+        physics_timing_row(painter, "PHYSICS STEP", profile.total_ms, 95.0)
+        physics_timing_row(painter, "MOTION", profile.motion_ms, 114.0)
+        physics_timing_row(painter, "BROAD PHASE", profile.broad_phase_ms, 133.0)
+        physics_timing_row(painter, "SOLVE", profile.solve_ms, 152.0)
+        physics_timing_row(painter, "SLEEP", profile.sleep_ms, 171.0)
+    })
+    return canvas
+}
+
+func physics_timing_row(
+    painter:&Canvas.Painter,
+    label:str,
+    milliseconds:float,
+    y:float
+) {
+    let tenths = Math.round(milliseconds * 10.0) as int
+    painter.text(
+        label,
+        Math.Vec2(16.0, y),
+        Canvas.TextStyle(size:13.0, color:Color.slate_300())
+    )
+    painter.text(
+        "$(tenths / 10).$(tenths % 10) ms",
+        Math.Vec2(236.0, y),
+        Canvas.TextStyle(
+            size:13.0,
+            color:Color.white(),
+            alignment:Canvas.TextAlignment.end
+        )
+    )
+}
+
+func refresh_box_stats(scene:&Resources.World, simulation:&Simulation) {
+    let box_count = simulation.physics.body_count()
+    let dynamic_count = simulation.squares.count()
+    let candidate_pair_count = simulation.physics.candidate_pair_count()
+    let awake_count = simulation.physics.awake_body_count()
+    let profile = simulation.physics.step_profile()
+    scene.update<Components.Overlay2D>(
+        simulation.stats_display,
+        func(display:&Components.Overlay2D) {
+            var drawing = box_stats_drawing(
+                box_count,
+                dynamic_count,
+                candidate_pair_count,
+                awake_count,
+                profile
+            )
+            display.replace(drawing)
+        }
+    )
+}
+
+func create_fixed_box(
+    simulation:&Simulation,
+    position:Math.Vec2,
+    size:Math.Vec2
+) {
+    simulation.physics.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Box2D(size)
+        ..position = position
+        ..friction = 0.9
+    )
+}
+
+func create_container(scene:&Resources.World, simulation:&Simulation) {
+    let half_width = Constants.container_width * 0.5
+    let half_height = Constants.container_height * 0.5
+    let boundary_half = Constants.boundary_depth * 0.5
+
+    create_fixed_box(
+        simulation,
+        Math.Vec2(-half_width - boundary_half, 0.0),
+        Math.Vec2(Constants.boundary_depth, Constants.container_height)
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(half_width + boundary_half, 0.0),
+        Math.Vec2(Constants.boundary_depth, Constants.container_height)
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(0.0, -half_height - boundary_half),
+        Math.Vec2(
+            Constants.container_width + Constants.boundary_depth * 2.0,
+            Constants.boundary_depth
+        )
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(0.0, half_height + boundary_half),
+        Math.Vec2(
+            Constants.container_width + Constants.boundary_depth * 2.0,
+            Constants.boundary_depth
+        )
+    )
+
+    var frame = container_drawing()
+    scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D())
+        ..with(Components.Drawing2D(
+            frame,
+            (Constants.container_width * Constants.pixels_per_meter) as int,
+            (Constants.container_height * Constants.pixels_per_meter) as int
+        ))
+    )
+}
+
+func square_color(index:int) Color {
+    if index % 4 == 0 { return Color.sky_400() }
+    if index % 4 == 1 { return Color.cyan_400() }
+    if index % 4 == 2 { return Color.violet_400() }
+    return Color.fuchsia_400()
+}
+
+func emit_square(
+    scene:&Resources.World,
+    simulation:&Simulation,
+    requested_position:Math.Vec2? = null
+) {
+    let horizontal_limit = Constants.container_width * 0.5 - Constants.square_size
+    let x = (simulation.randomizer.get_float() * 2.0 - 1.0) * horizontal_limit
+    let horizontal_velocity = (simulation.randomizer.get_float() * 2.0 - 1.0) * 0.35
+    let rotation = (simulation.randomizer.get_float() * 2.0 - 1.0) * 0.28
+    let angular_velocity = (simulation.randomizer.get_float() * 2.0 - 1.0) * 0.9
+    var position = Math.Vec2(
+        x,
+        Constants.container_height * 0.5 - Constants.square_size
+    )
+    if let requested = requested_position { position = requested }
+    var body = simulation.physics.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Box2D(Math.Vec2(Constants.square_size))
+        ..position = position
+        ..velocity = Math.Vec2(horizontal_velocity, 0.0)
+        ..rotation = rotation
+        ..angular_velocity = angular_velocity
+        ..restitution = 0.05
+        ..friction = 0.75
+        ..angular_damping = 0.12
+    )
+    var drawing = Components.Canvas(square_drawing(), 21, 21)
+    drawing.color = square_color(simulation.squares.count())
+    drawing.layer = 1
+    let entity = scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D(
+            position:body.position().multiply(Constants.pixels_per_meter),
+            rotation:body.rotation()
+        ))
+        ..with(drawing)
+    )
+    simulation.squares.append(SimulatedSquare(
+        body:body,
+        entity:entity
+    ))
+}
+
+func synchronize_square_transforms(
+    scene:&Resources.World,
+    squares:@SimulatedSquare[..],
+    refresh_sleeping:bool
+) {
+    for square in squares {
+        if square.body.is_awake() || refresh_sleeping {
+            let position = square.body.position().multiply(
+                Constants.pixels_per_meter
+            )
+            let rotation = square.body.rotation()
+            scene.update<Components.Transform2D>(
+                square.entity,
+                func(transform:&Components.Transform2D) {
+                    transform.position = position
+                    transform.rotation = rotation
+                }
+            )
+        }
+    }
+}
+
+func create_scene(scene:&Resources.World, simulation:&Simulation) {
+    scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D())
+        ..with(Components.Camera2D())
+    )
+    create_container(scene, simulation)
+    let box_count = simulation.physics.body_count()
+    var stats = box_stats_drawing(
+        box_count,
+        0,
+        0,
+        0,
+        simulation.physics.step_profile()
+    )
+    simulation.stats_display = scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Overlay2D(stats, 252, 190)
+            ..position = Math.Vec2(16.0, 238.0)
+            ..layer = 101
+        )
+    )
+    if simulation.stress_count > 0 {
+        var columns = 15
+        var spacing = 0.27
+        if simulation.stress_count > 120 {
+            columns = 30
+            spacing = 0.225
+        }
+        while simulation.squares.count() < simulation.stress_count {
+            let next = simulation.squares.count()
+            let column = next % columns
+            let row = next / columns
+            emit_square(scene, simulation, Math.Vec2(
+                (column as float - (columns - 1) as float * 0.5) * spacing,
+                -Constants.container_height * 0.5 + 0.18 + row as float * spacing
+            ))
+        }
+        simulation.emission_elapsed = 0.0
+    }
+}
+
+func update_simulation(
+    time:@Resources.FrameTime,
+    scene:&Resources.World,
+    simulation:&Simulation,
+    renderer:@Rendering.Renderer,
+    controller:&Application.Controller
+) {
+    simulation.emission_elapsed += time.delta
+    while simulation.stress_count == 0 &&
+        simulation.emission_elapsed >= Constants.emission_interval &&
+        simulation.squares.count() < Constants.maximum_squares
+    {
+        emit_square(scene, simulation)
+        simulation.emission_elapsed -= Constants.emission_interval
+    }
+    simulation.accumulator = Math.min(
+        simulation.accumulator + time.delta,
+        Constants.fixed_delta * Constants.maximum_physics_substeps as float
+    )
+    var substeps = 0
+    var physics_frame_ms = 0.0
+    while simulation.accumulator >= Constants.fixed_delta &&
+        substeps < Constants.maximum_physics_substeps
+    {
+        simulation.physics.step(Constants.fixed_delta)
+        physics_frame_ms += simulation.physics.step_profile().total_ms
+        substeps++
+        simulation.accumulator -= Constants.fixed_delta
+    }
+    simulation.stats_elapsed += time.delta
+    var refresh_sleeping_transforms = false
+    if simulation.stats_elapsed >= 0.25 {
+        refresh_box_stats(scene, simulation)
+        simulation.stats_elapsed = 0.0
+        refresh_sleeping_transforms = true
+    }
+
+    synchronize_square_transforms(
+        scene,
+        @simulation.squares[0:simulation.squares.count()],
+        refresh_sleeping_transforms
+    )
+
+    if simulation.warmup_remaining > 0 {
+        simulation.warmup_remaining--
+        return
+    }
+    simulation.smoke_physics_ms += physics_frame_ms
+    simulation.smoke_physics_steps += substeps
+    if substeps > simulation.maximum_substeps {
+        simulation.maximum_substeps = substeps
+    }
+    simulation.rendered_frames++
+    simulation.smoke_elapsed += time.delta
+    if simulation.smoke_frames > 0 &&
+        simulation.rendered_frames >= simulation.smoke_frames
+    {
+        let profile = simulation.physics.step_profile()
+        var maximum_speed = 0.0
+        var maximum_angular_speed = 0.0
+        var base_maximum_speed = 0.0
+        var base_maximum_angular_speed = 0.0
+        var base_awake_count = 0
+        var base_count = 0
+        for square in simulation.squares {
+            maximum_speed = Math.max(
+                maximum_speed,
+                square.body.velocity().length()
+            )
+            maximum_angular_speed = Math.max(
+                maximum_angular_speed,
+                Math.abs(square.body.angular_velocity())
+            )
+            if square.body.position().y < -2.0 {
+                base_count++
+                if square.body.is_awake() { base_awake_count++ }
+                base_maximum_speed = Math.max(
+                    base_maximum_speed,
+                    square.body.velocity().length()
+                )
+                base_maximum_angular_speed = Math.max(
+                    base_maximum_angular_speed,
+                    Math.abs(square.body.angular_velocity())
+                )
+            }
+        }
+        print("FallingBody smoke: $(simulation.squares.count()) dynamic bodies")
+        print("  average FPS: $(simulation.rendered_frames as float / simulation.smoke_elapsed)")
+        print("  physics steps/frame: $(simulation.smoke_physics_steps as float / simulation.rendered_frames as float)")
+        print("  average physics/frame: $(simulation.smoke_physics_ms / simulation.rendered_frames as float) ms")
+        print("  maximum substeps: $(simulation.maximum_substeps)")
+        print("  awake: $(simulation.physics.awake_body_count())")
+        print("  active pairs: $(simulation.physics.candidate_pair_count())")
+        print("  physics step: $(profile.total_ms) ms")
+        print("  motion: $(profile.motion_ms) ms")
+        print("  broad phase: $(profile.broad_phase_ms) ms")
+        print("  solve: $(profile.solve_ms) ms")
+        print("  sleep: $(profile.sleep_ms) ms")
+        print("  maximum speed: $(maximum_speed) m/s")
+        print("  maximum angular speed: $(maximum_angular_speed) rad/s")
+        print("  base maximum speed: $(base_maximum_speed) m/s")
+        print("  base maximum angular speed: $(base_maximum_angular_speed) rad/s")
+        print("  base awake below -2 m: $(base_awake_count) / $(base_count)")
+        print("  draw calls: $(renderer.stats().draw_calls())")
+        print("  pipeline binds: $(renderer.stats().pipeline_bindings())")
+        print("  rendered instances: $(renderer.stats().instances())")
+        controller.stop()
+    }
+}
+
+func main() {
+    Application()
+        ..add_resource(Simulation(
+            requested_smoke_frames(),
+            requested_stress_count()
+        ))
+        ..add_plugin(Plugins.Window(Plugins.WindowSettings()
+            ..title = "GFX.Physics — Falling squares"
+            ..width = Constants.window_width
+            ..height = Constants.window_height
+            ..resizable = false
+        ))
+        ..add_plugin(Plugins.Rendering(Plugins.RenderingSettings()
+            ..clear = Color.slate_950()
+        ))
+        ..add_plugin(Plugins.PerformancePanel(Plugins.PerformancePanelSettings()
+            ..anchor = Plugins.FPSCounterAnchor.top_left
+            ..margin = Math.Vec2(16.0)
+        ))
+        ..add_plugin(Plugins.Scene2D())
+        ..add_plugin(Plugins.Time())
+        ..add_system(Application.Schedule.startup, create_scene)
+        ..add_system(Application.Schedule.update, update_simulation)
+        ..run()
+}

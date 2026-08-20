@@ -1,0 +1,14 @@
+public use GFX.Physics.Box2D.Box2D
+public use GFX.Physics.RigidBody2D.BodyType2D
+public use GFX.Physics.RigidBody2D.RigidBody2D
+public use GFX.Physics.RigidBody2D.RigidBody2DSettings
+public use GFX.Physics.World2D.World2D
+public use GFX.Physics.World2D.World2DStepProfile
+
+contribute GFX.Components {
+    public use GFX.Physics.RigidBody2D.RigidBody2D
+}
+
+contribute GFX.Resources {
+    public use GFX.Physics.World2D.World2D
+}

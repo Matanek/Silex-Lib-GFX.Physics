@@ -1,0 +1,11 @@
+use GFX.Components
+use GFX.Resources
+
+test "contribute physics declarations to GFX umbrellas" {
+    var world = Resources.World2D()
+    var body:Components.RigidBody2D = world.create_rigid_body()
+
+    assert(world.body_count() == 1)
+    assert(body.position().x == 0.0)
+    assert(body.position().y == 0.0)
+}

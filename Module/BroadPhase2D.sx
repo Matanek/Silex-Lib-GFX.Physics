@@ -1,0 +1,651 @@
+use STD.Math
+use STD.Threading
+
+package struct AABB2D {
+    let lower:Math.Vec2
+    let upper:Math.Vec2
+
+    init() {
+        self.lower = Math.Vec2()
+        self.upper = Math.Vec2()
+    }
+
+    init(center:Math.Vec2, half_size:Math.Vec2) {
+        self.lower = center.subtract(half_size)
+        self.upper = center.add(half_size)
+    }
+
+    package init(lower:Math.Vec2, upper:Math.Vec2, bounds:bool) {
+        self.lower = lower
+        self.upper = upper
+    }
+
+    func contains(other:AABB2D) bool {
+        return self.lower.x <= other.lower.x && self.lower.y <= other.lower.y &&
+            self.upper.x >= other.upper.x && self.upper.y >= other.upper.y
+    }
+
+    func overlaps(other:AABB2D) bool {
+        return self.lower.x <= other.upper.x && self.upper.x >= other.lower.x &&
+            self.lower.y <= other.upper.y && self.upper.y >= other.lower.y
+    }
+
+    func perimeter() float {
+        let size = self.upper.subtract(self.lower)
+        return 2.0 * (size.x + size.y)
+    }
+
+    func fattened(displacement:Math.Vec2) AABB2D {
+        let margin = Math.Vec2(0.02)
+        var lower = self.lower.subtract(margin)
+        var upper = self.upper.add(margin)
+        let prediction = displacement.multiply(4.0)
+        if prediction.x < 0.0 { lower.x += prediction.x }
+        else { upper.x += prediction.x }
+        if prediction.y < 0.0 { lower.y += prediction.y }
+        else { upper.y += prediction.y }
+        return AABB2D(lower, upper, true)
+    }
+}
+
+package struct BodyPair2D {
+    let first:int
+    let second:int
+
+    init() {
+        self.first = 0
+        self.second = 0
+    }
+
+    init(first:int, second:int) {
+        self.first = first
+        self.second = second
+    }
+}
+
+class PairBuffer2D {
+    var values:BodyPair2D[]
+
+    func resize(count:int) {
+        self.values.clear()
+        var index = 0
+        while index < count {
+            self.values.append(BodyPair2D())
+            index++
+        }
+    }
+
+    func set(index:int, pair:BodyPair2D) { self.values[index] = pair }
+}
+
+package class BroadPhase2D {
+    private var bounds:AABB2D[]
+    private var parents:int[]
+    private var first_children:int[]
+    private var second_children:int[]
+    private var heights:int[]
+    private var bodies:int[]
+    private var moved:bool[]
+    private var free_nodes:int[]
+    private var moved_proxies:int[]
+    private var query_stack:int[]
+    private var parallel_counts:int[]
+    private var parallel_offsets:int[]
+    private var parallel_stack:int[]
+    private var parallel_stack_stride:int
+    private var parallel_pairs:PairBuffer2D
+    private var pair_sort_scratch:BodyPair2D[]
+    private var pair_sort_counts:int[]
+    private var root:int
+
+    init() {
+        self.bounds = []
+        self.parents = []
+        self.first_children = []
+        self.second_children = []
+        self.heights = []
+        self.bodies = []
+        self.moved = []
+        self.free_nodes = []
+        self.moved_proxies = []
+        self.query_stack = []
+        self.parallel_counts = []
+        self.parallel_offsets = []
+        self.parallel_stack = []
+        self.parallel_stack_stride = 0
+        self.parallel_pairs = PairBuffer2D(values:[])
+        self.pair_sort_scratch = []
+        self.pair_sort_counts = []
+        self.root = -1
+    }
+
+    func create_proxy(bounds:AABB2D, body:int) int {
+        let proxy = self.allocate_node()
+        self.bounds[proxy] = bounds.fattened(Math.Vec2())
+        self.heights[proxy] = 0
+        self.bodies[proxy] = body
+        self.insert_leaf(proxy)
+        self.touch_proxy(proxy)
+        return proxy
+    }
+
+    func move_proxy(proxy:int, bounds:AABB2D, displacement:Math.Vec2) bool {
+        if self.bounds[proxy].contains(bounds) { return false }
+        self.remove_leaf(proxy)
+        self.bounds[proxy] = bounds.fattened(displacement)
+        self.insert_leaf(proxy)
+        self.touch_proxy(proxy)
+        return true
+    }
+
+    func touch_proxy(proxy:int) {
+        if self.moved[proxy] { return }
+        self.moved[proxy] = true
+        self.moved_proxies.append(proxy)
+    }
+
+    func collect_pairs(pairs:&BodyPair2D[]) {
+        pairs.clear()
+        for proxy in self.moved_proxies {
+            self.query_proxy(proxy, pairs)
+        }
+        for proxy in self.moved_proxies {
+            self.moved[proxy] = false
+        }
+        self.moved_proxies.clear()
+    }
+
+    func parallel_pair_count() int { return self.moved_proxies.count() }
+
+    func begin_parallel_pair_count() {
+        let moved_count = self.moved_proxies.count()
+        self.prepare_parallel_queries(moved_count)
+    }
+
+    func prepare_parallel_pair_output() {
+        let moved_count = self.moved_proxies.count()
+        var pair_count = 0
+        var index = 0
+        while index < moved_count {
+            self.parallel_offsets[index] = pair_count
+            pair_count += self.parallel_counts[index]
+            index++
+        }
+        self.parallel_pairs.resize(pair_count)
+    }
+
+    func finish_parallel_pairs(pairs:&BodyPair2D[]) {
+        pairs.clear()
+        for pair in self.parallel_pairs.values { pairs.append(pair) }
+        self.finish_pair_collection(pairs)
+    }
+
+    private func finish_pair_collection(pairs:&BodyPair2D[]) {
+        for proxy in self.moved_proxies { self.moved[proxy] = false }
+        self.moved_proxies.clear()
+    }
+
+    package func sort_pairs(pairs:&BodyPair2D[]) {
+        let count = pairs.count()
+        if count < 2 { return }
+        var maximum_body = 0
+        var index = 0
+        while index < count {
+            if pairs[index].second > maximum_body {
+                maximum_body = pairs[index].second
+            }
+            index++
+        }
+        while self.pair_sort_scratch.count() < count {
+            self.pair_sort_scratch.append(BodyPair2D())
+        }
+        while self.pair_sort_counts.count() <= maximum_body {
+            self.pair_sort_counts.append(0)
+        }
+
+        var key = 0
+        while key <= maximum_body {
+            self.pair_sort_counts[key] = 0
+            key++
+        }
+        index = 0
+        while index < count {
+            self.pair_sort_counts[pairs[index].second]++
+            index++
+        }
+        var offset = 0
+        key = 0
+        while key <= maximum_body {
+            let key_count = self.pair_sort_counts[key]
+            self.pair_sort_counts[key] = offset
+            offset += key_count
+            key++
+        }
+        index = 0
+        while index < count {
+            let pair = pairs[index]
+            let destination = self.pair_sort_counts[pair.second]
+            self.pair_sort_scratch[destination] = pair
+            self.pair_sort_counts[pair.second] = destination + 1
+            index++
+        }
+
+        key = 0
+        while key <= maximum_body {
+            self.pair_sort_counts[key] = 0
+            key++
+        }
+        index = 0
+        while index < count {
+            self.pair_sort_counts[self.pair_sort_scratch[index].first]++
+            index++
+        }
+        offset = 0
+        key = 0
+        while key <= maximum_body {
+            let key_count = self.pair_sort_counts[key]
+            self.pair_sort_counts[key] = offset
+            offset += key_count
+            key++
+        }
+        index = 0
+        while index < count {
+            let pair = self.pair_sort_scratch[index]
+            let destination = self.pair_sort_counts[pair.first]
+            pairs[destination] = pair
+            self.pair_sort_counts[pair.first] = destination + 1
+            index++
+        }
+    }
+
+    func height() int {
+        if self.root < 0 { return 0 }
+        return self.heights[self.root]
+    }
+
+    func proxies_overlap(first:int, second:int) bool {
+        return self.bounds[first].overlaps(self.bounds[second])
+    }
+
+    private func query_proxy(
+        proxy:int,
+        pairs:&BodyPair2D[]
+    ) {
+        if self.root < 0 { return }
+        let query_bounds = self.bounds[proxy]
+        let query_body = self.bodies[proxy]
+        self.query_stack.clear()
+        self.query_stack.append(self.root)
+        while self.query_stack.count() > 0 {
+            let candidate = self.query_stack.take_last()
+            if candidate == proxy || !query_bounds.overlaps(self.bounds[candidate]) {
+                continue
+            }
+            if self.is_leaf(candidate) {
+                let candidate_body = self.bodies[candidate]
+                if !self.moved[candidate] || query_body < candidate_body {
+                    self.append_pair(pairs, query_body, candidate_body)
+                }
+            } else {
+                self.query_stack.append(self.first_children[candidate])
+                self.query_stack.append(self.second_children[candidate])
+            }
+        }
+    }
+
+    private func append_pair(
+        pairs:&BodyPair2D[],
+        first:int,
+        second:int
+    ) {
+        if first == second { return }
+        var lower = first
+        var upper = second
+        if lower > upper {
+            lower = second
+            upper = first
+        }
+        pairs.append(BodyPair2D(lower, upper))
+    }
+
+    private func prepare_parallel_queries(moved_count:int) {
+        while self.parallel_counts.count() < moved_count {
+            self.parallel_counts.append(0)
+            self.parallel_offsets.append(0)
+        }
+        self.parallel_stack_stride = self.height() + 2
+        let stack_count = moved_count * self.parallel_stack_stride
+        while self.parallel_stack.count() < stack_count {
+            self.parallel_stack.append(0)
+        }
+    }
+
+    func count_parallel_pairs(start:int, end:int) {
+        var index = start
+        while index < end {
+            self.query_proxy_parallel(index, false)
+            index++
+        }
+    }
+
+    func fill_parallel_pairs(start:int, end:int) {
+        var index = start
+        while index < end {
+            self.query_proxy_parallel(index, true)
+            index++
+        }
+    }
+
+    private func query_proxy_parallel(ordinal:int, fill:bool) {
+        let proxy = self.moved_proxies[ordinal]
+        let query_bounds = self.bounds[proxy]
+        let query_body = self.bodies[proxy]
+        let stack_base = ordinal * self.parallel_stack_stride
+        var stack_count = 1
+        self.parallel_stack[stack_base] = self.root
+        var count = 0
+        var output = self.parallel_offsets[ordinal]
+        while stack_count > 0 {
+            stack_count--
+            let candidate = self.parallel_stack[stack_base + stack_count]
+            if candidate == proxy || !query_bounds.overlaps(self.bounds[candidate]) {
+                continue
+            }
+            if self.is_leaf(candidate) {
+                let candidate_body = self.bodies[candidate]
+                if !self.moved[candidate] || query_body < candidate_body {
+                    if fill {
+                        var lower = query_body
+                        var upper = candidate_body
+                        if lower > upper {
+                            lower = candidate_body
+                            upper = query_body
+                        }
+                        self.parallel_pairs.set(output, BodyPair2D(lower, upper))
+                        output++
+                    } else {
+                        count++
+                    }
+                }
+            } else {
+                self.parallel_stack[stack_base + stack_count] =
+                    self.first_children[candidate]
+                stack_count++
+                self.parallel_stack[stack_base + stack_count] =
+                    self.second_children[candidate]
+                stack_count++
+            }
+        }
+        if !fill { self.parallel_counts[ordinal] = count }
+    }
+
+    private func allocate_node() int {
+        if self.free_nodes.count() > 0 {
+            let index = self.free_nodes.take_last()
+            self.reset_node(index)
+            return index
+        }
+        self.bounds.append(AABB2D())
+        self.parents.append(-1)
+        self.first_children.append(-1)
+        self.second_children.append(-1)
+        self.heights.append(-1)
+        self.bodies.append(-1)
+        self.moved.append(false)
+        return self.bounds.count() - 1
+    }
+
+    private func release_node(index:int) {
+        self.reset_node(index)
+        self.free_nodes.append(index)
+    }
+
+    private func reset_node(index:int) {
+        self.bounds[index] = AABB2D()
+        self.parents[index] = -1
+        self.first_children[index] = -1
+        self.second_children[index] = -1
+        self.heights[index] = -1
+        self.bodies[index] = -1
+        self.moved[index] = false
+    }
+
+    private func is_leaf(index:int) bool {
+        return self.first_children[index] < 0
+    }
+
+    private func insert_leaf(leaf:int) {
+        if self.root < 0 {
+            self.root = leaf
+            self.parents[leaf] = -1
+            return
+        }
+
+        let leaf_bounds = self.bounds[leaf]
+        var sibling = self.root
+        while !self.is_leaf(sibling) {
+            let first = self.first_children[sibling]
+            let second = self.second_children[sibling]
+            let area = self.bounds[sibling].perimeter()
+            let combined = combine(self.bounds[sibling], leaf_bounds)
+            let combined_area = combined.perimeter()
+            let direct_cost = 2.0 * combined_area
+            let inherited_cost = 2.0 * (combined_area - area)
+            let first_cost = self.insertion_cost(first, leaf_bounds, inherited_cost)
+            let second_cost = self.insertion_cost(second, leaf_bounds, inherited_cost)
+            if direct_cost < first_cost && direct_cost < second_cost { break }
+            if first_cost < second_cost { sibling = first }
+            else { sibling = second }
+        }
+
+        let old_parent = self.parents[sibling]
+        let new_parent = self.allocate_node()
+        self.parents[new_parent] = old_parent
+        self.bounds[new_parent] = combine(leaf_bounds, self.bounds[sibling])
+        self.heights[new_parent] = self.heights[sibling] + 1
+        self.first_children[new_parent] = sibling
+        self.second_children[new_parent] = leaf
+        self.parents[sibling] = new_parent
+        self.parents[leaf] = new_parent
+
+        if old_parent < 0 {
+            self.root = new_parent
+        } else if self.first_children[old_parent] == sibling {
+            self.first_children[old_parent] = new_parent
+        } else {
+            self.second_children[old_parent] = new_parent
+        }
+
+        var index = self.parents[leaf]
+        while index >= 0 {
+            index = self.balance(index)
+            self.rebuild(index)
+            index = self.parents[index]
+        }
+    }
+
+    private func remove_leaf(leaf:int) {
+        if leaf == self.root {
+            self.root = -1
+            return
+        }
+
+        let parent = self.parents[leaf]
+        let grand_parent = self.parents[parent]
+        var sibling = self.first_children[parent]
+        if sibling == leaf { sibling = self.second_children[parent] }
+
+        if grand_parent >= 0 {
+            if self.first_children[grand_parent] == parent {
+                self.first_children[grand_parent] = sibling
+            } else {
+                self.second_children[grand_parent] = sibling
+            }
+            self.parents[sibling] = grand_parent
+            self.release_node(parent)
+
+            var index = grand_parent
+            while index >= 0 {
+                index = self.balance(index)
+                self.rebuild(index)
+                index = self.parents[index]
+            }
+        } else {
+            self.root = sibling
+            self.parents[sibling] = -1
+            self.release_node(parent)
+        }
+        self.parents[leaf] = -1
+    }
+
+    private func rebuild(index:int) {
+        if self.is_leaf(index) { return }
+        let first = self.first_children[index]
+        let second = self.second_children[index]
+        self.bounds[index] = combine(
+            self.bounds[first],
+            self.bounds[second]
+        )
+        self.heights[index] = 1 + maximum(
+            self.heights[first],
+            self.heights[second]
+        )
+    }
+
+    private func balance(index:int) int {
+        if self.is_leaf(index) || self.heights[index] < 2 { return index }
+        let first = self.first_children[index]
+        let second = self.second_children[index]
+        let difference = self.heights[second] - self.heights[first]
+
+        if difference > 1 { return self.rotate_second_up(index, first, second) }
+        if difference < -1 { return self.rotate_first_up(index, first, second) }
+        return index
+    }
+
+    private func rotate_second_up(index:int, first:int, second:int) int {
+        let old_parent = self.parents[index]
+        let inner = self.first_children[second]
+        let outer = self.second_children[second]
+        self.first_children[second] = index
+        self.parents[second] = old_parent
+        self.parents[index] = second
+        self.replace_child(old_parent, index, second)
+
+        if self.heights[inner] > self.heights[outer] {
+            self.second_children[second] = inner
+            self.second_children[index] = outer
+            self.parents[outer] = index
+        } else {
+            self.second_children[second] = outer
+            self.second_children[index] = inner
+            self.parents[inner] = index
+        }
+        self.rebuild(index)
+        self.rebuild(second)
+        return second
+    }
+
+    private func rotate_first_up(index:int, first:int, second:int) int {
+        let old_parent = self.parents[index]
+        let inner = self.first_children[first]
+        let outer = self.second_children[first]
+        self.first_children[first] = index
+        self.parents[first] = old_parent
+        self.parents[index] = first
+        self.replace_child(old_parent, index, first)
+
+        if self.heights[inner] > self.heights[outer] {
+            self.second_children[first] = inner
+            self.first_children[index] = outer
+            self.parents[outer] = index
+        } else {
+            self.second_children[first] = outer
+            self.first_children[index] = inner
+            self.parents[inner] = index
+        }
+        self.rebuild(index)
+        self.rebuild(first)
+        return first
+    }
+
+    private func replace_child(parent:int, old_child:int, new_child:int) {
+        if parent < 0 {
+            self.root = new_child
+        } else if self.first_children[parent] == old_child {
+            self.first_children[parent] = new_child
+        } else {
+            self.second_children[parent] = new_child
+        }
+    }
+
+    private func insertion_cost(
+        child:int,
+        leaf_bounds:AABB2D,
+        inherited_cost:float
+    ) float {
+        let combined = combine(self.bounds[child], leaf_bounds)
+        if self.is_leaf(child) {
+            return combined.perimeter() + inherited_cost
+        }
+        return combined.perimeter() - self.bounds[child].perimeter() +
+            inherited_cost
+    }
+}
+
+struct CountBroadPhasePairs2D:Threading.ParallelJob {
+    var broad_phase:BroadPhase2D
+    func execute(start:int, end:int) {
+        self.broad_phase.count_parallel_pairs(start, end)
+    }
+}
+
+struct FillBroadPhasePairs2D:Threading.ParallelJob {
+    var broad_phase:BroadPhase2D
+    func execute(start:int, end:int) {
+        self.broad_phase.fill_parallel_pairs(start, end)
+    }
+}
+
+package func collect_pairs_parallel(
+    broad_phase:BroadPhase2D,
+    pairs:&BodyPair2D[],
+    executor:Threading.Executor
+) {
+    let moved_count = broad_phase.parallel_pair_count()
+    if moved_count < 256 {
+        broad_phase.collect_pairs(pairs)
+        return
+    }
+    broad_phase.begin_parallel_pair_count()
+    var shared = executor
+    shared.submit_parallel(
+        moved_count,
+        CountBroadPhasePairs2D(broad_phase:broad_phase)
+    ).complete()
+    broad_phase.prepare_parallel_pair_output()
+    shared.submit_parallel(
+        moved_count,
+        FillBroadPhasePairs2D(broad_phase:broad_phase)
+    ).complete()
+    broad_phase.finish_parallel_pairs(pairs)
+}
+
+func combine(first:AABB2D, second:AABB2D) AABB2D {
+    return AABB2D(
+        Math.Vec2(
+            Math.min(first.lower.x, second.lower.x),
+            Math.min(first.lower.y, second.lower.y)
+        ),
+        Math.Vec2(
+            Math.max(first.upper.x, second.upper.x),
+            Math.max(first.upper.y, second.upper.y)
+        ),
+        true
+    )
+}
+
+func maximum(first:int, second:int) int {
+    if first > second { return first }
+    return second
+}

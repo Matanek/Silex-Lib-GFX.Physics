@@ -1,0 +1,14 @@
+use STD.Math
+
+public struct Box2D {
+    let size:Math.Vec2
+
+    init(size:Math.Vec2 = Math.Vec2(1.0)) {
+        if size.x <= 0.0 || size.y <= 0.0 {
+            panic("GFX.Physics.Box2D requires positive dimensions")
+        }
+        self.size = size
+    }
+
+    module func half_size() Math.Vec2 { return self.size.multiply(0.5) }
+}

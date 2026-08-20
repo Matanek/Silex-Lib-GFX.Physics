@@ -1,0 +1,1592 @@
+use GFX.Physics.BroadPhase2D.AABB2D
+use GFX.Physics.BroadPhase2D.BodyPair2D
+use GFX.Physics.BroadPhase2D.BroadPhase2D
+use GFX.Physics.BroadPhase2D.collect_pairs_parallel
+use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.BodyType2D
+use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use STD.Math
+use STD.Threading
+use STD.Time.Clock
+
+public struct World2DStepProfile {
+    var motion_ms:float
+    var broad_phase_ms:float
+    var solve_ms:float
+    var sleep_ms:float
+    var total_ms:float
+
+    init() {
+        self.motion_ms = 0.0
+        self.broad_phase_ms = 0.0
+        self.solve_ms = 0.0
+        self.sleep_ms = 0.0
+        self.total_ms = 0.0
+    }
+}
+
+struct IntegrateBodies2D:Threading.ParallelJob {
+    var store:BodyStore2D
+    var gravity:Math.Vec2
+    var delta:float
+
+    func execute(start:int, end:int) {
+        var index = start
+        while index < end {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index]
+            {
+                integrate_body(self.store, self.gravity, index, self.delta)
+            }
+            index++
+        }
+    }
+}
+
+struct ContactPair2D {
+    var normal:Math.Vec2
+    var first_contact:Math.Vec2
+    var second_contact:Math.Vec2
+    var contact_count:int
+    var normal_impulse_first:float
+    var normal_impulse_second:float
+    var tangent_impulse_first:float
+    var tangent_impulse_second:float
+
+    init() {
+        self.normal = Math.Vec2()
+        self.first_contact = Math.Vec2()
+        self.second_contact = Math.Vec2()
+        self.contact_count = 0
+        self.normal_impulse_first = 0.0
+        self.normal_impulse_second = 0.0
+        self.tangent_impulse_first = 0.0
+        self.tangent_impulse_second = 0.0
+    }
+}
+
+class PairSet2D {
+    private var first_bodies:int[]
+    private var second_bodies:int[]
+    private var states:int[]
+    private var entry_count:int
+    private var removed_count:int
+
+    init(minimum_capacity:int = 256) {
+        self.first_bodies = []
+        self.second_bodies = []
+        self.states = []
+        self.entry_count = 0
+        self.removed_count = 0
+        self.rebuild(minimum_capacity)
+    }
+
+    func count() int { return self.entry_count }
+
+    func contains(pair:BodyPair2D) bool {
+        return self.find(pair) >= 0
+    }
+
+    func add(pair:BodyPair2D) {
+        self.ensure_capacity()
+        var slot = self.initial_slot(pair)
+        var removed_slot = -1
+        while self.states[slot] != 0 {
+            if self.states[slot] == 1 &&
+                self.first_bodies[slot] == pair.first &&
+                self.second_bodies[slot] == pair.second
+            {
+                return
+            }
+            if self.states[slot] == 2 && removed_slot < 0 {
+                removed_slot = slot
+            }
+            slot = (slot + 1) % self.states.count()
+        }
+        if removed_slot >= 0 {
+            slot = removed_slot
+            self.removed_count--
+        }
+        self.first_bodies[slot] = pair.first
+        self.second_bodies[slot] = pair.second
+        self.states[slot] = 1
+        self.entry_count++
+    }
+
+    func remove(pair:BodyPair2D) bool {
+        let slot = self.find(pair)
+        if slot < 0 { return false }
+        self.states[slot] = 2
+        self.entry_count--
+        self.removed_count++
+        return true
+    }
+
+    private func find(pair:BodyPair2D) int {
+        var slot = self.initial_slot(pair)
+        while self.states[slot] != 0 {
+            if self.states[slot] == 1 &&
+                self.first_bodies[slot] == pair.first &&
+                self.second_bodies[slot] == pair.second
+            {
+                return slot
+            }
+            slot = (slot + 1) % self.states.count()
+        }
+        return -1
+    }
+
+    private func initial_slot(pair:BodyPair2D) int {
+        let hash = pair.first as uint * 73_856_093 +
+            pair.second as uint * 19_349_663
+        return (hash % self.states.count() as uint) as int
+    }
+
+    private func ensure_capacity() {
+        if (self.entry_count + self.removed_count + 1) * 4 <
+            self.states.count() * 3
+        {
+            return
+        }
+        var capacity = self.states.count()
+        if (self.entry_count + 1) * 4 >= capacity * 3 {
+            capacity *= 2
+        }
+        self.rebuild(capacity)
+    }
+
+    private func rebuild(minimum_capacity:int) {
+        var capacity = 8
+        while capacity < minimum_capacity { capacity *= 2 }
+        let previous_first = self.first_bodies
+        let previous_second = self.second_bodies
+        let previous_states = self.states
+        self.first_bodies = []
+        self.second_bodies = []
+        self.states = []
+        var index = 0
+        while index < capacity {
+            self.first_bodies.append(0)
+            self.second_bodies.append(0)
+            self.states.append(0)
+            index++
+        }
+        self.entry_count = 0
+        self.removed_count = 0
+        index = 0
+        while index < previous_states.count() {
+            if previous_states[index] == 1 {
+                self.add_without_growth(BodyPair2D(
+                    previous_first[index],
+                    previous_second[index]
+                ))
+            }
+            index++
+        }
+    }
+
+    private func add_without_growth(pair:BodyPair2D) {
+        var slot = self.initial_slot(pair)
+        while self.states[slot] == 1 {
+            slot = (slot + 1) % self.states.count()
+        }
+        self.first_bodies[slot] = pair.first
+        self.second_bodies[slot] = pair.second
+        self.states[slot] = 1
+        self.entry_count++
+    }
+}
+
+public class World2D {
+    private var current_gravity:Math.Vec2
+    private var store:BodyStore2D
+    private var proxies:int[]
+    private var tight_bounds:AABB2D[]
+    private var broad_phase:BroadPhase2D
+    private var discovered_pairs:BodyPair2D[]
+    private var new_candidate_pairs:BodyPair2D[]
+    private var candidate_bodies:BodyPair2D[]
+    private var candidate_enabled:bool[]
+    private var candidate_pairs:ContactPair2D[]
+    private var candidate_pair_keys:PairSet2D
+    private var free_candidate_slots:int[]
+    private var free_candidate_count:int
+    private var active_pairs:int[]
+    private var collisions:Collision2D[]
+    private var support_grace:float[]
+    private var load_grace:float[]
+    private var stable_for_sleep:bool[]
+    private var sleep_parents:int[]
+    private var sleep_ranks:int[]
+    private var sleep_eligible:bool[]
+    private var sleep_motion_squared:float[]
+    private var island_body_counts:int[]
+    private var island_ready_counts:int[]
+    private var island_can_sleep:bool[]
+    private var sleep_enabled_body_count:int
+    private var current_candidate_pair_count:int
+    private var current_pair_collection_ms:float
+    private var current_pair_maintenance_ms:float
+    private var current_pair_filter_ms:float
+    private var profiling_enabled:bool
+    private var current_step_profile:World2DStepProfile
+    private var parallel_executor:Threading.Executor?
+
+    init(gravity:Math.Vec2 = Math.Vec2(0.0, -9.81)) {
+        self.current_gravity = gravity
+        self.store = BodyStore2D()
+        self.proxies = []
+        self.tight_bounds = []
+        self.broad_phase = BroadPhase2D()
+        self.discovered_pairs = []
+        self.new_candidate_pairs = []
+        self.candidate_bodies = []
+        self.candidate_enabled = []
+        self.candidate_pairs = []
+        self.candidate_pair_keys = PairSet2D()
+        self.free_candidate_slots = []
+        self.free_candidate_count = 0
+        self.active_pairs = []
+        self.collisions = []
+        self.support_grace = []
+        self.load_grace = []
+        self.stable_for_sleep = []
+        self.sleep_parents = []
+        self.sleep_ranks = []
+        self.sleep_eligible = []
+        self.sleep_motion_squared = []
+        self.island_body_counts = []
+        self.island_ready_counts = []
+        self.island_can_sleep = []
+        self.sleep_enabled_body_count = 0
+        self.current_candidate_pair_count = 0
+        self.current_pair_collection_ms = 0.0
+        self.current_pair_maintenance_ms = 0.0
+        self.current_pair_filter_ms = 0.0
+        self.profiling_enabled = false
+        self.current_step_profile = World2DStepProfile()
+        self.parallel_executor = null
+    }
+
+    func gravity() Math.Vec2 { return self.current_gravity }
+    func set_gravity(gravity:Math.Vec2) {
+        self.current_gravity = gravity
+        var index = 0
+        while index < self.store.count() {
+            self.store.wake(index)
+            index++
+        }
+    }
+    func body_count() int { return self.store.count() }
+    func candidate_pair_count() int { return self.current_candidate_pair_count }
+    func set_profiling_enabled(enabled:bool) { self.profiling_enabled = enabled }
+    func step_profile() World2DStepProfile { return self.current_step_profile }
+    func enable_parallelism(worker_count:int) {
+        if worker_count < 1 {
+            panic("GFX.Physics.World2D parallel worker count must be positive")
+        }
+        self.parallel_executor = Threading.Executor(worker_count:worker_count)
+    }
+    func awake_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.awake[index] { count++ }
+            index++
+        }
+        return count
+    }
+
+    package func persistent_pair_count() int {
+        return self.candidate_pair_keys.count()
+    }
+
+    package func candidate_pair_slot_count() int {
+        return self.candidate_pairs.count()
+    }
+
+    package func collision_count() int { return self.collisions.count() }
+
+    package func pair_collection_ms() float {
+        return self.current_pair_collection_ms
+    }
+
+    package func pair_maintenance_ms() float {
+        return self.current_pair_maintenance_ms
+    }
+
+    package func pair_filter_ms() float {
+        return self.current_pair_filter_ms
+    }
+
+    package func buried_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.support_grace[index] > 0.0 &&
+                self.load_grace[index] > 0.0
+            {
+                count++
+            }
+            index++
+        }
+        return count
+    }
+
+    package func stable_buried_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.support_grace[index] > 0.0 &&
+                self.load_grace[index] > 0.0 &&
+                self.stable_for_sleep[index]
+            {
+                count++
+            }
+            index++
+        }
+        return count
+    }
+
+    package func quiet_buried_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            let linear_speed_squared =
+                self.store.velocities_x[index] * self.store.velocities_x[index] +
+                self.store.velocities_y[index] * self.store.velocities_y[index]
+            let sweep_radius_squared =
+                self.store.half_widths[index] * self.store.half_widths[index] +
+                self.store.half_heights[index] * self.store.half_heights[index]
+            let angular_speed = self.store.angular_velocities[index]
+            let motion_squared = linear_speed_squared +
+                angular_speed * angular_speed * sweep_radius_squared
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.support_grace[index] > 0.0 &&
+                self.load_grace[index] > 0.0 &&
+                motion_squared <= 0.0009
+            {
+                count++
+            }
+            index++
+        }
+        return count
+    }
+
+    package func sleeping_progress_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.sleep_times[index] > 0.0 { count++ }
+            index++
+        }
+        return count
+    }
+
+    package func sleep_eligible_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index] && self.sleep_eligible[index]
+            {
+                count++
+            }
+            index++
+        }
+        return count
+    }
+
+    package func sleep_ready_body_count() int {
+        var count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index] && self.sleep_eligible[index] &&
+                self.store.sleep_times[index] >= 0.5
+            {
+                count++
+            }
+            index++
+        }
+        return count
+    }
+
+    func create_rigid_body(
+        settings:RigidBody2DSettings = RigidBody2DSettings()
+    ) RigidBody2D {
+        let id = self.store.append(settings)
+        let bounds = body_bounds(self.store, id.index)
+        self.tight_bounds.append(bounds)
+        self.proxies.append(self.broad_phase.create_proxy(
+            bounds,
+            id.index
+        ))
+        self.support_grace.append(0.0)
+        self.load_grace.append(0.0)
+        self.stable_for_sleep.append(true)
+        self.sleep_parents.append(id.index)
+        self.sleep_ranks.append(0)
+        self.sleep_eligible.append(false)
+        self.sleep_motion_squared.append(0.0)
+        self.island_body_counts.append(0)
+        self.island_ready_counts.append(0)
+        self.island_can_sleep.append(true)
+        if settings.body_type == BodyType2D.dynamic && settings.allow_sleep {
+            self.sleep_enabled_body_count++
+        }
+        self.store.dirty_transforms[id.index] = false
+        return RigidBody2D(self.store, id)
+    }
+
+    func step(delta:float) {
+        if delta < 0.0 {
+            panic("GFX.Physics.World2D.step requires a non-negative delta")
+        }
+        var profile_clock = Clock()
+        if self.profiling_enabled { profile_clock.tick() }
+        var integrated_in_parallel = false
+        if self.store.count() >= 256 {
+            if var executor = self.parallel_executor {
+                var shared = executor
+                shared.submit_parallel(
+                    self.store.count(),
+                    IntegrateBodies2D(
+                        store:self.store,
+                        gravity:self.current_gravity,
+                        delta:delta
+                    )
+                ).complete()
+                integrated_in_parallel = true
+            }
+        }
+        var index = 0
+        while index < self.store.count() {
+            var previous_x = self.store.positions_x[index]
+            var previous_y = self.store.positions_y[index]
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index]
+            {
+                if !integrated_in_parallel {
+                    integrate_body(
+                        self.store,
+                        self.current_gravity,
+                        index,
+                        delta
+                    )
+                }
+                previous_x = self.store.previous_positions_x[index]
+                previous_y = self.store.previous_positions_y[index]
+            } else if !self.store.dirty_transforms[index] {
+                index++
+                continue
+            }
+            let bounds = body_bounds(self.store, index)
+            self.tight_bounds[index] = bounds
+            self.broad_phase.move_proxy(
+                self.proxies[index],
+                bounds,
+                Math.Vec2(
+                    self.store.positions_x[index] - previous_x,
+                    self.store.positions_y[index] - previous_y
+                )
+            )
+            self.store.dirty_transforms[index] = false
+            index++
+        }
+        if self.profiling_enabled {
+            self.current_step_profile.motion_ms = profile_clock.tick() * 1000.0
+        }
+        if var executor = self.parallel_executor {
+            collect_pairs_parallel(
+                self.broad_phase,
+                self.discovered_pairs,
+                executor
+            )
+        } else {
+            self.broad_phase.collect_pairs(self.discovered_pairs)
+        }
+        if self.profiling_enabled {
+            self.current_pair_collection_ms = profile_clock.tick() * 1000.0
+        }
+        self.update_candidate_pairs(self.discovered_pairs)
+        if self.profiling_enabled {
+            self.current_pair_maintenance_ms = profile_clock.tick() * 1000.0
+        }
+        self.update_active_pairs()
+        self.current_candidate_pair_count = self.active_pairs.count()
+        if self.profiling_enabled {
+            self.current_pair_filter_ms = profile_clock.tick() * 1000.0
+            self.current_step_profile.broad_phase_ms =
+                self.current_pair_collection_ms +
+                self.current_pair_maintenance_ms +
+                self.current_pair_filter_ms
+        }
+        self.solve_collisions(self.active_pairs)
+        if self.profiling_enabled {
+            self.current_step_profile.solve_ms = profile_clock.tick() * 1000.0
+        }
+        self.update_sleep(delta)
+        if self.profiling_enabled {
+            self.current_step_profile.sleep_ms = profile_clock.tick() * 1000.0
+            self.current_step_profile.total_ms =
+                self.current_step_profile.motion_ms +
+                self.current_step_profile.broad_phase_ms +
+                self.current_step_profile.solve_ms +
+                self.current_step_profile.sleep_ms
+        }
+    }
+
+    private func update_sleep(delta:float) {
+        if self.sleep_enabled_body_count == 0 { return }
+        let rest_motion_threshold_squared = 0.0025
+        let significant_motion_threshold_squared = 0.01
+        let sleep_delay = 0.5
+        let sleep_quorum_numerator = 19
+        let sleep_quorum_denominator = 20
+        var index = 0
+        while index < self.store.count() {
+            self.support_grace[index] = Math.max(
+                0.0,
+                self.support_grace[index] - delta
+            )
+            self.load_grace[index] = Math.max(
+                0.0,
+                self.load_grace[index] - delta
+            )
+            self.stable_for_sleep[index] = true
+            self.sleep_parents[index] = index
+            self.sleep_ranks[index] = 0
+            self.sleep_eligible[index] = false
+            self.sleep_motion_squared[index] = 0.0
+            self.island_body_counts[index] = 0
+            self.island_ready_counts[index] = 0
+            self.island_can_sleep[index] = true
+            index++
+        }
+        var collision_index = 0
+        while collision_index < self.collisions.count() {
+            let collision = self.collisions[collision_index]
+            let first = collision.first_body
+            let second = collision.second_body
+            let offset = body_position(self.store, second).subtract(
+                body_position(self.store, first)
+            )
+            if overlap_on_axis(
+                self.store,
+                first,
+                second,
+                offset,
+                collision.normal
+            ) > 0.002
+            {
+                self.stable_for_sleep[first] = false
+                self.stable_for_sleep[second] = false
+            }
+            let height_delta = self.store.positions_y[second] -
+                self.store.positions_y[first]
+            if height_delta > 0.05 {
+                self.load_grace[first] = 0.25
+                self.support_grace[second] = 0.25
+            } else if height_delta < -0.05 {
+                self.load_grace[second] = 0.25
+                self.support_grace[first] = 0.25
+            }
+            if self.store.body_types[first] == BodyType2D.dynamic &&
+                self.store.body_types[second] == BodyType2D.dynamic &&
+                self.store.awake[first] && self.store.awake[second] &&
+                self.store.allow_sleep[first] && self.store.allow_sleep[second]
+            {
+                self.union_sleep_bodies(first, second)
+            }
+            collision_index++
+        }
+        index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                if !self.store.allow_sleep[index] {
+                    self.store.sleep_times[index] = 0.0
+                    self.store.awake[index] = true
+                } else if self.store.awake[index] {
+                    let linear_speed_squared =
+                        self.store.velocities_x[index] *
+                            self.store.velocities_x[index] +
+                        self.store.velocities_y[index] *
+                            self.store.velocities_y[index]
+                    let sweep_radius_squared =
+                        self.store.half_widths[index] *
+                            self.store.half_widths[index] +
+                        self.store.half_heights[index] *
+                            self.store.half_heights[index]
+                    let angular_speed = self.store.angular_velocities[index]
+                    let surface_motion_squared = linear_speed_squared +
+                        angular_speed * angular_speed * sweep_radius_squared
+                    self.sleep_motion_squared[index] = surface_motion_squared
+                    if surface_motion_squared > significant_motion_threshold_squared {
+                        self.store.sleep_times[index] = 0.0
+                    } else if surface_motion_squared > rest_motion_threshold_squared {
+                        self.store.sleep_times[index] = Math.max(
+                            0.0,
+                            self.store.sleep_times[index] - delta * 0.25
+                        )
+                    } else {
+                        self.store.sleep_times[index] += delta
+                        self.sleep_eligible[index] = true
+                    }
+                }
+            }
+            index++
+        }
+        index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index]
+            {
+                let root = self.find_sleep_root(index)
+                self.island_body_counts[root]++
+                if self.sleep_eligible[index] &&
+                    self.store.sleep_times[index] >= sleep_delay
+                {
+                    self.island_ready_counts[root]++
+                }
+                if !self.store.allow_sleep[index] ||
+                    self.sleep_motion_squared[index] >
+                        significant_motion_threshold_squared
+                {
+                    self.island_can_sleep[root] = false
+                }
+            }
+            index++
+        }
+        index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.awake[index]
+            {
+                let root = self.find_sleep_root(index)
+                if self.island_can_sleep[root] &&
+                    self.island_ready_counts[root] * sleep_quorum_denominator >=
+                        self.island_body_counts[root] * sleep_quorum_numerator
+                {
+                    self.store.velocities_x[index] = 0.0
+                    self.store.velocities_y[index] = 0.0
+                    self.store.angular_velocities[index] = 0.0
+                    self.store.awake[index] = false
+                }
+            }
+            index++
+        }
+    }
+
+    private func find_sleep_root(body:int) int {
+        var root = body
+        while self.sleep_parents[root] != root {
+            root = self.sleep_parents[root]
+        }
+        var current = body
+        while self.sleep_parents[current] != current {
+            let parent = self.sleep_parents[current]
+            self.sleep_parents[current] = root
+            current = parent
+        }
+        return root
+    }
+
+    private func union_sleep_bodies(first:int, second:int) {
+        var first_root = self.find_sleep_root(first)
+        var second_root = self.find_sleep_root(second)
+        if first_root == second_root { return }
+        if self.sleep_ranks[first_root] < self.sleep_ranks[second_root] {
+            let swapped = first_root
+            first_root = second_root
+            second_root = swapped
+        }
+        self.sleep_parents[second_root] = first_root
+        if self.sleep_ranks[first_root] == self.sleep_ranks[second_root] {
+            self.sleep_ranks[first_root]++
+        }
+    }
+
+    private func update_candidate_pairs(discovered:@BodyPair2D[]) {
+        var index = self.candidate_pairs.count() - 1
+        while index >= 0 {
+            if !self.candidate_enabled[index] {
+                index--
+                continue
+            }
+            let pair = self.candidate_bodies[index]
+            if !self.broad_phase.proxies_overlap(
+                self.proxies[pair.first],
+                self.proxies[pair.second]
+            ) {
+                self.candidate_pair_keys.remove(pair)
+                self.candidate_enabled[index] = false
+                if self.free_candidate_count ==
+                    self.free_candidate_slots.count()
+                {
+                    self.free_candidate_slots.append(index)
+                } else {
+                    self.free_candidate_slots[self.free_candidate_count] = index
+                }
+                self.free_candidate_count++
+            }
+            index--
+        }
+        self.new_candidate_pairs.clear()
+        for pair in discovered {
+            if !self.candidate_pair_keys.contains(pair) {
+                self.new_candidate_pairs.append(pair)
+            }
+        }
+        self.broad_phase.sort_pairs(self.new_candidate_pairs)
+        for pair in self.new_candidate_pairs { self.insert_candidate_pair(pair) }
+    }
+
+    private func update_active_pairs() {
+        self.active_pairs.clear()
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            if !self.candidate_enabled[index] {
+                index++
+                continue
+            }
+            let pair = self.candidate_bodies[index]
+            if !self.store.awake[pair.first] && !self.store.awake[pair.second]
+            {
+                index++
+                continue
+            }
+            if self.tight_bounds[pair.first].overlaps(
+                self.tight_bounds[pair.second]
+            ) {
+                self.active_pairs.append(index)
+            }
+            index++
+        }
+    }
+
+    private func insert_candidate_pair(pair:BodyPair2D) {
+        if self.store.inverse_masses[pair.first] +
+            self.store.inverse_masses[pair.second] <= 0.0
+        {
+            return
+        }
+        if self.candidate_pair_keys.contains(pair) { return }
+        self.candidate_pair_keys.add(pair)
+        if self.free_candidate_count > 0 {
+            self.free_candidate_count--
+            let slot = self.free_candidate_slots[self.free_candidate_count]
+            self.candidate_bodies[slot] = pair
+            self.candidate_enabled[slot] = true
+            self.candidate_pairs[slot] = ContactPair2D()
+        } else {
+            self.candidate_bodies.append(pair)
+            self.candidate_enabled.append(true)
+            self.candidate_pairs.append(ContactPair2D())
+        }
+    }
+
+    private func solve_collisions(pairs:@int[]) {
+        var store = self.store
+        self.collisions.clear()
+        for candidate_index in pairs {
+            let pair = self.candidate_bodies[candidate_index]
+            if let collision = build_box_collision(
+                store,
+                pair.first,
+                pair.second,
+                candidate_index,
+                self.candidate_pairs[candidate_index]
+            ) {
+                self.collisions.append(collision)
+            } else {
+                self.candidate_pairs[candidate_index].contact_count = 0
+                self.candidate_pairs[candidate_index].normal_impulse_first = 0.0
+                self.candidate_pairs[candidate_index].normal_impulse_second = 0.0
+                self.candidate_pairs[candidate_index].tangent_impulse_first = 0.0
+                self.candidate_pairs[candidate_index].tangent_impulse_second = 0.0
+            }
+        }
+        var collision_index = 0
+        while collision_index < self.collisions.count() {
+            warm_start_collision(store, self.collisions[collision_index])
+            collision_index++
+        }
+        var iteration = 0
+        while iteration < 8 {
+            collision_index = 0
+            while collision_index < self.collisions.count() {
+                var collision = self.collisions[collision_index]
+                resolve_collision_velocity(store, collision)
+                self.collisions[collision_index] = collision
+                collision_index++
+            }
+            iteration++
+        }
+        var position_iteration = 0
+        while position_iteration < 2 {
+            collision_index = 0
+            while collision_index < self.collisions.count() {
+                resolve_collision_position(
+                    store,
+                    self.collisions[collision_index]
+                )
+                collision_index++
+            }
+            position_iteration++
+        }
+        collision_index = 0
+        while collision_index < self.collisions.count() {
+            let collision = self.collisions[collision_index]
+            let cache = collision.cache_index
+            self.candidate_pairs[cache].normal = collision.normal
+            self.candidate_pairs[cache].first_contact = body_local_point(
+                store,
+                collision.first_body,
+                collision.contacts.first
+            )
+            self.candidate_pairs[cache].second_contact = body_local_point(
+                store,
+                collision.first_body,
+                collision.contacts.second
+            )
+            self.candidate_pairs[cache].contact_count = collision.contacts.count
+            self.candidate_pairs[cache].normal_impulse_first =
+                collision.normal_impulse_first
+            self.candidate_pairs[cache].normal_impulse_second =
+                collision.normal_impulse_second
+            self.candidate_pairs[cache].tangent_impulse_first =
+                collision.tangent_impulse_first
+            self.candidate_pairs[cache].tangent_impulse_second =
+                collision.tangent_impulse_second
+            collision_index++
+        }
+    }
+}
+
+func integrate_body(
+    store:BodyStore2D,
+    gravity:Math.Vec2,
+    index:int,
+    delta:float
+) {
+    store.previous_positions_x[index] = store.positions_x[index]
+    store.previous_positions_y[index] = store.positions_y[index]
+    store.velocities_x[index] +=
+        gravity.x * store.gravity_scales[index] * delta
+    store.velocities_y[index] +=
+        gravity.y * store.gravity_scales[index] * delta
+    let linear_scale = Math.max(
+        0.0,
+        1.0 - store.linear_dampings[index] * delta
+    )
+    store.velocities_x[index] *= linear_scale
+    store.velocities_y[index] *= linear_scale
+    store.angular_velocities[index] *= Math.max(
+        0.0,
+        1.0 - store.angular_dampings[index] * delta
+    )
+    store.positions_x[index] += store.velocities_x[index] * delta
+    store.positions_y[index] += store.velocities_y[index] * delta
+    if store.angular_velocities[index] != 0.0 {
+        store.rotations[index] += store.angular_velocities[index] * delta
+        store.cache_rotation(index)
+    }
+}
+
+func body_bounds(store:BodyStore2D, index:int) AABB2D {
+    let cosine = Math.abs(store.rotation_cosines[index])
+    let sine = Math.abs(store.rotation_sines[index])
+    return AABB2D(
+        body_position(store, index),
+        Math.Vec2(
+            store.half_widths[index] * cosine + store.half_heights[index] * sine,
+            store.half_widths[index] * sine + store.half_heights[index] * cosine
+        )
+    )
+}
+
+struct ContactPoints2D {
+    let first:Math.Vec2
+    let second:Math.Vec2
+    let count:int
+
+    init() {
+        self.first = Math.Vec2()
+        self.second = Math.Vec2()
+        self.count = 0
+    }
+
+    init(first:Math.Vec2) {
+        self.first = first
+        self.second = first
+        self.count = 1
+    }
+
+    init(first:Math.Vec2, second:Math.Vec2) {
+        self.first = first
+        self.second = second
+        self.count = 2
+    }
+}
+
+struct Collision2D {
+    let first_body:int
+    let second_body:int
+    let normal:Math.Vec2
+    let contacts:ContactPoints2D
+    let cache_index:int
+    var normal_impulse_first:float
+    var normal_impulse_second:float
+    var tangent_impulse_first:float
+    var tangent_impulse_second:float
+    var normal_mass_first:float
+    var normal_mass_second:float
+    var tangent_mass_first:float
+    var tangent_mass_second:float
+    var normal_denominator_first:float
+    var normal_denominator_second:float
+    var normal_coupling:float
+    var normal_determinant:float
+    var combined_friction:float
+
+    init() {
+        self.first_body = 0
+        self.second_body = 0
+        self.normal = Math.Vec2()
+        self.contacts = ContactPoints2D()
+        self.cache_index = 0
+        self.normal_impulse_first = 0.0
+        self.normal_impulse_second = 0.0
+        self.tangent_impulse_first = 0.0
+        self.tangent_impulse_second = 0.0
+        self.normal_mass_first = 0.0
+        self.normal_mass_second = 0.0
+        self.tangent_mass_first = 0.0
+        self.tangent_mass_second = 0.0
+        self.normal_denominator_first = 0.0
+        self.normal_denominator_second = 0.0
+        self.normal_coupling = 0.0
+        self.normal_determinant = 0.0
+        self.combined_friction = 0.0
+    }
+
+    init(
+        store:BodyStore2D,
+        first_body:int,
+        second_body:int,
+        normal:Math.Vec2,
+        contacts:ContactPoints2D,
+        cache_index:int,
+        cache:ContactPair2D
+    ) {
+        self.first_body = first_body
+        self.second_body = second_body
+        self.normal = normal
+        self.contacts = contacts
+        self.cache_index = cache_index
+        let first_local_contact = body_local_point(
+            store,
+            first_body,
+            contacts.first
+        )
+        let second_local_contact = body_local_point(
+            store,
+            first_body,
+            contacts.second
+        )
+        let first_contact_delta = cache.first_contact.subtract(
+            first_local_contact
+        )
+        let second_contact_delta = cache.second_contact.subtract(
+            second_local_contact
+        )
+        let contact_threshold_squared = 0.0004
+        if cache.contact_count == contacts.count &&
+            cache.normal.dot(normal) > 0.98 &&
+            first_contact_delta.dot(first_contact_delta) <= contact_threshold_squared &&
+            (contacts.count == 1 ||
+                second_contact_delta.dot(second_contact_delta) <=
+                    contact_threshold_squared)
+        {
+            self.normal_impulse_first = cache.normal_impulse_first
+            self.normal_impulse_second = cache.normal_impulse_second
+            self.tangent_impulse_first = cache.tangent_impulse_first
+            self.tangent_impulse_second = cache.tangent_impulse_second
+        } else {
+            self.normal_impulse_first = 0.0
+            self.normal_impulse_second = 0.0
+            self.tangent_impulse_first = 0.0
+            self.tangent_impulse_second = 0.0
+        }
+        self.normal_mass_first = 0.0
+        self.normal_mass_second = 0.0
+        self.tangent_mass_first = 0.0
+        self.tangent_mass_second = 0.0
+        self.normal_denominator_first = 0.0
+        self.normal_denominator_second = 0.0
+        self.normal_coupling = 0.0
+        self.normal_determinant = 0.0
+        self.combined_friction = 0.0
+    }
+}
+
+func build_box_collision(
+    store:BodyStore2D,
+    first_body:int,
+    second_body:int,
+    cache_index:int,
+    cache:ContactPair2D
+) Collision2D? {
+    let inverse_mass = store.inverse_masses[first_body] +
+        store.inverse_masses[second_body]
+    if inverse_mass <= 0.0 { return null }
+
+    let offset = body_position(store, second_body).subtract(
+        body_position(store, first_body)
+    )
+    var normal = body_axis_x(store, first_body)
+    var penetration = overlap_on_axis(store, first_body, second_body, offset, normal)
+    if penetration <= 0.0 { return null }
+
+    let first_y = body_axis_y(store, first_body)
+    let first_y_overlap = overlap_on_axis(
+        store,
+        first_body,
+        second_body,
+        offset,
+        first_y
+    )
+    if first_y_overlap <= 0.0 { return null }
+    if first_y_overlap < penetration {
+        normal = first_y
+        penetration = first_y_overlap
+    }
+
+    let second_x = body_axis_x(store, second_body)
+    let second_x_overlap = overlap_on_axis(
+        store,
+        first_body,
+        second_body,
+        offset,
+        second_x
+    )
+    if second_x_overlap <= 0.0 { return null }
+    if second_x_overlap < penetration {
+        normal = second_x
+        penetration = second_x_overlap
+    }
+
+    let second_y = body_axis_y(store, second_body)
+    let second_y_overlap = overlap_on_axis(
+        store,
+        first_body,
+        second_body,
+        offset,
+        second_y
+    )
+    if second_y_overlap <= 0.0 { return null }
+    if second_y_overlap < penetration {
+        normal = second_y
+        penetration = second_y_overlap
+    }
+
+    if offset.dot(normal) < 0.0 { normal = normal.negated() }
+    let contacts = contact_points(store, first_body, second_body, normal)
+    wake_for_contact(
+        store,
+        first_body,
+        second_body,
+        normal,
+        contacts.first,
+        penetration
+    )
+    var collision = Collision2D(
+        store,
+        first_body,
+        second_body,
+        normal,
+        contacts,
+        cache_index,
+        cache
+    )
+    prepare_collision_constraints(store, collision)
+    return collision
+}
+
+func resolve_collision_position(
+    store:BodyStore2D,
+    collision:@Collision2D
+) {
+    let first = collision.first_body
+    let second = collision.second_body
+    let first_inverse_mass = solver_inverse_mass(store, first)
+    let second_inverse_mass = solver_inverse_mass(store, second)
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    if inverse_mass <= 0.0 { return }
+    let normal = collision.normal
+    let offset = body_position(store, second).subtract(body_position(store, first))
+    let penetration = overlap_on_axis(store, first, second, offset, normal)
+    let correction_depth = Math.min(
+        0.4,
+        Math.max(penetration - 0.00025, 0.0) * 0.9
+    )
+    if correction_depth <= 0.0 { return }
+    let correction = normal.multiply(correction_depth / inverse_mass)
+    translate_body(
+        store,
+        first,
+        correction.multiply(-first_inverse_mass)
+    )
+    translate_body(
+        store,
+        second,
+        correction.multiply(second_inverse_mass)
+    )
+}
+
+func prepare_collision_constraints(
+    store:BodyStore2D,
+    collision:&Collision2D
+) {
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
+    let tangent = Math.Vec2(-normal.y, normal.x)
+    let first_inverse_mass = solver_inverse_mass(store, first)
+    let second_inverse_mass = solver_inverse_mass(store, second)
+    let first_inverse_inertia = solver_inverse_inertia(store, first)
+    let second_inverse_inertia = solver_inverse_inertia(store, second)
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    let first_position = body_position(store, first)
+    let second_position = body_position(store, second)
+    let first_contact = Math.Vec2(
+        collision.contacts.first.x,
+        collision.contacts.first.y
+    )
+    let first_radius = first_contact.subtract(first_position)
+    let second_radius = first_contact.subtract(second_position)
+    let first_normal_arm = cross(first_radius, normal)
+    let second_normal_arm = cross(second_radius, normal)
+    let first_tangent_arm = cross(first_radius, tangent)
+    let second_tangent_arm = cross(second_radius, tangent)
+    let normal_denominator = inverse_mass +
+        first_normal_arm * first_normal_arm * first_inverse_inertia +
+        second_normal_arm * second_normal_arm * second_inverse_inertia
+    let tangent_denominator = inverse_mass +
+        first_tangent_arm * first_tangent_arm * first_inverse_inertia +
+        second_tangent_arm * second_tangent_arm * second_inverse_inertia
+    collision.normal_denominator_first = normal_denominator
+    collision.normal_mass_first = 1.0 / normal_denominator
+    collision.tangent_mass_first = 1.0 / tangent_denominator
+    collision.combined_friction = Math.sqrt(
+        store.frictions[first] * store.frictions[second]
+    )
+
+    if collision.contacts.count == 2 {
+        let contact = Math.Vec2(
+            collision.contacts.second.x,
+            collision.contacts.second.y
+        )
+        let first_second_radius = contact.subtract(first_position)
+        let second_second_radius = contact.subtract(second_position)
+        let first_second_normal_arm = cross(first_second_radius, normal)
+        let second_second_normal_arm = cross(second_second_radius, normal)
+        let first_second_tangent_arm = cross(first_second_radius, tangent)
+        let second_second_tangent_arm = cross(second_second_radius, tangent)
+        let second_normal_denominator = inverse_mass +
+            first_second_normal_arm * first_second_normal_arm *
+                first_inverse_inertia +
+            second_second_normal_arm * second_second_normal_arm *
+                second_inverse_inertia
+        let second_tangent_denominator = inverse_mass +
+            first_second_tangent_arm * first_second_tangent_arm *
+                first_inverse_inertia +
+            second_second_tangent_arm * second_second_tangent_arm *
+                second_inverse_inertia
+        collision.normal_denominator_second = second_normal_denominator
+        collision.normal_mass_second = 1.0 / second_normal_denominator
+        collision.tangent_mass_second = 1.0 / second_tangent_denominator
+        let coupling = inverse_mass +
+            first_normal_arm * first_second_normal_arm *
+                first_inverse_inertia +
+            second_normal_arm * second_second_normal_arm *
+                second_inverse_inertia
+        collision.normal_coupling = coupling
+        collision.normal_determinant =
+            normal_denominator * second_normal_denominator -
+            coupling * coupling
+    }
+}
+
+func resolve_collision_velocity(
+    store:BodyStore2D,
+    collision:&Collision2D
+) {
+    if collision.contacts.count == 1 {
+        resolve_contact(store, collision, collision.contacts.first, false)
+    } else {
+        resolve_two_contacts(store, collision)
+    }
+}
+
+func warm_start_collision(store:BodyStore2D, collision:@Collision2D) {
+    apply_cached_impulse(
+        store,
+        collision,
+        collision.contacts.first,
+        collision.normal_impulse_first,
+        collision.tangent_impulse_first
+    )
+    if collision.contacts.count == 2 {
+        apply_cached_impulse(
+            store,
+            collision,
+            collision.contacts.second,
+            collision.normal_impulse_second,
+            collision.tangent_impulse_second
+        )
+    }
+}
+
+func apply_cached_impulse(
+    store:BodyStore2D,
+    collision:@Collision2D,
+    contact:Math.Vec2,
+    normal_impulse:float,
+    tangent_impulse:float
+) {
+    if normal_impulse == 0.0 && tangent_impulse == 0.0 { return }
+    let tangent = Math.Vec2(-collision.normal.y, collision.normal.x)
+    let impulse = collision.normal.multiply(normal_impulse).add(
+        tangent.multiply(tangent_impulse)
+    )
+    apply_impulse_at(store, collision.first_body, impulse.negated(), contact)
+    apply_impulse_at(store, collision.second_body, impulse, contact)
+}
+
+func contact_points(
+    store:BodyStore2D,
+    first:int,
+    second:int,
+    normal:Math.Vec2
+) ContactPoints2D {
+    let first_support = body_support(store, first, normal)
+    let second_support = body_support(store, second, normal.negated())
+    var contact = first_support.add(second_support).multiply(0.5)
+    if store.inverse_masses[first] <= 0.0 { contact = second_support }
+    else if store.inverse_masses[second] <= 0.0 { contact = first_support }
+
+    if face_alignment(store, first, normal) < 0.999 ||
+        face_alignment(store, second, normal) < 0.999
+    {
+        return ContactPoints2D(contact)
+    }
+
+    let tangent = Math.Vec2(-normal.y, normal.x)
+    let first_center = body_position(store, first).dot(tangent)
+    let second_center = body_position(store, second).dot(tangent)
+    let first_radius = projection_radius(store, first, tangent)
+    let second_radius = projection_radius(store, second, tangent)
+    let lower = Math.max(
+        first_center - first_radius,
+        second_center - second_radius
+    )
+    let upper = Math.min(
+        first_center + first_radius,
+        second_center + second_radius
+    )
+    if upper - lower <= 0.001 { return ContactPoints2D(contact) }
+
+    let plane = 0.5 * (
+        first_support.dot(normal) + second_support.dot(normal)
+    )
+    return ContactPoints2D(
+        normal.multiply(plane).add(tangent.multiply(lower)),
+        normal.multiply(plane).add(tangent.multiply(upper))
+    )
+}
+
+func face_alignment(store:BodyStore2D, body:int, normal:Math.Vec2) float {
+    return Math.max(
+        Math.abs(body_axis_x(store, body).dot(normal)),
+        Math.abs(body_axis_y(store, body).dot(normal))
+    )
+}
+
+func resolve_contact(
+    store:BodyStore2D,
+    collision:&Collision2D,
+    contact:Math.Vec2,
+    second_contact:bool
+) {
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
+    let relative_velocity = velocity_at(store, second, contact).subtract(
+        velocity_at(store, first, contact)
+    )
+    let normal_velocity = relative_velocity.dot(normal)
+    var normal_mass:float = collision.normal_mass_first + 0.0
+    if second_contact { normal_mass = collision.normal_mass_second + 0.0 }
+    var velocity_bias = normal_velocity
+    if normal_velocity < -1.0 {
+        velocity_bias *= 1.0 + Math.min(
+            store.restitutions[first],
+            store.restitutions[second]
+        )
+    }
+    var previous:float = collision.normal_impulse_first + 0.0
+    if second_contact { previous = collision.normal_impulse_second + 0.0 }
+    let increment = -velocity_bias * normal_mass
+    let accumulated = Math.max(previous + increment, 0.0)
+    let applied = accumulated - previous
+    let impulse = normal.multiply(applied)
+    apply_impulse_at(store, first, impulse.negated(), contact)
+    apply_impulse_at(store, second, impulse, contact)
+    if second_contact { collision.normal_impulse_second = accumulated }
+    else { collision.normal_impulse_first = accumulated }
+
+    resolve_friction(store, collision, contact, second_contact)
+}
+
+func resolve_two_contacts(
+    store:BodyStore2D,
+    collision:&Collision2D
+) {
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
+    let contacts = ContactPoints2D(
+        Math.Vec2(collision.contacts.first.x, collision.contacts.first.y),
+        Math.Vec2(collision.contacts.second.x, collision.contacts.second.y)
+    )
+    let mass_a = collision.normal_denominator_first + 0.0
+    let mass_b = collision.normal_denominator_second + 0.0
+    let coupling = collision.normal_coupling + 0.0
+    let determinant = collision.normal_determinant + 0.0
+    if determinant <= 0.00000001 {
+        resolve_contact(store, collision, contacts.first, false)
+        resolve_contact(store, collision, contacts.second, true)
+        return
+    }
+
+    let velocity_a = velocity_at(store, second, contacts.first).subtract(
+        velocity_at(store, first, contacts.first)
+    ).dot(normal)
+    let velocity_b = velocity_at(store, second, contacts.second).subtract(
+        velocity_at(store, first, contacts.second)
+    ).dot(normal)
+    let restitution = Math.min(store.restitutions[first], store.restitutions[second])
+    var bias_a = velocity_a
+    var bias_b = velocity_b
+    if velocity_a < -1.0 { bias_a *= 1.0 + restitution }
+    if velocity_b < -1.0 { bias_b *= 1.0 + restitution }
+    let delta_a = (-mass_b * bias_a + coupling * bias_b) / determinant
+    let delta_b = (coupling * bias_a - mass_a * bias_b) / determinant
+    let impulse_a = collision.normal_impulse_first + delta_a
+    let impulse_b = collision.normal_impulse_second + delta_b
+    if impulse_a < 0.0 || impulse_b < 0.0 {
+        resolve_contact(store, collision, contacts.first, false)
+        resolve_contact(store, collision, contacts.second, true)
+        return
+    }
+
+    apply_impulse_at(store, first, normal.multiply(-delta_a), contacts.first)
+    apply_impulse_at(store, second, normal.multiply(delta_a), contacts.first)
+    apply_impulse_at(store, first, normal.multiply(-delta_b), contacts.second)
+    apply_impulse_at(store, second, normal.multiply(delta_b), contacts.second)
+    collision.normal_impulse_first = impulse_a
+    collision.normal_impulse_second = impulse_b
+    resolve_friction(store, collision, contacts.first, false)
+    resolve_friction(store, collision, contacts.second, true)
+}
+
+func resolve_friction(
+    store:BodyStore2D,
+    collision:&Collision2D,
+    contact:Math.Vec2,
+    second_contact:bool
+) {
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
+    let relative_velocity = velocity_at(store, second, contact).subtract(
+        velocity_at(store, first, contact)
+    )
+    let tangent = Math.Vec2(-normal.y, normal.x)
+    let tangent_velocity = relative_velocity.dot(tangent)
+    if Math.abs(tangent_velocity) <= 0.000001 { return }
+
+    var tangent_mass:float = collision.tangent_mass_first + 0.0
+    var previous:float = collision.tangent_impulse_first + 0.0
+    var normal_impulse:float = collision.normal_impulse_first + 0.0
+    if second_contact {
+        previous = collision.tangent_impulse_second + 0.0
+        normal_impulse = collision.normal_impulse_second + 0.0
+        tangent_mass = collision.tangent_mass_second + 0.0
+    }
+    let increment = -tangent_velocity * tangent_mass
+    let friction_limit = collision.combined_friction * normal_impulse
+    let accumulated = Math.max(
+        -friction_limit,
+        Math.min(previous + increment, friction_limit)
+    )
+    let tangent_impulse = tangent.multiply(accumulated - previous)
+    apply_impulse_at(store, first, tangent_impulse.negated(), contact)
+    apply_impulse_at(store, second, tangent_impulse, contact)
+    if second_contact { collision.tangent_impulse_second = accumulated }
+    else { collision.tangent_impulse_first = accumulated }
+}
+
+func overlap_on_axis(
+    store:BodyStore2D,
+    first:int,
+    second:int,
+    offset:Math.Vec2,
+    axis:Math.Vec2
+) float {
+    return projection_radius(store, first, axis) +
+        projection_radius(store, second, axis) -
+        Math.abs(offset.dot(axis))
+}
+
+func body_position(store:BodyStore2D, index:int) Math.Vec2 {
+    return Math.Vec2(store.positions_x[index], store.positions_y[index])
+}
+
+func body_local_point(
+    store:BodyStore2D,
+    index:int,
+    point:Math.Vec2
+) Math.Vec2 {
+    let offset_x = point.x - store.positions_x[index]
+    let offset_y = point.y - store.positions_y[index]
+    let cosine = store.rotation_cosines[index]
+    let sine = store.rotation_sines[index]
+    return Math.Vec2(
+        offset_x * cosine + offset_y * sine,
+        offset_y * cosine - offset_x * sine
+    )
+}
+
+func body_axis_x(store:BodyStore2D, index:int) Math.Vec2 {
+    return Math.Vec2(
+        store.rotation_cosines[index],
+        store.rotation_sines[index]
+    )
+}
+
+func body_axis_y(store:BodyStore2D, index:int) Math.Vec2 {
+    return Math.Vec2(
+        -store.rotation_sines[index],
+        store.rotation_cosines[index]
+    )
+}
+
+func projection_radius(
+    store:BodyStore2D,
+    index:int,
+    axis:Math.Vec2
+) float {
+    let cosine = store.rotation_cosines[index]
+    let sine = store.rotation_sines[index]
+    let along_x = axis.x * cosine + axis.y * sine
+    let along_y = axis.x * -sine + axis.y * cosine
+    return store.half_widths[index] * Math.abs(along_x) +
+        store.half_heights[index] * Math.abs(along_y)
+}
+
+func body_support(
+    store:BodyStore2D,
+    index:int,
+    direction:Math.Vec2
+) Math.Vec2 {
+    let cosine = store.rotation_cosines[index]
+    let sine = store.rotation_sines[index]
+    var x = 0.0
+    var y = 0.0
+    let along_x = direction.x * cosine + direction.y * sine
+    let along_y = direction.x * -sine + direction.y * cosine
+    if along_x > 0.000001 { x = store.half_widths[index] }
+    else if along_x < -0.000001 { x = -store.half_widths[index] }
+    if along_y > 0.000001 { y = store.half_heights[index] }
+    else if along_y < -0.000001 { y = -store.half_heights[index] }
+    return Math.Vec2(
+        store.positions_x[index] + cosine * x - sine * y,
+        store.positions_y[index] + sine * x + cosine * y
+    )
+}
+
+func velocity_at(
+    store:BodyStore2D,
+    index:int,
+    point:Math.Vec2
+) Math.Vec2 {
+    let radius_x = point.x - store.positions_x[index]
+    let radius_y = point.y - store.positions_y[index]
+    let angular = store.angular_velocities[index]
+    return Math.Vec2(
+        store.velocities_x[index] - angular * radius_y,
+        store.velocities_y[index] + angular * radius_x
+    )
+}
+
+func wake_for_contact(
+    store:BodyStore2D,
+    first:int,
+    second:int,
+    normal:Math.Vec2,
+    contact:Math.Vec2,
+    penetration:float
+) {
+    if store.awake[first] == store.awake[second] { return }
+    let relative_velocity = velocity_at(store, second, contact).subtract(
+        velocity_at(store, first, contact)
+    )
+    if relative_velocity.dot(normal) >= -0.35 && penetration <= 0.015 {
+        return
+    }
+    if store.awake[first] { store.wake(second) }
+    else { store.wake(first) }
+}
+
+func solver_inverse_mass(store:BodyStore2D, index:int) float {
+    if !store.awake[index] { return 0.0 }
+    return store.inverse_masses[index]
+}
+
+func solver_inverse_inertia(store:BodyStore2D, index:int) float {
+    if !store.awake[index] { return 0.0 }
+    return store.inverse_inertias[index]
+}
+
+func translate_body(store:BodyStore2D, index:int, offset:Math.Vec2) {
+    if !store.awake[index] || store.inverse_masses[index] <= 0.0 { return }
+    store.positions_x[index] += offset.x
+    store.positions_y[index] += offset.y
+    store.dirty_transforms[index] = true
+}
+
+func apply_impulse_at(
+    store:BodyStore2D,
+    index:int,
+    impulse:Math.Vec2,
+    point:Math.Vec2
+) {
+    if !store.awake[index] { return }
+    store.velocities_x[index] += impulse.x * store.inverse_masses[index]
+    store.velocities_y[index] += impulse.y * store.inverse_masses[index]
+    let radius_x = point.x - store.positions_x[index]
+    let radius_y = point.y - store.positions_y[index]
+    store.angular_velocities[index] +=
+        (radius_x * impulse.y - radius_y * impulse.x) *
+        store.inverse_inertias[index]
+}
+
+func cross(left:Math.Vec2, right:Math.Vec2) float {
+    return left.x * right.y - left.y * right.x
+}
