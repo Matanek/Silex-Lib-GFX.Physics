@@ -231,9 +231,9 @@ func refresh_box_stats(scene:&Resources.World, simulation:&Simulation) {
     let candidate_pair_count = simulation.physics.candidate_pair_count()
     let awake_count = simulation.physics.awake_body_count()
     let profile = simulation.physics.step_profile()
-    scene.update<Components.Overlay2D>(
+    scene.update<Components.Canvas>(
         simulation.stats_display,
-        func(display:&Components.Overlay2D) {
+        func(display:&Components.Canvas) {
             var drawing = box_stats_drawing(
                 box_count,
                 dynamic_count,
@@ -294,7 +294,7 @@ func create_container(scene:&Resources.World, simulation:&Simulation) {
     var frame = container_drawing()
     scene.spawn(ECS.EntityRecipe()
         ..with(Components.Transform2D())
-        ..with(Components.Drawing2D(
+        ..with(Components.Canvas(
             frame,
             (Constants.container_width * Constants.pixels_per_meter) as int,
             (Constants.container_height * Constants.pixels_per_meter) as int
@@ -387,8 +387,10 @@ func create_scene(scene:&Resources.World, simulation:&Simulation) {
         simulation.physics.step_profile()
     )
     simulation.stats_display = scene.spawn(ECS.EntityRecipe()
-        ..with(Components.Overlay2D(stats, 252, 190)
-            ..position = Math.Vec2(16.0, 238.0)
+        ..with(Components.Transform2D(position:Math.Vec2(16.0, 238.0)))
+        ..with(Components.Canvas(stats, 252, 190)
+            ..space = Components.CanvasSpace.viewport
+            ..pivot = Math.Vec2()
             ..layer = 101
         )
     )
@@ -528,18 +530,14 @@ func main() {
             requested_smoke_frames(),
             requested_stress_count()
         ))
-        ..add_plugin(Plugins.Window(Plugins.WindowSettings()
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
             ..title = "GFX.Physics — Falling squares"
             ..width = Constants.window_width
             ..height = Constants.window_height
             ..resizable = false
         ))
-        ..add_plugin(Plugins.Rendering(Plugins.RenderingSettings()
+        ..add_plugin(Plugins.Rendering(Plugins.Rendering.Settings()
             ..clear = Color.slate_950()
-        ))
-        ..add_plugin(Plugins.PerformancePanel(Plugins.PerformancePanelSettings()
-            ..anchor = Plugins.FPSCounterAnchor.top_left
-            ..margin = Math.Vec2(16.0)
         ))
         ..add_plugin(Plugins.Scene2D())
         ..add_plugin(Plugins.Time())

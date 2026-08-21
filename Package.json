@@ -1,9 +1,15 @@
 {
   "name": "GFX.Physics",
-  "version": "0.1.0",
-  "requires": { "silex": ">=0.38.34" },
+  "version": "0.2.0",
+  "requires": { "silex": ">=0.38.36" },
   "dependencies": {
-    "GFX": "^0.36.0",
+    "GFX": "^0.37.0",
+    "GFX.Canvas": "^0.1.0",
+    "GFX.Scene2D": "^0.1.0",
     "STD": "^0.16.0"
+  },
+  "devDependencies": {
+    "GFX.ECS": "^0.1.0",
+    "GFX.Rendering": "^0.1.0"
   }
 }

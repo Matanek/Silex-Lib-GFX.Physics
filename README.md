@@ -4,7 +4,7 @@
 small, headless 2D simulation API and grows through executable examples.
 
 ```text
-silex install path/to/GFX.Physics
+silex install GFX.Physics
 ```
 
 ```silex
