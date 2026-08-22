@@ -1,7 +1,9 @@
 {
   "name": "GFX.Physics",
-  "version": "0.2.0",
-  "requires": { "silex": ">=0.38.36" },
+  "version": "0.3.0",
+  "description": "Optional headless 2D physics simulation for GFX.",
+  "authors": ["Matanek"],
+  "requires": { "silex": ">=0.39.0" },
   "dependencies": {
     "GFX": "^0.37.0",
     "GFX.Canvas": "^0.1.0",
