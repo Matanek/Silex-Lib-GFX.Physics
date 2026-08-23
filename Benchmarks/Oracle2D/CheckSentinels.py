@@ -80,6 +80,8 @@ def main() -> int:
         for record in records:
             if record.get("present") != "immediate":
                 failures.append("presentation is not recorded as immediate")
+            if name == "world-example" and record.get("focus") != "focused":
+                failures.append("World window is not recorded as focused")
             try:
                 fps = float(record["fps"])
             except (KeyError, ValueError):

@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import math
 import pathlib
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -68,17 +69,28 @@ def parse_record(line: str, source: str, line_number: int) -> dict[str, str]:
 
 def load_records(paths: list[pathlib.Path]) -> list[dict[str, str]]:
     records: list[dict[str, str]] = []
+    rss_pattern = re.compile(r"^# run=\d+ rss_bytes=(\d+)(?:\s|$)")
     if not paths:
         sources = [("<stdin>", sys.stdin)]
     else:
         sources = [(str(path), path.open(encoding="utf-8")) for path in paths]
     try:
         for source, stream in sources:
+            pending_rss: str | None = None
             for line_number, raw_line in enumerate(stream, 1):
                 line = raw_line.strip()
-                if not line or line.startswith("#"):
+                if not line:
                     continue
-                records.append(parse_record(line, source, line_number))
+                if line.startswith("#"):
+                    match = rss_pattern.match(line)
+                    if match:
+                        pending_rss = match.group(1)
+                    continue
+                record = parse_record(line, source, line_number)
+                if pending_rss is not None:
+                    record["_rss_bytes"] = pending_rss
+                    pending_rss = None
+                records.append(record)
     finally:
         for _, stream in sources:
             if stream is not sys.stdin:
@@ -148,6 +160,12 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
         key = (record["engine"], record["scenario"], record["mode"], record["workers"])
         grouped[key].append(record)
 
+    rss_baselines: dict[tuple[str, str, str], float] = {}
+    for (engine, scenario, mode, workers), group in grouped.items():
+        rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
+        if scenario == "release-parity" and len(rss_values) == len(group):
+            rss_baselines[(engine, mode, workers)] = statistics.median(rss_values)
+
     for key in sorted(grouped):
         engine, scenario, mode, workers = key
         group = grouped[key]
@@ -169,6 +187,9 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
             f"n={len(group)} median={median:.6f}ms min={min(times):.6f}ms "
             f"max={max(times):.6f}ms mad={mad:.6f}ms ({relative_mad * 100.0:.2f}%)"
         )
+        rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
+        if len(rss_values) == len(group):
+            timing += f" rss_median={statistics.median(rss_values):.0f}B"
 
         if len(group) >= 7 and relative_mad > 0.05:
             group_failures.append(f"timing MAD {relative_mad * 100.0:.2f}% exceeds 5%")
@@ -176,6 +197,15 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
             budget = CADENCE_BUDGETS_MS.get(scenario)
             if budget is not None and median > budget:
                 group_failures.append(f"median {median:.6f} ms exceeds {budget:.2f} ms budget")
+            if scenario in {"sparse-10000", "circle-5000"} and len(rss_values) == len(group):
+                baseline = rss_baselines.get((engine, mode, workers))
+                if baseline is not None:
+                    rss_median = statistics.median(rss_values)
+                    bytes_per_body = (rss_median - baseline) / int(group[0]["bodies"])
+                    if bytes_per_body > 1024.0:
+                        group_failures.append(
+                            f"incremental RSS {bytes_per_body:.3f} B/body exceeds 1024 B/body"
+                        )
 
         status = "PASS" if not group_failures else "FAIL"
         reports.append(f"{status} {label}: {timing}")

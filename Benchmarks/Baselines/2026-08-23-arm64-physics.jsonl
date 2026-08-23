@@ -1,0 +1,226 @@
+# captured=2026-08-23
+# host_model=MacBook_Pro_Mac15,7
+# cpu=Apple_M3_Pro_12_cores_6P_6E
+# memory_bytes=19327352832
+# os=macOS_26.5.2_25F84
+# architecture=arm64
+# silex_version=0.39.1
+# silex_toolchain_commit=b52b54f4dcc48f814a0a258cefd5058df9794951
+# gfx_physics_commit=b453ac9abccfcb0b697ac9704aaac41efac11409
+# box2d_revision=v3.1.1_8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3
+# protocol=one_discarded_warmup_then_seven_isolated_release_processes
+# rss_bytes_and_peak_footprint_bytes_are_reported_in_the_comment_before_each_release_record
+# debug_correctness_silex
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=debug workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.996 step_ms=0.0083 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=debug workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=65.948006 step_ms=0.5495667 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=debug workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=340.776 step_ms=2.8398001 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=debug workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=758.36005 step_ms=6.319667 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=debug workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=6446.2783 step_ms=26.859493 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=debug workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=6892.77 step_ms=22.9759 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=debug workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=35116.406 step_ms=117.05469 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# debug_correctness_box2d
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=debug workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.863037 step_ms=0.007192 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=debug workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=61.706055 step_ms=0.514217 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=debug workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=330.413818 step_ms=2.753448 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=debug workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=666.062988 step_ms=5.550525 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=debug workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=794.184082 step_ms=3.309100 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=debug workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=3240.174805 step_ms=10.800583 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=debug workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=17186.947998 step_ms=57.289827 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# release_measurements
+# run=1 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.74300003 step_ms=0.0061916667 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=2 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.74799997 step_ms=0.006233333 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=3 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.811 step_ms=0.006758333 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=4 rss_bytes=4128768 peak_footprint_bytes=2965816
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.77 step_ms=0.0064166663 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=5 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.90400004 step_ms=0.0075333337 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=6 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.769 step_ms=0.0064083333 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=7 rss_bytes=4128768 peak_footprint_bytes=2982224
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.793 step_ms=0.006608333 centroid_x=0.0 centroid_y=0.49975002 max_speed=0.0 min_y=0.49975002 max_overlap_mm=-1.0 awake=1 contacts=1 state_signature=1.49925 memory_bytes=-1
+# run=1 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=56.218 step_ms=0.46848333 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=2 rss_bytes=20398080 peak_footprint_bytes=19464528
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=55.454998 step_ms=0.46212497 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=3 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=54.908997 step_ms=0.45757496 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=4 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=55.006 step_ms=0.45838335 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=5 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=55.59 step_ms=0.46325 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=6 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=55.145 step_ms=0.45954168 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=7 rss_bytes=20398080 peak_footprint_bytes=19480936
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=54.245 step_ms=0.45204166 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+# run=1 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=257.241 step_ms=2.143675 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=2 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=261.19803 step_ms=2.1766503 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=3 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=267.023 step_ms=2.2251918 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=4 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=273.209 step_ms=2.2767417 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=5 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=262.702 step_ms=2.1891832 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=6 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=270.27 step_ms=2.25225 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=7 rss_bytes=88604672 peak_footprint_bytes=87507352
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=260.27798 step_ms=2.1689832 centroid_x=65.87499 centroid_y=31.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=5000 contacts=0 state_signature=2533600800.0 memory_bytes=-1
+# run=1 rss_bytes=173457408 peak_footprint_bytes=172343776
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=537.831 step_ms=4.481925 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=2 rss_bytes=173457408 peak_footprint_bytes=172327368
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=553.013 step_ms=4.608442 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=3 rss_bytes=173457408 peak_footprint_bytes=172327368
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=552.137 step_ms=4.601142 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=4 rss_bytes=173457408 peak_footprint_bytes=172343776
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=536.704 step_ms=4.472533 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=5 rss_bytes=173457408 peak_footprint_bytes=172327368
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=538.163 step_ms=4.484692 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=6 rss_bytes=173457408 peak_footprint_bytes=172327368
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=532.23004 step_ms=4.4352503 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=7 rss_bytes=173457408 peak_footprint_bytes=172327368
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=538.907 step_ms=4.4908915 centroid_x=65.87499 centroid_y=62.375 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=10000 contacts=0 state_signature=16373907000.0 memory_bytes=-1
+# run=1 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=4975.568 step_ms=20.731533 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=2 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=4949.39 step_ms=20.62246 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=3 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=4950.873 step_ms=20.628637 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=4 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=4981.4272 step_ms=20.755947 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=5 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=5046.818 step_ms=21.028408 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=6 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=5058.812 step_ms=21.078382 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=7 rss_bytes=21676032 peak_footprint_bytes=20201832
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=5140.015 step_ms=21.416729 centroid_x=-0.29065275 centroid_y=3.9685504 max_speed=1.4028072 min_y=0.19607833 max_overlap_mm=-1.0 awake=1000 contacts=1593 state_signature=7048619.5 memory_bytes=-1
+# run=1 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5878.627 step_ms=19.595423 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=2 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5996.629 step_ms=19.988764 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=3 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5971.666 step_ms=19.905554 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=4 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5945.597 step_ms=19.818657 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=5 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5896.947 step_ms=19.656488 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=6 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5944.673 step_ms=19.815577 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+# run=7 rss_bytes=34816000 peak_footprint_bytes=33227112
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=5919.983 step_ms=19.733276 centroid_x=-0.046799995 centroid_y=-2.001882 max_speed=0.0002425313 min_y=-2.9503942 max_overlap_mm=5.9777274 awake=1800 contacts=87 state_signature=-8139242.5 memory_bytes=-1
+
+# run=1 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=30753.814 step_ms=102.51272 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=2 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=30377.21 step_ms=101.25737 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=3 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=29959.223 step_ms=99.864075 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=4 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=29940.42 step_ms=99.8014 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=5 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=30201.375 step_ms=100.67125 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=6 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=30778.828 step_ms=102.59609 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=7 rss_bytes=94863360 peak_footprint_bytes=93307288
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=30487.906 step_ms=101.62635 centroid_x=-0.03905046 centroid_y=-2.5879438 max_speed=0.12928568 min_y=-2.9754453 max_overlap_mm=49.05616 awake=5000 contacts=386 state_signature=-93540870.0 memory_bytes=-1
+# run=1 rss_bytes=1998848 peak_footprint_bytes=1376568
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.126953 step_ms=0.001058 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=2 rss_bytes=1982464 peak_footprint_bytes=1360184
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.114990 step_ms=0.000958 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=3 rss_bytes=1998848 peak_footprint_bytes=1376568
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.123047 step_ms=0.001025 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=4 rss_bytes=1982464 peak_footprint_bytes=1360184
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.105957 step_ms=0.000883 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=5 rss_bytes=1982464 peak_footprint_bytes=1360184
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.120117 step_ms=0.001001 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=6 rss_bytes=1982464 peak_footprint_bytes=1360184
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.127197 step_ms=0.001060 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=7 rss_bytes=1998848 peak_footprint_bytes=1376568
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=release-parity mode=release workers=1 bodies=1 steps=120 dt=0.008333334 elapsed_ms=0.132080 step_ms=0.001101 centroid_x=0.000010599 centroid_y=0.499896049 max_speed=0.000080286 min_y=0.499896049 max_overlap_mm=-1.000000000 awake=1 contacts=1 state_signature=1.501165661 memory_bytes=19684
+# run=1 rss_bytes=4227072 peak_footprint_bytes=3621200
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=11.500977 step_ms=0.095841 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=2 rss_bytes=4276224 peak_footprint_bytes=3670352
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=10.480957 step_ms=0.087341 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=3 rss_bytes=4227072 peak_footprint_bytes=3621200
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=9.837158 step_ms=0.081976 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=4 rss_bytes=4227072 peak_footprint_bytes=3621200
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=10.907959 step_ms=0.090900 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=5 rss_bytes=4227072 peak_footprint_bytes=3621200
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=10.976074 step_ms=0.091467 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=6 rss_bytes=4243456 peak_footprint_bytes=3637584
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=10.823975 step_ms=0.090200 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=7 rss_bytes=4227072 peak_footprint_bytes=3621200
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=9.641846 step_ms=0.080349 centroid_x=65.874949307 centroid_y=6.124994534 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=1000 contacts=0 state_signature=52183275.982962251 memory_bytes=1546564
+# run=1 rss_bytes=9568256 peak_footprint_bytes=8978792
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.049072 step_ms=0.517076 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=2 rss_bytes=9617408 peak_footprint_bytes=9027944
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.306885 step_ms=0.519224 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=3 rss_bytes=9568256 peak_footprint_bytes=8978792
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=65.315186 step_ms=0.544293 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=4 rss_bytes=9633792 peak_footprint_bytes=9044328
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.457764 step_ms=0.520481 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=5 rss_bytes=9601024 peak_footprint_bytes=9011560
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.151855 step_ms=0.517932 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=6 rss_bytes=9535488 peak_footprint_bytes=8946024
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.417969 step_ms=0.520150 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=7 rss_bytes=9551872 peak_footprint_bytes=8962408
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-5000 mode=release workers=1 bodies=5000 steps=120 dt=0.016666668 elapsed_ms=62.095947 step_ms=0.517466 centroid_x=65.874949307 centroid_y=31.124967626 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=5000 contacts=0 state_signature=2533600880.110445499 memory_bytes=7850148
+# run=1 rss_bytes=14073856 peak_footprint_bytes=13484392
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=130.303955 step_ms=1.085866 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=2 rss_bytes=14106624 peak_footprint_bytes=13517160
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=133.994873 step_ms=1.116624 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=3 rss_bytes=14172160 peak_footprint_bytes=13582696
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=130.081055 step_ms=1.084009 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=4 rss_bytes=14073856 peak_footprint_bytes=13484392
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=132.149170 step_ms=1.101243 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=5 rss_bytes=14090240 peak_footprint_bytes=13500776
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=132.625000 step_ms=1.105208 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=6 rss_bytes=14073856 peak_footprint_bytes=13484392
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=131.628906 step_ms=1.096908 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=7 rss_bytes=14204928 peak_footprint_bytes=13615464
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=sparse-10000 mode=release workers=1 bodies=10000 steps=120 dt=0.016666668 elapsed_ms=133.580078 step_ms=1.113167 centroid_x=65.874949307 centroid_y=62.374922778 max_speed=2.015564437 min_y=0.499999702 max_overlap_mm=-1.000000000 awake=10000 contacts=0 state_signature=16373908055.452981949 memory_bytes=14596744
+# run=1 rss_bytes=8437760 peak_footprint_bytes=7831888
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=54.529053 step_ms=0.227204 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=2 rss_bytes=8372224 peak_footprint_bytes=7766352
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=52.281006 step_ms=0.217838 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=3 rss_bytes=8470528 peak_footprint_bytes=7864656
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=52.529053 step_ms=0.218871 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=4 rss_bytes=8470528 peak_footprint_bytes=7864656
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=53.133057 step_ms=0.221388 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=5 rss_bytes=8437760 peak_footprint_bytes=7831888
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=53.120117 step_ms=0.221334 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=6 rss_bytes=8519680 peak_footprint_bytes=7913808
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=52.461182 step_ms=0.218588 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=7 rss_bytes=8454144 peak_footprint_bytes=7848272
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=pile-1000 mode=release workers=1 bodies=1000 steps=240 dt=0.016666668 elapsed_ms=53.028809 step_ms=0.220953 centroid_x=0.003074264 centroid_y=3.911822121 max_speed=0.000000000 min_y=0.198226333 max_overlap_mm=-1.000000000 awake=0 contacts=3842 state_signature=7920427.469945431 memory_bytes=4967412
+# run=1 rss_bytes=19857408 peak_footprint_bytes=19267944
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=222.260986 step_ms=0.740870 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=2 rss_bytes=19873792 peak_footprint_bytes=19284328
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=228.025146 step_ms=0.760084 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=3 rss_bytes=19906560 peak_footprint_bytes=19317096
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=221.771973 step_ms=0.739240 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=4 rss_bytes=19841024 peak_footprint_bytes=19251560
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=257.654053 step_ms=0.858847 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=5 rss_bytes=19873792 peak_footprint_bytes=19284328
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=220.255127 step_ms=0.734184 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=6 rss_bytes=19873792 peak_footprint_bytes=19284328
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=224.678955 step_ms=0.748930 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=7 rss_bytes=19841024 peak_footprint_bytes=19251560
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-1800 mode=release workers=1 bodies=1800 steps=300 dt=0.016666668 elapsed_ms=223.761963 step_ms=0.745873 centroid_x=-0.046799997 centroid_y=-2.041161029 max_speed=0.000006318 min_y=-2.951478004 max_overlap_mm=11.257268488 awake=1800 contacts=20219 state_signature=-8381939.303574164 memory_bytes=10963912
+# run=1 rss_bytes=82690048 peak_footprint_bytes=82133400
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1365.163086 step_ms=4.550544 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=2 rss_bytes=82673664 peak_footprint_bytes=82117016
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1382.705811 step_ms=4.609019 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=3 rss_bytes=82575360 peak_footprint_bytes=82018712
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1359.174072 step_ms=4.530580 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=4 rss_bytes=82640896 peak_footprint_bytes=82084248
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1359.189941 step_ms=4.530633 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=5 rss_bytes=82477056 peak_footprint_bytes=81920408
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1362.214844 step_ms=4.540716 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=6 rss_bytes=82558976 peak_footprint_bytes=82002328
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1343.648926 step_ms=4.478830 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880
+# run=7 rss_bytes=82526208 peak_footprint_bytes=81969560
+SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=circle-5000 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=1338.196045 step_ms=4.460653 centroid_x=-0.036399998 centroid_y=-2.420830934 max_speed=0.000006974 min_y=-2.977111101 max_overlap_mm=16.325283796 awake=5000 contacts=141934 state_signature=-83418374.667319968 memory_bytes=58550880

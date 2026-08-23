@@ -1,0 +1,59 @@
+# captured=2026-08-23
+# host_model=MacBook_Pro_Mac15,7
+# cpu=Apple_M3_Pro_12_cores_6P_6E
+# memory_bytes=19327352832
+# os=macOS_26.5.2_25F84
+# architecture=arm64
+# silex_version=0.39.1
+# silex_toolchain_commit=b52b54f4dcc48f814a0a258cefd5058df9794951
+# gfx_scene2d_commit=221bc0af2839af453947c6b4ee50e9bfb4f66932
+# gfx_scene3d_commit=0aeacadfd9232f4707443931ac0ed7944efa73c3
+# gfx_canvas_commit=e4c64537148b9128eb033352cb6802e865098a41
+# protocol=one_discarded_warmup_then_seven_isolated_five_second_runs
+# presentation=immediate
+# world_focus=focused_via_--benchmark-focused
+# nonfocused_world_measurements_discarded
+# sentinel=boids-kernel-4000 run=1
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.59794 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=2
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.59428 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=3
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.05998 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=4
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.87506 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=5
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.10006 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=6
+SILEX_GFX_BOIDS count=4000 present=immediate fps=79.92464 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-kernel-4000 run=7
+SILEX_GFX_BOIDS count=4000 present=immediate fps=80.27854 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+# sentinel=boids-example-2000 run=1
+SILEX_GFX_BOIDS count=2000 present=immediate fps=241.37813
+# sentinel=boids-example-2000 run=2
+SILEX_GFX_BOIDS count=2000 present=immediate fps=224.28621
+# sentinel=boids-example-2000 run=3
+SILEX_GFX_BOIDS count=2000 present=immediate fps=237.54832
+# sentinel=boids-example-2000 run=4
+SILEX_GFX_BOIDS count=2000 present=immediate fps=229.00356
+# sentinel=boids-example-2000 run=5
+SILEX_GFX_BOIDS count=2000 present=immediate fps=239.97601
+# sentinel=boids-example-2000 run=6
+SILEX_GFX_BOIDS count=2000 present=immediate fps=227.0604
+# sentinel=boids-example-2000 run=7
+SILEX_GFX_BOIDS count=2000 present=immediate fps=238.67598
+# sentinel=world-example-focused run=1
+SILEX_GFX_WORLD seconds=5.0001373 present=immediate grass=5000 moving=false focus=focused fps=232.19362 slowest_ms=14.262 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=2
+SILEX_GFX_WORLD seconds=5.0014243 present=immediate grass=5000 moving=false focus=focused fps=229.13474 slowest_ms=16.1 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=3
+SILEX_GFX_WORLD seconds=5.0008235 present=immediate grass=5000 moving=false focus=focused fps=223.76315 slowest_ms=16.636 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=4
+SILEX_GFX_WORLD seconds=5.00056 present=immediate grass=5000 moving=false focus=focused fps=231.3741 slowest_ms=14.222 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=5
+SILEX_GFX_WORLD seconds=5.001842 present=immediate grass=5000 moving=false focus=focused fps=223.51765 slowest_ms=14.997 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=6
+SILEX_GFX_WORLD seconds=5.0024557 present=immediate grass=5000 moving=false focus=focused fps=227.08847 slowest_ms=16.959 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# sentinel=world-example-focused run=7
+SILEX_GFX_WORLD seconds=5.0012875 present=immediate grass=5000 moving=false focus=focused fps=225.94182 slowest_ms=19.502998 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# shape_gallery_release_smoke=alive_for_five_seconds_without_renderer_or_shader_diagnostic_then_stopped
+# canvas_package_tests=28_passed_0_failed
