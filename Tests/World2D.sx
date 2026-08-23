@@ -29,7 +29,7 @@ test "retain and remove persistent candidate pairs" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(4.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -70,6 +70,35 @@ test "advance a dynamic body under gravity" {
     assert(body.position().nearly_equal(Math.Vec2(0.0, 7.5475), 0.000001))
 }
 
+test "write dynamic body transforms into a reusable buffer" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(9.0, 9.0)
+    )
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 2.0)
+        ..rotation = 0.25
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(3.0, 4.0)
+        ..rotation = 0.5
+    )
+    var transforms = Physics.BodyTransformBuffer2D()
+
+    world.write_dynamic_body_transforms(transforms)
+    assert(transforms.count() == 2)
+    assert(transforms.position(0) == Math.Vec2(1.0, 2.0))
+    assert(transforms.rotation(0) == 0.25)
+    assert(transforms.position(1) == Math.Vec2(3.0, 4.0))
+    assert(transforms.rotation(1) == 0.5)
+
+    first.set_position(Math.Vec2(5.0, 6.0))
+    world.write_dynamic_body_transforms(transforms)
+    assert(transforms.count() == 2)
+    assert(transforms.position(0) == Math.Vec2(5.0, 6.0))
+}
+
 test "preserve explicit motion when gravity is disabled for a body" {
     var world = Physics.World2D()
     var body = world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -89,11 +118,11 @@ test "rest a dynamic box on a fixed box" {
     var world = Physics.World2D()
     var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
     )
 
@@ -112,11 +141,11 @@ test "rest on a wide floor away from the world origin" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(12.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(12.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(4.0, 2.0)
     )
 
@@ -134,11 +163,11 @@ test "put a resting body to sleep and wake it on mutation" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 0.5)
     )
 
@@ -158,15 +187,15 @@ test "keep a buried support asleep below an active neighbour" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var buried = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 0.5)
     )
     var active = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 1.5)
         ..allow_sleep = false
     )
@@ -192,16 +221,16 @@ test "keep dynamic boxes inside fixed container walls" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var left = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(0.2, 4.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.2, 4.0)))
         ..position = Math.Vec2(-1.1, 0.0)
     )
     var right = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(0.2, 4.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.2, 4.0)))
         ..position = Math.Vec2(1.1, 0.0)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(0.4))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.4)))
         ..velocity = Math.Vec2(4.0, 0.0)
     )
 
@@ -221,11 +250,11 @@ test "return a fast body from a deep container boundary" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var boundary = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(4.0, 4.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 4.0)))
         ..position = Math.Vec2(-3.0, 0.0)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(0.4))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.4)))
         ..velocity = Math.Vec2(-20.0, 0.0)
     )
 
@@ -238,19 +267,40 @@ test "return a fast body from a deep container boundary" {
     assert(boundary.position() == Math.Vec2(-3.0, 0.0))
 }
 
+test "return a fast circle through its entry face" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 4.0)))
+        ..position = Math.Vec2(3.0, 0.0)
+    )
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..velocity = Math.Vec2(40.0, 0.0)
+    )
+
+    world.step(0.1)
+    world.step(0.0)
+    world.step(0.0)
+    world.step(0.0)
+
+    assert(circle.position().x <= 0.801)
+    assert(circle.velocity().x <= 0.0)
+}
+
 test "stack dynamic boxes on each other" {
     var world = Physics.World2D()
     var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var lower = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 0.5)
     )
     var upper = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.5)
     )
 
@@ -282,12 +332,12 @@ test "slow sliding motion through floor friction" {
     var world = Physics.World2D()
     var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
         ..friction = 0.9
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 0.5)
         ..velocity = Math.Vec2(2.0, 0.0)
         ..friction = 0.9
@@ -308,12 +358,12 @@ test "resolve the floor contact of a rotated box" {
     var world = Physics.World2D()
     var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
         ..friction = 0.9
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
         ..rotation = 0.35
         ..friction = 0.9
@@ -338,7 +388,7 @@ test "sleep a settled dense contact island" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
         ..friction = 0.9
     )
@@ -348,7 +398,7 @@ test "sleep a settled dense contact island" {
         let column = index % 10
         let row = index / 10
         bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
-            ..shape = Physics.Box2D(Math.Vec2(0.5))
+            ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5)))
             ..position = Math.Vec2(
                 (column as float - 4.5) * 0.52,
                 0.25 + row as float * 0.52
@@ -376,15 +426,15 @@ test "wake a sleeping contact island on a meaningful impact" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 0.5)
     )
     var upper = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 1.5)
     )
 
@@ -396,7 +446,7 @@ test "wake a sleeping contact island on a meaningful impact" {
     assert(!upper.is_awake())
 
     world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 4.0)
         ..velocity = Math.Vec2(0.0, -4.0)
         ..allow_sleep = false
@@ -408,6 +458,341 @@ test "wake a sleeping contact island on a meaningful impact" {
     }
 
     assert(upper.is_awake())
+}
+
+test "retain the public circle shape of a rigid body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.35))
+    )
+
+    match circle.shape() {
+        circle(shape) => { assert(Math.nearly_equal(shape.radius, 0.35)) }
+        box(_) => { panic("circle rigid body exposed a box shape") }
+    }
+}
+
+test "rest a dynamic circle on a fixed box" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.8
+    )
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(0.0, 2.0)
+        ..friction = 0.8
+    )
+
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(circle.position().nearly_equal(Math.Vec2(0.0, 0.5), 0.002))
+    assert(circle.velocity().nearly_equal(Math.Vec2(), 0.002))
+}
+
+test "escape a near-coincident floor pair along the floor" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.05))
+        ..position = Math.Vec2(0.0, 0.05)
+        ..allow_sleep = false
+    )
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.05))
+        ..position = Math.Vec2(0.0, 0.0505)
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+
+    assert(Math.abs(second.position().x - first.position().x) >= 0.099)
+    assert(first.position().y >= 0.049)
+    assert(second.position().y >= 0.049)
+}
+
+test "settle a dense circle pile without residual agitation" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(9.2, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var circles:Physics.RigidBody2D[] = []
+    let radius = 0.05
+    let diameter = radius * 2.0
+    var index = 0
+    while index < 600 {
+        let column = index % 40
+        let row = index / 40
+        circles.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(radius))
+            ..position = Math.Vec2(
+                (column as float - 19.5) * diameter,
+                radius + row as float * diameter
+            )
+            ..friction = 0.75
+        ))
+        index++
+    }
+
+    var step = 0
+    while step < 600 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+
+    assert(world.awake_body_count() == 0)
+    for circle in circles {
+        assert(!circle.is_awake())
+        assert(circle.velocity() == Math.Vec2())
+    }
+    var maximum_overlap = 0.0
+    var first = 0
+    while first < circles.count() {
+        var second = first + 1
+        while second < circles.count() {
+            let distance = circles[second].position()
+                .subtract(circles[first].position())
+                .length()
+            maximum_overlap = Math.max(
+                maximum_overlap,
+                diameter - distance
+            )
+            second++
+        }
+        first++
+    }
+    assert(maximum_overlap <= 0.005)
+}
+
+test "settle a dense mixed pile without decompression" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var bodies:Physics.RigidBody2D[] = []
+    var circles:Physics.RigidBody2D[] = []
+    let size = 0.1
+    var index = 0
+    while index < 240 {
+        let column = index % 24
+        let row = index / 24
+        let position = Math.Vec2(
+            (column as float - 11.5) * size,
+            size * 0.5 + row as float * size
+        )
+        if index % 2 == 0 {
+            var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+                ..shape = Physics.Shape2D.circle(Physics.Circle2D(size * 0.5))
+                ..position = position
+                ..friction = 0.75
+            )
+            circles.append(body)
+            bodies.append(body)
+        } else {
+            var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+                ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(size)))
+                ..position = position
+                ..friction = 0.75
+            )
+            bodies.append(body)
+        }
+        index++
+    }
+
+    var step = 0
+    while step < 600 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+
+    assert(world.awake_body_count() <= 16)
+    for body in bodies {
+        assert(body.position().y >= 0.04)
+        assert(body.position().y <= 1.2)
+        assert(body.velocity().length() <= 0.1)
+    }
+    var maximum_circle_overlap = 0.0
+    var first = 0
+    while first < circles.count() {
+        var second = first + 1
+        while second < circles.count() {
+            maximum_circle_overlap = Math.max(
+                maximum_circle_overlap,
+                size - circles[second].position()
+                    .subtract(circles[first].position()).length()
+            )
+            second++
+        }
+        first++
+    }
+    assert(maximum_circle_overlap <= 0.005)
+}
+
+test "remove circle overlap without waking a resting pair forever" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(-0.35, 0.0)
+    )
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(0.35, 0.0)
+    )
+
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+
+    let distance = second.position().subtract(first.position()).length()
+    assert(distance >= 0.999)
+    assert(!first.is_awake())
+    assert(!second.is_awake())
+}
+
+test "keep a sleeping circle column supporting a surface impact" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var supports:Physics.RigidBody2D[] = []
+    var row = 0
+    while row < 8 {
+        supports.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.05))
+            ..position = Math.Vec2(0.0, 0.05 + row as float * 0.1)
+            ..friction = 0.75
+        ))
+        row++
+    }
+
+    var step = 0
+    while step < 600 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    for support in supports { assert(!support.is_awake()) }
+
+    var impact = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.05))
+        ..position = Math.Vec2(0.0, 1.2)
+        ..velocity = Math.Vec2(0.0, -10.0)
+        ..friction = 0.75
+        ..allow_sleep = false
+    )
+    step = 0
+    while step < 60 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+
+    // The sleeping column is already a valid rigid support. The impact may
+    // wake its exposed top, but must not walk downward one body per step.
+    row = 0
+    while row < supports.count() - 1 {
+        assert(!supports[row].is_awake())
+        row++
+    }
+    for support in supports {
+        assert(impact.position().subtract(support.position()).length() >= 0.099)
+    }
+}
+
+test "resolve circle against box when the circle was created first" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..velocity = Math.Vec2(4.0, 0.0)
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.2, 4.0)))
+        ..position = Math.Vec2(1.1, 0.0)
+    )
+
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(circle.position().x <= 0.801)
+    assert(circle.velocity().x <= 0.001)
+}
+
+test "bounce one circle from another circle" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(0.0, 0.0)
+        ..restitution = 1.0
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(2.0, 0.0)
+        ..restitution = 1.0
+        ..allow_sleep = false
+    )
+
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(moving.velocity().x < -1.9)
+    assert(moving.position().x < -1.0)
+}
+
+test "exchange velocity between two dynamic circles" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(-1.0, 0.0)
+        ..velocity = Math.Vec2(1.0, 0.0)
+        ..restitution = 1.0
+        ..allow_sleep = false
+    )
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(1.0, 0.0)
+        ..velocity = Math.Vec2(-1.0, 0.0)
+        ..restitution = 1.0
+        ..allow_sleep = false
+    )
+
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(first.velocity().x < -0.99)
+    assert(second.velocity().x > 0.99)
+    assert(first.position().x < -0.99)
+    assert(second.position().x > 0.99)
 }
 
 test "advance hundreds of bodies through the parallel broad phase" {

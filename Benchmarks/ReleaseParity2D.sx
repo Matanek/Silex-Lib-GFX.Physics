@@ -5,11 +5,11 @@ func main() {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(8.0, 1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
         ..position = Math.Vec2(0.0, -0.5)
     )
     var box = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Box2D(Math.Vec2(1.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
     )
 

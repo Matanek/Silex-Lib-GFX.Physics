@@ -1,0 +1,10 @@
+public struct Circle2D {
+    let radius:float
+
+    init(radius:float = 0.5) {
+        if radius <= 0.0 {
+            panic("GFX.Physics.Circle2D requires a positive radius")
+        }
+        self.radius = radius
+    }
+}

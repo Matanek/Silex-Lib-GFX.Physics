@@ -1,4 +1,6 @@
 use GFX.Physics.Box2D.Box2D
+use GFX.Physics.Circle2D.Circle2D
+use GFX.Physics.Shape2D.Shape2D
 use STD.Math
 
 public enum BodyType2D {
@@ -8,7 +10,7 @@ public enum BodyType2D {
 
 public struct RigidBody2DSettings {
     var body_type:BodyType2D
-    var shape:Box2D
+    var shape:Shape2D?
     var position:Math.Vec2
     var velocity:Math.Vec2
     var rotation:float
@@ -23,7 +25,7 @@ public struct RigidBody2DSettings {
 
     init() {
         self.body_type = BodyType2D.dynamic
-        self.shape = Box2D()
+        self.shape = null
         self.position = Math.Vec2()
         self.velocity = Math.Vec2()
         self.rotation = 0.0
@@ -56,9 +58,12 @@ package struct BodyId2D {
 package class BodyStore2D {
     var generations:int[]
     var body_types:BodyType2D[]
-    var shapes:Box2D[]
+    var shapes:Shape2D[]
+    var shape_kinds:int[]
     var half_widths:float[]
     var half_heights:float[]
+    var radii:float[]
+    var sweep_radii_squared:float[]
     var positions_x:float[]
     var positions_y:float[]
     var previous_positions_x:float[]
@@ -73,7 +78,7 @@ package class BodyStore2D {
     var inverse_masses:float[]
     var inverse_inertias:float[]
     var restitutions:float[]
-    var frictions:float[]
+    var friction_roots:float[]
     var linear_dampings:float[]
     var angular_dampings:float[]
     var allow_sleep:bool[]
@@ -85,8 +90,11 @@ package class BodyStore2D {
         self.generations = []
         self.body_types = []
         self.shapes = []
+        self.shape_kinds = []
         self.half_widths = []
         self.half_heights = []
+        self.radii = []
+        self.sweep_radii_squared = []
         self.positions_x = []
         self.positions_y = []
         self.previous_positions_x = []
@@ -101,7 +109,7 @@ package class BodyStore2D {
         self.inverse_masses = []
         self.inverse_inertias = []
         self.restitutions = []
-        self.frictions = []
+        self.friction_roots = []
         self.linear_dampings = []
         self.angular_dampings = []
         self.allow_sleep = []
@@ -115,21 +123,56 @@ package class BodyStore2D {
     func append(settings:RigidBody2DSettings) BodyId2D {
         validate_settings(settings)
         let index = self.count()
-        let half = settings.shape.half_size()
+        var selected_shape = Shape2D.box(Box2D())
+        if let configured = settings.shape { selected_shape = configured }
+        var shape_kind = 0
+        var half_width = 0.0
+        var half_height = 0.0
+        var radius = 0.0
+        var sweep_radius_squared = 0.0
+        match selected_shape {
+            box(shape) => {
+                let half = shape.half_size()
+                half_width = half.x
+                half_height = half.y
+                sweep_radius_squared = half.x * half.x + half.y * half.y
+            }
+            circle(shape) => {
+                shape_kind = 1
+                half_width = shape.radius
+                half_height = shape.radius
+                radius = shape.radius
+                sweep_radius_squared = shape.radius * shape.radius
+            }
+        }
         var inverse_mass = 0.0
         var inverse_inertia = 0.0
         if settings.body_type == BodyType2D.dynamic {
             inverse_mass = 1.0 / settings.mass
-            let size = settings.shape.size
-            inverse_inertia = 12.0 / (
-                settings.mass * (size.x * size.x + size.y * size.y)
-            )
+            match selected_shape {
+                box(shape) => {
+                    inverse_inertia = 12.0 / (
+                        settings.mass * (
+                            shape.size.x * shape.size.x +
+                            shape.size.y * shape.size.y
+                        )
+                    )
+                }
+                circle(shape) => {
+                    inverse_inertia = 2.0 / (
+                        settings.mass * shape.radius * shape.radius
+                    )
+                }
+            }
         }
         self.generations.append(1)
         self.body_types.append(settings.body_type)
-        self.shapes.append(settings.shape)
-        self.half_widths.append(half.x)
-        self.half_heights.append(half.y)
+        self.shapes.append(selected_shape)
+        self.shape_kinds.append(shape_kind)
+        self.half_widths.append(half_width)
+        self.half_heights.append(half_height)
+        self.radii.append(radius)
+        self.sweep_radii_squared.append(sweep_radius_squared)
         self.positions_x.append(settings.position.x)
         self.positions_y.append(settings.position.y)
         self.previous_positions_x.append(settings.position.x)
@@ -144,7 +187,7 @@ package class BodyStore2D {
         self.inverse_masses.append(inverse_mass)
         self.inverse_inertias.append(inverse_inertia)
         self.restitutions.append(settings.restitution)
-        self.frictions.append(settings.friction)
+        self.friction_roots.append(Math.sqrt(settings.friction))
         self.linear_dampings.append(settings.linear_damping)
         self.angular_dampings.append(settings.angular_damping)
         self.allow_sleep.append(settings.allow_sleep)
@@ -189,7 +232,7 @@ public class RigidBody2D {
         return self.store.body_types[index]
     }
 
-    func shape() Box2D {
+    func shape() Shape2D {
         let index = self.store.require(self.id)
         return self.store.shapes[index]
     }

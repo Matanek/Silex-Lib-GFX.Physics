@@ -1,0 +1,7 @@
+use GFX.Physics.Box2D.Box2D
+use GFX.Physics.Circle2D.Circle2D
+
+public enum Shape2D {
+    box(Box2D)
+    circle(Circle2D)
+}

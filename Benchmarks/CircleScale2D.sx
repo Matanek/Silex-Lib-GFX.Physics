@@ -1,0 +1,210 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+use STD.Time.Clock
+
+func option_requested(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == expected { return true }
+            }
+        }
+    }
+    return false
+}
+
+func requested_count() int {
+    if option_requested("--count-5000") { return 5_000 }
+    if option_requested("--count-2000") { return 2_000 }
+    if option_requested("--count-1800") { return 1_800 }
+    if option_requested("--count-1000") { return 1_000 }
+    return 600
+}
+
+func create_fixed_box(
+    world:&Physics.World2D,
+    position:Math.Vec2,
+    size:Math.Vec2
+) {
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(size))
+        ..position = position
+        ..friction = 0.9
+    )
+}
+
+func run_case(body_count:int, step_count:int) {
+    var radius = 0.025
+    var columns = 40
+    if body_count > 600 { columns = 80 }
+    if body_count > 2_000 { columns = 170 }
+    if option_requested("--falling-body") {
+        radius = 0.05
+        columns = 87
+    }
+    let diameter = radius * 2.0
+    let spacing = diameter * 1.04
+    let container_width = 9.2
+    let container_height = 6.0
+    let boundary_depth = 4.0
+    let half_width = container_width * 0.5
+    let half_height = container_height * 0.5
+    let boundary_half = boundary_depth * 0.5
+    var world = Physics.World2D()
+    if option_requested("--parallel") {
+        world.enable_parallelism(4)
+    }
+    create_fixed_box(
+        world,
+        Math.Vec2(-half_width - boundary_half, 0.0),
+        Math.Vec2(boundary_depth, container_height)
+    )
+    create_fixed_box(
+        world,
+        Math.Vec2(half_width + boundary_half, 0.0),
+        Math.Vec2(boundary_depth, container_height)
+    )
+    create_fixed_box(
+        world,
+        Math.Vec2(0.0, -half_height - boundary_half),
+        Math.Vec2(container_width + boundary_depth * 2.0, boundary_depth)
+    )
+    create_fixed_box(
+        world,
+        Math.Vec2(0.0, half_height + boundary_half),
+        Math.Vec2(container_width + boundary_depth * 2.0, boundary_depth)
+    )
+
+    var circles:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < body_count {
+        let column = index % columns
+        let row = index / columns
+        circles.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(radius))
+            ..position = Math.Vec2(
+                (column as float - (columns - 1) as float * 0.5) * spacing,
+                -half_height + radius * 1.05 + row as float * spacing
+            )
+            ..friction = 0.75
+            ..angular_damping = 0.12
+            ..allow_sleep = !option_requested("--awake")
+        ))
+        index++
+    }
+    world.set_profiling_enabled(true)
+
+    var clock = Clock()
+    clock.tick()
+    var motion_total = 0.0
+    var broad_phase_total = 0.0
+    var pair_collection_total = 0.0
+    var pair_maintenance_total = 0.0
+    var pair_filter_total = 0.0
+    var pair_removal_total = 0.0
+    var pair_discovery_total = 0.0
+    var pair_sort_total = 0.0
+    var pair_insertion_total = 0.0
+    var solve_total = 0.0
+    var collision_build_total = 0.0
+    var collision_warm_start_total = 0.0
+    var collision_velocity_total = 0.0
+    var collision_position_total = 0.0
+    var collision_cache_total = 0.0
+    var sleep_total = 0.0
+    var candidate_total = 0
+    var moved_total = 0
+    var discovered_total = 0
+    var step = 0
+    while step < step_count {
+        world.step(1.0 / 60.0)
+        let profile = world.step_profile()
+        motion_total += profile.motion_ms
+        broad_phase_total += profile.broad_phase_ms
+        pair_collection_total += world.pair_collection_ms()
+        pair_maintenance_total += world.pair_maintenance_ms()
+        pair_filter_total += world.pair_filter_ms()
+        pair_removal_total += world.pair_removal_ms()
+        pair_discovery_total += world.pair_discovery_ms()
+        pair_sort_total += world.pair_sort_ms()
+        pair_insertion_total += world.pair_insertion_ms()
+        solve_total += profile.solve_ms
+        collision_build_total += world.collision_build_ms()
+        collision_warm_start_total += world.collision_warm_start_ms()
+        collision_velocity_total += world.collision_velocity_ms()
+        collision_position_total += world.collision_position_ms()
+        collision_cache_total += world.collision_cache_ms()
+        sleep_total += profile.sleep_ms
+        candidate_total += world.candidate_pair_count()
+        moved_total += world.moved_proxy_count()
+        discovered_total += world.discovered_pair_count()
+        if option_requested("--trace") && (step < 10 || step % 10 == 9) {
+            print("  step $(step + 1): moved=$(world.moved_proxy_count()), discovered=$(world.discovered_pair_count()), candidates=$(world.candidate_pair_count()), motion=$(profile.motion_ms), collection=$(world.pair_collection_ms()), solve=$(profile.solve_ms)")
+        }
+        step++
+    }
+    let elapsed = clock.tick()
+    var minimum_y = half_height
+    for circle in circles {
+        minimum_y = Math.min(minimum_y, circle.position().y)
+    }
+    var maximum_overlap = 0.0
+    var overlapping_pairs = 0
+    var first = 0
+    while first < circles.count() {
+        let first_position = circles[first].position()
+        var second = first + 1
+        while second < circles.count() {
+            let offset = circles[second].position().subtract(first_position)
+            let distance_squared = offset.length_squared()
+            if distance_squared < diameter * diameter {
+                let overlap = diameter - Math.sqrt(distance_squared)
+                maximum_overlap = Math.max(maximum_overlap, overlap)
+                if overlap > 0.0005 { overlapping_pairs++ }
+            }
+            second++
+        }
+        first++
+    }
+
+    print("circle pile: $(body_count) bodies, $(step_count) steps")
+    print("  elapsed: $(elapsed * 1000.0) ms")
+    print("  per step: $(elapsed * 1000.0 / step_count as float) ms")
+    print("  candidate average: $(candidate_total as float / step_count as float)")
+    print("  moved proxy average: $(moved_total as float / step_count as float)")
+    print("  discovered pair average: $(discovered_total as float / step_count as float)")
+    print("  motion/step: $(motion_total / step_count as float) ms")
+    print("  broad phase/step: $(broad_phase_total / step_count as float) ms")
+    print("  pair collection/step: $(pair_collection_total / step_count as float) ms")
+    print("  pair maintenance/step: $(pair_maintenance_total / step_count as float) ms")
+    print("    removal/step: $(pair_removal_total / step_count as float) ms")
+    print("    discovery/step: $(pair_discovery_total / step_count as float) ms")
+    print("    sort/step: $(pair_sort_total / step_count as float) ms")
+    print("    insertion/step: $(pair_insertion_total / step_count as float) ms")
+    print("  pair filter/step: $(pair_filter_total / step_count as float) ms")
+    print("  solve/step: $(solve_total / step_count as float) ms")
+    print("    build/step: $(collision_build_total / step_count as float) ms")
+    print("    warm start/step: $(collision_warm_start_total / step_count as float) ms")
+    print("    velocity/step: $(collision_velocity_total / step_count as float) ms")
+    print("    position/step: $(collision_position_total / step_count as float) ms")
+    print("    cache/step: $(collision_cache_total / step_count as float) ms")
+    print("  sleep/step: $(sleep_total / step_count as float) ms")
+    print("  minimum y: $(minimum_y)")
+    print("  maximum overlap: $(maximum_overlap * 1_000.0) mm")
+    print("  overlapping pairs above 0.5 mm: $(overlapping_pairs)")
+    print("  awake: $(world.awake_body_count())")
+    print("  sleep eligible: $(world.sleep_eligible_body_count())")
+    print("  sleep ready: $(world.sleep_ready_body_count())")
+    assert(world.body_count() == body_count + 4)
+    assert(minimum_y >= -half_height - 0.001)
+}
+
+func main() {
+    var step_count = 120
+    if option_requested("--medium") { step_count = 300 }
+    if option_requested("--long") { step_count = 600 }
+    run_case(requested_count(), step_count)
+}

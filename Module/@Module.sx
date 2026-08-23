@@ -1,4 +1,8 @@
 public use GFX.Physics.Box2D.Box2D
+public use GFX.Physics.Circle2D.Circle2D
+public use GFX.Physics.Shape2D.Shape2D
+public use GFX.Physics.BodyTransform2D.BodyTransform2D
+public use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 public use GFX.Physics.RigidBody2D.BodyType2D
 public use GFX.Physics.RigidBody2D.RigidBody2D
 public use GFX.Physics.RigidBody2D.RigidBody2DSettings

@@ -1,0 +1,40 @@
+use STD.Math
+
+public class BodyTransformBuffer2D {
+    package var positions_x:float[]
+    package var positions_y:float[]
+    package var rotations:float[]
+
+    init() {
+        self.positions_x = []
+        self.positions_y = []
+        self.rotations = []
+    }
+
+    func count() int { return self.positions_x.count() }
+
+    func position(index:int) Math.Vec2 {
+        return Math.Vec2(self.positions_x[index], self.positions_y[index])
+    }
+
+    func rotation(index:int) float { return self.rotations[index] }
+
+    package func resize(count:int) {
+        while self.positions_x.count() < count {
+            self.positions_x.append(0.0)
+            self.positions_y.append(0.0)
+            self.rotations.append(0.0)
+        }
+        while self.positions_x.count() > count {
+            self.positions_x.take_last()
+            self.positions_y.take_last()
+            self.rotations.take_last()
+        }
+    }
+
+    package func write(index:int, position:Math.Vec2, rotation:float) {
+        self.positions_x[index] = position.x
+        self.positions_y[index] = position.y
+        self.rotations[index] = rotation
+    }
+}

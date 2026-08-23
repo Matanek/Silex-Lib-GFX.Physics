@@ -14,25 +14,25 @@ func run_case(
     world.set_profiling_enabled(true)
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(13.2, 4.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(13.2, 4.0)))
         ..position = Math.Vec2(0.0, -5.0)
         ..friction = 0.9
     )
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(4.0, 6.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 6.0)))
         ..position = Math.Vec2(-6.6, 0.0)
         ..friction = 0.9
     )
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(4.0, 6.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 6.0)))
         ..position = Math.Vec2(6.6, 0.0)
         ..friction = 0.9
     )
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Box2D(Math.Vec2(13.2, 4.0))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(13.2, 4.0)))
         ..position = Math.Vec2(0.0, 5.0)
         ..friction = 0.9
     )
@@ -43,7 +43,7 @@ func run_case(
         let column = index % columns
         let row = index / columns
         bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
-            ..shape = Physics.Box2D(Math.Vec2(square_size))
+            ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(square_size)))
             ..position = Math.Vec2(
                 (
                     column as float -

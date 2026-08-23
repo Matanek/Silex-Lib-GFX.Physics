@@ -1,0 +1,16 @@
+use STD.Math
+
+public struct BodyTransform2D {
+    let position:Math.Vec2
+    let rotation:float
+
+    init() {
+        self.position = Math.Vec2()
+        self.rotation = 0.0
+    }
+
+    init(position:Math.Vec2, rotation:float) {
+        self.position = position
+        self.rotation = rotation
+    }
+}

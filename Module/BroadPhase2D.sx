@@ -36,7 +36,7 @@ package struct AABB2D {
     }
 
     func fattened(displacement:Math.Vec2) AABB2D {
-        let margin = Math.Vec2(0.02)
+        let margin = Math.Vec2(0.04)
         var lower = self.lower.subtract(margin)
         var upper = self.upper.add(margin)
         let prediction = displacement.multiply(4.0)
@@ -156,6 +156,8 @@ package class BroadPhase2D {
     }
 
     func parallel_pair_count() int { return self.moved_proxies.count() }
+
+    package func moved_proxy_count() int { return self.moved_proxies.count() }
 
     func begin_parallel_pair_count() {
         let moved_count = self.moved_proxies.count()
@@ -613,7 +615,7 @@ package func collect_pairs_parallel(
     executor:Threading.Executor
 ) {
     let moved_count = broad_phase.parallel_pair_count()
-    if moved_count < 256 {
+    if moved_count < 16 {
         broad_phase.collect_pairs(pairs)
         return
     }

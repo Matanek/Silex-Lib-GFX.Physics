@@ -6,6 +6,8 @@ use GFX.Physics.RigidBody2D.BodyStore2D
 use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.RigidBody2D.RigidBody2D
 use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.BodyTransform2D.BodyTransform2D
+use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 use STD.Math
 use STD.Threading
 use STD.Time.Clock
@@ -53,6 +55,8 @@ struct ContactPair2D {
     var normal_impulse_second:float
     var tangent_impulse_first:float
     var tangent_impulse_second:float
+    var first_awake:bool
+    var second_awake:bool
 
     init() {
         self.normal = Math.Vec2()
@@ -63,6 +67,8 @@ struct ContactPair2D {
         self.normal_impulse_second = 0.0
         self.tangent_impulse_first = 0.0
         self.tangent_impulse_second = 0.0
+        self.first_awake = false
+        self.second_awake = false
     }
 }
 
@@ -198,12 +204,68 @@ class PairSet2D {
     }
 }
 
+struct CompactCircleCollision2D {
+    let first_body:int
+    let second_body:int
+    let normal:Math.Vec2
+    let first_contact:Math.Vec2
+    let cache_index:int
+    var normal_impulse:float
+    var tangent_impulse:float
+    let normal_mass:float
+    let tangent_mass:float
+    let first_tangent_arm:float
+    let second_tangent_arm:float
+    let normal_velocity_bias:float
+    let combined_friction:float
+
+    init(
+        first_body:int,
+        second_body:int,
+        normal:Math.Vec2,
+        first_contact:Math.Vec2,
+        cache_index:int,
+        normal_impulse:float,
+        tangent_impulse:float,
+        normal_mass:float,
+        tangent_mass:float,
+        first_tangent_arm:float,
+        second_tangent_arm:float,
+        normal_velocity_bias:float,
+        combined_friction:float
+    ) {
+        self.first_body = first_body
+        self.second_body = second_body
+        self.normal = normal
+        self.first_contact = first_contact
+        self.cache_index = cache_index
+        self.normal_impulse = normal_impulse
+        self.tangent_impulse = tangent_impulse
+        self.normal_mass = normal_mass
+        self.tangent_mass = tangent_mass
+        self.first_tangent_arm = first_tangent_arm
+        self.second_tangent_arm = second_tangent_arm
+        self.normal_velocity_bias = normal_velocity_bias
+        self.combined_friction = combined_friction
+    }
+}
+
 public class World2D {
     private var current_gravity:Math.Vec2
     private var store:BodyStore2D
     private var proxies:int[]
     private var tight_bounds:AABB2D[]
     private var broad_phase:BroadPhase2D
+    private var maximum_dynamic_shape_radius:float
+    private var maximum_dynamic_circle_radius:float
+    private var fixed_bodies:int[]
+    private var circle_grid_heads:int[]
+    private var circle_grid_stamps:int[]
+    private var circle_grid_next:int[]
+    private var circle_grid_cell_x:int[]
+    private var circle_grid_cell_y:int[]
+    private var circle_grid_generation:int
+    private var dynamic_grid_active:bool
     private var discovered_pairs:BodyPair2D[]
     private var new_candidate_pairs:BodyPair2D[]
     private var candidate_bodies:BodyPair2D[]
@@ -214,9 +276,17 @@ public class World2D {
     private var free_candidate_count:int
     private var active_pairs:int[]
     private var collisions:Collision2D[]
+    private var compact_circle_collisions:CompactCircleCollision2D[]
+    // A non-negative entry addresses the compact circle array. A negative
+    // entry addresses the general collision array through `-entry - 1`.
+    private var collision_entries:int[]
+    private var direct_wake_pending:bool[]
+    private var direct_wake_bodies:int[]
+    private var contact_wake_cooldowns:float[]
     private var support_grace:float[]
     private var load_grace:float[]
     private var stable_for_sleep:bool[]
+    private var severe_for_sleep:bool[]
     private var sleep_parents:int[]
     private var sleep_ranks:int[]
     private var sleep_eligible:bool[]
@@ -226,9 +296,20 @@ public class World2D {
     private var island_can_sleep:bool[]
     private var sleep_enabled_body_count:int
     private var current_candidate_pair_count:int
+    private var current_moved_proxy_count:int
+    private var current_discovered_pair_count:int
     private var current_pair_collection_ms:float
     private var current_pair_maintenance_ms:float
     private var current_pair_filter_ms:float
+    private var current_pair_removal_ms:float
+    private var current_pair_discovery_ms:float
+    private var current_pair_sort_ms:float
+    private var current_pair_insertion_ms:float
+    private var current_collision_build_ms:float
+    private var current_collision_warm_start_ms:float
+    private var current_collision_velocity_ms:float
+    private var current_collision_position_ms:float
+    private var current_collision_cache_ms:float
     private var profiling_enabled:bool
     private var current_step_profile:World2DStepProfile
     private var parallel_executor:Threading.Executor?
@@ -239,6 +320,16 @@ public class World2D {
         self.proxies = []
         self.tight_bounds = []
         self.broad_phase = BroadPhase2D()
+        self.maximum_dynamic_shape_radius = 0.0
+        self.maximum_dynamic_circle_radius = 0.0
+        self.fixed_bodies = []
+        self.circle_grid_heads = []
+        self.circle_grid_stamps = []
+        self.circle_grid_next = []
+        self.circle_grid_cell_x = []
+        self.circle_grid_cell_y = []
+        self.circle_grid_generation = 0
+        self.dynamic_grid_active = false
         self.discovered_pairs = []
         self.new_candidate_pairs = []
         self.candidate_bodies = []
@@ -249,9 +340,15 @@ public class World2D {
         self.free_candidate_count = 0
         self.active_pairs = []
         self.collisions = []
+        self.compact_circle_collisions = []
+        self.collision_entries = []
+        self.direct_wake_pending = []
+        self.direct_wake_bodies = []
+        self.contact_wake_cooldowns = []
         self.support_grace = []
         self.load_grace = []
         self.stable_for_sleep = []
+        self.severe_for_sleep = []
         self.sleep_parents = []
         self.sleep_ranks = []
         self.sleep_eligible = []
@@ -261,9 +358,20 @@ public class World2D {
         self.island_can_sleep = []
         self.sleep_enabled_body_count = 0
         self.current_candidate_pair_count = 0
+        self.current_moved_proxy_count = 0
+        self.current_discovered_pair_count = 0
         self.current_pair_collection_ms = 0.0
         self.current_pair_maintenance_ms = 0.0
         self.current_pair_filter_ms = 0.0
+        self.current_pair_removal_ms = 0.0
+        self.current_pair_discovery_ms = 0.0
+        self.current_pair_sort_ms = 0.0
+        self.current_pair_insertion_ms = 0.0
+        self.current_collision_build_ms = 0.0
+        self.current_collision_warm_start_ms = 0.0
+        self.current_collision_velocity_ms = 0.0
+        self.current_collision_position_ms = 0.0
+        self.current_collision_cache_ms = 0.0
         self.profiling_enabled = false
         self.current_step_profile = World2DStepProfile()
         self.parallel_executor = null
@@ -279,6 +387,62 @@ public class World2D {
         }
     }
     func body_count() int { return self.store.count() }
+    func write_dynamic_body_transforms(output:&BodyTransform2D[]) {
+        var dynamic_count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                dynamic_count++
+            }
+            index++
+        }
+        while output.count() < dynamic_count {
+            output.append(BodyTransform2D())
+        }
+        while output.count() > dynamic_count { output.take_last() }
+        index = 0
+        var destination = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                output[destination] = BodyTransform2D(
+                    Math.Vec2(
+                        self.store.positions_x[index],
+                        self.store.positions_y[index]
+                    ),
+                    self.store.rotations[index]
+                )
+                destination++
+            }
+            index++
+        }
+    }
+    func write_dynamic_body_transforms(output:BodyTransformBuffer2D) {
+        var dynamic_count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                dynamic_count++
+            }
+            index++
+        }
+        output.resize(dynamic_count)
+        index = 0
+        var destination = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                output.write(
+                    destination,
+                    Math.Vec2(
+                        self.store.positions_x[index],
+                        self.store.positions_y[index]
+                    ),
+                    self.store.rotations[index]
+                )
+                destination++
+            }
+            index++
+        }
+    }
     func candidate_pair_count() int { return self.current_candidate_pair_count }
     func set_profiling_enabled(enabled:bool) { self.profiling_enabled = enabled }
     func step_profile() World2DStepProfile { return self.current_step_profile }
@@ -308,6 +472,12 @@ public class World2D {
 
     package func collision_count() int { return self.collisions.count() }
 
+    package func moved_proxy_count() int { return self.current_moved_proxy_count }
+
+    package func discovered_pair_count() int {
+        return self.current_discovered_pair_count
+    }
+
     package func pair_collection_ms() float {
         return self.current_pair_collection_ms
     }
@@ -319,6 +489,22 @@ public class World2D {
     package func pair_filter_ms() float {
         return self.current_pair_filter_ms
     }
+
+    package func pair_removal_ms() float { return self.current_pair_removal_ms }
+    package func pair_discovery_ms() float { return self.current_pair_discovery_ms }
+    package func pair_sort_ms() float { return self.current_pair_sort_ms }
+    package func pair_insertion_ms() float { return self.current_pair_insertion_ms }
+    package func collision_build_ms() float { return self.current_collision_build_ms }
+    package func collision_warm_start_ms() float {
+        return self.current_collision_warm_start_ms
+    }
+    package func collision_velocity_ms() float {
+        return self.current_collision_velocity_ms
+    }
+    package func collision_position_ms() float {
+        return self.current_collision_position_ms
+    }
+    package func collision_cache_ms() float { return self.current_collision_cache_ms }
 
     package func buried_body_count() int {
         var count = 0
@@ -358,9 +544,7 @@ public class World2D {
             let linear_speed_squared =
                 self.store.velocities_x[index] * self.store.velocities_x[index] +
                 self.store.velocities_y[index] * self.store.velocities_y[index]
-            let sweep_radius_squared =
-                self.store.half_widths[index] * self.store.half_widths[index] +
-                self.store.half_heights[index] * self.store.half_heights[index]
+            let sweep_radius_squared = self.store.sweep_radii_squared[index]
             let angular_speed = self.store.angular_velocities[index]
             let motion_squared = linear_speed_squared +
                 angular_speed * angular_speed * sweep_radius_squared
@@ -425,9 +609,32 @@ public class World2D {
             bounds,
             id.index
         ))
+        self.circle_grid_next.append(-1)
+        self.circle_grid_cell_x.append(0)
+        self.circle_grid_cell_y.append(0)
+        self.direct_wake_pending.append(false)
+        self.contact_wake_cooldowns.append(0.0)
+        if settings.body_type == BodyType2D.fixed {
+            self.fixed_bodies.append(id.index)
+        } else {
+            let shape_radius = Math.sqrt(
+                self.store.sweep_radii_squared[id.index]
+            )
+            self.maximum_dynamic_shape_radius = Math.max(
+                self.maximum_dynamic_shape_radius,
+                shape_radius
+            )
+            if self.store.shape_kinds[id.index] == 1 {
+                self.maximum_dynamic_circle_radius = Math.max(
+                    self.maximum_dynamic_circle_radius,
+                    self.store.radii[id.index]
+                )
+            }
+        }
         self.support_grace.append(0.0)
         self.load_grace.append(0.0)
         self.stable_for_sleep.append(true)
+        self.severe_for_sleep.append(false)
         self.sleep_parents.append(id.index)
         self.sleep_ranks.append(0)
         self.sleep_eligible.append(false)
@@ -448,6 +655,7 @@ public class World2D {
         }
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
+        self.dynamic_grid_active = self.maximum_dynamic_shape_radius > 0.0
         var integrated_in_parallel = false
         if self.store.count() >= 256 {
             if var executor = self.parallel_executor {
@@ -465,6 +673,12 @@ public class World2D {
         }
         var index = 0
         while index < self.store.count() {
+            self.stable_for_sleep[index] = true
+            self.severe_for_sleep[index] = false
+            self.contact_wake_cooldowns[index] = Math.max(
+                0.0,
+                self.contact_wake_cooldowns[index] - delta
+            )
             var previous_x = self.store.positions_x[index]
             var previous_y = self.store.positions_y[index]
             if self.store.body_types[index] == BodyType2D.dynamic &&
@@ -486,29 +700,41 @@ public class World2D {
             }
             let bounds = body_bounds(self.store, index)
             self.tight_bounds[index] = bounds
-            self.broad_phase.move_proxy(
-                self.proxies[index],
-                bounds,
-                Math.Vec2(
-                    self.store.positions_x[index] - previous_x,
-                    self.store.positions_y[index] - previous_y
+            if !self.dynamic_grid_active {
+                self.broad_phase.move_proxy(
+                    self.proxies[index],
+                    bounds,
+                    Math.Vec2(
+                        self.store.positions_x[index] - previous_x,
+                        self.store.positions_y[index] - previous_y
+                    )
                 )
-            )
+            }
             self.store.dirty_transforms[index] = false
             index++
+        }
+        if self.dynamic_grid_active && self.maximum_dynamic_circle_radius > 0.0 {
+            self.clip_fast_circles_against_sleeping_pile()
         }
         if self.profiling_enabled {
             self.current_step_profile.motion_ms = profile_clock.tick() * 1000.0
         }
-        if var executor = self.parallel_executor {
-            collect_pairs_parallel(
-                self.broad_phase,
-                self.discovered_pairs,
-                executor
-            )
+        if self.dynamic_grid_active {
+            self.current_moved_proxy_count = 0
+            self.collect_dynamic_grid_pairs()
         } else {
-            self.broad_phase.collect_pairs(self.discovered_pairs)
+            self.current_moved_proxy_count = self.broad_phase.moved_proxy_count()
+            if var executor = self.parallel_executor {
+                collect_pairs_parallel(
+                    self.broad_phase,
+                    self.discovered_pairs,
+                    executor
+                )
+            } else {
+                self.broad_phase.collect_pairs(self.discovered_pairs)
+            }
         }
+        self.current_discovered_pair_count = self.discovered_pairs.count()
         if self.profiling_enabled {
             self.current_pair_collection_ms = profile_clock.tick() * 1000.0
         }
@@ -516,6 +742,7 @@ public class World2D {
         if self.profiling_enabled {
             self.current_pair_maintenance_ms = profile_clock.tick() * 1000.0
         }
+        self.wake_direct_impacts()
         self.update_active_pairs()
         self.current_candidate_pair_count = self.active_pairs.count()
         if self.profiling_enabled {
@@ -557,7 +784,6 @@ public class World2D {
                 0.0,
                 self.load_grace[index] - delta
             )
-            self.stable_for_sleep[index] = true
             self.sleep_parents[index] = index
             self.sleep_ranks[index] = 0
             self.sleep_eligible[index] = false
@@ -575,16 +801,20 @@ public class World2D {
             let offset = body_position(self.store, second).subtract(
                 body_position(self.store, first)
             )
-            if overlap_on_axis(
+            let penetration = overlap_on_axis(
                 self.store,
                 first,
                 second,
                 offset,
                 collision.normal
-            ) > 0.002
-            {
+            )
+            if penetration > 0.001 {
                 self.stable_for_sleep[first] = false
                 self.stable_for_sleep[second] = false
+            }
+            if penetration > 0.01 {
+                self.severe_for_sleep[first] = true
+                self.severe_for_sleep[second] = true
             }
             let height_delta = self.store.positions_y[second] -
                 self.store.positions_y[first]
@@ -604,6 +834,27 @@ public class World2D {
             }
             collision_index++
         }
+        collision_index = 0
+        while collision_index < self.compact_circle_collisions.count() {
+            let collision = self.compact_circle_collisions[collision_index]
+            let first = collision.first_body
+            let second = collision.second_body
+            let height_delta = self.store.positions_y[second] -
+                self.store.positions_y[first]
+            if height_delta > 0.05 {
+                self.load_grace[first] = 0.25
+                self.support_grace[second] = 0.25
+            } else if height_delta < -0.05 {
+                self.load_grace[second] = 0.25
+                self.support_grace[first] = 0.25
+            }
+            if self.store.awake[first] && self.store.awake[second] &&
+                self.store.allow_sleep[first] && self.store.allow_sleep[second]
+            {
+                self.union_sleep_bodies(first, second)
+            }
+            collision_index++
+        }
         index = 0
         while index < self.store.count() {
             if self.store.body_types[index] == BodyType2D.dynamic {
@@ -617,10 +868,7 @@ public class World2D {
                         self.store.velocities_y[index] *
                             self.store.velocities_y[index]
                     let sweep_radius_squared =
-                        self.store.half_widths[index] *
-                            self.store.half_widths[index] +
-                        self.store.half_heights[index] *
-                            self.store.half_heights[index]
+                        self.store.sweep_radii_squared[index]
                     let angular_speed = self.store.angular_velocities[index]
                     let surface_motion_squared = linear_speed_squared +
                         angular_speed * angular_speed * sweep_radius_squared
@@ -639,6 +887,47 @@ public class World2D {
                 }
             }
             index++
+        }
+        if self.dynamic_grid_active && self.maximum_dynamic_circle_radius > 0.0 {
+            var requires_sleep_audit = false
+            index = 0
+            while index < self.store.count() {
+                if self.store.body_types[index] == BodyType2D.dynamic &&
+                    self.store.awake[index] &&
+                    self.sleep_eligible[index] &&
+                    self.store.sleep_times[index] >= sleep_delay
+                {
+                    requires_sleep_audit = true
+                    break
+                }
+                index++
+            }
+            if requires_sleep_audit {
+                self.audit_circle_sleep_stability()
+            }
+            index = 0
+            while index < self.store.count() {
+                if self.store.body_types[index] == BodyType2D.dynamic &&
+                    self.store.awake[index] &&
+                    self.sleep_eligible[index] &&
+                    self.store.sleep_times[index] >= sleep_delay
+                {
+                    let quiet_buried =
+                        self.support_grace[index] > 0.0 &&
+                        self.load_grace[index] > 0.0 &&
+                        !self.severe_for_sleep[index] &&
+                        self.sleep_motion_squared[index] <=
+                            rest_motion_threshold_squared
+                    if self.stable_for_sleep[index] || quiet_buried {
+                        self.store.velocities_x[index] = 0.0
+                        self.store.velocities_y[index] = 0.0
+                        self.store.angular_velocities[index] = 0.0
+                        self.store.awake[index] = false
+                    }
+                }
+                index++
+            }
+            return
         }
         index = 0
         while index < self.store.count() {
@@ -681,6 +970,42 @@ public class World2D {
         }
     }
 
+    private func audit_circle_sleep_stability() {
+        var body = 0
+        while body < self.store.count() {
+            self.tight_bounds[body] = body_bounds(self.store, body)
+            body++
+        }
+        self.collect_dynamic_grid_pairs()
+        for pair in self.discovered_pairs {
+            if self.store.shape_kinds[pair.first] != 1 ||
+                self.store.shape_kinds[pair.second] != 1
+            {
+                continue
+            }
+            let combined_radius = self.store.radii[pair.first] +
+                self.store.radii[pair.second]
+            let minimum_distance = combined_radius - 0.005
+            let severe_distance = combined_radius - 0.005
+            let offset_x = self.store.positions_x[pair.second] -
+                self.store.positions_x[pair.first]
+            let offset_y = self.store.positions_y[pair.second] -
+                self.store.positions_y[pair.first]
+            if offset_x * offset_x + offset_y * offset_y <
+                minimum_distance * minimum_distance
+            {
+                self.stable_for_sleep[pair.first] = false
+                self.stable_for_sleep[pair.second] = false
+            }
+            if offset_x * offset_x + offset_y * offset_y <
+                severe_distance * severe_distance
+            {
+                self.severe_for_sleep[pair.first] = true
+                self.severe_for_sleep[pair.second] = true
+            }
+        }
+    }
+
     private func find_sleep_root(body:int) int {
         var root = body
         while self.sleep_parents[root] != root {
@@ -711,6 +1036,8 @@ public class World2D {
     }
 
     private func update_candidate_pairs(discovered:@BodyPair2D[]) {
+        var profile_clock = Clock()
+        if self.profiling_enabled { profile_clock.tick() }
         var index = self.candidate_pairs.count() - 1
         while index >= 0 {
             if !self.candidate_enabled[index] {
@@ -718,10 +1045,16 @@ public class World2D {
                 continue
             }
             let pair = self.candidate_bodies[index]
-            if !self.broad_phase.proxies_overlap(
+            var overlaps = self.broad_phase.proxies_overlap(
                 self.proxies[pair.first],
                 self.proxies[pair.second]
-            ) {
+            )
+            if self.dynamic_grid_active {
+                overlaps = self.tight_bounds[pair.first].overlaps(
+                    self.tight_bounds[pair.second]
+                )
+            }
+            if !overlaps {
                 self.candidate_pair_keys.remove(pair)
                 self.candidate_enabled[index] = false
                 if self.free_candidate_count ==
@@ -735,14 +1068,377 @@ public class World2D {
             }
             index--
         }
+        if self.profiling_enabled {
+            self.current_pair_removal_ms = profile_clock.tick() * 1000.0
+        }
         self.new_candidate_pairs.clear()
         for pair in discovered {
             if !self.candidate_pair_keys.contains(pair) {
                 self.new_candidate_pairs.append(pair)
             }
         }
-        self.broad_phase.sort_pairs(self.new_candidate_pairs)
+        if self.profiling_enabled {
+            self.current_pair_discovery_ms = profile_clock.tick() * 1000.0
+        }
+        // Broad-phase output already follows moved body order and deterministic
+        // tree traversal order, including through the parallel offset table.
+        // Re-sorting every newly discovered pair made dense scenes quadratic in
+        // practice under the current list lowering.
+        if self.profiling_enabled {
+            self.current_pair_sort_ms = profile_clock.tick() * 1000.0
+        }
         for pair in self.new_candidate_pairs { self.insert_candidate_pair(pair) }
+        if self.profiling_enabled {
+            self.current_pair_insertion_ms = profile_clock.tick() * 1000.0
+        }
+    }
+
+    private func collect_dynamic_grid_pairs() {
+        self.discovered_pairs.clear()
+        self.ensure_circle_grid_capacity()
+        self.circle_grid_generation++
+        let generation = self.circle_grid_generation
+        let cell_size = self.maximum_dynamic_shape_radius * 2.0
+        let inverse_cell_size = 1.0 / cell_size
+        var body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic {
+                body++
+                continue
+            }
+            let cell_x = Math.floor(
+                self.store.positions_x[body] * inverse_cell_size
+            ) as int
+            let cell_y = Math.floor(
+                self.store.positions_y[body] * inverse_cell_size
+            ) as int
+            let bucket = circle_grid_bucket(
+                cell_x,
+                cell_y,
+                self.circle_grid_heads.count()
+            )
+            if self.circle_grid_stamps[bucket] != generation {
+                self.circle_grid_stamps[bucket] = generation
+                self.circle_grid_heads[bucket] = -1
+            }
+            self.circle_grid_cell_x[body] = cell_x
+            self.circle_grid_cell_y[body] = cell_y
+            self.circle_grid_next[body] = self.circle_grid_heads[bucket]
+            self.circle_grid_heads[bucket] = body
+            body++
+        }
+
+        body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic {
+                body++
+                continue
+            }
+            let cell_x = self.circle_grid_cell_x[body]
+            let cell_y = self.circle_grid_cell_y[body]
+            var offset_y = -1
+            while offset_y <= 0 {
+                var offset_x = -1
+                var maximum_offset_x = 1
+                if offset_y == 0 { maximum_offset_x = 0 }
+                while offset_x <= maximum_offset_x {
+                    let expected_x = cell_x + offset_x
+                    let expected_y = cell_y + offset_y
+                    let bucket = circle_grid_bucket(
+                        expected_x,
+                        expected_y,
+                        self.circle_grid_heads.count()
+                    )
+                    if self.circle_grid_stamps[bucket] == generation {
+                        var other = self.circle_grid_heads[bucket]
+                        while other >= 0 {
+                            if self.circle_grid_cell_x[other] == expected_x &&
+                                self.circle_grid_cell_y[other] == expected_y &&
+                                (offset_x != 0 || offset_y != 0 || other < body) &&
+                                self.tight_bounds[other].overlaps(
+                                    self.tight_bounds[body]
+                                )
+                            {
+                                var first = other
+                                var second = body
+                                if first > second {
+                                    first = body
+                                    second = other
+                                }
+                                self.discovered_pairs.append(
+                                    BodyPair2D(first, second)
+                                )
+                            }
+                            other = self.circle_grid_next[other]
+                        }
+                    }
+                    offset_x++
+                }
+                offset_y++
+            }
+            for fixed_body in self.fixed_bodies {
+                if self.tight_bounds[fixed_body].overlaps(
+                    self.tight_bounds[body]
+                ) {
+                    var first = fixed_body
+                    var second = body
+                    if first > second {
+                        first = body
+                        second = fixed_body
+                    }
+                    self.discovered_pairs.append(BodyPair2D(first, second))
+                }
+            }
+            body++
+        }
+    }
+
+    private func clip_fast_circles_against_sleeping_pile() {
+        // A 5 cm-radius ball falling at 10 m/s travels farther than its
+        // diameter during one 60 Hz step. Build a grid containing only rigid
+        // sleeping supports, then retain the earliest swept circle contact for
+        // each fast awake circle before ordinary discrete contact generation.
+        self.ensure_circle_grid_capacity()
+        self.circle_grid_generation++
+        let generation = self.circle_grid_generation
+        let cell_size = self.maximum_dynamic_circle_radius * 2.0
+        let inverse_cell_size = 1.0 / cell_size
+        var body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic ||
+                self.store.shape_kinds[body] != 1 ||
+                self.store.awake[body]
+            {
+                body++
+                continue
+            }
+            let cell_x = Math.floor(
+                self.store.positions_x[body] * inverse_cell_size
+            ) as int
+            let cell_y = Math.floor(
+                self.store.positions_y[body] * inverse_cell_size
+            ) as int
+            let bucket = circle_grid_bucket(
+                cell_x,
+                cell_y,
+                self.circle_grid_heads.count()
+            )
+            if self.circle_grid_stamps[bucket] != generation {
+                self.circle_grid_stamps[bucket] = generation
+                self.circle_grid_heads[bucket] = -1
+            }
+            self.circle_grid_cell_x[body] = cell_x
+            self.circle_grid_cell_y[body] = cell_y
+            self.circle_grid_next[body] = self.circle_grid_heads[bucket]
+            self.circle_grid_heads[bucket] = body
+            body++
+        }
+
+        body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic ||
+                self.store.shape_kinds[body] != 1 ||
+                !self.store.awake[body]
+            {
+                body++
+                continue
+            }
+            let start_x = self.store.previous_positions_x[body]
+            let start_y = self.store.previous_positions_y[body]
+            let motion_x = self.store.positions_x[body] - start_x
+            let motion_y = self.store.positions_y[body] - start_y
+            let motion_squared = motion_x * motion_x + motion_y * motion_y
+            let radius = self.store.radii[body]
+            if motion_squared <= radius * radius * 0.25 {
+                body++
+                continue
+            }
+
+            let sweep_radius = radius + self.maximum_dynamic_circle_radius
+            let minimum_x = Math.floor(
+                (Math.min(start_x, self.store.positions_x[body]) -
+                    sweep_radius) * inverse_cell_size
+            ) as int
+            let maximum_x = Math.floor(
+                (Math.max(start_x, self.store.positions_x[body]) +
+                    sweep_radius) * inverse_cell_size
+            ) as int
+            let minimum_y = Math.floor(
+                (Math.min(start_y, self.store.positions_y[body]) -
+                    sweep_radius) * inverse_cell_size
+            ) as int
+            let maximum_y = Math.floor(
+                (Math.max(start_y, self.store.positions_y[body]) +
+                    sweep_radius) * inverse_cell_size
+            ) as int
+            var earliest = 2.0
+            var target = -1
+            var cell_y = minimum_y
+            while cell_y <= maximum_y {
+                var cell_x = minimum_x
+                while cell_x <= maximum_x {
+                    let bucket = circle_grid_bucket(
+                        cell_x,
+                        cell_y,
+                        self.circle_grid_heads.count()
+                    )
+                    if self.circle_grid_stamps[bucket] == generation {
+                        var other = self.circle_grid_heads[bucket]
+                        while other >= 0 {
+                            if self.circle_grid_cell_x[other] == cell_x &&
+                                self.circle_grid_cell_y[other] == cell_y
+                            {
+                                let combined_radius = radius +
+                                    self.store.radii[other]
+                                let relative_x = start_x -
+                                    self.store.positions_x[other]
+                                let relative_y = start_y -
+                                    self.store.positions_y[other]
+                                let c = relative_x * relative_x +
+                                    relative_y * relative_y -
+                                    combined_radius * combined_radius
+                                if c > 0.0 {
+                                    let b = 2.0 * (
+                                        relative_x * motion_x +
+                                        relative_y * motion_y
+                                    )
+                                    let discriminant = b * b -
+                                        4.0 * motion_squared * c
+                                    if discriminant >= 0.0 {
+                                        let time = (-b -
+                                            Math.sqrt(discriminant)) /
+                                            (2.0 * motion_squared)
+                                        if time >= 0.0 && time <= 1.0 &&
+                                            time < earliest
+                                        {
+                                            earliest = time
+                                            target = other
+                                        }
+                                    }
+                                }
+                            }
+                            other = self.circle_grid_next[other]
+                        }
+                    }
+                    cell_x++
+                }
+                cell_y++
+            }
+            if target >= 0 {
+                let travel = Math.sqrt(motion_squared)
+                let contact_time = Math.min(
+                    1.0,
+                    earliest + 0.0001 / travel
+                )
+                self.store.positions_x[body] = start_x +
+                    motion_x * contact_time
+                self.store.positions_y[body] = start_y +
+                    motion_y * contact_time
+                self.tight_bounds[body] = body_bounds(self.store, body)
+                self.store.dirty_transforms[body] = true
+            }
+            body++
+        }
+    }
+
+    private func ensure_circle_grid_capacity() {
+        let required = Math.max(8, self.store.count() * 2)
+        if self.circle_grid_heads.count() >= required { return }
+        var capacity = 8
+        while capacity < required { capacity *= 2 }
+        self.circle_grid_heads.clear()
+        self.circle_grid_stamps.clear()
+        var index = 0
+        while index < capacity {
+            self.circle_grid_heads.append(-1)
+            self.circle_grid_stamps.append(0)
+            index++
+        }
+        self.circle_grid_generation = 0
+    }
+
+    private func wake_direct_impacts() {
+        // Wake decisions use one immutable awake-state snapshot. Applying a
+        // wake immediately while walking candidate pairs made the result
+        // depend on pair order and allowed a surface impact to propagate down
+        // a sleeping pile before its supporting contacts were solved.
+        for body in self.direct_wake_bodies {
+            self.direct_wake_pending[body] = false
+        }
+        self.direct_wake_bodies.clear()
+
+        var candidate_index = 0
+        while candidate_index < self.candidate_pairs.count() {
+            if !self.candidate_enabled[candidate_index] {
+                candidate_index++
+                continue
+            }
+            let pair = self.candidate_bodies[candidate_index]
+            if self.store.awake[pair.first] == self.store.awake[pair.second]
+            {
+                candidate_index++
+                continue
+            }
+            var sleeping = pair.first
+            if self.store.awake[pair.first] { sleeping = pair.second }
+            var awake_body = pair.second
+            if self.store.awake[pair.first] { awake_body = pair.first }
+            if self.store.body_types[sleeping] != BodyType2D.dynamic ||
+                self.contact_wake_cooldowns[awake_body] > 0.0 ||
+                !self.tight_bounds[pair.first].overlaps(
+                    self.tight_bounds[pair.second]
+                )
+            {
+                candidate_index++
+                continue
+            }
+
+            var cache = ContactPair2D()
+            if let collision = build_collision(
+                self.store,
+                pair.first,
+                pair.second,
+                candidate_index,
+                cache,
+                false
+            ) {
+                let offset = body_position(self.store, pair.second).subtract(
+                    body_position(self.store, pair.first)
+                )
+                let penetration = overlap_on_axis(
+                    self.store,
+                    pair.first,
+                    pair.second,
+                    offset,
+                    collision.normal
+                )
+                let relative_velocity = velocity_at(
+                    self.store,
+                    pair.second,
+                    collision.contacts.first
+                ).subtract(velocity_at(
+                    self.store,
+                    pair.first,
+                    collision.contacts.first
+                ))
+                if (relative_velocity.dot(collision.normal) < -0.35 ||
+                        penetration > 0.01) &&
+                    !self.direct_wake_pending[sleeping]
+                {
+                    self.direct_wake_pending[sleeping] = true
+                    self.direct_wake_bodies.append(sleeping)
+                }
+            }
+            candidate_index++
+        }
+
+        for body in self.direct_wake_bodies {
+            self.store.wake(body)
+            // A body awakened by contact must first resolve against the
+            // sleeping support that was added to this step. Until that short
+            // interval expires it cannot recursively wake the next layer.
+            self.contact_wake_cooldowns[body] = 0.5
+        }
     }
 
     private func update_active_pairs() {
@@ -774,7 +1470,6 @@ public class World2D {
         {
             return
         }
-        if self.candidate_pair_keys.contains(pair) { return }
         self.candidate_pair_keys.add(pair)
         if self.free_candidate_count > 0 {
             self.free_candidate_count--
@@ -790,19 +1485,61 @@ public class World2D {
     }
 
     private func solve_collisions(pairs:@int[]) {
+        var profile_clock = Clock()
+        if self.profiling_enabled { profile_clock.tick() }
         var store = self.store
         self.collisions.clear()
+        self.compact_circle_collisions.clear()
+        self.collision_entries.clear()
         for candidate_index in pairs {
             let pair = self.candidate_bodies[candidate_index]
-            if let collision = build_box_collision(
+            var contact_cache = self.candidate_pairs[candidate_index]
+            if (store.body_types[pair.first] == BodyType2D.dynamic &&
+                    !store.awake[pair.first]) ||
+                (store.body_types[pair.second] == BodyType2D.dynamic &&
+                    !store.awake[pair.second]) ||
+                self.direct_wake_pending[pair.first] ||
+                self.direct_wake_pending[pair.second]
+            {
+                // A sleeping body has had its velocity cleared. Reapplying an
+                // impulse cached before sleep can release the former stack
+                // load into the one awake body and wake the whole pile.
+                contact_cache = ContactPair2D()
+            }
+            var collision_found = false
+            if store.shape_kinds[pair.first] == 1 &&
+                store.shape_kinds[pair.second] == 1 &&
+                store.awake[pair.first] && store.awake[pair.second] &&
+                store.inverse_masses[pair.first] > 0.0 &&
+                store.inverse_masses[pair.second] > 0.0
+            {
+                if let collision = build_compact_circle_collision(
+                    store,
+                    pair.first,
+                    pair.second,
+                    candidate_index,
+                    contact_cache
+                ) {
+                    let index = self.compact_circle_collisions.count()
+                    self.compact_circle_collisions.append(collision)
+                    self.collision_entries.append(index)
+                    collision_found = true
+                }
+            } else if let collision = build_collision(
                 store,
                 pair.first,
                 pair.second,
                 candidate_index,
-                self.candidate_pairs[candidate_index]
-            ) {
+                contact_cache,
+                false
+                )
+            {
+                let index = self.collisions.count()
                 self.collisions.append(collision)
-            } else {
+                self.collision_entries.append(-index - 1)
+                collision_found = true
+            }
+            if !collision_found {
                 self.candidate_pairs[candidate_index].contact_count = 0
                 self.candidate_pairs[candidate_index].normal_impulse_first = 0.0
                 self.candidate_pairs[candidate_index].normal_impulse_second = 0.0
@@ -810,61 +1547,388 @@ public class World2D {
                 self.candidate_pairs[candidate_index].tangent_impulse_second = 0.0
             }
         }
+        if self.profiling_enabled {
+            self.current_collision_build_ms = profile_clock.tick() * 1000.0
+        }
         var collision_index = 0
-        while collision_index < self.collisions.count() {
-            warm_start_collision(store, self.collisions[collision_index])
+        while collision_index < self.collision_entries.count() {
+            let entry = self.collision_entries[collision_index]
+            if entry >= 0 {
+                warm_start_compact_circle_collision(
+                    store,
+                    self.compact_circle_collisions[entry]
+                )
+            } else {
+                warm_start_collision(store, self.collisions[-entry - 1])
+            }
             collision_index++
+        }
+        if self.profiling_enabled {
+            self.current_collision_warm_start_ms = profile_clock.tick() * 1000.0
         }
         var iteration = 0
         while iteration < 8 {
             collision_index = 0
-            while collision_index < self.collisions.count() {
-                var collision = self.collisions[collision_index]
-                resolve_collision_velocity(store, collision)
-                self.collisions[collision_index] = collision
+            while collision_index < self.collision_entries.count() {
+                let entry = self.collision_entries[collision_index]
+                if entry >= 0 {
+                    let impulses = resolve_compact_circle_velocity(
+                        store,
+                        self.compact_circle_collisions[entry]
+                    )
+                    self.compact_circle_collisions[entry]
+                        .normal_impulse =
+                        impulses.normal
+                    self.compact_circle_collisions[entry]
+                        .tangent_impulse =
+                        impulses.tangent
+                } else if self.collisions[-entry - 1].contacts.count == 1 {
+                    let impulses = resolve_single_collision_velocity(
+                        store,
+                        self.collisions[-entry - 1]
+                    )
+                    self.collisions[-entry - 1].normal_impulse_first =
+                        impulses.normal
+                    self.collisions[-entry - 1].tangent_impulse_first =
+                        impulses.tangent
+                } else {
+                    var collision = self.collisions[-entry - 1]
+                    resolve_collision_velocity(store, collision)
+                    self.collisions[-entry - 1] = collision
+                }
                 collision_index++
             }
             iteration++
         }
+        if self.profiling_enabled {
+            self.current_collision_velocity_ms = profile_clock.tick() * 1000.0
+        }
         var position_iteration = 0
-        while position_iteration < 2 {
+        while position_iteration < 16 {
+            // Reuse the contact set for most iterations. The final global
+            // sweeps catch contacts introduced by the preceding corrections
+            // without rebuilding the dense circle grid eight times per step.
+            let use_global_circle_pass = self.dynamic_grid_active &&
+                self.maximum_dynamic_circle_radius > 0.0 &&
+                position_iteration >= 8
             collision_index = 0
-            while collision_index < self.collisions.count() {
-                resolve_collision_position(
-                    store,
-                    self.collisions[collision_index]
-                )
+            while collision_index < self.collision_entries.count() {
+                let entry = self.collision_entries[collision_index]
+                if entry >= 0 {
+                    if !use_global_circle_pass {
+                        resolve_compact_circle_position(
+                            store,
+                            self.compact_circle_collisions[entry]
+                        )
+                    }
+                } else {
+                    let collision = self.collisions[-entry - 1]
+                    if store.shape_kinds[collision.first_body] == 1 &&
+                        store.shape_kinds[collision.second_body] == 1
+                    {
+                        if !use_global_circle_pass {
+                            resolve_circle_collision_position(store, collision)
+                        }
+                    } else {
+                        resolve_collision_position(store, collision)
+                    }
+                }
                 collision_index++
+            }
+            if use_global_circle_pass {
+                self.resolve_circle_grid_positions(
+                    position_iteration == 15,
+                    position_iteration % 2 == 1
+                )
+                self.resolve_circle_fixed_box_positions()
             }
             position_iteration++
         }
+        if self.dynamic_grid_active && self.maximum_dynamic_circle_radius > 0.0 {
+            self.enforce_fixed_box_boundaries()
+        }
+        if self.profiling_enabled {
+            self.current_collision_position_ms = profile_clock.tick() * 1000.0
+        }
         collision_index = 0
-        while collision_index < self.collisions.count() {
-            let collision = self.collisions[collision_index]
-            let cache = collision.cache_index
-            self.candidate_pairs[cache].normal = collision.normal
-            self.candidate_pairs[cache].first_contact = body_local_point(
-                store,
-                collision.first_body,
-                collision.contacts.first
-            )
-            self.candidate_pairs[cache].second_contact = body_local_point(
-                store,
-                collision.first_body,
-                collision.contacts.second
-            )
-            self.candidate_pairs[cache].contact_count = collision.contacts.count
-            self.candidate_pairs[cache].normal_impulse_first =
-                collision.normal_impulse_first
-            self.candidate_pairs[cache].normal_impulse_second =
-                collision.normal_impulse_second
-            self.candidate_pairs[cache].tangent_impulse_first =
-                collision.tangent_impulse_first
-            self.candidate_pairs[cache].tangent_impulse_second =
-                collision.tangent_impulse_second
+        while collision_index < self.collision_entries.count() {
+            let entry = self.collision_entries[collision_index]
+            if entry >= 0 {
+                let collision = self.compact_circle_collisions[entry]
+                let cache = collision.cache_index
+                self.candidate_pairs[cache].normal = collision.normal
+                self.candidate_pairs[cache].first_contact =
+                    collision.first_contact
+                self.candidate_pairs[cache].contact_count = 1
+                self.candidate_pairs[cache].normal_impulse_first =
+                    collision.normal_impulse
+                self.candidate_pairs[cache].normal_impulse_second = 0.0
+                self.candidate_pairs[cache].tangent_impulse_first =
+                    collision.tangent_impulse
+                self.candidate_pairs[cache].tangent_impulse_second = 0.0
+                self.candidate_pairs[cache].first_awake =
+                    store.awake[collision.first_body]
+                self.candidate_pairs[cache].second_awake =
+                    store.awake[collision.second_body]
+            } else {
+                let collision = self.collisions[-entry - 1]
+                let cache = collision.cache_index
+                self.candidate_pairs[cache].normal = collision.normal
+                self.candidate_pairs[cache].first_contact =
+                    body_contact_cache_point(
+                        store,
+                        collision.first_body,
+                        collision.contacts.first
+                    )
+                self.candidate_pairs[cache].second_contact =
+                    body_contact_cache_point(
+                        store,
+                        collision.first_body,
+                        collision.contacts.second
+                    )
+                self.candidate_pairs[cache].contact_count =
+                    collision.contacts.count
+                self.candidate_pairs[cache].normal_impulse_first =
+                    collision.normal_impulse_first
+                self.candidate_pairs[cache].normal_impulse_second =
+                    collision.normal_impulse_second
+                self.candidate_pairs[cache].tangent_impulse_first =
+                    collision.tangent_impulse_first
+                self.candidate_pairs[cache].tangent_impulse_second =
+                    collision.tangent_impulse_second
+                self.candidate_pairs[cache].first_awake =
+                    store.awake[collision.first_body]
+                self.candidate_pairs[cache].second_awake =
+                    store.awake[collision.second_body]
+            }
             collision_index++
         }
+        if self.profiling_enabled {
+            self.current_collision_cache_ms = profile_clock.tick() * 1000.0
+        }
     }
+
+    private func enforce_fixed_box_boundaries() {
+        var circle = 0
+        while circle < self.store.count() {
+            if self.store.body_types[circle] != BodyType2D.dynamic ||
+                self.store.shape_kinds[circle] != 1 ||
+                !self.store.awake[circle]
+            {
+                circle++
+                continue
+            }
+            for fixed_body in self.fixed_bodies {
+                if self.store.shape_kinds[fixed_body] != 0 { continue }
+                if !self.tight_bounds[fixed_body].overlaps(
+                    self.tight_bounds[circle]
+                ) { continue }
+                self.enforce_circle_outside_fixed_box(circle, fixed_body)
+            }
+            circle++
+        }
+    }
+
+    private func resolve_circle_grid_positions(
+        track_stability:bool,
+        reverse_order:bool
+    ) {
+        self.ensure_circle_grid_capacity()
+        self.circle_grid_generation++
+        let generation = self.circle_grid_generation
+        let cell_size = self.maximum_dynamic_circle_radius * 2.0
+        let inverse_cell_size = 1.0 / cell_size
+        var body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic ||
+                self.store.shape_kinds[body] != 1
+            {
+                body++
+                continue
+            }
+            let cell_x = Math.floor(
+                self.store.positions_x[body] * inverse_cell_size
+            ) as int
+            let cell_y = Math.floor(
+                self.store.positions_y[body] * inverse_cell_size
+            ) as int
+            let bucket = circle_grid_bucket(
+                cell_x,
+                cell_y,
+                self.circle_grid_heads.count()
+            )
+            if self.circle_grid_stamps[bucket] != generation {
+                self.circle_grid_stamps[bucket] = generation
+                self.circle_grid_heads[bucket] = -1
+            }
+            self.circle_grid_cell_x[body] = cell_x
+            self.circle_grid_cell_y[body] = cell_y
+            self.circle_grid_next[body] = self.circle_grid_heads[bucket]
+            self.circle_grid_heads[bucket] = body
+            body++
+        }
+
+        var body_step = 1
+        body = 0
+        if reverse_order {
+            body = self.store.count() - 1
+            body_step = -1
+        }
+        while body >= 0 && body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic ||
+                self.store.shape_kinds[body] != 1
+            {
+                body += body_step
+                continue
+            }
+            let cell_x = self.circle_grid_cell_x[body]
+            let cell_y = self.circle_grid_cell_y[body]
+            var offset_y = -1
+            while offset_y <= 0 {
+                var offset_x = -1
+                var maximum_offset_x = 1
+                if offset_y == 0 { maximum_offset_x = 0 }
+                while offset_x <= maximum_offset_x {
+                    let expected_x = cell_x + offset_x
+                    let expected_y = cell_y + offset_y
+                    let bucket = circle_grid_bucket(
+                        expected_x,
+                        expected_y,
+                        self.circle_grid_heads.count()
+                    )
+                    if self.circle_grid_stamps[bucket] == generation {
+                        var other = self.circle_grid_heads[bucket]
+                        while other >= 0 {
+                            if self.circle_grid_cell_x[other] == expected_x &&
+                                self.circle_grid_cell_y[other] == expected_y &&
+                                (offset_x != 0 || offset_y != 0 || other < body)
+                            {
+                                resolve_circle_pair_position(
+                                    self.store,
+                                    other,
+                                    body
+                                )
+                                if track_stability {
+                                    let minimum_distance =
+                                        self.store.radii[other] +
+                                        self.store.radii[body] - 0.01
+                                    let separation_x =
+                                        self.store.positions_x[body] -
+                                        self.store.positions_x[other]
+                                    let separation_y =
+                                        self.store.positions_y[body] -
+                                        self.store.positions_y[other]
+                                    if separation_x * separation_x +
+                                        separation_y * separation_y <
+                                            minimum_distance * minimum_distance
+                                    {
+                                        self.stable_for_sleep[other] = false
+                                        self.stable_for_sleep[body] = false
+                                    }
+                                }
+                            }
+                            other = self.circle_grid_next[other]
+                        }
+                    }
+                    offset_x++
+                }
+                offset_y++
+            }
+            body += body_step
+        }
+    }
+
+    private func resolve_circle_fixed_box_positions() {
+        var circle = 0
+        while circle < self.store.count() {
+            if self.store.body_types[circle] != BodyType2D.dynamic ||
+                self.store.shape_kinds[circle] != 1 ||
+                !self.store.awake[circle]
+            {
+                circle++
+                continue
+            }
+            for fixed_body in self.fixed_bodies {
+                if self.store.shape_kinds[fixed_body] != 0 { continue }
+                self.enforce_circle_outside_fixed_box(circle, fixed_body)
+                resolve_circle_fixed_box_position(
+                    self.store,
+                    circle,
+                    fixed_body
+                )
+            }
+            circle++
+        }
+    }
+
+    private func enforce_circle_outside_fixed_box(circle:int, box:int) {
+        let box_x = self.store.positions_x[box]
+        let box_y = self.store.positions_y[box]
+        let cosine = self.store.rotation_cosines[box]
+        let sine = self.store.rotation_sines[box]
+        let offset_x = self.store.positions_x[circle] - box_x
+        let offset_y = self.store.positions_y[circle] - box_y
+        var local_x:float = offset_x * cosine + offset_y * sine
+        var local_y:float = offset_y * cosine - offset_x * sine
+        let half_width = self.store.half_widths[box]
+        let half_height = self.store.half_heights[box]
+        if Math.abs(local_x) >= half_width ||
+            Math.abs(local_y) >= half_height
+        {
+            return
+        }
+
+        let previous_offset_x = self.store.previous_positions_x[circle] - box_x
+        let previous_offset_y = self.store.previous_positions_y[circle] - box_y
+        let previous_local_x =
+            previous_offset_x * cosine + previous_offset_y * sine
+        let previous_local_y =
+            previous_offset_y * cosine - previous_offset_x * sine
+        let previous_outside_x = Math.abs(previous_local_x) - half_width
+        let previous_outside_y = Math.abs(previous_local_y) - half_height
+        var normal_local_x:float = 0.0
+        var normal_local_y:float = 0.0
+        if previous_outside_x > 0.0 || previous_outside_y > 0.0 {
+            if previous_outside_x > previous_outside_y {
+                normal_local_x = 1.0
+                if previous_local_x < 0.0 { normal_local_x = -1.0 }
+            } else {
+                normal_local_y = 1.0
+                if previous_local_y < 0.0 { normal_local_y = -1.0 }
+            }
+        } else {
+            let distance_x = half_width - Math.abs(local_x)
+            let distance_y = half_height - Math.abs(local_y)
+            if distance_x < distance_y {
+                normal_local_x = 1.0
+                if local_x < 0.0 { normal_local_x = -1.0 }
+            } else {
+                normal_local_y = 1.0
+                if local_y < 0.0 { normal_local_y = -1.0 }
+            }
+        }
+
+        let radius = self.store.radii[circle]
+        if normal_local_x != 0.0 {
+            local_x = normal_local_x * (half_width + radius + 0.00025)
+        } else {
+            local_y = normal_local_y * (half_height + radius + 0.00025)
+        }
+        self.store.positions_x[circle] =
+            box_x + cosine * local_x - sine * local_y
+        self.store.positions_y[circle] =
+            box_y + sine * local_x + cosine * local_y
+        let normal_x = cosine * normal_local_x - sine * normal_local_y
+        let normal_y = sine * normal_local_x + cosine * normal_local_y
+        let inward_velocity = self.store.velocities_x[circle] * normal_x +
+            self.store.velocities_y[circle] * normal_y
+        if inward_velocity < 0.0 {
+            self.store.velocities_x[circle] -= inward_velocity * normal_x
+            self.store.velocities_y[circle] -= inward_velocity * normal_y
+        }
+        self.store.dirty_transforms[circle] = true
+    }
+
 }
 
 func integrate_body(
@@ -898,6 +1962,12 @@ func integrate_body(
 }
 
 func body_bounds(store:BodyStore2D, index:int) AABB2D {
+    if store.shape_kinds[index] == 1 {
+        return AABB2D(
+            body_position(store, index),
+            Math.Vec2(store.radii[index])
+        )
+    }
     let cosine = Math.abs(store.rotation_cosines[index])
     let sine = Math.abs(store.rotation_sines[index])
     return AABB2D(
@@ -907,6 +1977,380 @@ func body_bounds(store:BodyStore2D, index:int) AABB2D {
             store.half_widths[index] * sine + store.half_heights[index] * cosine
         )
     )
+}
+
+func build_collision(
+    store:BodyStore2D,
+    first_body:int,
+    second_body:int,
+    cache_index:int,
+    cache:ContactPair2D,
+    wake_contacts:bool = true
+) Collision2D? {
+    let first_kind = store.shape_kinds[first_body]
+    let second_kind = store.shape_kinds[second_body]
+    if first_kind == 0 && second_kind == 0 {
+        return build_box_collision(
+            store,
+            first_body,
+            second_body,
+            cache_index,
+            cache,
+            wake_contacts
+        )
+    }
+    if first_kind == 1 && second_kind == 1 {
+        return build_circle_collision(
+            store,
+            first_body,
+            second_body,
+            cache_index,
+            cache
+        )
+    }
+    if first_kind == 1 {
+        return build_circle_box_collision(
+            store,
+            first_body,
+            second_body,
+            true,
+            cache_index,
+            cache,
+            wake_contacts
+        )
+    }
+    return build_circle_box_collision(
+        store,
+        second_body,
+        first_body,
+        false,
+        cache_index,
+        cache,
+        wake_contacts
+    )
+}
+
+func build_circle_collision(
+    store:BodyStore2D,
+    first_body:int,
+    second_body:int,
+    cache_index:int,
+    cache:ContactPair2D
+) Collision2D? {
+    let inverse_mass = store.inverse_masses[first_body] +
+        store.inverse_masses[second_body]
+    if inverse_mass <= 0.0 { return null }
+
+    let offset_x = store.positions_x[second_body] -
+        store.positions_x[first_body]
+    let offset_y = store.positions_y[second_body] -
+        store.positions_y[first_body]
+    let distance_squared = offset_x * offset_x + offset_y * offset_y
+    let combined_radius = store.radii[first_body] + store.radii[second_body]
+    if distance_squared >= combined_radius * combined_radius { return null }
+
+    var distance = 0.0
+    if distance_squared > 0.000000000001 {
+        distance = Math.sqrt(distance_squared)
+    }
+    let separation_normal = circle_contact_normal(
+        store,
+        first_body,
+        second_body,
+        offset_x,
+        offset_y,
+        distance,
+        combined_radius
+    )
+    let normal_x = separation_normal.x
+    let normal_y = separation_normal.y
+    let penetration = combined_radius - distance
+    let normal = Math.Vec2(normal_x, normal_y)
+    let contact = Math.Vec2(
+        (store.positions_x[first_body] + normal_x * store.radii[first_body] +
+            store.positions_x[second_body] -
+            normal_x * store.radii[second_body]) * 0.5,
+        (store.positions_y[first_body] + normal_y * store.radii[first_body] +
+            store.positions_y[second_body] -
+            normal_y * store.radii[second_body]) * 0.5
+    )
+    // Dynamic circle wake-up is staged before active-pair filtering. Keeping
+    // it out of constraint construction makes wake propagation independent of
+    // candidate order and gives a newly awakened surface body its sleeping
+    // support contacts in this same step.
+    var collision = Collision2D(
+        store,
+        first_body,
+        second_body,
+        normal,
+        ContactPoints2D(contact),
+        cache_index,
+        cache,
+        true
+    )
+    prepare_circle_collision_constraints(store, collision)
+    return collision
+}
+
+func build_compact_circle_collision(
+    store:BodyStore2D,
+    first_body:int,
+    second_body:int,
+    cache_index:int,
+    cache:ContactPair2D
+) CompactCircleCollision2D? {
+    let offset_x = store.positions_x[second_body] -
+        store.positions_x[first_body]
+    let offset_y = store.positions_y[second_body] -
+        store.positions_y[first_body]
+    let distance_squared = offset_x * offset_x + offset_y * offset_y
+    let combined_radius = store.radii[first_body] + store.radii[second_body]
+    if distance_squared >= combined_radius * combined_radius { return null }
+
+    var distance = 0.0
+    if distance_squared > 0.000000000001 {
+        distance = Math.sqrt(distance_squared)
+    }
+    let separation_normal = circle_contact_normal(
+        store,
+        first_body,
+        second_body,
+        offset_x,
+        offset_y,
+        distance,
+        combined_radius
+    )
+    let normal_x = separation_normal.x
+    let normal_y = separation_normal.y
+    let normal = Math.Vec2(normal_x, normal_y)
+    let contact = Math.Vec2(
+        (store.positions_x[first_body] + normal_x * store.radii[first_body] +
+            store.positions_x[second_body] -
+            normal_x * store.radii[second_body]) * 0.5,
+        (store.positions_y[first_body] + normal_y * store.radii[first_body] +
+            store.positions_y[second_body] -
+            normal_y * store.radii[second_body]) * 0.5
+    )
+
+    var normal_impulse = 0.0
+    var tangent_impulse = 0.0
+    let local_x = contact.x - store.positions_x[first_body]
+    let local_y = contact.y - store.positions_y[first_body]
+    let delta_x = cache.first_contact.x - local_x
+    let delta_y = cache.first_contact.y - local_y
+    let cache_distance_limit = combined_radius * 0.1
+    if cache.contact_count == 1 &&
+        cache.first_awake == store.awake[first_body] &&
+        cache.second_awake == store.awake[second_body] &&
+        cache.normal.x * normal_x + cache.normal.y * normal_y > 0.995 &&
+        delta_x * delta_x + delta_y * delta_y <=
+            cache_distance_limit * cache_distance_limit
+    {
+        normal_impulse = cache.normal_impulse_first
+        tangent_impulse = cache.tangent_impulse_first
+    }
+
+    let first_inverse_mass = store.inverse_masses[first_body]
+    let second_inverse_mass = store.inverse_masses[second_body]
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    let tangent_x = -normal_y
+    let tangent_y = normal_x
+    let first_radius_x = contact.x - store.positions_x[first_body]
+    let first_radius_y = contact.y - store.positions_y[first_body]
+    let second_radius_x = contact.x - store.positions_x[second_body]
+    let second_radius_y = contact.y - store.positions_y[second_body]
+    let first_tangent_arm =
+        first_radius_x * tangent_y - first_radius_y * tangent_x
+    let second_tangent_arm =
+        second_radius_x * tangent_y - second_radius_y * tangent_x
+    let tangent_denominator = inverse_mass +
+        first_tangent_arm * first_tangent_arm *
+            store.inverse_inertias[first_body] +
+        second_tangent_arm * second_tangent_arm *
+            store.inverse_inertias[second_body]
+    var velocity_bias = 0.0
+    let relative_normal_velocity =
+        (store.velocities_x[second_body] -
+            store.velocities_x[first_body]) * normal_x +
+        (store.velocities_y[second_body] -
+            store.velocities_y[first_body]) * normal_y
+    if relative_normal_velocity < -1.0 {
+        velocity_bias = -Math.min(
+            store.restitutions[first_body],
+            store.restitutions[second_body]
+        ) * relative_normal_velocity
+    }
+    return CompactCircleCollision2D(
+        first_body:first_body,
+        second_body:second_body,
+        normal:normal,
+        first_contact:Math.Vec2(local_x, local_y),
+        cache_index:cache_index,
+        normal_impulse:normal_impulse,
+        tangent_impulse:tangent_impulse,
+        normal_mass:1.0 / inverse_mass,
+        tangent_mass:1.0 / tangent_denominator,
+        first_tangent_arm:first_tangent_arm,
+        second_tangent_arm:second_tangent_arm,
+        normal_velocity_bias:velocity_bias,
+        combined_friction:store.friction_roots[first_body] *
+            store.friction_roots[second_body]
+    )
+}
+
+func build_circle_box_collision(
+    store:BodyStore2D,
+    circle_body:int,
+    box_body:int,
+    circle_is_first:bool,
+    cache_index:int,
+    cache:ContactPair2D,
+    wake_contacts:bool = true
+) Collision2D? {
+    let inverse_mass = store.inverse_masses[circle_body] +
+        store.inverse_masses[box_body]
+    if inverse_mass <= 0.0 { return null }
+
+    let circle_position = body_position(store, circle_body)
+    let box_position = body_position(store, box_body)
+    let offset_x = circle_position.x - box_position.x
+    let offset_y = circle_position.y - box_position.y
+    let cosine = store.rotation_cosines[box_body]
+    let sine = store.rotation_sines[box_body]
+    let local_x = offset_x * cosine + offset_y * sine
+    let local_y = offset_y * cosine - offset_x * sine
+    var closest_x = Math.max(
+        -store.half_widths[box_body],
+        Math.min(local_x, store.half_widths[box_body])
+    )
+    var closest_y = Math.max(
+        -store.half_heights[box_body],
+        Math.min(local_y, store.half_heights[box_body])
+    )
+    let delta_x = local_x - closest_x
+    let delta_y = local_y - closest_y
+    let distance_squared = delta_x * delta_x + delta_y * delta_y
+    let radius = store.radii[circle_body]
+    if distance_squared >= radius * radius { return null }
+
+    var normal_local_x = 0.0
+    var normal_local_y = 0.0
+    var penetration = 0.0
+    var circle_surface_direction = -1.0
+    if distance_squared > 0.000000000001 {
+        let distance = Math.sqrt(distance_squared)
+        normal_local_x = delta_x / distance
+        normal_local_y = delta_y / distance
+        penetration = radius - distance
+    } else {
+        circle_surface_direction = 1.0
+        var retained_face = false
+        if cache.contact_count == 1 {
+            var cached_x:float = cache.normal.x + 0.0
+            var cached_y:float = cache.normal.y + 0.0
+            if circle_is_first {
+                cached_x = -cached_x
+                cached_y = -cached_y
+            }
+            let cached_local_x = cached_x * cosine + cached_y * sine
+            let cached_local_y = cached_y * cosine - cached_x * sine
+            if Math.abs(cached_local_x) > Math.abs(cached_local_y) {
+                normal_local_x = 1.0
+                if cached_local_x < 0.0 { normal_local_x = -1.0 }
+            } else {
+                normal_local_y = 1.0
+                if cached_local_y < 0.0 { normal_local_y = -1.0 }
+            }
+            retained_face = true
+        } else {
+            let previous_offset_x =
+                store.previous_positions_x[circle_body] - box_position.x
+            let previous_offset_y =
+                store.previous_positions_y[circle_body] - box_position.y
+            let previous_local_x =
+                previous_offset_x * cosine + previous_offset_y * sine
+            let previous_local_y =
+                previous_offset_y * cosine - previous_offset_x * sine
+            let outside_x = Math.abs(previous_local_x) -
+                store.half_widths[box_body]
+            let outside_y = Math.abs(previous_local_y) -
+                store.half_heights[box_body]
+            if outside_x > 0.0 || outside_y > 0.0 {
+                if outside_x > outside_y {
+                    normal_local_x = 1.0
+                    if previous_local_x < 0.0 { normal_local_x = -1.0 }
+                } else {
+                    normal_local_y = 1.0
+                    if previous_local_y < 0.0 { normal_local_y = -1.0 }
+                }
+                retained_face = true
+            }
+        }
+        if !retained_face {
+            let distance_x = store.half_widths[box_body] - Math.abs(local_x)
+            let distance_y = store.half_heights[box_body] - Math.abs(local_y)
+            if distance_x < distance_y {
+                normal_local_x = 1.0
+                if local_x < 0.0 { normal_local_x = -1.0 }
+            } else {
+                normal_local_y = 1.0
+                if local_y < 0.0 { normal_local_y = -1.0 }
+            }
+        }
+        if normal_local_x != 0.0 {
+            closest_x = normal_local_x * store.half_widths[box_body]
+            closest_y = local_y
+            penetration = radius + store.half_widths[box_body] -
+                normal_local_x * local_x
+        } else {
+            closest_x = local_x
+            closest_y = normal_local_y * store.half_heights[box_body]
+            penetration = radius + store.half_heights[box_body] -
+                normal_local_y * local_y
+        }
+    }
+
+    let box_to_circle = Math.Vec2(
+        cosine * normal_local_x - sine * normal_local_y,
+        sine * normal_local_x + cosine * normal_local_y
+    )
+    let box_surface = Math.Vec2(
+        box_position.x + cosine * closest_x - sine * closest_y,
+        box_position.y + sine * closest_x + cosine * closest_y
+    )
+    let circle_surface = circle_position.add(
+        box_to_circle.multiply(radius * circle_surface_direction)
+    )
+    let contact = box_surface.add(circle_surface).multiply(0.5)
+    var first_body = box_body
+    var second_body = circle_body
+    var normal = box_to_circle
+    if circle_is_first {
+        first_body = circle_body
+        second_body = box_body
+        normal = box_to_circle.negated()
+    }
+    if wake_contacts {
+        wake_for_contact(
+            store,
+            first_body,
+            second_body,
+            normal,
+            contact,
+            penetration
+        )
+    }
+    var collision = Collision2D(
+        store,
+        first_body,
+        second_body,
+        normal,
+        ContactPoints2D(contact),
+        cache_index,
+        cache
+    )
+    prepare_collision_constraints(store, collision)
+    return collision
 }
 
 struct ContactPoints2D {
@@ -949,6 +2393,8 @@ struct Collision2D {
     var tangent_mass_second:float
     var normal_denominator_first:float
     var normal_denominator_second:float
+    var normal_velocity_bias_first:float
+    var normal_velocity_bias_second:float
     var normal_coupling:float
     var normal_determinant:float
     var combined_friction:float
@@ -969,6 +2415,8 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
+        self.normal_velocity_bias_first = 0.0
+        self.normal_velocity_bias_second = 0.0
         self.normal_coupling = 0.0
         self.normal_determinant = 0.0
         self.combined_friction = 0.0
@@ -988,12 +2436,12 @@ struct Collision2D {
         self.normal = normal
         self.contacts = contacts
         self.cache_index = cache_index
-        let first_local_contact = body_local_point(
+        let first_local_contact = body_contact_cache_point(
             store,
             first_body,
             contacts.first
         )
-        let second_local_contact = body_local_point(
+        let second_local_contact = body_contact_cache_point(
             store,
             first_body,
             contacts.second
@@ -1006,6 +2454,8 @@ struct Collision2D {
         )
         let contact_threshold_squared = 0.0004
         if cache.contact_count == contacts.count &&
+            cache.first_awake == store.awake[first_body] &&
+            cache.second_awake == store.awake[second_body] &&
             cache.normal.dot(normal) > 0.98 &&
             first_contact_delta.dot(first_contact_delta) <= contact_threshold_squared &&
             (contacts.count == 1 ||
@@ -1028,9 +2478,67 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
+        self.normal_velocity_bias_first = 0.0
+        self.normal_velocity_bias_second = 0.0
         self.normal_coupling = 0.0
         self.normal_determinant = 0.0
         self.combined_friction = 0.0
+    }
+
+    init(
+        store:BodyStore2D,
+        first_body:int,
+        second_body:int,
+        normal:Math.Vec2,
+        contacts:ContactPoints2D,
+        cache_index:int,
+        cache:ContactPair2D,
+        circle_contact:bool
+    ) {
+        self.first_body = first_body
+        self.second_body = second_body
+        self.normal = normal
+        self.contacts = contacts
+        self.cache_index = cache_index
+        let local_x = contacts.first.x - store.positions_x[first_body]
+        let local_y = contacts.first.y - store.positions_y[first_body]
+        let delta_x = cache.first_contact.x - local_x
+        let delta_y = cache.first_contact.y - local_y
+        if cache.contact_count == 1 &&
+            cache.first_awake == store.awake[first_body] &&
+            cache.second_awake == store.awake[second_body] &&
+            cache.normal.x * normal.x + cache.normal.y * normal.y > 0.98 &&
+            delta_x * delta_x + delta_y * delta_y <= 0.0004
+        {
+            self.normal_impulse_first = cache.normal_impulse_first
+            self.tangent_impulse_first = cache.tangent_impulse_first
+        } else {
+            self.normal_impulse_first = 0.0
+            self.tangent_impulse_first = 0.0
+        }
+        self.normal_impulse_second = 0.0
+        self.tangent_impulse_second = 0.0
+        self.normal_mass_first = 0.0
+        self.normal_mass_second = 0.0
+        self.tangent_mass_first = 0.0
+        self.tangent_mass_second = 0.0
+        self.normal_denominator_first = 0.0
+        self.normal_denominator_second = 0.0
+        self.normal_velocity_bias_first = 0.0
+        self.normal_velocity_bias_second = 0.0
+        self.normal_coupling = 0.0
+        self.normal_determinant = 0.0
+        self.combined_friction = 0.0
+    }
+}
+
+struct ContactImpulse2D {
+    let normal:float
+    let tangent:float
+
+    init(normal:float, tangent:float) {
+        self.normal = normal
+        self.tangent = tangent
     }
 }
 
@@ -1039,7 +2547,8 @@ func build_box_collision(
     first_body:int,
     second_body:int,
     cache_index:int,
-    cache:ContactPair2D
+    cache:ContactPair2D,
+    wake_contacts:bool = true
 ) Collision2D? {
     let inverse_mass = store.inverse_masses[first_body] +
         store.inverse_masses[second_body]
@@ -1096,14 +2605,16 @@ func build_box_collision(
 
     if offset.dot(normal) < 0.0 { normal = normal.negated() }
     let contacts = contact_points(store, first_body, second_body, normal)
-    wake_for_contact(
-        store,
-        first_body,
-        second_body,
-        normal,
-        contacts.first,
-        penetration
-    )
+    if wake_contacts {
+        wake_for_contact(
+            store,
+            first_body,
+            second_body,
+            normal,
+            contacts.first,
+            penetration
+        )
+    }
     var collision = Collision2D(
         store,
         first_body,
@@ -1131,10 +2642,11 @@ func resolve_collision_position(
     let offset = body_position(store, second).subtract(body_position(store, first))
     let penetration = overlap_on_axis(store, first, second, offset, normal)
     let correction_depth = Math.min(
-        0.4,
+        maximum_position_correction(store, first, second),
         Math.max(penetration - 0.00025, 0.0) * 0.9
     )
     if correction_depth <= 0.0 { return }
+
     let correction = normal.multiply(correction_depth / inverse_mass)
     translate_body(
         store,
@@ -1146,6 +2658,127 @@ func resolve_collision_position(
         second,
         correction.multiply(second_inverse_mass)
     )
+}
+
+func resolve_circle_collision_position(
+    store:BodyStore2D,
+    collision:@Collision2D
+) {
+    resolve_circle_pair_position(
+        store,
+        collision.first_body,
+        collision.second_body
+    )
+}
+
+func resolve_circle_fixed_box_position(
+    store:BodyStore2D,
+    circle:int,
+    box:int
+) {
+    let offset_x = store.positions_x[circle] - store.positions_x[box]
+    let offset_y = store.positions_y[circle] - store.positions_y[box]
+    let cosine = store.rotation_cosines[box]
+    let sine = store.rotation_sines[box]
+    let local_x = offset_x * cosine + offset_y * sine
+    let local_y = offset_y * cosine - offset_x * sine
+    let half_width = store.half_widths[box]
+    let half_height = store.half_heights[box]
+    let closest_x = Math.max(-half_width, Math.min(local_x, half_width))
+    let closest_y = Math.max(-half_height, Math.min(local_y, half_height))
+    let delta_x = local_x - closest_x
+    let delta_y = local_y - closest_y
+    let distance_squared = delta_x * delta_x + delta_y * delta_y
+    let radius = store.radii[circle]
+    if distance_squared >= radius * radius { return }
+
+    var normal_local_x:float = 0.0
+    var normal_local_y:float = 0.0
+    var penetration:float = 0.0
+    if distance_squared > 0.000000000001 {
+        let distance = Math.sqrt(distance_squared)
+        normal_local_x = delta_x / distance
+        normal_local_y = delta_y / distance
+        penetration = radius - distance
+    } else {
+        let distance_x = half_width - Math.abs(local_x)
+        let distance_y = half_height - Math.abs(local_y)
+        if distance_x < distance_y {
+            normal_local_x = 1.0
+            if local_x < 0.0 { normal_local_x = -1.0 }
+            penetration = radius + distance_x
+        } else {
+            normal_local_y = 1.0
+            if local_y < 0.0 { normal_local_y = -1.0 }
+            penetration = radius + distance_y
+        }
+    }
+    let correction_depth = Math.min(
+        maximum_position_correction(store, circle, box),
+        Math.max(penetration - 0.00025, 0.0) * 0.97
+    )
+    if correction_depth <= 0.0 { return }
+    let normal_x = cosine * normal_local_x - sine * normal_local_y
+    let normal_y = sine * normal_local_x + cosine * normal_local_y
+    store.positions_x[circle] += normal_x * correction_depth
+    store.positions_y[circle] += normal_y * correction_depth
+    store.dirty_transforms[circle] = true
+}
+
+func resolve_circle_pair_position(
+    store:BodyStore2D,
+    first:int,
+    second:int
+) {
+    let first_inverse_mass = solver_inverse_mass(store, first)
+    let second_inverse_mass = solver_inverse_mass(store, second)
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    if inverse_mass <= 0.0 { return }
+    let offset_x = store.positions_x[second] - store.positions_x[first]
+    let offset_y = store.positions_y[second] - store.positions_y[first]
+    let distance_squared = offset_x * offset_x + offset_y * offset_y
+    let combined_radius = store.radii[first] + store.radii[second]
+    if distance_squared >= combined_radius * combined_radius { return }
+    var distance:float = 0.0
+    if distance_squared > 0.000000000001 {
+        distance = Math.sqrt(distance_squared)
+    }
+    let separation_normal = circle_contact_normal(
+        store,
+        first,
+        second,
+        offset_x,
+        offset_y,
+        distance,
+        combined_radius
+    )
+    let normal_x = separation_normal.x
+    let normal_y = separation_normal.y
+    let penetration = combined_radius - distance
+    var relaxation = 0.9
+    if first_inverse_mass <= 0.0 || second_inverse_mass <= 0.0 {
+        // A sleeping neighbour is a rigid support for this step. Resolving the
+        // complete overlap against it cannot transfer the correction farther
+        // into the sleeping pile, and prevents pressure from accumulating at
+        // the awake/sleeping boundary.
+        relaxation = 1.0
+    }
+    let correction_depth = Math.min(
+        maximum_position_correction(store, first, second),
+        Math.max(penetration - 0.00025, 0.0) * relaxation
+    )
+    if correction_depth <= 0.0 { return }
+    let scale = correction_depth / inverse_mass
+    if first_inverse_mass > 0.0 {
+        store.positions_x[first] -= normal_x * scale * first_inverse_mass
+        store.positions_y[first] -= normal_y * scale * first_inverse_mass
+        store.dirty_transforms[first] = true
+    }
+    if second_inverse_mass > 0.0 {
+        store.positions_x[second] += normal_x * scale * second_inverse_mass
+        store.positions_y[second] += normal_y * scale * second_inverse_mass
+        store.dirty_transforms[second] = true
+    }
 }
 
 func prepare_collision_constraints(
@@ -1182,9 +2815,21 @@ func prepare_collision_constraints(
     collision.normal_denominator_first = normal_denominator
     collision.normal_mass_first = 1.0 / normal_denominator
     collision.tangent_mass_first = 1.0 / tangent_denominator
-    collision.combined_friction = Math.sqrt(
-        store.frictions[first] * store.frictions[second]
+    collision.combined_friction = store.friction_roots[first] *
+        store.friction_roots[second]
+    let restitution = Math.min(
+        store.restitutions[first],
+        store.restitutions[second]
     )
+    let first_normal_velocity = velocity_at(
+        store,
+        second,
+        first_contact
+    ).subtract(velocity_at(store, first, first_contact)).dot(normal)
+    if first_normal_velocity < -1.0 {
+        collision.normal_velocity_bias_first =
+            -restitution * first_normal_velocity
+    }
 
     if collision.contacts.count == 2 {
         let contact = Math.Vec2(
@@ -1219,6 +2864,59 @@ func prepare_collision_constraints(
         collision.normal_determinant =
             normal_denominator * second_normal_denominator -
             coupling * coupling
+        let second_normal_velocity = velocity_at(
+            store,
+            second,
+            contact
+        ).subtract(velocity_at(store, first, contact)).dot(normal)
+        if second_normal_velocity < -1.0 {
+            collision.normal_velocity_bias_second =
+                -restitution * second_normal_velocity
+        }
+    }
+}
+
+func prepare_circle_collision_constraints(
+    store:BodyStore2D,
+    collision:&Collision2D
+) {
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal_x:float = collision.normal.x + 0.0
+    let normal_y:float = collision.normal.y + 0.0
+    let tangent_x = -normal_y
+    let tangent_y = normal_x
+    let contact_x:float = collision.contacts.first.x + 0.0
+    let contact_y:float = collision.contacts.first.y + 0.0
+    let first_radius_x = contact_x - store.positions_x[first]
+    let first_radius_y = contact_y - store.positions_y[first]
+    let second_radius_x = contact_x - store.positions_x[second]
+    let second_radius_y = contact_y - store.positions_y[second]
+    let first_inverse_mass = solver_inverse_mass(store, first)
+    let second_inverse_mass = solver_inverse_mass(store, second)
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    let first_tangent_arm =
+        first_radius_x * tangent_y - first_radius_y * tangent_x
+    let second_tangent_arm =
+        second_radius_x * tangent_y - second_radius_y * tangent_x
+    let tangent_denominator = inverse_mass +
+        first_tangent_arm * first_tangent_arm *
+            solver_inverse_inertia(store, first) +
+        second_tangent_arm * second_tangent_arm *
+            solver_inverse_inertia(store, second)
+    collision.normal_denominator_first = inverse_mass
+    collision.normal_mass_first = 1.0 / inverse_mass
+    collision.tangent_mass_first = 1.0 / tangent_denominator
+    collision.combined_friction = store.friction_roots[first] *
+        store.friction_roots[second]
+    let relative_normal_velocity =
+        (store.velocities_x[second] - store.velocities_x[first]) * normal_x +
+        (store.velocities_y[second] - store.velocities_y[first]) * normal_y
+    if relative_normal_velocity < -1.0 {
+        collision.normal_velocity_bias_first = -Math.min(
+            store.restitutions[first],
+            store.restitutions[second]
+        ) * relative_normal_velocity
     }
 }
 
@@ -1231,6 +2929,243 @@ func resolve_collision_velocity(
     } else {
         resolve_two_contacts(store, collision)
     }
+}
+
+func warm_start_compact_circle_collision(
+    store:BodyStore2D,
+    collision:@CompactCircleCollision2D
+) {
+    if collision.normal_impulse == 0.0 && collision.tangent_impulse == 0.0 {
+        return
+    }
+    let impulse_x = collision.normal.x * collision.normal_impulse -
+        collision.normal.y * collision.tangent_impulse
+    let impulse_y = collision.normal.y * collision.normal_impulse +
+        collision.normal.x * collision.tangent_impulse
+    let first = collision.first_body
+    let second = collision.second_body
+    store.velocities_x[first] -= impulse_x * store.inverse_masses[first]
+    store.velocities_y[first] -= impulse_y * store.inverse_masses[first]
+    store.angular_velocities[first] -= collision.first_tangent_arm *
+        collision.tangent_impulse * store.inverse_inertias[first]
+    store.velocities_x[second] += impulse_x * store.inverse_masses[second]
+    store.velocities_y[second] += impulse_y * store.inverse_masses[second]
+    store.angular_velocities[second] += collision.second_tangent_arm *
+        collision.tangent_impulse * store.inverse_inertias[second]
+}
+
+func resolve_compact_circle_position(
+    store:BodyStore2D,
+    collision:@CompactCircleCollision2D
+) {
+    let first = collision.first_body
+    let second = collision.second_body
+    let first_inverse_mass = store.inverse_masses[first]
+    let second_inverse_mass = store.inverse_masses[second]
+    let inverse_mass = first_inverse_mass + second_inverse_mass
+    let offset_x = store.positions_x[second] - store.positions_x[first]
+    let offset_y = store.positions_y[second] - store.positions_y[first]
+    let distance_squared = offset_x * offset_x + offset_y * offset_y
+    let combined_radius = store.radii[first] + store.radii[second]
+    if distance_squared >= combined_radius * combined_radius { return }
+    var distance:float = 0.0
+    if distance_squared > 0.000000000001 {
+        distance = Math.sqrt(distance_squared)
+    }
+    let separation_normal = circle_contact_normal(
+        store,
+        first,
+        second,
+        offset_x,
+        offset_y,
+        distance,
+        combined_radius
+    )
+    let normal_x = separation_normal.x
+    let normal_y = separation_normal.y
+    let penetration = combined_radius - distance
+    let correction_depth = Math.min(
+        maximum_position_correction(store, first, second),
+        Math.max(penetration - 0.00025, 0.0) * 0.7
+    )
+    if correction_depth <= 0.0 { return }
+    let scale = correction_depth / inverse_mass
+    store.positions_x[first] -= normal_x * scale * first_inverse_mass
+    store.positions_y[first] -= normal_y * scale * first_inverse_mass
+    store.positions_x[second] += normal_x * scale * second_inverse_mass
+    store.positions_y[second] += normal_y * scale * second_inverse_mass
+    store.dirty_transforms[first] = true
+    store.dirty_transforms[second] = true
+}
+
+func resolve_compact_circle_velocity(
+    store:BodyStore2D,
+    collision:@CompactCircleCollision2D
+) ContactImpulse2D {
+    let first = collision.first_body
+    let second = collision.second_body
+    let normal_x = collision.normal.x
+    let normal_y = collision.normal.y
+    let normal_velocity =
+        (store.velocities_x[second] - store.velocities_x[first]) * normal_x +
+        (store.velocities_y[second] - store.velocities_y[first]) * normal_y
+    let previous_normal = collision.normal_impulse
+    let normal_increment =
+        -(normal_velocity - collision.normal_velocity_bias) *
+        collision.normal_mass
+    let accumulated_normal = Math.max(
+        previous_normal + normal_increment,
+        0.0
+    )
+    let applied_normal = accumulated_normal - previous_normal
+    let normal_impulse_x = normal_x * applied_normal
+    let normal_impulse_y = normal_y * applied_normal
+    let first_inverse_mass = store.inverse_masses[first]
+    let second_inverse_mass = store.inverse_masses[second]
+    store.velocities_x[first] -= normal_impulse_x * first_inverse_mass
+    store.velocities_y[first] -= normal_impulse_y * first_inverse_mass
+    store.velocities_x[second] += normal_impulse_x * second_inverse_mass
+    store.velocities_y[second] += normal_impulse_y * second_inverse_mass
+
+    if collision.combined_friction <= 0.0 {
+        return ContactImpulse2D(accumulated_normal, 0.0)
+    }
+
+    let first_angular = store.angular_velocities[first]
+    let second_angular = store.angular_velocities[second]
+    let tangent_x = -normal_y
+    let tangent_y = normal_x
+    let linear_tangent_velocity =
+        (store.velocities_x[second] - store.velocities_x[first]) * tangent_x +
+        (store.velocities_y[second] - store.velocities_y[first]) * tangent_y
+    let previous_tangent = collision.tangent_impulse
+    if Math.abs(linear_tangent_velocity) <= 0.000001 &&
+        first_angular == 0.0 && second_angular == 0.0
+    {
+        return ContactImpulse2D(accumulated_normal, previous_tangent)
+    }
+    let tangent_velocity = linear_tangent_velocity +
+        second_angular * collision.second_tangent_arm -
+        first_angular * collision.first_tangent_arm
+    if Math.abs(tangent_velocity) <= 0.000001 {
+        return ContactImpulse2D(accumulated_normal, previous_tangent)
+    }
+    let tangent_increment = -tangent_velocity * collision.tangent_mass
+    let friction_limit = collision.combined_friction * accumulated_normal
+    let accumulated_tangent = Math.max(
+        -friction_limit,
+        Math.min(previous_tangent + tangent_increment, friction_limit)
+    )
+    let applied_tangent = accumulated_tangent - previous_tangent
+    let tangent_impulse_x = tangent_x * applied_tangent
+    let tangent_impulse_y = tangent_y * applied_tangent
+    store.velocities_x[first] -= tangent_impulse_x * first_inverse_mass
+    store.velocities_y[first] -= tangent_impulse_y * first_inverse_mass
+    store.angular_velocities[first] -= collision.first_tangent_arm *
+        applied_tangent * store.inverse_inertias[first]
+    store.velocities_x[second] += tangent_impulse_x * second_inverse_mass
+    store.velocities_y[second] += tangent_impulse_y * second_inverse_mass
+    store.angular_velocities[second] += collision.second_tangent_arm *
+        applied_tangent * store.inverse_inertias[second]
+    return ContactImpulse2D(accumulated_normal, accumulated_tangent)
+}
+
+func resolve_single_collision_velocity(
+    store:BodyStore2D,
+    collision:@Collision2D
+) ContactImpulse2D {
+    let first = collision.first_body
+    let second = collision.second_body
+    let contact_x = collision.contacts.first.x
+    let contact_y = collision.contacts.first.y
+    let normal_x = collision.normal.x
+    let normal_y = collision.normal.y
+    let first_radius_x = contact_x - store.positions_x[first]
+    let first_radius_y = contact_y - store.positions_y[first]
+    let second_radius_x = contact_x - store.positions_x[second]
+    let second_radius_y = contact_y - store.positions_y[second]
+
+    let first_angular = store.angular_velocities[first]
+    let second_angular = store.angular_velocities[second]
+    let relative_x =
+        store.velocities_x[second] - second_angular * second_radius_y -
+        store.velocities_x[first] + first_angular * first_radius_y
+    let relative_y =
+        store.velocities_y[second] + second_angular * second_radius_x -
+        store.velocities_y[first] - first_angular * first_radius_x
+    let normal_velocity = relative_x * normal_x + relative_y * normal_y
+    let previous_normal = collision.normal_impulse_first
+    let normal_increment =
+        -(normal_velocity - collision.normal_velocity_bias_first) *
+        collision.normal_mass_first
+    let accumulated_normal = Math.max(
+        previous_normal + normal_increment,
+        0.0
+    )
+    let applied_normal = accumulated_normal - previous_normal
+    let normal_impulse_x = normal_x * applied_normal
+    let normal_impulse_y = normal_y * applied_normal
+    let first_inverse_mass = solver_inverse_mass(store, first)
+    let second_inverse_mass = solver_inverse_mass(store, second)
+    let first_inverse_inertia = solver_inverse_inertia(store, first)
+    let second_inverse_inertia = solver_inverse_inertia(store, second)
+    if first_inverse_mass > 0.0 || first_inverse_inertia > 0.0 {
+        store.velocities_x[first] -= normal_impulse_x * first_inverse_mass
+        store.velocities_y[first] -= normal_impulse_y * first_inverse_mass
+        store.angular_velocities[first] -=
+            (first_radius_x * normal_impulse_y -
+                first_radius_y * normal_impulse_x) * first_inverse_inertia
+    }
+    if second_inverse_mass > 0.0 || second_inverse_inertia > 0.0 {
+        store.velocities_x[second] += normal_impulse_x * second_inverse_mass
+        store.velocities_y[second] += normal_impulse_y * second_inverse_mass
+        store.angular_velocities[second] +=
+            (second_radius_x * normal_impulse_y -
+                second_radius_y * normal_impulse_x) * second_inverse_inertia
+    }
+
+    let updated_first_angular = store.angular_velocities[first]
+    let updated_second_angular = store.angular_velocities[second]
+    let updated_relative_x =
+        store.velocities_x[second] -
+        updated_second_angular * second_radius_y -
+        store.velocities_x[first] + updated_first_angular * first_radius_y
+    let updated_relative_y =
+        store.velocities_y[second] +
+        updated_second_angular * second_radius_x -
+        store.velocities_y[first] - updated_first_angular * first_radius_x
+    let tangent_x = -normal_y
+    let tangent_y = normal_x
+    let tangent_velocity =
+        updated_relative_x * tangent_x + updated_relative_y * tangent_y
+    let previous_tangent = collision.tangent_impulse_first
+    if Math.abs(tangent_velocity) <= 0.000001 {
+        return ContactImpulse2D(accumulated_normal, previous_tangent)
+    }
+    let tangent_increment = -tangent_velocity * collision.tangent_mass_first
+    let friction_limit = collision.combined_friction * accumulated_normal
+    let accumulated_tangent = Math.max(
+        -friction_limit,
+        Math.min(previous_tangent + tangent_increment, friction_limit)
+    )
+    let applied_tangent = accumulated_tangent - previous_tangent
+    let tangent_impulse_x = tangent_x * applied_tangent
+    let tangent_impulse_y = tangent_y * applied_tangent
+    if first_inverse_mass > 0.0 || first_inverse_inertia > 0.0 {
+        store.velocities_x[first] -= tangent_impulse_x * first_inverse_mass
+        store.velocities_y[first] -= tangent_impulse_y * first_inverse_mass
+        store.angular_velocities[first] -=
+            (first_radius_x * tangent_impulse_y -
+                first_radius_y * tangent_impulse_x) * first_inverse_inertia
+    }
+    if second_inverse_mass > 0.0 || second_inverse_inertia > 0.0 {
+        store.velocities_x[second] += tangent_impulse_x * second_inverse_mass
+        store.velocities_y[second] += tangent_impulse_y * second_inverse_mass
+        store.angular_velocities[second] +=
+            (second_radius_x * tangent_impulse_y -
+                second_radius_y * tangent_impulse_x) * second_inverse_inertia
+    }
+    return ContactImpulse2D(accumulated_normal, accumulated_tangent)
 }
 
 func warm_start_collision(store:BodyStore2D, collision:@Collision2D) {
@@ -1332,16 +3267,13 @@ func resolve_contact(
     let normal_velocity = relative_velocity.dot(normal)
     var normal_mass:float = collision.normal_mass_first + 0.0
     if second_contact { normal_mass = collision.normal_mass_second + 0.0 }
-    var velocity_bias = normal_velocity
-    if normal_velocity < -1.0 {
-        velocity_bias *= 1.0 + Math.min(
-            store.restitutions[first],
-            store.restitutions[second]
-        )
+    var velocity_bias = collision.normal_velocity_bias_first + 0.0
+    if second_contact {
+        velocity_bias = collision.normal_velocity_bias_second + 0.0
     }
     var previous:float = collision.normal_impulse_first + 0.0
     if second_contact { previous = collision.normal_impulse_second + 0.0 }
-    let increment = -velocity_bias * normal_mass
+    let increment = -(normal_velocity - velocity_bias) * normal_mass
     let accumulated = Math.max(previous + increment, 0.0)
     let applied = accumulated - previous
     let impulse = normal.multiply(applied)
@@ -1380,11 +3312,8 @@ func resolve_two_contacts(
     let velocity_b = velocity_at(store, second, contacts.second).subtract(
         velocity_at(store, first, contacts.second)
     ).dot(normal)
-    let restitution = Math.min(store.restitutions[first], store.restitutions[second])
-    var bias_a = velocity_a
-    var bias_b = velocity_b
-    if velocity_a < -1.0 { bias_a *= 1.0 + restitution }
-    if velocity_b < -1.0 { bias_b *= 1.0 + restitution }
+    let bias_a = velocity_a - collision.normal_velocity_bias_first
+    let bias_b = velocity_b - collision.normal_velocity_bias_second
     let delta_a = (-mass_b * bias_a + coupling * bias_b) / determinant
     let delta_b = (coupling * bias_a - mass_a * bias_b) / determinant
     let impulse_a = collision.normal_impulse_first + delta_a
@@ -1458,6 +3387,68 @@ func body_position(store:BodyStore2D, index:int) Math.Vec2 {
     return Math.Vec2(store.positions_x[index], store.positions_y[index])
 }
 
+func circle_contact_normal(
+    store:BodyStore2D,
+    first:int,
+    second:int,
+    offset_x:float,
+    offset_y:float,
+    distance:float,
+    combined_radius:float
+) Math.Vec2 {
+    if distance <= combined_radius * 0.2 {
+        let previous_x = store.previous_positions_x[second] -
+            store.previous_positions_x[first]
+        let previous_y = store.previous_positions_y[second] -
+            store.previous_positions_y[first]
+        let previous_distance_squared = previous_x * previous_x +
+            previous_y * previous_y
+        let retained_axis_threshold = combined_radius * 0.05
+        if previous_distance_squared >=
+            retained_axis_threshold * retained_axis_threshold
+        {
+            // Once the current centres are nearly coincident, their tiny
+            // offset is solver noise. Preserve the preceding contact axis even
+            // when that previous contact was already penetrating. This keeps
+            // two circles projected against the same wall from alternating on
+            // an arbitrary horizontal axis and being clamped together again.
+            let inverse_previous_distance =
+                1.0 / Math.sqrt(previous_distance_squared)
+            return Math.Vec2(
+                previous_x * inverse_previous_distance,
+                previous_y * inverse_previous_distance
+            )
+        }
+    }
+    return circle_separation_normal(
+        offset_x,
+        offset_y,
+        distance,
+        combined_radius
+    )
+}
+
+func circle_separation_normal(
+    offset_x:float,
+    offset_y:float,
+    distance:float,
+    combined_radius:float
+) Math.Vec2 {
+    // At extreme overlap the tiny centre offset is solver noise, not a
+    // reliable contact normal. A vertical noise axis at the floor is undone
+    // by boundary projection and can store an entire pile's compression.
+    // Escape horizontally so the correction remains valid on the floor.
+    if distance <= combined_radius * 0.2 {
+        if offset_x < 0.0 { return Math.Vec2(-1.0, 0.0) }
+        return Math.Vec2(1.0, 0.0)
+    }
+    let inverse_distance = 1.0 / distance
+    return Math.Vec2(
+        offset_x * inverse_distance,
+        offset_y * inverse_distance
+    )
+}
+
 func body_local_point(
     store:BodyStore2D,
     index:int,
@@ -1471,6 +3462,20 @@ func body_local_point(
         offset_x * cosine + offset_y * sine,
         offset_y * cosine - offset_x * sine
     )
+}
+
+func body_contact_cache_point(
+    store:BodyStore2D,
+    index:int,
+    point:Math.Vec2
+) Math.Vec2 {
+    if store.shape_kinds[index] == 1 {
+        return Math.Vec2(
+            point.x - store.positions_x[index],
+            point.y - store.positions_y[index]
+        )
+    }
+    return body_local_point(store, index, point)
 }
 
 func body_axis_x(store:BodyStore2D, index:int) Math.Vec2 {
@@ -1492,6 +3497,7 @@ func projection_radius(
     index:int,
     axis:Math.Vec2
 ) float {
+    if store.shape_kinds[index] == 1 { return store.radii[index] }
     let cosine = store.rotation_cosines[index]
     let sine = store.rotation_sines[index]
     let along_x = axis.x * cosine + axis.y * sine
@@ -1505,6 +3511,12 @@ func body_support(
     index:int,
     direction:Math.Vec2
 ) Math.Vec2 {
+    if store.shape_kinds[index] == 1 {
+        return Math.Vec2(
+            store.positions_x[index] + direction.x * store.radii[index],
+            store.positions_y[index] + direction.y * store.radii[index]
+        )
+    }
     let cosine = store.rotation_cosines[index]
     let sine = store.rotation_sines[index]
     var x = 0.0
@@ -1547,9 +3559,7 @@ func wake_for_contact(
     let relative_velocity = velocity_at(store, second, contact).subtract(
         velocity_at(store, first, contact)
     )
-    if relative_velocity.dot(normal) >= -0.35 && penetration <= 0.015 {
-        return
-    }
+    if relative_velocity.dot(normal) >= -0.35 { return }
     if store.awake[first] { store.wake(second) }
     else { store.wake(first) }
 }
@@ -1562,6 +3572,21 @@ func solver_inverse_mass(store:BodyStore2D, index:int) float {
 func solver_inverse_inertia(store:BodyStore2D, index:int) float {
     if !store.awake[index] { return 0.0 }
     return store.inverse_inertias[index]
+}
+
+func maximum_position_correction(
+    store:BodyStore2D,
+    first:int,
+    second:int
+) float {
+    // Position projection must remain local. The former fixed 0.4 m limit was
+    // four diameters for the 10 cm reference bodies and could move one body
+    // through several neighbours in a single constraint pass. Scale the cap
+    // from the smaller shape instead so deep contacts converge over several
+    // iterations without decompressing the whole pile.
+    let first_radius = Math.sqrt(store.sweep_radii_squared[first])
+    let second_radius = Math.sqrt(store.sweep_radii_squared[second])
+    return Math.max(0.001, Math.min(first_radius, second_radius) * 0.25)
 }
 
 func translate_body(store:BodyStore2D, index:int, offset:Math.Vec2) {
@@ -1578,6 +3603,11 @@ func apply_impulse_at(
     point:Math.Vec2
 ) {
     if !store.awake[index] { return }
+    if store.inverse_masses[index] <= 0.0 &&
+        store.inverse_inertias[index] <= 0.0
+    {
+        return
+    }
     store.velocities_x[index] += impulse.x * store.inverse_masses[index]
     store.velocities_y[index] += impulse.y * store.inverse_masses[index]
     let radius_x = point.x - store.positions_x[index]
@@ -1589,4 +3619,14 @@ func apply_impulse_at(
 
 func cross(left:Math.Vec2, right:Math.Vec2) float {
     return left.x * right.y - left.y * right.x
+}
+
+func circle_grid_bucket(x:int, y:int, bucket_count:int) int {
+    var reduced_x = x % bucket_count
+    var reduced_y = y % bucket_count
+    if reduced_x < 0 { reduced_x += bucket_count }
+    if reduced_y < 0 { reduced_y += bucket_count }
+    let hash = reduced_x as uint * 73_856_093 as uint ^
+        reduced_y as uint * 19_349_663 as uint
+    return (hash % bucket_count as uint) as int
 }
