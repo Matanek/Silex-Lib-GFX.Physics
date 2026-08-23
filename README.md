@@ -77,7 +77,8 @@ profiling part of the normal step cost. See
 [`Benchmarks/Scale2D.sx`](Benchmarks/Scale2D.sx) and
 [`Benchmarks/CircleScale2D.sx`](Benchmarks/CircleScale2D.sx), plus
 [`Docs/Performance.md`](Docs/Performance.md) for the reproducible 1k/5k/10k
-cases.
+cases. The reconstruction corpus and pinned Box2D oracle are documented in
+[`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
 
 Forces, general shapes, joints, general-purpose continuous collision detection,
 and application plugins remain outside the current contract. The dense-circle

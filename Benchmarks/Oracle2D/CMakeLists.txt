@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(GFXPhysicsBox2DOracle LANGUAGES C)
+
+include(FetchContent)
+
+set(BOX2D_SAMPLES OFF CACHE BOOL "" FORCE)
+set(BOX2D_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BOX2D_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(BOX2D_DOCS OFF CACHE BOOL "" FORCE)
+
+# Box2D v3.1.1. The immutable commit is intentional: a moving tag is not an
+# acceptable differential oracle.
+FetchContent_Declare(
+    box2d
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(box2d)
+
+add_executable(gfx_physics_box2d_oracle Box2DOracle.c)
+target_compile_features(gfx_physics_box2d_oracle PRIVATE c_std_17)
+target_link_libraries(gfx_physics_box2d_oracle PRIVATE box2d)
+
+if(MSVC)
+    target_compile_options(gfx_physics_box2d_oracle PRIVATE /W4)
+else()
+    target_compile_options(gfx_physics_box2d_oracle PRIVATE -Wall -Wextra -Wpedantic)
+endif()

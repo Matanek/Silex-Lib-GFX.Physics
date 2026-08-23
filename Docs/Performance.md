@@ -1,5 +1,10 @@
 # World2D performance contract
 
+The reconstruction-wide differential scenes, repetition rules, memory gates,
+Box2D oracle and GFX sentinels are defined in
+[`OracleAndBudgets.md`](OracleAndBudgets.md). This page retains the detailed
+profiling history of the current `World2D` implementation.
+
 Performance is measured from executable consumer programs, in Release mode,
 after compilation. Compilation time and the Zig cache are not part of a physics
 measurement.
