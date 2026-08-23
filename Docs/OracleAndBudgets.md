@@ -14,12 +14,19 @@ there is no X64 performance baseline and no ARM64 result is presented as an
 X64 prediction.
 
 Compiler and runtime optimizations remain portable despite that measurement
-scope. Before push, emit the affected verified targets and run the correctness
-corpus on ARM64. On the exact pushed commit, require native GitHub Actions for
-macOS ARM64, Linux X64 and Windows X64, plus every other verified target
-affected by the change. If a verified target is missing from the workflow
-triggered by the push, extend that workflow before claiming a general Silex
-optimization. CI correctness is not a substitute for the ARM64 performance
+scope. After each compiler Spec 02, 03 and 04, and after runtime Spec 05, emit
+the affected verified targets, run the correctness corpus on ARM64 and replay
+the local performance gates named below. These are intermediate local gates:
+do not create or push a commit solely to run the native matrix after each Spec.
+
+The shared remote portability gate is the Spec 05 milestone. On one exact
+pushed checkpoint containing the completed Specs 02 through 05, require native
+GitHub Actions for macOS ARM64, Linux X64 and Windows X64, plus every other
+verified target affected by the sequence. If a verified target is missing from
+the workflow triggered by that push, extend that workflow before claiming the
+sequence as a general Silex optimization. Until this milestone is green,
+describe intermediate X64 results as structural emissions rather than native
+verification. CI correctness is not a substitute for the ARM64 performance
 baseline, and the ARM64 baseline is not a substitute for native CI
 correctness.
 
@@ -88,9 +95,10 @@ Do not take automated screenshots for these gates. ShapeGallery's automated
 smoke protects construction, text loading and the render path; the explicitly
 requested milestone review remains the authority for visual integrity.
 
-Replay the Boids benchmark after compiler Specs 02, 03 and 04 and after runtime
-Spec 05. Replay all four sentinels at the Spec 05 milestone and before the Spec
-13 switch.
+Replay the Boids benchmark locally after compiler Specs 02, 03 and 04 and after
+runtime Spec 05. Replay all four sentinels locally at the Spec 05 milestone,
+then run the shared remote portability gate on the exact checkpoint. Replay
+the four sentinels again before the Spec 13 switch.
 
 ## Baseline acceptance
 
