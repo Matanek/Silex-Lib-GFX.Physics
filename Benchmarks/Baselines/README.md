@@ -30,9 +30,9 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckSentinels.py baseline-gfx.
 ```
 
 After review, add `--enforce` for future candidates and pass the accepted
-4,000-boid median through `--boids-kernel-baseline`. Record X64 in a separate
-file produced on an actual verified X64 machine; never copy ARM64 results into
-that slot.
+4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
+expected: portable Silex changes use native GitHub Actions for correctness on
+the exact pushed commit instead.
 
 ## Infrastructure verification before capture
 
@@ -50,6 +50,9 @@ On 2026-08-23, before accepting any timing baseline:
   Viewer examples;
 - the Canvas text smoke passed and ShapeGallery2D compiled in Release.
 
-The remaining work is deliberately limited to an idle-machine ARM64 capture,
-the visual ShapeGallery milestone when required by the Spec sequence, and
-native X64 captures on the corresponding verified systems.
+The remaining work is deliberately limited to an idle-machine ARM64 capture
+and the visual ShapeGallery milestone when required by the Spec sequence.
+Future compiler or runtime optimizations must still pass native macOS ARM64,
+Linux X64 and Windows X64 GitHub Actions on the exact pushed commit, and every
+other verified target they affect. The push workflow must be extended first
+when one of those targets is missing.

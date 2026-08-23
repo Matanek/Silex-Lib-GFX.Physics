@@ -8,9 +8,20 @@ in [`../Benchmarks/Oracle2D/README.md`](../Benchmarks/Oracle2D/README.md).
 ## Configurations
 
 Each result names an OS, architecture, CPU, Silex commit, engine revision,
-Debug or Release mode, worker count, fixed delta and repetition set. ARM64 and
-X64 are independent configurations. A result from one is never substituted
-for the other.
+Debug or Release mode, worker count, fixed delta and repetition set. Timing,
+memory and scaling baselines belong only to the macOS ARM64 reference machine;
+there is no X64 performance baseline and no ARM64 result is presented as an
+X64 prediction.
+
+Compiler and runtime optimizations remain portable despite that measurement
+scope. Before push, emit the affected verified targets and run the correctness
+corpus on ARM64. On the exact pushed commit, require native GitHub Actions for
+macOS ARM64, Linux X64 and Windows X64, plus every other verified target
+affected by the change. If a verified target is missing from the workflow
+triggered by the push, extend that workflow before claiming a general Silex
+optimization. CI correctness is not a substitute for the ARM64 performance
+baseline, and the ARM64 baseline is not a substitute for native CI
+correctness.
 
 Correctness runs in Debug and Release. Cadence and memory gates use Release
 after one warm-up, with seven isolated process repetitions. Interactive GFX
@@ -43,18 +54,18 @@ but Silex is not required to reproduce Box2D's exact floating-point state.
 
 ## Performance and memory decisions
 
-The cadence budgets apply independently on the verified ARM64 and X64 release
-machines. A gate passes when the seven-run median is within budget and median
-absolute deviation is at most 5%. A change also fails when its median regresses
-more than 5% against the accepted same-machine baseline, even if it remains
-under the absolute budget. Improvements are reported per scene and never
-generalized from body count alone.
+The cadence budgets apply only to the macOS ARM64 reference machine. A gate
+passes when the seven-run median is within budget and median absolute deviation
+is at most 5%. A change also fails when its median regresses more than 5%
+against the accepted ARM64 baseline, even if it remains under the absolute
+budget. Improvements are reported per scene and never generalized from body
+count alone.
 
 Record peak process RSS separately from elapsed simulation time. Until a
 portable package allocator counter exists, the memory gate is relative: after
 subtracting the `release-parity` process RSS, `sparse-10000` and `circle-5000`
 must not grow by more than 1 KiB per additional dynamic body and must not
-regress by more than 5% against their same-platform accepted baseline. Box2D's
+regress by more than 5% against their accepted ARM64 baseline. Box2D's
 `memory_bytes` is its own world counter and is diagnostic, not a substitute for
 the process RSS comparison.
 
