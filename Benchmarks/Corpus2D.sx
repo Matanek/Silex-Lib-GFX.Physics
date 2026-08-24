@@ -15,6 +15,17 @@ func option_requested(expected:str) bool {
     return false
 }
 
+func requested_worker_count() int {
+    let workers_2 = option_requested("--workers-2")
+    let workers_4 = option_requested("--workers-4")
+    if workers_2 && workers_4 {
+        panic("physics corpus accepts only one worker-count option")
+    }
+    if workers_2 { return 2 }
+    if workers_4 { return 4 }
+    return 1
+}
+
 func create_fixed_box(
     world:&Physics.World2D,
     position:Math.Vec2,
@@ -91,8 +102,7 @@ func measure(
         }
     }
 
-    var workers = 1
-    if option_requested("--workers-4") { workers = 4 }
+    let workers = requested_worker_count()
     var mode = "release"
     if option_requested("--debug-build") { mode = "debug" }
     print(
@@ -106,7 +116,8 @@ func measure(
 }
 
 func enable_requested_workers(world:&Physics.World2D) {
-    if option_requested("--workers-4") { world.enable_parallelism(4) }
+    let workers = requested_worker_count()
+    if workers > 1 { world.enable_parallelism(workers) }
 }
 
 func run_release_parity() {

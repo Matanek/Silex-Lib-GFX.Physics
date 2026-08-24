@@ -40,9 +40,10 @@ matching scenario in each executable:
 
 The other common options are `--sparse-1000`, `--sparse-5000`,
 `--sparse-10000`, `--pile-1000`, and `--circle-5000`. The Silex witness also
-accepts `--workers-4`; Box2D remains at one worker until a benchmark-only task
-adapter is added. Never compare its one-worker timing to a four-worker Silex
-run without naming that distinction.
+accepts `--workers-2` or `--workers-4`; omitting both keeps one worker. Box2D
+remains at one worker until a benchmark-only task adapter is added. Never
+compare its one-worker timing to a multi-worker Silex run without naming that
+distinction.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass
@@ -84,7 +85,8 @@ record.
 - Compare correctness before timing. A scenario fails if any process exits
   unsuccessfully, emits a non-finite value, violates its invariant, or changes
   `state_signature` across identical runs of the same engine, build, target and
-  worker count.
+  worker count. When one result file contains several worker counts for the
+  same Silex configuration, their signatures must also remain identical.
 - Box2D and Silex are not expected to have identical floating-point states.
   Compare their scene invariants and trends, not their raw signatures.
 

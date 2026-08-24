@@ -160,6 +160,26 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
         key = (record["engine"], record["scenario"], record["mode"], record["workers"])
         grouped[key].append(record)
 
+    signatures_by_configuration: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    workers_by_configuration: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for record in records:
+        key = (record["engine"], record["scenario"], record["mode"])
+        signatures_by_configuration[key].add(record["state_signature"])
+        workers_by_configuration[key].add(record["workers"])
+
+    for key in sorted(signatures_by_configuration):
+        worker_counts = workers_by_configuration[key]
+        signatures = signatures_by_configuration[key]
+        if len(worker_counts) > 1 and len(signatures) != 1:
+            engine, scenario, mode = key
+            reports.append(
+                f"FAIL {engine}/{scenario}/{mode}/worker-matrix: "
+                "state_signature changed across worker counts"
+            )
+            failures.append(
+                f"{engine}/{scenario}/{mode}: state_signature changed across worker counts"
+            )
+
     rss_baselines: dict[tuple[str, str, str], float] = {}
     for (engine, scenario, mode, workers), group in grouped.items():
         rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
