@@ -46,6 +46,7 @@ func measure(
     bodies:@Physics.RigidBody2D[..],
     step_count:int,
     delta:float,
+    workers:int,
     circle_radius:float = 0.0
 ) {
     var clock = Clock()
@@ -102,7 +103,6 @@ func measure(
         }
     }
 
-    let workers = requested_worker_count()
     var mode = "release"
     if option_requested("--debug-build") { mode = "debug" }
     print(
@@ -115,26 +115,25 @@ func measure(
     )
 }
 
-func enable_requested_workers(world:&Physics.World2D) {
-    let workers = requested_worker_count()
+func enable_workers(world:&Physics.World2D, workers:int) {
     if workers > 1 { world.enable_parallelism(workers) }
 }
 
-func run_release_parity() {
+func run_release_parity(workers:int) {
     var world = Physics.World2D()
-    enable_requested_workers(world)
+    enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(8.0, 1.0))
     var bodies:Physics.RigidBody2D[] = []
     bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
     ))
-    measure("release-parity", world, @bodies[0:bodies.count()], 120, 1.0 / 120.0)
+    measure("release-parity", world, @bodies[0:bodies.count()], 120, 1.0 / 120.0, workers)
 }
 
-func run_sparse(body_count:int) {
+func run_sparse(body_count:int, workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
-    enable_requested_workers(world)
+    enable_workers(world, workers)
     var bodies:Physics.RigidBody2D[] = []
     var index = 0
     while index < body_count {
@@ -148,14 +147,14 @@ func run_sparse(body_count:int) {
         ))
         index++
     }
-    measure("sparse-$(body_count)", world, @bodies[0:bodies.count()], 120, 1.0 / 60.0)
+    measure("sparse-$(body_count)", world, @bodies[0:bodies.count()], 120, 1.0 / 60.0, workers)
 }
 
-func run_pile() {
+func run_pile(workers:int) {
     let body_count = 1_000
     let columns = 50
     var world = Physics.World2D()
-    enable_requested_workers(world)
+    enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(24.0, 1.0), 0.8)
     var bodies:Physics.RigidBody2D[] = []
     var index = 0
@@ -174,7 +173,7 @@ func run_pile() {
         ))
         index++
     }
-    measure("pile-1000", world, @bodies[0:bodies.count()], 240, 1.0 / 60.0)
+    measure("pile-1000", world, @bodies[0:bodies.count()], 240, 1.0 / 60.0, workers)
 }
 
 func create_container(world:&Physics.World2D, width:float, height:float) {
@@ -188,7 +187,7 @@ func create_container(world:&Physics.World2D, width:float, height:float) {
     create_fixed_box(world, Math.Vec2(0.0, half_height + half_depth), Math.Vec2(width + depth * 2.0, depth), 0.9)
 }
 
-func run_circle(body_count:int) {
+func run_circle(body_count:int, workers:int) {
     var radius = 0.05
     var columns = 87
     if body_count > 2_000 {
@@ -200,7 +199,7 @@ func run_circle(body_count:int) {
     let height = 6.0
     let half_height = height * 0.5
     var world = Physics.World2D()
-    enable_requested_workers(world)
+    enable_workers(world, workers)
     create_container(world, width, height)
     var bodies:Physics.RigidBody2D[] = []
     var index = 0
@@ -225,17 +224,24 @@ func run_circle(body_count:int) {
         @bodies[0:bodies.count()],
         300,
         1.0 / 60.0,
+        workers,
         radius
     )
 }
 
 func main() {
-    if option_requested("--release-parity") { run_release_parity(); return }
-    if option_requested("--sparse-1000") { run_sparse(1_000); return }
-    if option_requested("--sparse-5000") { run_sparse(5_000); return }
-    if option_requested("--sparse-10000") { run_sparse(10_000); return }
-    if option_requested("--pile-1000") { run_pile(); return }
-    if option_requested("--circle-1800") { run_circle(1_800); return }
-    if option_requested("--circle-5000") { run_circle(5_000); return }
-    panic("expected one corpus scenario option")
+    let workers = requested_worker_count()
+    if option_requested("--release-parity") { run_release_parity(workers); return }
+    if option_requested("--sparse-1000") { run_sparse(1_000, workers); return }
+    if option_requested("--sparse-5000") { run_sparse(5_000, workers); return }
+    if option_requested("--sparse-10000") { run_sparse(10_000, workers); return }
+    if option_requested("--pile-1000") { run_pile(workers); return }
+    if option_requested("--circle-1800") { run_circle(1_800, workers); return }
+    if option_requested("--circle-5000") { run_circle(5_000, workers); return }
+
+    // Native process arguments are not yet portable on every backend. The
+    // no-argument checkpoint therefore emits the deterministic worker matrix.
+    run_sparse(10_000, 1)
+    run_sparse(10_000, 2)
+    run_sparse(10_000, 4)
 }
