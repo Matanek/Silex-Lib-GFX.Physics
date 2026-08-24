@@ -239,9 +239,7 @@ func main() {
     if option_requested("--circle-1800") { run_circle(1_800, workers); return }
     if option_requested("--circle-5000") { run_circle(5_000, workers); return }
 
-    // Native process arguments are not yet portable on every backend. The
-    // no-argument checkpoint therefore emits the deterministic worker matrix.
+    // Keep the no-argument smoke useful while CI selects each worker count in
+    // a distinct process, so every world owns one executor lifetime.
     run_sparse(10_000, 1)
-    run_sparse(10_000, 2)
-    run_sparse(10_000, 4)
 }
