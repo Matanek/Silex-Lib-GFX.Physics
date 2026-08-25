@@ -21,7 +21,15 @@ var body = world.create_rigid_body(Physics.RigidBody2DSettings()
 
 world.step(1.0 / 60.0)
 print(body.position())
+
+world.destroy_rigid_body(body)
+assert(!body.is_valid())
 ```
+
+`World2D` owns every body. Destroying a body invalidates every copy of its
+opaque `RigidBody2D` handle; subsequent access fails explicitly. `is_valid()`
+allows code that retains handles across world updates to discard an invalid
+reference without learning its internal slot or generation.
 
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:

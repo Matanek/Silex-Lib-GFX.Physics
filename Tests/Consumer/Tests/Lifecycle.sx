@@ -1,0 +1,69 @@
+use GFX.Physics
+use STD.Math
+
+test "destroy and reuse bodies without exposing storage handles" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+        ..velocity = Math.Vec2(1.0, 0.0)
+    )
+    var removed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+        ..velocity = Math.Vec2(2.0, 0.0)
+    )
+    var moved = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(3.0, 0.0)
+        ..velocity = Math.Vec2(3.0, 0.0)
+    )
+
+    world.destroy_rigid_body(removed)
+
+    assert(!removed.is_valid())
+    assert(first.is_valid())
+    assert(moved.is_valid())
+    assert(world.body_count() == 2)
+    assert(moved.position() == Math.Vec2(3.0, 0.0))
+
+    var replacement = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(4.0, 0.0)
+        ..velocity = Math.Vec2(4.0, 0.0)
+    )
+    world.step(0.5)
+
+    assert(replacement.is_valid())
+    assert(world.body_count() == 3)
+    assert(first.position() == Math.Vec2(1.5, 0.0))
+    assert(moved.position() == Math.Vec2(4.5, 0.0))
+    assert(replacement.position() == Math.Vec2(6.0, 0.0))
+
+    var transforms = Physics.BodyTransformBuffer2D()
+    world.write_dynamic_body_transforms(transforms)
+    assert(transforms.count() == 3)
+
+    world.destroy_rigid_body(replacement)
+    assert(!replacement.is_valid())
+    assert(world.body_count() == 2)
+}
+
+test "rebuild derived solver storage after destroying a colliding body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.5)
+    )
+
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 1)
+
+    world.destroy_rigid_body(fixed_body)
+    world.step(0.0)
+
+    assert(!fixed_body.is_valid())
+    assert(moving.is_valid())
+    assert(moving.position() == Math.Vec2(0.0, 0.5))
+    assert(world.body_count() == 1)
+    assert(world.candidate_pair_count() == 0)
+}

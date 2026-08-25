@@ -41,22 +41,114 @@ public struct RigidBody2DSettings {
 }
 
 package struct BodyId2D {
-    let index:int
+    let slot:int
     let generation:int
 
     init() {
-        self.index = -1
+        self.slot = -1
         self.generation = 0
     }
 
-    init(index:int, generation:int) {
-        self.index = index
+    init(slot:int, generation:int) {
+        self.slot = slot
         self.generation = generation
     }
 }
 
+package struct ShapeId2D {
+    let slot:int
+    let generation:int
+
+    init() {
+        self.slot = -1
+        self.generation = 0
+    }
+
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class ShapeStore2D {
+    var slot_generations:int[]
+    var slot_dense_indices:int[]
+    var dense_slots:int[]
+    var free_slots:int[]
+    var body_slots:int[]
+    var shapes:Shape2D[]
+    var next_body_shape_slots:int[]
+
+    init() {
+        self.slot_generations = []
+        self.slot_dense_indices = []
+        self.dense_slots = []
+        self.free_slots = []
+        self.body_slots = []
+        self.shapes = []
+        self.next_body_shape_slots = []
+    }
+
+    func count() int { return self.dense_slots.count() }
+
+    func append(body_slot:int, shape:Shape2D, next_slot:int) ShapeId2D {
+        var slot = self.slot_generations.count()
+        if !self.free_slots.is_empty() {
+            slot = self.free_slots.take_last()
+        } else {
+            self.slot_generations.append(1)
+            self.slot_dense_indices.append(-1)
+        }
+        let dense_index = self.count()
+        self.slot_dense_indices[slot] = dense_index
+        self.dense_slots.append(slot)
+        self.body_slots.append(body_slot)
+        self.shapes.append(shape)
+        self.next_body_shape_slots.append(next_slot)
+        return ShapeId2D(slot, self.slot_generations[slot])
+    }
+
+    func require(id:ShapeId2D) int {
+        if !self.contains(id) {
+            panic("GFX.Physics shape handle no longer refers to a live shape")
+        }
+        return self.slot_dense_indices[id.slot]
+    }
+
+    func contains(id:ShapeId2D) bool {
+        return id.slot >= 0 && id.slot < self.slot_generations.count() &&
+            self.slot_generations[id.slot] == id.generation &&
+            self.slot_dense_indices[id.slot] >= 0
+    }
+
+    func destroy(id:ShapeId2D) {
+        let dense_index = self.require(id)
+        let last = self.count() - 1
+        if dense_index != last {
+            self.dense_slots.swap(dense_index, last)
+            self.body_slots.swap(dense_index, last)
+            self.shapes.swap(dense_index, last)
+            self.next_body_shape_slots.swap(dense_index, last)
+            self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
+        }
+        self.dense_slots.take_last()
+        self.body_slots.take_last()
+        self.shapes.take_last()
+        self.next_body_shape_slots.take_last()
+        self.slot_dense_indices[id.slot] = -1
+        self.slot_generations[id.slot]++
+        self.free_slots.append(id.slot)
+    }
+}
+
 package class BodyStore2D {
-    var generations:int[]
+    var slot_generations:int[]
+    var slot_dense_indices:int[]
+    var dense_slots:int[]
+    var free_slots:int[]
+    var shape_store:ShapeStore2D
+    var first_shape_slots:int[]
+    var shape_counts:int[]
     var body_types:BodyType2D[]
     var shapes:Shape2D[]
     var shape_kinds:int[]
@@ -87,7 +179,13 @@ package class BodyStore2D {
     var dirty_transforms:bool[]
 
     init() {
-        self.generations = []
+        self.slot_generations = []
+        self.slot_dense_indices = []
+        self.dense_slots = []
+        self.free_slots = []
+        self.shape_store = ShapeStore2D()
+        self.first_shape_slots = []
+        self.shape_counts = []
         self.body_types = []
         self.shapes = []
         self.shape_kinds = []
@@ -123,6 +221,15 @@ package class BodyStore2D {
     func append(settings:RigidBody2DSettings) BodyId2D {
         validate_settings(settings)
         let index = self.count()
+        var slot = self.slot_generations.count()
+        if !self.free_slots.is_empty() {
+            slot = self.free_slots.take_last()
+        } else {
+            self.slot_generations.append(1)
+            self.slot_dense_indices.append(-1)
+        }
+        self.slot_dense_indices[slot] = index
+        self.dense_slots.append(slot)
         var selected_shape = Shape2D.box(Box2D())
         if let configured = settings.shape { selected_shape = configured }
         var shape_kind = 0
@@ -165,7 +272,9 @@ package class BodyStore2D {
                 }
             }
         }
-        self.generations.append(1)
+        let shape_id = self.shape_store.append(slot, selected_shape, -1)
+        self.first_shape_slots.append(shape_id.slot)
+        self.shape_counts.append(1)
         self.body_types.append(settings.body_type)
         self.shapes.append(selected_shape)
         self.shape_kinds.append(shape_kind)
@@ -194,16 +303,61 @@ package class BodyStore2D {
         self.awake.append(settings.body_type == BodyType2D.dynamic)
         self.sleep_times.append(0.0)
         self.dirty_transforms.append(true)
-        return BodyId2D(index, 1)
+        return BodyId2D(slot, self.slot_generations[slot])
     }
 
     func require(id:BodyId2D) int {
-        if id.index < 0 || id.index >= self.count() ||
-            self.generations[id.index] != id.generation
-        {
+        if !self.contains(id) {
             panic("GFX.Physics.RigidBody2D no longer refers to a live body")
         }
-        return id.index
+        return self.slot_dense_indices[id.slot]
+    }
+
+    func contains(id:BodyId2D) bool {
+        return id.slot >= 0 && id.slot < self.slot_generations.count() &&
+            self.slot_generations[id.slot] == id.generation &&
+            self.slot_dense_indices[id.slot] >= 0
+    }
+
+    func shape_count(id:BodyId2D) int {
+        return self.shape_counts[self.require(id)]
+    }
+
+    func attach_shape(id:BodyId2D, shape:Shape2D) ShapeId2D {
+        let index = self.require(id)
+        let shape_id = self.shape_store.append(
+            id.slot,
+            shape,
+            self.first_shape_slots[index]
+        )
+        self.first_shape_slots[index] = shape_id.slot
+        self.shape_counts[index]++
+        return shape_id
+    }
+
+    func destroy(id:BodyId2D) int {
+        let dense_index = self.require(id)
+        var shape_slot = self.first_shape_slots[dense_index]
+        while shape_slot >= 0 {
+            let shape_dense = self.shape_store.slot_dense_indices[shape_slot]
+            let next_slot = self.shape_store.next_body_shape_slots[shape_dense]
+            self.shape_store.destroy(ShapeId2D(
+                shape_slot,
+                self.shape_store.slot_generations[shape_slot]
+            ))
+            shape_slot = next_slot
+        }
+
+        let last = self.count() - 1
+        if dense_index != last {
+            self.swap_dense(dense_index, last)
+            self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
+        }
+        self.take_last_dense()
+        self.slot_dense_indices[id.slot] = -1
+        self.slot_generations[id.slot]++
+        self.free_slots.append(id.slot)
+        return dense_index
     }
 
     func wake(index:int) {
@@ -216,6 +370,74 @@ package class BodyStore2D {
         self.rotation_cosines[index] = Math.cos(self.rotations[index])
         self.rotation_sines[index] = Math.sin(self.rotations[index])
     }
+
+    private func swap_dense(first:int, second:int) {
+        self.dense_slots.swap(first, second)
+        self.first_shape_slots.swap(first, second)
+        self.shape_counts.swap(first, second)
+        self.body_types.swap(first, second)
+        self.shapes.swap(first, second)
+        self.shape_kinds.swap(first, second)
+        self.half_widths.swap(first, second)
+        self.half_heights.swap(first, second)
+        self.radii.swap(first, second)
+        self.sweep_radii_squared.swap(first, second)
+        self.positions_x.swap(first, second)
+        self.positions_y.swap(first, second)
+        self.previous_positions_x.swap(first, second)
+        self.previous_positions_y.swap(first, second)
+        self.velocities_x.swap(first, second)
+        self.velocities_y.swap(first, second)
+        self.rotations.swap(first, second)
+        self.rotation_cosines.swap(first, second)
+        self.rotation_sines.swap(first, second)
+        self.angular_velocities.swap(first, second)
+        self.gravity_scales.swap(first, second)
+        self.inverse_masses.swap(first, second)
+        self.inverse_inertias.swap(first, second)
+        self.restitutions.swap(first, second)
+        self.friction_roots.swap(first, second)
+        self.linear_dampings.swap(first, second)
+        self.angular_dampings.swap(first, second)
+        self.allow_sleep.swap(first, second)
+        self.awake.swap(first, second)
+        self.sleep_times.swap(first, second)
+        self.dirty_transforms.swap(first, second)
+    }
+
+    private func take_last_dense() {
+        self.dense_slots.take_last()
+        self.first_shape_slots.take_last()
+        self.shape_counts.take_last()
+        self.body_types.take_last()
+        self.shapes.take_last()
+        self.shape_kinds.take_last()
+        self.half_widths.take_last()
+        self.half_heights.take_last()
+        self.radii.take_last()
+        self.sweep_radii_squared.take_last()
+        self.positions_x.take_last()
+        self.positions_y.take_last()
+        self.previous_positions_x.take_last()
+        self.previous_positions_y.take_last()
+        self.velocities_x.take_last()
+        self.velocities_y.take_last()
+        self.rotations.take_last()
+        self.rotation_cosines.take_last()
+        self.rotation_sines.take_last()
+        self.angular_velocities.take_last()
+        self.gravity_scales.take_last()
+        self.inverse_masses.take_last()
+        self.inverse_inertias.take_last()
+        self.restitutions.take_last()
+        self.friction_roots.take_last()
+        self.linear_dampings.take_last()
+        self.angular_dampings.take_last()
+        self.allow_sleep.take_last()
+        self.awake.take_last()
+        self.sleep_times.take_last()
+        self.dirty_transforms.take_last()
+    }
 }
 
 public class RigidBody2D {
@@ -226,6 +448,14 @@ public class RigidBody2D {
         self.store = store
         self.id = id
     }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+
+    package func belongs_to(store:BodyStore2D) bool {
+        return self.store == store
+    }
+
+    package func body_id() BodyId2D { return self.id }
 
     func body_type() BodyType2D {
         let index = self.store.require(self.id)

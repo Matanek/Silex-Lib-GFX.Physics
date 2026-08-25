@@ -603,11 +603,12 @@ public class World2D {
         settings:RigidBody2DSettings = RigidBody2DSettings()
     ) RigidBody2D {
         let id = self.store.append(settings)
-        let bounds = body_bounds(self.store, id.index)
+        let index = self.store.require(id)
+        let bounds = body_bounds(self.store, index)
         self.tight_bounds.append(bounds)
         self.proxies.append(self.broad_phase.create_proxy(
             bounds,
-            id.index
+            index
         ))
         self.circle_grid_next.append(-1)
         self.circle_grid_cell_x.append(0)
@@ -615,19 +616,19 @@ public class World2D {
         self.direct_wake_pending.append(false)
         self.contact_wake_cooldowns.append(0.0)
         if settings.body_type == BodyType2D.fixed {
-            self.fixed_bodies.append(id.index)
+            self.fixed_bodies.append(index)
         } else {
             let shape_radius = Math.sqrt(
-                self.store.sweep_radii_squared[id.index]
+                self.store.sweep_radii_squared[index]
             )
             self.maximum_dynamic_shape_radius = Math.max(
                 self.maximum_dynamic_shape_radius,
                 shape_radius
             )
-            if self.store.shape_kinds[id.index] == 1 {
+            if self.store.shape_kinds[index] == 1 {
                 self.maximum_dynamic_circle_radius = Math.max(
                     self.maximum_dynamic_circle_radius,
-                    self.store.radii[id.index]
+                    self.store.radii[index]
                 )
             }
         }
@@ -635,7 +636,7 @@ public class World2D {
         self.load_grace.append(0.0)
         self.stable_for_sleep.append(true)
         self.severe_for_sleep.append(false)
-        self.sleep_parents.append(id.index)
+        self.sleep_parents.append(index)
         self.sleep_ranks.append(0)
         self.sleep_eligible.append(false)
         self.sleep_motion_squared.append(0.0)
@@ -645,8 +646,19 @@ public class World2D {
         if settings.body_type == BodyType2D.dynamic && settings.allow_sleep {
             self.sleep_enabled_body_count++
         }
-        self.store.dirty_transforms[id.index] = false
+        self.store.dirty_transforms[index] = false
         return RigidBody2D(self.store, id)
+    }
+
+    func destroy_rigid_body(body:RigidBody2D) {
+        if !body.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot destroy a body owned by another world")
+        }
+        let id = body.body_id()
+        let index = self.store.require(id)
+        self.swap_remove_world_body(index)
+        self.store.destroy(id)
+        self.rebuild_after_body_destruction()
     }
 
     func step(delta:float) {
@@ -765,6 +777,112 @@ public class World2D {
                 self.current_step_profile.solve_ms +
                 self.current_step_profile.sleep_ms
         }
+    }
+
+    private func swap_remove_world_body(index:int) {
+        let last = self.store.count() - 1
+        if index != last {
+            self.proxies.swap(index, last)
+            self.tight_bounds.swap(index, last)
+            self.circle_grid_next.swap(index, last)
+            self.circle_grid_cell_x.swap(index, last)
+            self.circle_grid_cell_y.swap(index, last)
+            self.direct_wake_pending.swap(index, last)
+            self.contact_wake_cooldowns.swap(index, last)
+            self.support_grace.swap(index, last)
+            self.load_grace.swap(index, last)
+            self.stable_for_sleep.swap(index, last)
+            self.severe_for_sleep.swap(index, last)
+            self.sleep_parents.swap(index, last)
+            self.sleep_ranks.swap(index, last)
+            self.sleep_eligible.swap(index, last)
+            self.sleep_motion_squared.swap(index, last)
+            self.island_body_counts.swap(index, last)
+            self.island_ready_counts.swap(index, last)
+            self.island_can_sleep.swap(index, last)
+        }
+        self.proxies.take_last()
+        self.tight_bounds.take_last()
+        self.circle_grid_next.take_last()
+        self.circle_grid_cell_x.take_last()
+        self.circle_grid_cell_y.take_last()
+        self.direct_wake_pending.take_last()
+        self.contact_wake_cooldowns.take_last()
+        self.support_grace.take_last()
+        self.load_grace.take_last()
+        self.stable_for_sleep.take_last()
+        self.severe_for_sleep.take_last()
+        self.sleep_parents.take_last()
+        self.sleep_ranks.take_last()
+        self.sleep_eligible.take_last()
+        self.sleep_motion_squared.take_last()
+        self.island_body_counts.take_last()
+        self.island_ready_counts.take_last()
+        self.island_can_sleep.take_last()
+    }
+
+    private func rebuild_after_body_destruction() {
+        self.broad_phase = BroadPhase2D()
+        self.fixed_bodies.clear()
+        self.circle_grid_heads.clear()
+        self.circle_grid_stamps.clear()
+        self.circle_grid_generation = 0
+        self.maximum_dynamic_shape_radius = 0.0
+        self.maximum_dynamic_circle_radius = 0.0
+        self.dynamic_grid_active = false
+        self.sleep_enabled_body_count = 0
+
+        var index = 0
+        while index < self.store.count() {
+            let bounds = body_bounds(self.store, index)
+            self.tight_bounds[index] = bounds
+            self.proxies[index] = self.broad_phase.create_proxy(bounds, index)
+            self.circle_grid_next[index] = -1
+            self.circle_grid_cell_x[index] = 0
+            self.circle_grid_cell_y[index] = 0
+            self.direct_wake_pending[index] = false
+            self.sleep_parents[index] = index
+            self.sleep_ranks[index] = 0
+            self.store.dirty_transforms[index] = false
+            if self.store.body_types[index] == BodyType2D.fixed {
+                self.fixed_bodies.append(index)
+            } else {
+                let shape_radius = Math.sqrt(
+                    self.store.sweep_radii_squared[index]
+                )
+                self.maximum_dynamic_shape_radius = Math.max(
+                    self.maximum_dynamic_shape_radius,
+                    shape_radius
+                )
+                if self.store.shape_kinds[index] == 1 {
+                    self.maximum_dynamic_circle_radius = Math.max(
+                        self.maximum_dynamic_circle_radius,
+                        self.store.radii[index]
+                    )
+                }
+                if self.store.allow_sleep[index] {
+                    self.sleep_enabled_body_count++
+                }
+            }
+            index++
+        }
+
+        self.discovered_pairs.clear()
+        self.new_candidate_pairs.clear()
+        self.candidate_bodies.clear()
+        self.candidate_enabled.clear()
+        self.candidate_pairs.clear()
+        self.candidate_pair_keys = PairSet2D()
+        self.free_candidate_slots.clear()
+        self.free_candidate_count = 0
+        self.active_pairs.clear()
+        self.collisions.clear()
+        self.compact_circle_collisions.clear()
+        self.collision_entries.clear()
+        self.direct_wake_bodies.clear()
+        self.current_candidate_pair_count = 0
+        self.current_moved_proxy_count = self.broad_phase.moved_proxy_count()
+        self.current_discovered_pair_count = 0
     }
 
     private func update_sleep(delta:float) {

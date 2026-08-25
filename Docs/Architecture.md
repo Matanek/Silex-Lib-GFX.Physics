@@ -25,10 +25,25 @@ The first vertical slice contains:
   bulk synchronization with a renderer or ECS.
 
 Body handles keep the direct public API while `World2D` stores hot body fields
-in parallel arrays: positions, velocities, inverse masses, inertias, rotations,
-material properties, and sleep state. The broad-phase tree similarly separates
-its topology fields while retaining contiguous AABBs. Neither internal index nor
-generation leaks into the public contract.
+in parallel dense arrays: positions, velocities, inverse masses, inertias,
+rotations, material properties, and sleep state. Stable sparse slots map each
+opaque handle to its current dense index. Destruction increments the slot
+generation, compacts the dense arrays by moving their last entry, and makes a
+stale handle fail explicitly. Freed slots are reused without revalidating any
+older copy of a handle. Neither slot, dense index nor generation leaks into the
+public contract.
+
+Shapes use their own generational dense pool. A body owns a private linked set
+of shape slots, so body compaction does not move or expose shape identities and
+body destruction releases all of its shapes. The retained public `shape()`
+accessor still reports the primary box or circle used by the regression solver;
+the additional shape capacity prepares the native core without prematurely
+publishing the geometry API from the next reconstruction step.
+
+The existing broad phase, contacts and solver remain the regression oracle.
+After a public body destruction, their derived indices and reusable buffers are
+rebuilt from the surviving dense body state; ordinary stepping then continues
+without preserving a pair or contact that referenced the removed body.
 
 The general solver separates oriented boxes on their four face axes and handles
 circle-box contacts in the box's local frame. Circle-circle contacts use their

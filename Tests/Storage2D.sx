@@ -1,0 +1,53 @@
+use GFX.Physics.Box2D.Box2D
+use GFX.Physics.Circle2D.Circle2D
+use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.Shape2D.Shape2D
+use STD.Math
+
+test "reuse generation slots while keeping body and shape pools dense" {
+    var store = BodyStore2D()
+    let first = store.append(RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+    )
+    let removed = store.append(RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+    )
+    let moved = store.append(RigidBody2DSettings()
+        ..position = Math.Vec2(3.0, 0.0)
+    )
+    let extra_shape = store.attach_shape(
+        first,
+        Shape2D.circle(Circle2D(0.25))
+    )
+
+    assert(store.count() == 3)
+    assert(store.shape_count(first) == 2)
+    assert(store.shape_store.count() == 4)
+    assert(store.shape_store.contains(extra_shape))
+
+    store.destroy(removed)
+
+    assert(!store.contains(removed))
+    assert(store.count() == 2)
+    assert(store.require(moved) == 1)
+    assert(store.positions_x[store.require(moved)] == 3.0)
+
+    let replacement = store.append(RigidBody2DSettings()
+        ..shape = Shape2D.box(Box2D(Math.Vec2(2.0, 1.0)))
+        ..position = Math.Vec2(4.0, 0.0)
+    )
+
+    assert(replacement.slot == removed.slot)
+    assert(replacement.generation != removed.generation)
+    assert(store.require(replacement) == 2)
+    assert(store.count() == store.dense_slots.count())
+    assert(store.shape_store.count() == 4)
+
+    store.destroy(first)
+
+    assert(!store.contains(first))
+    assert(!store.shape_store.contains(extra_shape))
+    assert(store.count() == 2)
+    assert(store.shape_store.count() == 2)
+}
