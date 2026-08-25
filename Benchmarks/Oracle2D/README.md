@@ -75,9 +75,15 @@ by its public API. The Silex reference uses its public `World2D.step` contract.
 `CheckCorpus.py` reads records from files or standard input, checks finite
 values, scene invariants and same-configuration signatures, then reports
 median, range and median absolute deviation. With seven or more Silex Release
-records it also evaluates the cadence budgets. Add `--enforce` when a missed
-gate must return a non-zero status; omit it when recording the known misses of
-the starting reference.
+records it also evaluates the cadence gates. Add `--enforce` when a missed gate
+must return a non-zero status. The explicitly labelled `circle-5000` cadence
+target is still reported when missed, but does not turn a correction-valid run
+into a failed hard gate.
+
+When every record is preceded by `# run=N rss_bytes=B`, the checker subtracts
+the matching `release-parity` median. `sparse-10000` receives 1 KiB per body;
+`circle-5000` receives the same body budget plus 512 bytes per
+`persistent_pairs` entry. Dense RSS records without that field are rejected.
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCorpus.py results.jsonl

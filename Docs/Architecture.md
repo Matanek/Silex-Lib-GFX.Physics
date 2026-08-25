@@ -45,7 +45,7 @@ body destruction releases all of its shapes. The retained public `shape()`
 accessor still reports the primary box or circle used by the regression solver.
 The broader `Shape2D` vocabulary is accepted by `ShapePlacement2D` for pure
 geometry queries and by `World2D` for persistent geometric contacts. The
-legacy solver still resolves only its original box and circle subset.
+dynamic-response solver currently resolves only the box and circle subset.
 
 The stateless geometry layer expands each form into one or more private convex
 proxies. Polygon construction computes a welded convex hull. GJK produces
@@ -64,24 +64,25 @@ Private GJK vertices are reference-backed as a temporary workaround for a
 Silex Release-backend discrepancy in nested mutation of structs held by a
 collection; the public API remains value-like.
 
-The existing broad phase, contacts and solver remain the regression oracle.
+The established broad-phase, contact, and solver invariants remain regression
+oracles while their internal algorithms evolve.
 After a public body destruction, their derived indices and reusable buffers are
 rebuilt from the surviving dense body state; ordinary stepping then continues
 without preserving a pair or contact that referenced the removed body.
 
-General-shape world contacts reuse that lifecycle without entering the legacy
-solver. Each body stores local geometry bounds and a collision filter. The
+General-shape world contacts reuse that lifecycle without entering the
+dynamic-response path. Each body stores local geometry bounds and a collision
+filter. The
 broad phase retains stable candidate slots; a general pair refreshes its
 manifold in place and clears the slot when the shapes separate. Public
 `Contact2D` values are read-only snapshots reconstructed in stable body-slot
 order, so BVH nodes, pair hashes, dense indices, and cached impulses do not
 cross the API boundary.
 
-Mono-worker worlds retain the reusable grid path that meets the established
-sparse cadence gates. Explicit multi-worker non-circle worlds use the dynamic
-tree's count/prefix/fill discovery. This routing keeps the historical scalar
-path as the performance reference while making parallel pair generation a real
-exercised path rather than dormant code.
+Worker count no longer selects a different broad phase. Worlds with dynamic
+shapes use the same reusable deterministic grid for one or several workers;
+the tree remains the fixed-shape query structure. This keeps candidate sets,
+insertion order, and contact-cache evolution identical across worker counts.
 
 The general solver separates oriented boxes on their four face axes and handles
 circle-box contacts in the box's local frame. Circle-circle contacts use their
@@ -95,55 +96,34 @@ retain contact anchors plus normal and tangent impulses across steps;
 geometrically compatible contacts warm-start the next solve while moved or
 separated contacts invalidate their cache instead of injecting stale torque.
 
-The dense dynamic-circle path prepares a smaller one-contact constraint that
-contains only the two body indices, normal, local contact anchor, cached
-impulses, effective masses, precomputed tangent arms, velocity bias, and
-friction. Per-body friction roots are also cached once, making the geometric
-mean material mix a multiplication rather than a square root per contact.
-Compact circle constraints and general
-constraints share an encoded order array, so the eight velocity and sixteen
-position iterations preserve deterministic Gauss-Seidel propagation without
-paying the full general-contact footprint for every ball.
+The solver prepares general contacts and a compact dynamic-circle form, then
+places every constraint into deterministic conflict-free colors. Four true
+substeps each integrate velocities, warm-start, run two alternating biased
+color sweeps, integrate positions, and perform one normal-only relaxation
+sweep. Friction runs on the second biased sweep; restitution and impulse-cache
+storage follow the substeps. One worker calls the same jobs directly, while a
+large color partitions the same kernel across the persistent executor. The
+twelfth overflow color remains explicitly ordered and scalar.
 
-Penetration correction is a separate sixteen-pass positional solve. In a dense
-dynamic-circle world, the first eight passes reuse the current contact set and
-the final eight rebuild the uniform grid to catch contacts introduced by
-earlier corrections. Circle penetration is relaxed per iteration: a full
-correction moved one ball entirely into its next neighbour and could make a
-dense pile collapse intermittently. Every iterative general, circle, and fixed
-contact correction is additionally capped at one quarter of the smaller
-shape's sweep radius; hard container recovery remains allowed to restore a body
-that has already crossed a boundary. The former absolute 0.4 m cap was four
-diameters in the graphical reference and could project a deeply engaged body
-through several neighbours in one pass, producing a pile-wide decompression.
-Near-coincident centres retain a
-meaningful pre-step separation axis even when that preceding contact was
-already penetrating; this preserves the physical entry direction against a
-wall. A truly coincident resting degeneracy falls back to a deterministic
-horizontal escape axis. Global grid sweeps alternate their traversal direction
-to avoid leaving the same low-index boundary contact unresolved.
+Compact circle collisions are immutable during the solve; their normal,
+tangent, and accumulated restitution impulses live in a smaller mutable list.
+Groups of four normal constraints expose pairwise ARM64 SIMD opportunities
+without changing their scalar semantics. General parallel faces retain their
+coupled 2×2 normal solve and clipped per-point separations. There is no legacy
+positional projection phase hidden behind a worker-count or load threshold.
+
 Bodies ready to sleep receive a final overlap audit from current AABBs, and
 sleeping bodies are not translated afterward. Cached impulses record the awake
 state of both bodies and are discarded across every sleep/wake transition,
 preventing an old stack load computed for different effective masses from being
 released into a neighbour.
 
-Before that narrow phase, a package-private dynamic AABB tree stores one fat
-proxy per body. Escaping proxies are removed and reinserted, while tree
-rotations keep sequential insertions balanced. Candidate pairs persist between
-steps, so only proxies that leave their fat bounds query the tree again. Tight
-body bounds remove stale fat-proxy pairs before the iterative solver. Fat bounds
-predict four times the current displacement to avoid needless reinsertion. A
-custom open-addressed pair set deduplicates persistent candidates. Only newly
-discovered candidates are ordered before insertion; a stable two-pass counting
-sort reuses world-owned buffers instead of heap-sorting every active pair on
-every step.
-
-When the dynamic population is dominated by circles, a reusable hashed uniform
-grid discovers circle-circle neighbours in the surrounding cells. Fixed bodies
-and all box or mixed-shape queries remain in the AABB tree. This hybrid avoids
-turning a dense ball pile into thousands of independent tree traversals while
-preserving boxes as first-class colliders.
+Before that narrow phase, a reusable deterministic grid discovers candidates
+from tight bounds for every world containing dynamic shapes. A custom
+open-addressed pair set deduplicates persistent candidates, and stable ordering
+keeps pair insertion and cache evolution independent of worker count. The
+package-private dynamic AABB tree remains the fixed-shape query structure; it
+is not selected as a second dynamic-world algorithm when parallelism is enabled.
 
 Before discrete dense-circle contact generation, fast awake circles query a
 second grid containing only sleeping circles. A segment-circle intersection
@@ -154,11 +134,11 @@ substepping the whole world. It is not general CCD: awake-awake, box, mixed
 shape, and arbitrary swept rotation remain discrete.
 
 Parallelism is explicit at the world boundary. `enable_parallelism` creates a
-persistent STD executor. Motion integration is partitioned by disjoint body
-ranges. For 256 or more moved proxies, pair discovery uses two parallel tree
-passes: one count per proxy, a sequential prefix sum, then direct writes into
-disjoint slices of one reusable pair buffer. The steady-state step does not
-allocate per contact or per job.
+persistent STD executor. The common stage graph dispatches body ranges only at
+16,384 active bodies and conflict-free constraint colors at 4,096 entries;
+smaller jobs execute directly to avoid measured scheduling regressions. These
+thresholds select execution mode, never a different solver. The steady-state
+step does not allocate per contact or per job.
 
 At the beginning of each step, awake dynamic bodies are gathered by stable body
 slot into a reusable contiguous list. Serial integration walks only that list;
@@ -201,7 +181,7 @@ and a consumer-facing test. Forces, dynamic response for the new geometry,
 constraints, solver-level continuous collision detection, application
 integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
 current contract. Dense contact
-parallel solving requires a conflict-free constraint graph (or coloring) before
-it can safely use the worker pool. Explicit SIMD kernels likewise depend on a
+joint solving extends the existing conflict-free constraint graph before it can
+safely use the worker pool. Additional SIMD kernels likewise depend on a
 portable vector surface in the Silex backend; the current SoA and contiguous
 constraint layouts are prepared for that work without exposing it publicly.

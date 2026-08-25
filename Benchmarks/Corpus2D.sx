@@ -43,7 +43,8 @@ func create_fixed_box(
 func measure(
     scenario:str,
     world:&Physics.World2D,
-    bodies:@Physics.RigidBody2D[..],
+    first_body:int,
+    body_count:int,
     step_count:int,
     delta:float,
     workers:int,
@@ -64,10 +65,11 @@ func measure(
     var minimum_y = 1_000_000.0
     var signature = 0.0
     var index = 0
-    while index < bodies.count() {
-        let position = bodies[index].position()
-        let velocity = bodies[index].velocity()
-        let angular_velocity = bodies[index].angular_velocity()
+    while index < body_count {
+        let body_index = first_body + index
+        let position = world.body_position_at(body_index)
+        let velocity = world.body_velocity_at(body_index)
+        let angular_velocity = world.body_angular_velocity_at(body_index)
         centroid_x += position.x
         centroid_y += position.y
         maximum_speed = Math.max(maximum_speed, velocity.length())
@@ -78,9 +80,9 @@ func measure(
         )
         index++
     }
-    if bodies.count() > 0 {
-        centroid_x /= bodies.count() as float
-        centroid_y /= bodies.count() as float
+    if body_count > 0 {
+        centroid_x /= body_count as float
+        centroid_y /= body_count as float
     }
 
     var maximum_overlap_mm = -1.0
@@ -88,11 +90,12 @@ func measure(
         maximum_overlap_mm = 0.0
         let diameter = circle_radius * 2.0
         var first = 0
-        while first < bodies.count() {
-            let first_position = bodies[first].position()
+        while first < body_count {
+            let first_position = world.body_position_at(first_body + first)
             var second = first + 1
-            while second < bodies.count() {
-                let distance = bodies[second].position().subtract(first_position).length()
+            while second < body_count {
+                let distance = world.body_position_at(first_body + second)
+                    .subtract(first_position).length()
                 maximum_overlap_mm = Math.max(
                     maximum_overlap_mm,
                     (diameter - distance) * 1_000.0
@@ -107,11 +110,17 @@ func measure(
     if option_requested("--debug-build") { mode = "debug" }
     print(
         "SILEX_PHYSICS_CORPUS engine=silex-current scenario=$(scenario) " +
-        "mode=$(mode) workers=$(workers) bodies=$(bodies.count()) steps=$(step_count) dt=$(delta) " +
+        "mode=$(mode) workers=$(workers) bodies=$(body_count) steps=$(step_count) dt=$(delta) " +
         "elapsed_ms=$(elapsed_ms) step_ms=$(elapsed_ms / step_count as float) " +
         "centroid_x=$(centroid_x) centroid_y=$(centroid_y) max_speed=$(maximum_speed) min_y=$(minimum_y) " +
         "max_overlap_mm=$(maximum_overlap_mm) awake=$(world.awake_body_count()) " +
-        "contacts=$(world.collision_count()) state_signature=$(signature) memory_bytes=-1"
+        "contacts=$(world.collision_count()) state_signature=$(signature) memory_bytes=-1 " +
+        "candidate_slots=$(world.candidate_pair_slot_count()) " +
+        "persistent_pairs=$(world.persistent_pair_count()) " +
+        "constraints=$(world.constraint_count()) " +
+        "compact_constraints=$(world.compact_collision_count()) " +
+        "parallel_dispatches=$(world.soft_step_parallel_dispatch_count()) " +
+        "maximum_color_count=$(world.soft_step_maximum_color_count())"
     )
 }
 
@@ -123,31 +132,31 @@ func run_release_parity(workers:int) {
     var world = Physics.World2D()
     enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(8.0, 1.0))
-    var bodies:Physics.RigidBody2D[] = []
-    bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+    let first_body = world.body_count()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
-    ))
-    measure("release-parity", world, @bodies[0:bodies.count()], 120, 1.0 / 120.0, workers)
+    )
+    measure("release-parity", world, first_body, 1, 120, 1.0 / 120.0, workers)
 }
 
 func run_sparse(body_count:int, workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
     enable_workers(world, workers)
-    var bodies:Physics.RigidBody2D[] = []
+    let first_body = world.body_count()
     var index = 0
     while index < body_count {
         let column = index % 100
         let row = index / 100
-        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+        world.create_rigid_body(Physics.RigidBody2DSettings()
             ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5)))
             ..position = Math.Vec2(column as float * 1.25, row as float * 1.25)
             ..velocity = Math.Vec2(2.0, 0.25)
             ..allow_sleep = false
-        ))
+        )
         index++
     }
-    measure("sparse-$(body_count)", world, @bodies[0:bodies.count()], 120, 1.0 / 60.0, workers)
+    measure("sparse-$(body_count)", world, first_body, body_count, 120, 1.0 / 60.0, workers)
 }
 
 func run_pile(workers:int) {
@@ -156,12 +165,12 @@ func run_pile(workers:int) {
     var world = Physics.World2D()
     enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(24.0, 1.0), 0.8)
-    var bodies:Physics.RigidBody2D[] = []
+    let first_body = world.body_count()
     var index = 0
     while index < body_count {
         let column = index % columns
         let row = index / columns
-        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+        world.create_rigid_body(Physics.RigidBody2DSettings()
             ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.4)))
             ..position = Math.Vec2(
                 (column as float - 24.5) * 0.405,
@@ -170,10 +179,10 @@ func run_pile(workers:int) {
             ..rotation = ((index % 3) as float - 1.0) * 0.002
             ..friction = 0.75
             ..angular_damping = 0.12
-        ))
+        )
         index++
     }
-    measure("pile-1000", world, @bodies[0:bodies.count()], 240, 1.0 / 60.0, workers)
+    measure("pile-1000", world, first_body, body_count, 240, 1.0 / 60.0, workers)
 }
 
 func create_container(world:&Physics.World2D, width:float, height:float) {
@@ -201,12 +210,12 @@ func run_circle(body_count:int, workers:int) {
     var world = Physics.World2D()
     enable_workers(world, workers)
     create_container(world, width, height)
-    var bodies:Physics.RigidBody2D[] = []
+    let first_body = world.body_count()
     var index = 0
     while index < body_count {
         let column = index % columns
         let row = index / columns
-        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+        world.create_rigid_body(Physics.RigidBody2DSettings()
             ..shape = Physics.Shape2D.circle(Physics.Circle2D(radius))
             ..position = Math.Vec2(
                 (column as float - (columns - 1) as float * 0.5) * spacing,
@@ -215,13 +224,14 @@ func run_circle(body_count:int, workers:int) {
             ..friction = 0.75
             ..angular_damping = 0.12
             ..allow_sleep = false
-        ))
+        )
         index++
     }
     measure(
         "circle-$(body_count)",
         world,
-        @bodies[0:bodies.count()],
+        first_body,
+        body_count,
         300,
         1.0 / 60.0,
         workers,

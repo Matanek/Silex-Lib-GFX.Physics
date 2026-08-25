@@ -93,17 +93,14 @@ circle-box, and circle-circle contacts use an iterative impulse solver with the
 appropriate inertia, restitution, and Coulomb friction. Boxes remain the
 default shape when `shape` is omitted, preserving existing consumers.
 
-A balanced dynamic AABB tree with fat proxies handles general shapes. Dense
-circle scenes switch to a reusable uniform grid for circle-circle candidates
-while retaining the tree for the fixed container and mixed shapes. Contact
-impulses persist across steps and warm-start the next solve. Dynamic
-circle-circle contacts use a compact constraint representation; general and
-compact constraints retain one deterministic Gauss-Seidel order. Dense-circle
-position correction applies a relaxed correction through eight retained-contact
-passes and eight global grid sweeps. Each projection is capped relative to the
-smaller collider, so a deep contact cannot move a body through several
-neighbours in one pass. The global passes catch newly introduced overlaps
-without transferring an entire penetration into the next neighbour.
+A balanced dynamic AABB tree retains fixed-shape queries. Worlds with dynamic
+shapes use the same reusable deterministic grid regardless of worker count, so
+parallelism cannot change the candidate set. Contact impulses persist across
+steps and warm-start the next solve. General and compact circle constraints are
+colored by body conflict and execute one common four-substep Soft Step graph:
+velocity integration, warm start, two alternating biased sweeps, position
+integration, normal relaxation, restitution, and cache storage. A load threshold
+may dispatch a color to workers but never selects a historical solver.
 General-contact islands sleep atomically after their residual surface motion
 remains below the stability thresholds. The dense-circle path audits current
 overlap and rests each quiet, supported body independently, so one noisy ball
@@ -117,6 +114,9 @@ contiguous ranges, so sleeping bodies leave the integration hot path. The
 headless [`Examples/World2D/SleepIslands.sx`](Examples/World2D/SleepIslands.sx)
 demonstrates sleep, staged impact wake-up, and deletion; see
 [`Docs/Islands.md`](Docs/Islands.md) for the observable contract.
+[`Examples/World2D/SoftStepPile.sx`](Examples/World2D/SoftStepPile.sx) is a
+second headless proof that settles 128 circles, asserts containment and overlap,
+and prints the measured final envelope.
 
 Large moving worlds can opt into the persistent STD worker pool:
 
@@ -124,9 +124,9 @@ Large moving worlds can opt into the persistent STD worker pool:
 world.enable_parallelism(4)
 ```
 
-The dynamic tree then discovers pairs through a lock-free two-pass job: it
-counts each moved proxy's pairs, reserves one contiguous output, and fills
-disjoint ranges in parallel. `set_profiling_enabled(true)` and `step_profile()`
+Large conflict-free colors then partition the same contact kernel into disjoint
+worker ranges; smaller colors run directly to avoid scheduling overhead.
+`set_profiling_enabled(true)` and `step_profile()`
 provide opt-in timings for motion, broad phase, solve, and sleep without making
 profiling part of the normal step cost. See
 [`Benchmarks/Scale2D.sx`](Benchmarks/Scale2D.sx) and

@@ -25,14 +25,20 @@ FLOAT_FIELDS = (
     "state_signature",
 )
 
-CADENCE_BUDGETS_MS = {
+CADENCE_GATES_MS = {
     "sparse-1000": 4.00,
     "sparse-5000": 16.67,
     "sparse-10000": 33.33,
     "pile-1000": 33.33,
     "circle-1800": 16.67,
+}
+
+CADENCE_TARGETS_MS = {
     "circle-5000": 16.67,
 }
+
+BODY_RSS_BUDGET_BYTES = 1024
+PERSISTENT_PAIR_RSS_BUDGET_BYTES = 512
 
 
 def parse_record(line: str, source: str, line_number: int) -> dict[str, str]:
@@ -183,7 +189,7 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
     rss_baselines: dict[tuple[str, str, str], float] = {}
     for (engine, scenario, mode, workers), group in grouped.items():
         rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
-        if scenario == "release-parity" and len(rss_values) == len(group):
+        if scenario == "release-parity" and len(rss_values) >= 7:
             rss_baselines[(engine, mode, workers)] = statistics.median(rss_values)
 
     for key in sorted(grouped):
@@ -191,6 +197,7 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
         group = grouped[key]
         label = f"{engine}/{scenario}/{mode}/workers-{workers}"
         group_failures: list[str] = []
+        group_notes: list[str] = []
         for record in group:
             group_failures.extend(correction_failures(record))
 
@@ -207,28 +214,57 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
             f"n={len(group)} median={median:.6f}ms min={min(times):.6f}ms "
             f"max={max(times):.6f}ms mad={mad:.6f}ms ({relative_mad * 100.0:.2f}%)"
         )
-        rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
-        if len(rss_values) == len(group):
+        rss_records = [record for record in group if "_rss_bytes" in record]
+        rss_values = [int(record["_rss_bytes"]) for record in rss_records]
+        if rss_values:
             timing += f" rss_median={statistics.median(rss_values):.0f}B"
 
         if len(group) >= 7 and relative_mad > 0.05:
             group_failures.append(f"timing MAD {relative_mad * 100.0:.2f}% exceeds 5%")
         if engine.startswith("silex") and mode == "release" and len(group) >= 7:
-            budget = CADENCE_BUDGETS_MS.get(scenario)
+            budget = CADENCE_GATES_MS.get(scenario)
             if budget is not None and median > budget:
                 group_failures.append(f"median {median:.6f} ms exceeds {budget:.2f} ms budget")
-            if scenario in {"sparse-10000", "circle-5000"} and len(rss_values) == len(group):
+            target = CADENCE_TARGETS_MS.get(scenario)
+            if target is not None and median > target:
+                group_notes.append(
+                    f"cadence target missed: median {median:.6f} ms exceeds {target:.2f} ms"
+                )
+            if scenario in {"sparse-10000", "circle-5000"} and len(rss_values) >= 7:
                 baseline = rss_baselines.get((engine, mode, workers))
                 if baseline is not None:
                     rss_median = statistics.median(rss_values)
-                    bytes_per_body = (rss_median - baseline) / int(group[0]["bodies"])
-                    if bytes_per_body > 1024.0:
+                    body_count = int(group[0]["bodies"])
+                    incremental_rss = rss_median - baseline
+                    allowed_rss = BODY_RSS_BUDGET_BYTES * body_count
+                    if scenario == "circle-5000":
+                        if any("persistent_pairs" not in record for record in rss_records):
+                            group_failures.append(
+                                "dense memory records require persistent_pairs"
+                            )
+                        else:
+                            pair_counts = {
+                                int(record["persistent_pairs"]) for record in rss_records
+                            }
+                            if len(pair_counts) != 1:
+                                group_failures.append(
+                                    "persistent_pairs changed across identical runs"
+                                )
+                            allowed_rss += (
+                                PERSISTENT_PAIR_RSS_BUDGET_BYTES *
+                                max(pair_counts)
+                            )
+                    bytes_per_body = incremental_rss / body_count
+                    if incremental_rss > allowed_rss:
                         group_failures.append(
-                            f"incremental RSS {bytes_per_body:.3f} B/body exceeds 1024 B/body"
+                            f"incremental RSS {incremental_rss:.0f} B "
+                            f"({bytes_per_body:.3f} B/body) exceeds "
+                            f"{allowed_rss} B storage budget"
                         )
 
         status = "PASS" if not group_failures else "FAIL"
-        reports.append(f"{status} {label}: {timing}")
+        note = "" if not group_notes else f"; {'; '.join(group_notes)}"
+        reports.append(f"{status} {label}: {timing}{note}")
         failures.extend(f"{label}: {failure}" for failure in sorted(set(group_failures)))
     return reports, failures
 

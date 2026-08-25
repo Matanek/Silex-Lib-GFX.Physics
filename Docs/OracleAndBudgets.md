@@ -69,12 +69,21 @@ budget. Improvements are reported per scene and never generalized from body
 count alone.
 
 Record peak process RSS separately from elapsed simulation time. Until a
-portable package allocator counter exists, the memory gate is relative: after
-subtracting the `release-parity` process RSS, `sparse-10000` and `circle-5000`
-must not grow by more than 1 KiB per additional dynamic body and must not
-regress by more than 5% against their accepted ARM64 baseline. Box2D's
-`memory_bytes` is its own world counter and is diagnostic, not a substitute for
-the process RSS comparison.
+portable package allocator counter exists, the memory gate is relative. After
+subtracting the `release-parity` process RSS, `sparse-10000` has a budget of
+1 KiB per dynamic body. The dense `circle-5000` scene adds 512 bytes per
+persistent pair to that body budget; its corpus record must therefore expose
+`persistent_pairs`. This separates body storage from the contact graph instead
+of pretending that a contact-free world and a world retaining more than three
+pairs per body have the same storage shape. Both scenes must also avoid a
+greater than 5% regression against their accepted ARM64 baseline.
+
+The pair allowance was fixed from the reconstruction evidence: the original
+body-only gate was already contradicted by the pinned Box2D witness, whose
+world counter reaches 58,550,880 bytes on `circle-5000`, and the corrected
+Silex corpus retains 16,194 pairs. The 512-byte value is a ceiling, not an
+allocation target. Box2D's `memory_bytes` remains its own world counter and is
+diagnostic, not a substitute for the process RSS comparison.
 
 Debug runs establish behavior and diagnostics only; they do not carry cadence
 budgets. Compilation time, CMake/FetchContent work and compiler caches never

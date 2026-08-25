@@ -20,8 +20,8 @@ silex compile Packages/GFX.Physics/Benchmarks/CircleScale2D.sx --release -o /tmp
 `Scale2D.sx` enables four persistent workers. Its sparse case keeps every body
 awake and moving without generating contacts; it measures integration, proxy
 maintenance, and pair discovery independently of the solver. Its pile case adds
-oriented contacts, friction, warm starting, eight velocity iterations, and
-contact-island sleep.
+oriented contacts, friction, warm starting, the common four-substep Soft Step
+graph, and contact-island sleep.
 
 `CircleScale2D.sx` is the dense-circle contract. Its `--awake` option disables
 sleep, so the 5,000-body result measures all bodies and contacts on every one of
@@ -42,7 +42,45 @@ The current budgets are:
 | 1,800-circle graphical layout, all awake | 16.67 ms | Met |
 | 5,000-circle dense pile, all awake | 16.67 ms | Not met |
 
-Reference measurements from the 2026-08-20 `arm64` development machine were:
+The current colored Soft Step solver was measured on 2026-08-25 on the idle
+`arm64` development machine with Silex `0.41.0` at `a48d2dd`. Each scenario
+used its corpus-defined duration, one untimed warm-up, seven isolated Release
+runs, and one worker:
+
+| Scenario | Runs | Median | Range | MAD | Maximum overlap |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `sparse-1000` | 7 | 0.787 ms | 0.775–0.815 ms | 0.009 ms | — |
+| `sparse-5000` | 7 | 4.080 ms | 3.986–4.144 ms | 0.034 ms | — |
+| `sparse-10000` | 7 | 8.517 ms | 8.433–8.821 ms | 0.083 ms | — |
+| `pile-1000` | 7 | 6.711 ms | 6.675–6.825 ms | 0.018 ms | — |
+| `circle-1800` | 7 | 12.641 ms | 12.507–12.741 ms | 0.082 ms | 7.639 mm |
+| `circle-5000` | 7 | 53.876 ms | 53.508–54.393 ms | 0.107 ms | 9.012 mm |
+
+The 5,000-circle correction gate is met, but its cadence target is not. A
+native sample attributes most remaining time to the constraint stage and shows
+large stack frames and aggregate traffic in call-containing hot functions.
+This is recorded as a backend optimization target; it is not hidden behind a
+second scalar solver or a relaxed overlap threshold.
+
+The separate memory switch gates pass after correcting the corpus ownership.
+The first harness retained every `RigidBody2D` class handle merely to inspect
+final state, so its 176,406,528-byte and 99,336,192-byte peaks mostly measured
+benchmark objects rather than the world. The corrected indexed observer gives
+seven-run medians of 5,357,568 bytes for `release-parity`, 12,484,608 bytes for
+`sparse-10000`, and 17,350,656 bytes for `circle-5000`. The sparse increment is
+712.704 bytes per body. The dense increment is 11,993,088 bytes for 5,000
+bodies and 16,194 persistent pairs, below its 13,411,328-byte body-plus-pair
+budget. All RSS series have zero median absolute deviation.
+
+The dense gate was amended from a body-only allowance to 1 KiB per body plus
+512 bytes per persistent pair. A contact-free scene and a scene retaining more
+than three pairs per body do not have the same storage shape; the pinned Box2D
+witness already reaches 58,550,880 bytes on `circle-5000`. This correction
+keeps the storage ceiling explicit and does not change the still-unmet 16.67 ms
+cadence target.
+
+The following measurements describe the retired pre-Soft-Step implementation
+and remain only as profiling history:
 
 | Scenario | Total/step | Motion | Broad phase | Solve | Sleep |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -52,7 +90,7 @@ Reference measurements from the 2026-08-20 `arm64` development machine were:
 | 1,000-body settling pile | 10.76 ms | 0.42 ms | 2.46 ms | 7.52 ms | 0.36 ms |
 | 1,800 circles, radius 0.05 m, all awake | 11.84 ms | 0.45 ms | 0.84 ms | 10.51 ms | <0.01 ms |
 
-The 1,800-circle figure is the median of three 300-step runs measured on
+That historical 1,800-circle figure is the median of three 300-step runs measured on
 2026-08-23. Its positional phase is 8.04 ms per step. The faster 8.01 ms
 six-contact-pass/two-global-pass result is retired: sustained graphical
 emission exposed intermittent dense-pile collapse. The relaxed
@@ -92,8 +130,8 @@ The former 9.62 ms dense-circle figure predates the current overlap convergence,
 boundary containment, and sleep audit. It is intentionally retired and must not
 be used as evidence that the 5,000-circle target is met. The correctness-first
 solver currently misses the 16.67 ms all-awake budget; a new median will be
-published only after the contact-coloring/parallel-solve milestone reaches the
-budget without weakening the overlap regressions.
+published only after native code generation reaches the budget without
+weakening the overlap regressions.
 
 These figures are scenario-specific, not a promise that every arrangement of
 the same number of bodies has the same cost. Dense overlap increases candidate
@@ -110,10 +148,12 @@ let profile = world.step_profile()
 print(profile.broad_phase_ms)
 ```
 
-The next dense-scene milestone is a persistent constraint graph with
-conflict-free colors so independent contacts can solve in parallel. SIMD is a
-separate backend milestone: the data is already arranged for vector kernels,
-but scalar Silex code must not pretend to provide explicit SIMD guarantees.
+The constraint graph and conflict-free colors are now present and a 4,100-entry
+single-color test exercises a real four-worker dispatch. The next dense-scene
+milestone is native-code efficiency: reduce stack and aggregate traffic across
+hot call boundaries and extend profitable SIMD beyond the current ARM64 lane
+pairs. Scalar Silex code must not pretend to provide gains the emitted binary
+does not demonstrate.
 
 The graphical reference includes the window, ECS synchronization, rendering,
 and presentation. Build it once, then run the sustained 30-second stress

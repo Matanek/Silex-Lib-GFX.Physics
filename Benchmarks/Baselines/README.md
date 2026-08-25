@@ -34,8 +34,11 @@ every reconstruction gate:
 | `circle-1800` | 19.815577 ms/step | 0.45% | 34,816,000 B | 0.745873 ms/step | cadence fails |
 | `circle-5000` | 101.257370 ms/step | 1.24% | 94,863,360 B | 4.530633 ms/step | correction, cadence and memory fail |
 
-After subtracting `release-parity`, Silex uses 16,932.9 B per body for
-`sparse-10000` and 18,146.9 B per body for `circle-5000`, above the 1 KiB gate.
+The original corpus retained one class handle per body and therefore reported
+16,932.9 B per body for `sparse-10000` and 18,146.9 B per body for
+`circle-5000`. Spec 10 rejected those RSS values as benchmark-owned storage;
+they remain here only as historical evidence. The dense body-only rule was
+also replaced by the body-plus-persistent-pair gate described below.
 The `circle-5000` state is deterministic but reaches 49.056 mm maximum overlap,
 above its 20 mm correction gate. `circle-1800` and `circle-5000` also exceed
 their 16.67 ms cadence budgets. All seven-run timing MAD values remain below
@@ -103,6 +106,50 @@ favorable sleeping scene:
 Both series retain the exact state signature and pass the 4.00 ms cadence
 gate. The active compaction therefore removes sleepers from the motion path
 without regressing the established all-awake reference on this machine.
+
+## Spec 10 colored Soft Step candidate
+
+[`2026-08-25-spec10-soft-step.jsonl`](2026-08-25-spec10-soft-step.jsonl)
+records the cadence and correction results of the colored Soft Step candidate
+with Silex `0.41.0` at
+`a48d2dd`. The installed and workspace-built compiler executables had the same
+SHA-256. One discarded warm-up precedes seven isolated one-worker Release
+processes per cadence scenario; an additional four-worker run verifies the
+state-signature matrix for the contact scenes.
+
+| Scenario | Median | MAD | Correction and cadence |
+| --- | ---: | ---: | --- |
+| `sparse-1000` | 0.787 ms | 1.17% | passes 4.00 ms |
+| `sparse-5000` | 4.080 ms | 0.84% | passes 16.67 ms |
+| `sparse-10000` | 8.517 ms | 0.97% | passes 33.33 ms |
+| `pile-1000` | 6.711 ms | 0.28% | passes 33.33 ms and containment |
+| `circle-1800` | 12.641 ms | 0.65% | passes 16.67 ms and 12 mm overlap gate |
+| `circle-5000` | 53.876 ms | 0.20% | passes 20 mm overlap gate; misses the explicit 16.67 ms target |
+
+One and four workers retain identical state signatures for `release-parity`,
+`pile-1000`, `circle-1800`, and `circle-5000`. The checker returns success with
+`--enforce` while reporting the missed `circle-5000` cadence target; that row
+is intentionally a target rather than a hard switch gate.
+
+[`2026-08-25-spec10-memory.jsonl`](2026-08-25-spec10-memory.jsonl) completes
+the seven-process RSS protocol with `/usr/bin/time -l` after correcting the
+corpus: it records body indices and queries package-private world storage
+instead of retaining one `RigidBody2D` class handle per body. The rejected
+harness had measured 176,406,528 B and 99,336,192 B for the two scenes; the
+corrected medians are:
+
+| Scenario | Median RSS | Incremental RSS | Gate |
+| --- | ---: | ---: | --- |
+| `sparse-10000` | 12,484,608 B | 7,127,040 B, or 712.704 B/body | 1 KiB/body — passes |
+| `circle-5000` | 17,350,656 B | 11,993,088 B | 1 KiB/body + 512 B/persistent pair — passes |
+
+The dense run retains 16,194 pairs, so its 13,411,328-byte allowance still
+leaves only 1,418,240 B of headroom. This revision is not a waiver around the
+implementation: the pinned Box2D witness already reports 58,550,880 B on the
+dense scene, proving that a body-only allowance conflated body and contact
+storage. The checker now requires `persistent_pairs` for dense RSS records and
+passes this baseline with `--enforce` while continuing to report the missed
+`circle-5000` cadence target.
 
 After review, add `--enforce` for future candidates and pass the accepted
 4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is

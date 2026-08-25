@@ -28,19 +28,17 @@ the number of touching pairs without materializing snapshots;
 mask, and group rules as stateless geometry queries. Rejected pairs never
 enter the persistent contact table.
 
-The broad phase selects a reusable uniform grid for mono-worker and all-circle
-worlds. When explicit parallelism is enabled for non-circle shapes, a dynamic
-AABB tree counts and fills newly discovered pairs through disjoint worker
-ranges. Pair insertion, contact refresh, and snapshot ordering remain
-deterministic across worker counts.
+The broad phase selects the same reusable deterministic grid for dynamic worlds
+at every worker count. Pair insertion, contact refresh, and snapshot ordering
+therefore remain deterministic across worker counts; fixed-shape queries keep
+their dynamic-tree representation.
 
 Capsules, convex and rounded polygons, segments, and one-sided chains now
 participate in broad-phase and persistent contact generation. Chains must be
-fixed bodies. In this reconstruction step their contacts are intentionally
-geometric only: the legacy solver still applies impulses and positional
-correction only to unrounded boxes and circles. The future Soft Step switch
-will consume the retained general manifolds without changing this public read
-surface.
+fixed bodies. Contact response currently covers the rigid box and circle forms;
+the common Soft Step solver consumes their retained manifolds without changing
+this public read surface. Response for the remaining geometric forms stays an
+explicit later capability rather than silently receiving partial response.
 
 The headless executable proof is
 [`../Examples/World2D/Contacts.sx`](../Examples/World2D/Contacts.sx):
