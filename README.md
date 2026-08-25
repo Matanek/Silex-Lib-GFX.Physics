@@ -58,6 +58,21 @@ ray casts, and shape casts. Independent read queries can run concurrently. See
 [`Docs/Geometry.md`](Docs/Geometry.md) and the executable
 [`Examples/Geometry2D/Queries.sx`](Examples/Geometry2D/Queries.sx).
 
+`World2D` also retains collision pairs and manifolds across steps. The current
+snapshots can be read without exposing their cache identity:
+
+```silex
+var contacts:Physics.Contact2D[] = []
+world.step(1.0 / 60.0)
+world.write_contacts(contacts)
+print(world.contact_count())
+```
+
+The headless [`Examples/World2D/Contacts.sx`](Examples/World2D/Contacts.sx)
+is the primary executable proof for contact creation, persistence, and
+invalidation. See [`Docs/Contacts.md`](Docs/Contacts.md) for filters,
+deterministic ordering, and the current solver boundary.
+
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:
 
@@ -115,15 +130,17 @@ profiling part of the normal step cost. See
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
 
-The existing `World2D` regression solver still accepts only boxes and circles;
-the additional forms currently belong to the stateless geometry API. Forces,
-joints, persistent contacts for those forms, general-purpose continuous dynamic
-collision response, and application plugins remain outside the current world
-contract. The public shape cast is a geometry query, while the dense-circle
-sweep described above remains narrower than general solver CCD.
+The existing `World2D` regression solver still resolves only unrounded boxes
+and circles. Additional forms can be attached to the world and produce
+persistent geometric contacts, but do not receive impulses or positional
+correction yet. Forces, joints, general-purpose continuous dynamic collision
+response, and application plugins remain outside the current world contract.
+The public shape cast is a geometry query, while the dense-circle sweep
+described above remains narrower than general solver CCD.
 
-See [`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) for the
-complete graphical consumer program. Its interactive emitter is currently
+[`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) remains a
+historical integrated stress program, not the recommended first verification
+path. Its interactive emitter is currently
 capped at 3,000 small dynamic circles, while explicit stress controls can still
 prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one persistent
 worker while rendering remains independent, and its reusable

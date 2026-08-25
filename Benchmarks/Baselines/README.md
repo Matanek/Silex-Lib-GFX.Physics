@@ -65,6 +65,26 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCorpus.py Packages/GFX.Phy
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckSentinels.py --enforce Packages/GFX.Physics/Benchmarks/Baselines/2026-08-23-arm64-gfx.log
 ```
 
+## Spec 08 broad-phase observation
+
+[`2026-08-25-spec08-broad-phase.jsonl`](2026-08-25-spec08-broad-phase.jsonl)
+records the persistent-contact candidate on the same macOS ARM64 machine. It
+uses one discarded warm-up and seven isolated Release processes per worker
+configuration:
+
+| Scenario | 1 worker median | 4 workers median | Gate |
+| --- | ---: | ---: | --- |
+| `sparse-1000` | 0.486692 ms | 1.263167 ms | both pass 4.00 ms |
+| `sparse-5000` | 2.353458 ms | 7.471250 ms | both pass 16.67 ms |
+| `sparse-10000` | 4.984250 ms | 16.072742 ms | both pass 33.33 ms |
+
+The immediately preceding `37c0aab` median for `sparse-1000` at one worker was
+0.495917 ms, so the retained scalar path did not regress. Four workers exercise
+the dynamic-tree count/prefix/fill path and preserve the exact state signature,
+but are slower on these contact-free grids; the observation proves bounded
+cadence and deterministic scaling, not a parallel speedup. Every series has a
+MAD below 2.09%.
+
 After review, add `--enforce` for future candidates and pass the accepted
 4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
 expected: portable Silex changes use native GitHub Actions for correctness on

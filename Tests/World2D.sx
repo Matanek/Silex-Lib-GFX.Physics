@@ -58,6 +58,46 @@ test "retain and remove persistent candidate pairs" {
     assert(fixed_body.position() == Math.Vec2(0.0, -0.5))
 }
 
+test "reuse a persistent general contact slot after separation" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-1.0, -0.2),
+            Math.Vec2(1.0, -0.2),
+            Math.Vec2(1.0, 0.2),
+            Math.Vec2(-1.0, 0.2)
+        ], 0.05))
+    )
+    var capsule = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.5, 0.0),
+            Math.Vec2(0.5, 0.0),
+            0.25
+        ))
+        ..position = Math.Vec2(0.0, 0.35)
+        ..gravity_scale = 0.0
+        ..allow_sleep = false
+    )
+
+    world.step(0.0)
+    assert(world.persistent_pair_count() == 1)
+    assert(world.candidate_pair_slot_count() == 1)
+    assert(world.contact_count() == 1)
+    world.step(0.0)
+    assert(world.candidate_pair_slot_count() == 1)
+
+    capsule.set_position(Math.Vec2(0.0, 2.0))
+    world.step(0.0)
+    assert(world.persistent_pair_count() == 0)
+    assert(world.candidate_pair_slot_count() == 1)
+    capsule.set_position(Math.Vec2(0.0, 0.35))
+    world.step(0.0)
+    assert(world.persistent_pair_count() == 1)
+    assert(world.candidate_pair_slot_count() == 1)
+    assert(world.contact_count() == 1)
+}
+
 test "advance a dynamic body under gravity" {
     var world = Physics.World2D()
     var body = world.create_rigid_body(Physics.RigidBody2DSettings()

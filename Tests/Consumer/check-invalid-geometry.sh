@@ -27,3 +27,5 @@ check_failure InvalidChain.sx \
     "GFX.Physics.Chain2D rejects consecutive duplicate points"
 check_failure InvalidRay.sx \
     "GFX.Physics.Ray2D requires a non-zero translation"
+check_failure InvalidDynamicChain.sx \
+    "GFX.Physics.World2D requires chain body shapes to be fixed"

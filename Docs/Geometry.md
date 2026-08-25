@@ -94,7 +94,6 @@ some nested writes in the Silex Release backend even though Debug preserves
 them. This internal workaround can be removed when that compiler discrepancy
 is fixed; no reference identity leaks into the public geometry API.
 
-`World2D` still attaches only boxes and circles to its existing regression
-solver. Capsules, polygons, segments, and chains are available to the stateless
-geometry layer in this step; persistent contacts and dynamic response for them
-belong to the following reconstruction work.
+`World2D` attaches every public shape and retains their geometric contacts.
+Its existing regression solver still applies dynamic response only to
+unrounded boxes and circles; see [`Contacts.md`](Contacts.md) for that boundary.

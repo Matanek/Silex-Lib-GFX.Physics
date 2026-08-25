@@ -1,5 +1,6 @@
 use GFX.Physics.Box2D.Box2D
 use GFX.Physics.Circle2D.Circle2D
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
 use GFX.Physics.Shape2D.Shape2D
 use STD.Math
 
@@ -22,6 +23,7 @@ public struct RigidBody2DSettings {
     var linear_damping:float
     var angular_damping:float
     var allow_sleep:bool
+    var collision_filter:CollisionFilter2D
 
     init() {
         self.body_type = BodyType2D.dynamic
@@ -37,6 +39,7 @@ public struct RigidBody2DSettings {
         self.linear_damping = 0.0
         self.angular_damping = 0.0
         self.allow_sleep = true
+        self.collision_filter = CollisionFilter2D()
     }
 }
 
@@ -141,6 +144,126 @@ package class ShapeStore2D {
     }
 }
 
+struct ShapeMetrics2D {
+    let kind:int
+    let half_width:float
+    let half_height:float
+    let radius:float
+    let sweep_radius_squared:float
+    let inverse_inertia_factor:float
+    let lower:Math.Vec2
+    let upper:Math.Vec2
+
+    init(
+        kind:int,
+        half_width:float,
+        half_height:float,
+        radius:float,
+        sweep_radius_squared:float,
+        inverse_inertia_factor:float,
+        lower:Math.Vec2,
+        upper:Math.Vec2
+    ) {
+        self.kind = kind
+        self.half_width = half_width
+        self.half_height = half_height
+        self.radius = radius
+        self.sweep_radius_squared = sweep_radius_squared
+        self.inverse_inertia_factor = inverse_inertia_factor
+        self.lower = lower
+        self.upper = upper
+    }
+}
+
+func shape_metrics(shape:Shape2D) ShapeMetrics2D {
+    var kind = 2
+    var radius = 0.0
+    var lower = Math.Vec2(3.4028235e38)
+    var upper = Math.Vec2(-3.4028235e38)
+    var sweep_radius = 0.0
+    var inverse_inertia_factor = 0.0
+    match shape {
+        box(value) => {
+            if value.radius == 0.0 { kind = 0 }
+            radius = value.radius
+            let half = value.half_size()
+            lower = Math.Vec2(-half.x - radius, -half.y - radius)
+            upper = Math.Vec2(half.x + radius, half.y + radius)
+            sweep_radius = Math.sqrt(half.x * half.x + half.y * half.y) +
+                radius
+            inverse_inertia_factor = 12.0 / (
+                value.size.x * value.size.x + value.size.y * value.size.y
+            )
+        }
+        capsule(value) => {
+            radius = value.radius
+            lower = Math.Vec2(
+                Math.min(value.first.x, value.second.x) - radius,
+                Math.min(value.first.y, value.second.y) - radius
+            )
+            upper = Math.Vec2(
+                Math.max(value.first.x, value.second.x) + radius,
+                Math.max(value.first.y, value.second.y) + radius
+            )
+            sweep_radius = Math.max(value.first.length(), value.second.length()) +
+                radius
+        }
+        chain(value) => {
+            kind = 3
+            for point in value.points {
+                lower.x = Math.min(lower.x, point.x)
+                lower.y = Math.min(lower.y, point.y)
+                upper.x = Math.max(upper.x, point.x)
+                upper.y = Math.max(upper.y, point.y)
+                sweep_radius = Math.max(sweep_radius, point.length())
+            }
+        }
+        circle(value) => {
+            kind = 1
+            radius = value.radius
+            lower = Math.Vec2(-radius)
+            upper = Math.Vec2(radius)
+            sweep_radius = radius
+            inverse_inertia_factor = 2.0 / (radius * radius)
+        }
+        polygon(value) => {
+            radius = value.radius
+            for point in value.vertices {
+                lower.x = Math.min(lower.x, point.x - radius)
+                lower.y = Math.min(lower.y, point.y - radius)
+                upper.x = Math.max(upper.x, point.x + radius)
+                upper.y = Math.max(upper.y, point.y + radius)
+                sweep_radius = Math.max(sweep_radius, point.length() + radius)
+            }
+        }
+        segment(value) => {
+            lower = Math.Vec2(
+                Math.min(value.first.x, value.second.x),
+                Math.min(value.first.y, value.second.y)
+            )
+            upper = Math.Vec2(
+                Math.max(value.first.x, value.second.x),
+                Math.max(value.first.y, value.second.y)
+            )
+            sweep_radius = Math.max(value.first.length(), value.second.length())
+        }
+    }
+    let half = upper.subtract(lower).multiply(0.5)
+    if inverse_inertia_factor == 0.0 && sweep_radius > 0.0 {
+        inverse_inertia_factor = 2.0 / (sweep_radius * sweep_radius)
+    }
+    return ShapeMetrics2D(
+        kind,
+        half.x,
+        half.y,
+        radius,
+        sweep_radius * sweep_radius,
+        inverse_inertia_factor,
+        lower,
+        upper
+    )
+}
+
 package class BodyStore2D {
     var slot_generations:int[]
     var slot_dense_indices:int[]
@@ -156,6 +279,11 @@ package class BodyStore2D {
     var half_heights:float[]
     var radii:float[]
     var sweep_radii_squared:float[]
+    var local_lower_x:float[]
+    var local_lower_y:float[]
+    var local_upper_x:float[]
+    var local_upper_y:float[]
+    var collision_filters:CollisionFilter2D[]
     var positions_x:float[]
     var positions_y:float[]
     var previous_positions_x:float[]
@@ -193,6 +321,11 @@ package class BodyStore2D {
         self.half_heights = []
         self.radii = []
         self.sweep_radii_squared = []
+        self.local_lower_x = []
+        self.local_lower_y = []
+        self.local_upper_x = []
+        self.local_upper_y = []
+        self.collision_filters = []
         self.positions_x = []
         self.positions_y = []
         self.previous_positions_x = []
@@ -232,51 +365,20 @@ package class BodyStore2D {
         self.dense_slots.append(slot)
         var selected_shape = Shape2D.box(Box2D())
         if let configured = settings.shape { selected_shape = configured }
-        var shape_kind = 0
-        var half_width = 0.0
-        var half_height = 0.0
-        var radius = 0.0
-        var sweep_radius_squared = 0.0
-        match selected_shape {
-            box(shape) => {
-                let half = shape.half_size()
-                half_width = half.x
-                half_height = half.y
-                sweep_radius_squared = half.x * half.x + half.y * half.y
-            }
-            circle(shape) => {
-                shape_kind = 1
-                half_width = shape.radius
-                half_height = shape.radius
-                radius = shape.radius
-                sweep_radius_squared = shape.radius * shape.radius
-            }
-            else => {
-                panic("GFX.Physics.World2D regression solver currently accepts only box and circle body shapes")
-            }
+        let metrics = shape_metrics(selected_shape)
+        let shape_kind = metrics.kind
+        let half_width = metrics.half_width
+        let half_height = metrics.half_height
+        let radius = metrics.radius
+        let sweep_radius_squared = metrics.sweep_radius_squared
+        if settings.body_type == BodyType2D.dynamic && shape_kind == 3 {
+            panic("GFX.Physics.World2D requires chain body shapes to be fixed")
         }
         var inverse_mass = 0.0
         var inverse_inertia = 0.0
         if settings.body_type == BodyType2D.dynamic {
             inverse_mass = 1.0 / settings.mass
-            match selected_shape {
-                box(shape) => {
-                    inverse_inertia = 12.0 / (
-                        settings.mass * (
-                            shape.size.x * shape.size.x +
-                            shape.size.y * shape.size.y
-                        )
-                    )
-                }
-                circle(shape) => {
-                    inverse_inertia = 2.0 / (
-                        settings.mass * shape.radius * shape.radius
-                    )
-                }
-                else => {
-                    panic("GFX.Physics.World2D regression solver currently accepts only box and circle body shapes")
-                }
-            }
+            inverse_inertia = metrics.inverse_inertia_factor / settings.mass
         }
         let shape_id = self.shape_store.append(slot, selected_shape, -1)
         self.first_shape_slots.append(shape_id.slot)
@@ -288,6 +390,11 @@ package class BodyStore2D {
         self.half_heights.append(half_height)
         self.radii.append(radius)
         self.sweep_radii_squared.append(sweep_radius_squared)
+        self.local_lower_x.append(metrics.lower.x)
+        self.local_lower_y.append(metrics.lower.y)
+        self.local_upper_x.append(metrics.upper.x)
+        self.local_upper_y.append(metrics.upper.y)
+        self.collision_filters.append(settings.collision_filter)
         self.positions_x.append(settings.position.x)
         self.positions_y.append(settings.position.y)
         self.previous_positions_x.append(settings.position.x)
@@ -327,6 +434,11 @@ package class BodyStore2D {
 
     func shape_count(id:BodyId2D) int {
         return self.shape_counts[self.require(id)]
+    }
+
+    func body_id_at(index:int) BodyId2D {
+        let slot = self.dense_slots[index]
+        return BodyId2D(slot, self.slot_generations[slot])
     }
 
     func attach_shape(id:BodyId2D, shape:Shape2D) ShapeId2D {
@@ -388,6 +500,11 @@ package class BodyStore2D {
         self.half_heights.swap(first, second)
         self.radii.swap(first, second)
         self.sweep_radii_squared.swap(first, second)
+        self.local_lower_x.swap(first, second)
+        self.local_lower_y.swap(first, second)
+        self.local_upper_x.swap(first, second)
+        self.local_upper_y.swap(first, second)
+        self.collision_filters.swap(first, second)
         self.positions_x.swap(first, second)
         self.positions_y.swap(first, second)
         self.previous_positions_x.swap(first, second)
@@ -422,6 +539,11 @@ package class BodyStore2D {
         self.half_heights.take_last()
         self.radii.take_last()
         self.sweep_radii_squared.take_last()
+        self.local_lower_x.take_last()
+        self.local_lower_y.take_last()
+        self.local_upper_x.take_last()
+        self.local_upper_y.take_last()
+        self.collision_filters.take_last()
         self.positions_x.take_last()
         self.positions_y.take_last()
         self.previous_positions_x.take_last()

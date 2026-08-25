@@ -1,0 +1,171 @@
+use GFX.Physics
+use STD.Math
+
+func general_contact_signature(worker_count:int) float[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(worker_count)
+    var index = 0
+    while index < 128 {
+        let x = index as float * 3.0
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed
+            ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+                Math.Vec2(-1.0, -0.2),
+                Math.Vec2(1.0, -0.2),
+                Math.Vec2(1.0, 0.2),
+                Math.Vec2(-1.0, 0.2)
+            ], 0.05))
+            ..position = Math.Vec2(x, 0.0)
+        )
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+                Math.Vec2(-0.5, 0.0),
+                Math.Vec2(0.5, 0.0),
+                0.25
+            ))
+            ..position = Math.Vec2(x, 0.35)
+            ..gravity_scale = 0.0
+            ..allow_sleep = false
+        )
+        index++
+    }
+    world.step(0.0)
+    assert(world.contact_count() == 128)
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    var signature:float[] = []
+    for contact in contacts {
+        let manifold = contact.manifold()
+        signature.append(contact.first_body().position().x)
+        signature.append(contact.second_body().position().x)
+        signature.append(manifold.normal.x)
+        signature.append(manifold.normal.y)
+        signature.append(manifold.points[0].point.x)
+        signature.append(manifold.points[0].point.y)
+    }
+    return signature
+}
+
+test "track persist and invalidate contacts for general shapes" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-1.0, -0.2),
+            Math.Vec2(1.0, -0.2),
+            Math.Vec2(1.0, 0.2),
+            Math.Vec2(-1.0, 0.2)
+        ], 0.05))
+    )
+    var capsule = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.5, 0.0),
+            Math.Vec2(0.5, 0.0),
+            0.25
+        ))
+        ..position = Math.Vec2(0.0, 0.35)
+        ..gravity_scale = 0.0
+        ..allow_sleep = false
+    )
+
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_body().body_type() == Physics.BodyType2D.fixed)
+    assert(contacts[0].second_body().body_type() == Physics.BodyType2D.dynamic)
+    assert(contacts[0].manifold().point_count() > 0)
+
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    capsule.set_position(Math.Vec2(0.0, 2.0))
+    world.step(0.0)
+    assert(world.contact_count() == 0)
+    capsule.set_position(Math.Vec2(0.0, 0.35))
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    assert(floor.is_valid())
+}
+
+test "apply body filters before persistent contact creation" {
+    let first_filter = Physics.CollisionFilter2D(
+        category_bits:0x1,
+        mask_bits:0x1
+    )
+    let second_filter = Physics.CollisionFilter2D(
+        category_bits:0x2,
+        mask_bits:0x2
+    )
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0)
+        ))
+        ..collision_filter = first_filter
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..collision_filter = second_filter
+        ..gravity_scale = 0.0
+    )
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 0)
+    assert(world.contact_count() == 0)
+}
+
+test "retain one-sided chain winding inside the world" {
+    let chain_filter = Physics.CollisionFilter2D(
+        category_bits:0x1,
+        mask_bits:0x6
+    )
+    let front_filter = Physics.CollisionFilter2D(
+        category_bits:0x2,
+        mask_bits:0x1
+    )
+    let back_filter = Physics.CollisionFilter2D(
+        category_bits:0x4,
+        mask_bits:0x1
+    )
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0),
+            Math.Vec2(2.0, 0.0)
+        ]))
+        ..collision_filter = chain_filter
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(0.0, -0.1)
+        ..collision_filter = front_filter
+        ..gravity_scale = 0.0
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(0.0, 0.1)
+        ..collision_filter = back_filter
+        ..gravity_scale = 0.0
+    )
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    assert(contacts[0].second_body().position().y < 0.0)
+}
+
+test "preserve general contact order across worker counts" {
+    let sequential = general_contact_signature(1)
+    let parallel = general_contact_signature(4)
+    assert(sequential.count() == parallel.count())
+    var index = 0
+    while index < sequential.count() {
+        assert(Math.nearly_equal(sequential[index], parallel[index], 0.000001))
+        index++
+    }
+}

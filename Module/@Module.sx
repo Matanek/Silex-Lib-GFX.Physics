@@ -21,6 +21,7 @@ public use GFX.Physics.RigidBody2D.RigidBody2D
 public use GFX.Physics.RigidBody2D.RigidBody2DSettings
 public use GFX.Physics.World2D.World2D
 public use GFX.Physics.World2D.World2DStepProfile
+public use GFX.Physics.World2D.Contact2D
 
 contribute GFX.Components {
     public use GFX.Physics.RigidBody2D.RigidBody2D

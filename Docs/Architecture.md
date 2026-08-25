@@ -44,7 +44,8 @@ of shape slots, so body compaction does not move or expose shape identities and
 body destruction releases all of its shapes. The retained public `shape()`
 accessor still reports the primary box or circle used by the regression solver.
 The broader `Shape2D` vocabulary is accepted by `ShapePlacement2D` for pure
-geometry queries but rejected explicitly if attached to that legacy solver.
+geometry queries and by `World2D` for persistent geometric contacts. The
+legacy solver still resolves only its original box and circle subset.
 
 The stateless geometry layer expands each form into one or more private convex
 proxies. Polygon construction computes a welded convex hull. GJK produces
@@ -67,6 +68,20 @@ The existing broad phase, contacts and solver remain the regression oracle.
 After a public body destruction, their derived indices and reusable buffers are
 rebuilt from the surviving dense body state; ordinary stepping then continues
 without preserving a pair or contact that referenced the removed body.
+
+General-shape world contacts reuse that lifecycle without entering the legacy
+solver. Each body stores local geometry bounds and a collision filter. The
+broad phase retains stable candidate slots; a general pair refreshes its
+manifold in place and clears the slot when the shapes separate. Public
+`Contact2D` values are read-only snapshots reconstructed in stable body-slot
+order, so BVH nodes, pair hashes, dense indices, and cached impulses do not
+cross the API boundary.
+
+Mono-worker worlds retain the reusable grid path that meets the established
+sparse cadence gates. Explicit multi-worker non-circle worlds use the dynamic
+tree's count/prefix/fill discovery. This routing keeps the historical scalar
+path as the performance reference while making parallel pair generation a real
+exercised path rather than dormant code.
 
 The general solver separates oriented boxes on their four face axes and handles
 circle-box contacts in the box's local frame. Circle-circle contacts use their
