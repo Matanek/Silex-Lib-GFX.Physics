@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Ray2D(Math.Vec2(), Math.Vec2())
+    print(invalid.max_fraction)
+}

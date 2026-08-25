@@ -1,0 +1,233 @@
+use GFX.Physics
+use STD.Math
+use STD.Threading
+
+class ParallelDistances {
+    var values:float[]
+
+    func query_range(start:int, end:int) {
+        var index = start
+        while index < end {
+            let first = Physics.ShapePlacement2D(
+                Physics.Shape2D.circle(Physics.Circle2D(0.5)),
+                Physics.Transform2D(position:Math.Vec2(index as float, 0.0))
+            )
+            let second = Physics.ShapePlacement2D(
+                Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0))),
+                Physics.Transform2D(position:Math.Vec2(index as float + 2.0, 0.0))
+            )
+            self.values[index] = Physics.Geometry2D.distance(first, second).distance
+            index++
+        }
+    }
+}
+
+struct ParallelGeometryQueries:Threading.ParallelJob {
+    var distances:ParallelDistances
+    func execute(start:int, end:int) { self.distances.query_range(start, end) }
+}
+
+test "construct the complete convex geometry vocabulary" {
+    let capsule = Physics.Capsule2D(
+        Math.Vec2(-1.0, 0.0),
+        Math.Vec2(1.0, 0.0),
+        0.25
+    )
+    let polygon = Physics.Polygon2D([
+        Math.Vec2(1.0, 1.0),
+        Math.Vec2(-1.0, -1.0),
+        Math.Vec2(-1.0, 1.0),
+        Math.Vec2(1.0, -1.0),
+        Math.Vec2(0.0, 0.0)
+    ], 0.1)
+    let segment = Physics.Segment2D(
+        Math.Vec2(-1.0, 0.0),
+        Math.Vec2(1.0, 0.0)
+    )
+    let chain = Physics.Chain2D([
+        Math.Vec2(-2.0, 0.0),
+        Math.Vec2(-1.0, 0.5),
+        Math.Vec2(1.0, 0.5),
+        Math.Vec2(2.0, 0.0)
+    ])
+
+    assert(capsule.radius == 0.25)
+    assert(polygon.count() == 4)
+    assert(segment.first == Math.Vec2(-1.0, 0.0))
+    assert(chain.segment_count() == 3)
+}
+
+test "compute transformed distances overlaps and manifolds" {
+    let transform = Physics.Transform2D(
+        position:Math.Vec2(2.0, 3.0),
+        rotation:Math.half_pi()
+    )
+    let transformed = transform.point(Math.Vec2.right())
+    assert(transformed.nearly_equal(Math.Vec2(2.0, 4.0), 0.0001))
+    assert(transform.inverse_point(transformed).nearly_equal(
+        Math.Vec2.right(),
+        0.0001
+    ))
+
+    let circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    let box = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))),
+        Physics.Transform2D(position:Math.Vec2(4.0, 0.0))
+    )
+    let distance = Physics.Geometry2D.distance(circle, box)
+
+    assert(Math.nearly_equal(distance.distance, 2.0, 0.0001))
+    assert(distance.first_point.nearly_equal(Math.Vec2(1.0, 0.0), 0.0001))
+    assert(distance.second_point.nearly_equal(Math.Vec2(3.0, 0.0), 0.0001))
+    assert(distance.normal.nearly_equal(Math.Vec2.right(), 0.0001))
+
+    let capsule = Physics.ShapePlacement2D(
+        Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0),
+            0.5
+        ))
+    )
+    let overlapping_circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.75)),
+        Physics.Transform2D(position:Math.Vec2(0.0, 1.0))
+    )
+
+    assert(Physics.Geometry2D.overlaps(capsule, overlapping_circle))
+    let manifold = Physics.Geometry2D.manifold(capsule, overlapping_circle)
+    assert(manifold.point_count() == 1)
+    assert(manifold.normal.nearly_equal(Math.Vec2.up(), 0.0001))
+    assert(manifold.points[0].separation < 0.0)
+
+    let first_box = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+    )
+    let second_box = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))),
+        Physics.Transform2D(position:Math.Vec2(1.5, 0.0))
+    )
+    let face_manifold = Physics.Geometry2D.manifold(first_box, second_box)
+    assert(face_manifold.point_count() == 2)
+    assert(face_manifold.normal.nearly_equal(Math.Vec2.right(), 0.0001))
+}
+
+test "ray cast and shape cast across polygons capsules segments and chains" {
+    let target = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+    )
+    let ray_hit = Physics.Geometry2D.ray_cast(
+        Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2(6.0, 0.0)),
+        target
+    )
+
+    assert(ray_hit.hit)
+    assert(Math.nearly_equal(ray_hit.fraction, 1.0 / 3.0, 0.002))
+    assert(ray_hit.point.nearly_equal(Math.Vec2(-1.0, 0.0), 0.01))
+    assert(ray_hit.normal.nearly_equal(Math.Vec2.left(), 0.001))
+
+    let moving = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.5)),
+        Physics.Transform2D(position:Math.Vec2(-3.0, 0.0))
+    )
+    let shape_hit = Physics.Geometry2D.shape_cast(
+        moving,
+        Math.Vec2(6.0, 0.0),
+        target
+    )
+    assert(shape_hit.hit)
+    assert(Math.nearly_equal(shape_hit.fraction, 0.250833, 0.002))
+    assert(shape_hit.normal.nearly_equal(Math.Vec2.left(), 0.001))
+
+    let chain = Physics.ShapePlacement2D(
+        Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0),
+            Math.Vec2(2.0, 0.0)
+        ]))
+    )
+    let chain_hit = Physics.Geometry2D.ray_cast(
+        Physics.Ray2D(Math.Vec2(0.0, -2.0), Math.Vec2(0.0, 4.0)),
+        chain
+    )
+    assert(chain_hit.hit)
+    assert(Math.nearly_equal(chain_hit.fraction, 0.5, 0.002))
+
+    let chain_back_hit = Physics.Geometry2D.ray_cast(
+        Physics.Ray2D(Math.Vec2(0.0, 2.0), Math.Vec2(0.0, -4.0)),
+        chain
+    )
+    assert(!chain_back_hit.hit)
+
+    let chain_front_circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.25)),
+        Physics.Transform2D(position:Math.Vec2(0.0, -0.1))
+    )
+    let chain_back_circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.25)),
+        Physics.Transform2D(position:Math.Vec2(0.0, 0.1))
+    )
+    assert(Physics.Geometry2D.overlaps(chain, chain_front_circle))
+    assert(!Physics.Geometry2D.overlaps(chain, chain_back_circle))
+}
+
+test "apply symmetric category mask and group filtering" {
+    let player = Physics.CollisionFilter2D(category_bits:0x2, mask_bits:0x5)
+    let floor = Physics.CollisionFilter2D(category_bits:0x1, mask_bits:0x2)
+    let debris = Physics.CollisionFilter2D(category_bits:0x4, mask_bits:0x1)
+    let same_positive = Physics.CollisionFilter2D(group_index:7)
+    let same_negative = Physics.CollisionFilter2D(group_index:-7)
+
+    assert(player.allows(floor))
+    assert(!player.allows(debris))
+    assert(same_positive.allows(same_positive))
+    assert(!same_negative.allows(same_negative))
+}
+
+test "keep coincident and crossing degeneracies deterministic" {
+    let first_circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    let second_circle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    let coincident = Physics.Geometry2D.manifold(first_circle, second_circle)
+    assert(coincident.point_count() == 1)
+    assert(coincident.normal.nearly_equal(Math.Vec2.right(), 0.0001))
+    assert(Math.nearly_equal(coincident.points[0].separation, -2.0, 0.0001))
+
+    let horizontal = Physics.ShapePlacement2D(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0)
+        ))
+    )
+    let vertical = Physics.ShapePlacement2D(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(0.0, -1.0),
+            Math.Vec2(0.0, 1.0)
+        ))
+    )
+    assert(Physics.Geometry2D.overlaps(horizontal, vertical))
+    assert(Physics.Geometry2D.manifold(horizontal, vertical).point_count() == 1)
+}
+
+test "run read-only geometry queries concurrently" {
+    var values:float[] = []
+    var index = 0
+    while index < 128 { values.append(0.0); index++ }
+    var distances = ParallelDistances(values:values)
+    var executor = Threading.Executor(worker_count:4)
+    var shared = executor
+    var done = shared.submit_parallel(
+        128,
+        ParallelGeometryQueries(distances:distances)
+    )
+    done.complete()
+
+    for distance in distances.values {
+        assert(Math.nearly_equal(distance, 1.0, 0.0001))
+    }
+}

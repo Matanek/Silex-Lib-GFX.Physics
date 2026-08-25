@@ -1,0 +1,49 @@
+use STD.Math
+
+public struct Transform2D {
+    let position:Math.Vec2
+    let rotation:float
+
+    init(position:Math.Vec2 = Math.Vec2(), rotation:float = 0.0) {
+        if !finite_transform_value(position.x) ||
+            !finite_transform_value(position.y) ||
+            !finite_transform_value(rotation)
+        {
+            panic("GFX.Physics.Transform2D requires finite values")
+        }
+        self.position = position
+        self.rotation = rotation
+    }
+
+    func point(local_point:Math.Vec2) Math.Vec2 {
+        let cosine = Math.cos(self.rotation)
+        let sine = Math.sin(self.rotation)
+        return Math.Vec2(
+            cosine * local_point.x - sine * local_point.y + self.position.x,
+            sine * local_point.x + cosine * local_point.y + self.position.y
+        )
+    }
+
+    func vector(local_vector:Math.Vec2) Math.Vec2 {
+        let cosine = Math.cos(self.rotation)
+        let sine = Math.sin(self.rotation)
+        return Math.Vec2(
+            cosine * local_vector.x - sine * local_vector.y,
+            sine * local_vector.x + cosine * local_vector.y
+        )
+    }
+
+    func inverse_point(world_point:Math.Vec2) Math.Vec2 {
+        let translated = world_point.subtract(self.position)
+        let cosine = Math.cos(self.rotation)
+        let sine = Math.sin(self.rotation)
+        return Math.Vec2(
+            cosine * translated.x + sine * translated.y,
+            -sine * translated.x + cosine * translated.y
+        )
+    }
+}
+
+func finite_transform_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

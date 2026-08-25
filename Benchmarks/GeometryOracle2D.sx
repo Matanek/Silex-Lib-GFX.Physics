@@ -1,0 +1,85 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+let circle = Physics.ShapePlacement2D(
+    Physics.Shape2D.circle(Physics.Circle2D(1.0))
+)
+let box = Physics.ShapePlacement2D(
+    Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))),
+    Physics.Transform2D(position:Math.Vec2(4.0, 0.0))
+)
+let distance = Physics.Geometry2D.distance(circle, box)
+print("distance $(distance.distance) $(distance.first_point.x) $(distance.first_point.y) $(distance.second_point.x) $(distance.second_point.y) $(distance.normal.x) $(distance.normal.y)")
+
+let capsule = Physics.ShapePlacement2D(
+    Physics.Shape2D.capsule(Physics.Capsule2D(
+        Math.Vec2(-1.0, 0.0),
+        Math.Vec2(1.0, 0.0),
+        0.5
+    ))
+)
+let manifold_circle = Physics.ShapePlacement2D(
+    Physics.Shape2D.circle(Physics.Circle2D(0.75)),
+    Physics.Transform2D(position:Math.Vec2(0.0, 1.0))
+)
+let manifold = Physics.Geometry2D.manifold(capsule, manifold_circle)
+print("manifold $(manifold.point_count()) $(manifold.normal.x) $(manifold.normal.y) $(manifold.points[0].point.x) $(manifold.points[0].point.y) $(manifold.points[0].separation)")
+
+let ray = Physics.Geometry2D.ray_cast(
+    Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2(6.0, 0.0)),
+    Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+    )
+)
+print("ray $(ray.hit) $(ray.fraction) $(ray.point.x) $(ray.point.y) $(ray.normal.x) $(ray.normal.y)")
+
+let chain = Physics.ShapePlacement2D(
+    Physics.Shape2D.chain(Physics.Chain2D([
+        Math.Vec2(-3.0, 0.0),
+        Math.Vec2(-2.0, 0.0),
+        Math.Vec2(2.0, 0.0),
+        Math.Vec2(3.0, 0.0)
+    ]))
+)
+let chain_front = Physics.Geometry2D.ray_cast(
+    Physics.Ray2D(Math.Vec2(0.0, -2.0), Math.Vec2(0.0, 4.0)),
+    chain
+)
+print("chain_front $(chain_front.hit) $(chain_front.fraction) $(chain_front.normal.x) $(chain_front.normal.y)")
+let chain_back = Physics.Geometry2D.ray_cast(
+    Physics.Ray2D(Math.Vec2(0.0, 2.0), Math.Vec2(0.0, -4.0)),
+    chain
+)
+print("chain_back $(chain_back.hit)")
+
+let cast = Physics.Geometry2D.shape_cast(
+    Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.5)),
+        Physics.Transform2D(position:Math.Vec2(-3.0, 0.0))
+    ),
+    Math.Vec2(6.0, 0.0),
+    Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+    )
+)
+print("shape_cast $(cast.hit) $(cast.fraction) $(cast.point.x) $(cast.point.y) $(cast.normal.x) $(cast.normal.y)")
+
+let hull = Physics.Polygon2D([
+    Math.Vec2(1.0, 1.0),
+    Math.Vec2(-1.0, -1.0),
+    Math.Vec2(-1.0, 1.0),
+    Math.Vec2(1.0, -1.0),
+    Math.Vec2(0.0, 0.0)
+])
+var area = 0.0
+var index = 0
+while index < hull.count() {
+    let first = hull.vertex(index)
+    let second = hull.vertex((index + 1) % hull.count())
+    area += first.x * second.y - first.y * second.x
+    index++
+}
+print("hull $(hull.count()) $(area)")
+print("degenerate_hull 0")
+}

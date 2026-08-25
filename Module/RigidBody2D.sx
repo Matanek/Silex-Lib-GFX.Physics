@@ -251,6 +251,9 @@ package class BodyStore2D {
                 radius = shape.radius
                 sweep_radius_squared = shape.radius * shape.radius
             }
+            else => {
+                panic("GFX.Physics.World2D regression solver currently accepts only box and circle body shapes")
+            }
         }
         var inverse_mass = 0.0
         var inverse_inertia = 0.0
@@ -269,6 +272,9 @@ package class BodyStore2D {
                     inverse_inertia = 2.0 / (
                         settings.mass * shape.radius * shape.radius
                     )
+                }
+                else => {
+                    panic("GFX.Physics.World2D regression solver currently accepts only box and circle body shapes")
                 }
             }
         }

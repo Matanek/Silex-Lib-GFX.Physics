@@ -1,0 +1,124 @@
+use STD.Math
+
+public struct Polygon2D {
+    let vertices:Math.Vec2[]
+    let radius:float
+
+    init(points:Math.Vec2[], radius:float = 0.0) {
+        if points.count() < 3 || points.count() > 8 {
+            panic("GFX.Physics.Polygon2D requires between three and eight input points")
+        }
+        if !finite_polygon_value(radius) || radius < 0.0 {
+            panic("GFX.Physics.Polygon2D requires a finite non-negative radius")
+        }
+        let hull = convex_hull(points)
+        if hull.count() < 3 {
+            panic("GFX.Physics.Polygon2D requires non-collinear points")
+        }
+        let maximum_radius = polygon_inradius(hull)
+        if radius > maximum_radius {
+            panic("GFX.Physics.Polygon2D radius exceeds its convex interior")
+        }
+        self.vertices = hull
+        self.radius = radius
+    }
+
+    func count() int { return self.vertices.count() }
+    func vertex(index:int) Math.Vec2 { return self.vertices[index] }
+}
+
+// Convex-hull construction follows the public geometry contract of Box2D
+// v3.1.1 (src/hull.c, 8c661469), with a Jarvis-march implementation adapted
+// to Silex rather than a line-by-line translation.
+func convex_hull(points:Math.Vec2[]) Math.Vec2[] {
+    var unique:Math.Vec2[] = []
+    for point in points {
+        if !finite_polygon_value(point.x) || !finite_polygon_value(point.y) {
+            panic("GFX.Physics.Polygon2D requires finite points")
+        }
+        var duplicate = false
+        for accepted in unique {
+            if point.subtract(accepted).length_squared() < 0.0004 {
+                duplicate = true
+            }
+        }
+        if !duplicate { unique.append(point) }
+    }
+    if unique.count() < 3 { return [] }
+
+    var start = 0
+    var index = 1
+    while index < unique.count() {
+        if unique[index].x < unique[start].x ||
+            (unique[index].x == unique[start].x &&
+                unique[index].y < unique[start].y)
+        {
+            start = index
+        }
+        index++
+    }
+
+    var hull:Math.Vec2[] = []
+    var current = start
+    while true {
+        hull.append(unique[current])
+        var candidate = 0
+        if candidate == current { candidate = 1 }
+        index = 0
+        while index < unique.count() {
+            if index != current && index != candidate {
+                let candidate_edge = unique[candidate].subtract(unique[current])
+                let tested_edge = unique[index].subtract(unique[current])
+                let turn = cross(candidate_edge, tested_edge)
+                if turn < -0.000001 ||
+                    (Math.abs(turn) <= 0.000001 &&
+                        tested_edge.length_squared() >
+                            candidate_edge.length_squared())
+                {
+                    candidate = index
+                }
+            }
+            index++
+        }
+        current = candidate
+        if current == start { break }
+        if hull.count() > unique.count() { return [] }
+    }
+    if polygon_area_twice(hull) <= 0.000001 { return [] }
+    return hull
+}
+
+func polygon_inradius(vertices:Math.Vec2[]) float {
+    var centroid = Math.Vec2()
+    for vertex in vertices { centroid = centroid.add(vertex) }
+    centroid = centroid.divide(vertices.count() as float)
+    var minimum_distance = 3.4028235e38
+    var index = 0
+    while index < vertices.count() {
+        let next = (index + 1) % vertices.count()
+        let edge = vertices[next].subtract(vertices[index])
+        let distance = Math.abs(cross(edge, centroid.subtract(vertices[index]))) /
+            edge.length()
+        minimum_distance = Math.min(minimum_distance, distance)
+        index++
+    }
+    return minimum_distance
+}
+
+func polygon_area_twice(vertices:Math.Vec2[]) float {
+    var area = 0.0
+    var index = 0
+    while index < vertices.count() {
+        area += cross(vertices[index], vertices[(index + 1) % vertices.count()])
+        index++
+    }
+    return area
+}
+
+func cross(first:Math.Vec2, second:Math.Vec2) float {
+    return first.x * second.y - first.y * second.x
+}
+
+func finite_polygon_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

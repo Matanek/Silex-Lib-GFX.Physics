@@ -1,0 +1,12 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Chain2D([
+        Math.Vec2(-1.0, 0.0),
+        Math.Vec2(0.0, 0.0),
+        Math.Vec2(0.0, 0.0),
+        Math.Vec2(1.0, 0.0)
+    ])
+    print(invalid.segment_count())
+}

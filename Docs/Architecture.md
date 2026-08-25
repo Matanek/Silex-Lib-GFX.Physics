@@ -18,9 +18,15 @@ The first vertical slice contains:
 - `Physics.RigidBody2D`, a body created and retained by that world;
 - `Physics.RigidBody2DSettings`, its fixed or dynamic behavior, initial motion,
   rotation, mass, friction, damping, and response to gravity;
-- `Physics.Shape2D`, the explicit choice between `box` and `circle`;
-- `Physics.Box2D`, an oriented rectangle retained as the default shape;
+- `Physics.Shape2D`, the explicit choice between box, capsule, chain, circle,
+  convex polygon, and segment;
+- `Physics.Box2D`, an oriented and optionally rounded rectangle retained as
+  the default world shape;
 - `Physics.Circle2D`, a circle with positive radius;
+- `Physics.Capsule2D`, `Physics.Polygon2D`, `Physics.Segment2D`, and
+  `Physics.Chain2D`, the additional stateless geometry forms;
+- `Physics.Geometry2D`, the pure distance, overlap, manifold, ray-cast, and
+  shape-cast boundary over transformed and filtered placements;
 - `Physics.BodyTransformBuffer2D`, reusable structure-of-arrays output for
   bulk synchronization with a renderer or ECS.
 
@@ -33,12 +39,29 @@ stale handle fail explicitly. Freed slots are reused without revalidating any
 older copy of a handle. Neither slot, dense index nor generation leaks into the
 public contract.
 
-Shapes use their own generational dense pool. A body owns a private linked set
+World shapes use their own generational dense pool. A body owns a private linked set
 of shape slots, so body compaction does not move or expose shape identities and
 body destruction releases all of its shapes. The retained public `shape()`
-accessor still reports the primary box or circle used by the regression solver;
-the additional shape capacity prepares the native core without prematurely
-publishing the geometry API from the next reconstruction step.
+accessor still reports the primary box or circle used by the regression solver.
+The broader `Shape2D` vocabulary is accepted by `ShapePlacement2D` for pure
+geometry queries but rejected explicitly if attached to that legacy solver.
+
+The stateless geometry layer expands each form into one or more private convex
+proxies. Polygon construction computes a welded convex hull. GJK produces
+closest witnesses; conservative advancement drives ray and shape casts; face
+axes produce manifolds with at most two clipped points. Chain segments keep
+the Box2D winding convention and accept queries only from their right side.
+Filters are evaluated at the public query boundary. Every temporary simplex,
+axis, and candidate belongs to one call, which permits parallel read queries
+without locks or world-step state.
+
+These algorithms are native Silex adaptations informed by Box2D `v3.1.1` at
+commit `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, notably `src/hull.c`,
+`src/distance.c`, `src/geometry.c`, and `src/manifold.c`. Box2D is Copyright
+(c) 2022 Erin Catto under the MIT License and remains a benchmark-only oracle.
+Private GJK vertices are reference-backed as a temporary workaround for a
+Silex Release-backend discrepancy in nested mutation of structs held by a
+collection; the public API remains value-like.
 
 The existing broad phase, contacts and solver remain the regression oracle.
 After a public body destruction, their derived indices and reusable buffers are
@@ -150,9 +173,10 @@ reports the four stable phases `motion_ms`, `broad_phase_ms`, `solve_ms`, and
 remain package-private.
 
 Every following capability must first appear in a focused executable example
-and a consumer-facing test. Forces, general shapes, constraints,
-continuous collision detection, application integration, cloth, soft bodies,
-fluids, and 3D are intentionally outside the current contract. Dense contact
+and a consumer-facing test. Forces, dynamic response for the new geometry,
+constraints, solver-level continuous collision detection, application
+integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
+current contract. Dense contact
 parallel solving requires a conflict-free constraint graph (or coloring) before
 it can safely use the worker pool. Explicit SIMD kernels likewise depend on a
 portable vector surface in the Silex backend; the current SoA and contiguous

@@ -1,0 +1,26 @@
+public struct CollisionFilter2D {
+    let category_bits:uint64
+    let mask_bits:uint64
+    let group_index:int
+
+    init(
+        category_bits:uint64 = 1,
+        mask_bits:uint64 = 0xffff_ffff_ffff_ffff,
+        group_index:int = 0
+    ) {
+        if category_bits == 0 {
+            panic("GFX.Physics.CollisionFilter2D requires at least one category bit")
+        }
+        self.category_bits = category_bits
+        self.mask_bits = mask_bits
+        self.group_index = group_index
+    }
+
+    func allows(other:CollisionFilter2D) bool {
+        if self.group_index != 0 && self.group_index == other.group_index {
+            return self.group_index > 0
+        }
+        return (self.mask_bits & other.category_bits) != 0 &&
+            (other.mask_bits & self.category_bits) != 0
+    }
+}

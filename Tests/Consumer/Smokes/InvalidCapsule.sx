@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Capsule2D(Math.Vec2(), Math.Vec2(), 0.5)
+    print(invalid.radius)
+}

@@ -1,7 +1,15 @@
 use GFX.Physics.Box2D.Box2D
+use GFX.Physics.Capsule2D.Capsule2D
+use GFX.Physics.Chain2D.Chain2D
 use GFX.Physics.Circle2D.Circle2D
+use GFX.Physics.Polygon2D.Polygon2D
+use GFX.Physics.Segment2D.Segment2D
 
 public enum Shape2D {
     box(Box2D)
+    capsule(Capsule2D)
+    chain(Chain2D)
     circle(Circle2D)
+    polygon(Polygon2D)
+    segment(Segment2D)
 }

@@ -1,0 +1,46 @@
+use STD.Math
+
+public struct Chain2D {
+    let points:Math.Vec2[]
+    let loop:bool
+
+    init(points:Math.Vec2[], loop:bool = false) {
+        self.points = points
+        self.loop = loop
+        validate_chain_points(points, loop)
+    }
+
+    func segment_count() int {
+        if self.loop { return self.points.count() }
+        return self.points.count() - 1
+    }
+}
+
+func validate_chain_points(points:Math.Vec2[], loop:bool) {
+        if points.count() < 4 {
+            panic("GFX.Physics.Chain2D requires at least four points")
+        }
+        var index = 0
+        while index < points.count() {
+            let point = points[index]
+            if !finite_chain_value(point.x) || !finite_chain_value(point.y) {
+                panic("GFX.Physics.Chain2D requires finite points")
+            }
+            if index > 0 &&
+                point.subtract(points[index - 1]).length_squared() <=
+                    0.000000000001
+            {
+                panic("GFX.Physics.Chain2D rejects consecutive duplicate points")
+            }
+            index++
+        }
+        if loop && points[0].subtract(points[-1]).length_squared() <=
+            0.000000000001
+        {
+            panic("GFX.Physics.Chain2D loop closes implicitly; omit the repeated endpoint")
+        }
+}
+
+func finite_chain_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

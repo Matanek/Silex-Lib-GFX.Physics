@@ -468,7 +468,7 @@ test "retain the public circle shape of a rigid body" {
 
     match circle.shape() {
         circle(shape) => { assert(Math.nearly_equal(shape.radius, 0.35)) }
-        box(_) => { panic("circle rigid body exposed a box shape") }
+        else => { panic("circle rigid body exposed another shape") }
     }
 }
 

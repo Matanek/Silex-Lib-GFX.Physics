@@ -1,0 +1,11 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Polygon2D([
+        Math.Vec2(-1.0, 0.0),
+        Math.Vec2(0.0, 0.0),
+        Math.Vec2(1.0, 0.0)
+    ])
+    print(invalid.count())
+}

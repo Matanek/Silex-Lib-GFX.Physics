@@ -1,6 +1,8 @@
 use GFX.Physics
 
-var world = Physics.World2D()
-var body = world.create_rigid_body()
-world.destroy_rigid_body(body)
-body.position()
+func main() {
+    var world = Physics.World2D()
+    var body = world.create_rigid_body()
+    world.destroy_rigid_body(body)
+    body.position()
+}

@@ -1,0 +1,6 @@
+use GFX.Physics
+
+func main() {
+    let invalid = Physics.Circle2D(0.0)
+    print(invalid.radius)
+}

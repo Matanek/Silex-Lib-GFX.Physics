@@ -26,6 +26,7 @@ From the workspace root:
 cmake -S Packages/GFX.Physics/Benchmarks/Oracle2D -B /tmp/gfx-physics-box2d -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/gfx-physics-box2d --config Release
 silex compile Packages/GFX.Physics/Benchmarks/Corpus2D.sx --release -o /tmp/gfx-physics-silex-corpus
+silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /tmp/gfx-physics-silex-geometry
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -44,6 +45,20 @@ accepts `--workers-2` or `--workers-4`; omitting both keeps one worker. Box2D
 remains at one worker until a benchmark-only task adapter is added. Never
 compare its one-worker timing to a multi-worker Silex run without naming that
 distinction.
+
+The separate geometry witness compares the public Silex algorithms with
+Box2D's pinned collision functions. It covers transformed distance, manifold,
+ray and shape casts, convex and degenerate hulls, and front/back chain winding:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_geometry_oracle > /tmp/box2d-geometry.txt
+/tmp/gfx-physics-silex-geometry > /tmp/silex-geometry.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckGeometry.py /tmp/box2d-geometry.txt /tmp/silex-geometry.txt
+```
+
+The checker requires identical case and field sets, finite candidate values,
+and a 0.003 absolute cast tolerance; hull records use 0.0001. The oracle target
+is benchmark-only and is not a package or runtime dependency.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

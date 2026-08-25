@@ -1,0 +1,849 @@
+use GFX.Physics.Box2D.Box2D
+use GFX.Physics.Capsule2D.Capsule2D
+use GFX.Physics.Chain2D.Chain2D
+use GFX.Physics.Circle2D.Circle2D
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+use GFX.Physics.Polygon2D.Polygon2D
+use GFX.Physics.Segment2D.Segment2D
+use GFX.Physics.Shape2D.Shape2D
+use GFX.Physics.Transform2D.Transform2D
+use STD.Math
+
+public struct ShapePlacement2D {
+    private var current_shape:Shape2D?
+    private var current_transform:Transform2D
+    private var current_filter:CollisionFilter2D
+
+    init(
+        shape:Shape2D,
+        transform:Transform2D = Transform2D(),
+        filter:CollisionFilter2D = CollisionFilter2D()
+    ) {
+        self.current_shape = shape
+        self.current_transform = transform
+        self.current_filter = filter
+    }
+
+    func shape() Shape2D {
+        if let shape = self.current_shape { return shape }
+        panic("GFX.Physics.ShapePlacement2D is not initialized")
+    }
+    func transform() Transform2D { return self.current_transform }
+    func filter() CollisionFilter2D { return self.current_filter }
+}
+
+public struct Ray2D {
+    let origin:Math.Vec2
+    let translation:Math.Vec2
+    let max_fraction:float
+
+    init(
+        origin:Math.Vec2,
+        translation:Math.Vec2,
+        max_fraction:float = 1.0
+    ) {
+        if !finite(origin) || !finite(translation) ||
+            !finite_scalar(max_fraction) || max_fraction <= 0.0
+        {
+            panic("GFX.Physics.Ray2D requires finite values and a positive maximum fraction")
+        }
+        if translation.length_squared() <= 0.000000000001 {
+            panic("GFX.Physics.Ray2D requires a non-zero translation")
+        }
+        self.origin = origin
+        self.translation = translation
+        self.max_fraction = max_fraction
+    }
+}
+
+public struct DistanceResult2D {
+    let first_point:Math.Vec2
+    let second_point:Math.Vec2
+    let normal:Math.Vec2
+    let distance:float
+
+    init(
+        first_point:Math.Vec2,
+        second_point:Math.Vec2,
+        normal:Math.Vec2,
+        distance:float
+    ) {
+        self.first_point = first_point
+        self.second_point = second_point
+        self.normal = normal
+        self.distance = distance
+    }
+}
+
+public struct CastResult2D {
+    let hit:bool
+    let point:Math.Vec2
+    let normal:Math.Vec2
+    let fraction:float
+
+    init() {
+        self.hit = false
+        self.point = Math.Vec2()
+        self.normal = Math.Vec2()
+        self.fraction = 0.0
+    }
+
+    init(point:Math.Vec2, normal:Math.Vec2, fraction:float) {
+        self.hit = true
+        self.point = point
+        self.normal = normal
+        self.fraction = fraction
+    }
+}
+
+public struct ManifoldPoint2D {
+    let point:Math.Vec2
+    let separation:float
+
+    init(point:Math.Vec2, separation:float) {
+        self.point = point
+        self.separation = separation
+    }
+}
+
+public struct Manifold2D {
+    let normal:Math.Vec2
+    let points:ManifoldPoint2D[]
+
+    init() {
+        self.normal = Math.Vec2()
+        self.points = []
+    }
+
+    init(normal:Math.Vec2, points:ManifoldPoint2D[]) {
+        self.normal = normal
+        self.points = points
+    }
+
+    func point_count() int { return self.points.count() }
+}
+
+public struct Geometry2D {
+    private init() {}
+
+    static func distance(
+        first:ShapePlacement2D,
+        second:ShapePlacement2D
+    ) DistanceResult2D {
+        return shape_distance(first, second, true)
+    }
+
+    static func overlaps(
+        first:ShapePlacement2D,
+        second:ShapePlacement2D
+    ) bool {
+        if !first.filter().allows(second.filter()) { return false }
+        for first_proxy in shape_proxies(first.shape(), first.transform()) {
+            for second_proxy in shape_proxies(second.shape(), second.transform()) {
+                if proxy_front_allows(first_proxy, second_proxy) &&
+                    proxy_front_allows(second_proxy, first_proxy) &&
+                    proxy_distance(first_proxy, second_proxy, true).distance <=
+                        0.000001
+                {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    static func manifold(
+        first:ShapePlacement2D,
+        second:ShapePlacement2D
+    ) Manifold2D {
+        if !first.filter().allows(second.filter()) { return Manifold2D() }
+        return shape_manifold(first, second)
+    }
+
+    static func ray_cast(
+        ray:Ray2D,
+        target:ShapePlacement2D,
+        filter:CollisionFilter2D = CollisionFilter2D()
+    ) CastResult2D {
+        if !filter.allows(target.filter()) { return CastResult2D() }
+        var moving_points:Math.Vec2[] = []
+        moving_points.append(ray.origin)
+        var moving = ConvexProxy2D(moving_points, 0.0)
+        var best = CastResult2D()
+        for target_proxy in shape_proxies(target.shape(), target.transform()) {
+            if !proxy_front_allows(target_proxy, moving) { continue }
+            let result = convex_cast(
+                target_proxy,
+                moving,
+                ray.translation,
+                ray.max_fraction,
+                false
+            )
+            if result.hit && (!best.hit || result.fraction < best.fraction) {
+                best = result
+            }
+        }
+        return best
+    }
+
+    static func shape_cast(
+        moving:ShapePlacement2D,
+        translation:Math.Vec2,
+        target:ShapePlacement2D,
+        max_fraction:float = 1.0,
+        can_encroach:bool = false
+    ) CastResult2D {
+        if !finite(translation) || !finite_scalar(max_fraction) ||
+            max_fraction <= 0.0
+        {
+            panic("GFX.Physics.Geometry2D.shape_cast requires finite motion and a positive maximum fraction")
+        }
+        if !moving.filter().allows(target.filter()) { return CastResult2D() }
+        if translation.length_squared() <= 0.000000000001 {
+            return CastResult2D()
+        }
+        var best = CastResult2D()
+        for target_proxy in shape_proxies(target.shape(), target.transform()) {
+            for moving_proxy in shape_proxies(moving.shape(), moving.transform()) {
+                if !proxy_front_allows(target_proxy, moving_proxy) ||
+                    !proxy_front_allows(moving_proxy, target_proxy)
+                {
+                    continue
+                }
+                let result = convex_cast(
+                    target_proxy,
+                    moving_proxy,
+                    translation,
+                    max_fraction,
+                    can_encroach
+                )
+                if result.hit && (!best.hit || result.fraction < best.fraction) {
+                    best = result
+                }
+            }
+        }
+        return best
+    }
+}
+
+class ConvexProxy2D {
+    let points:Math.Vec2[]
+    let radius:float
+    let one_sided:bool
+    let front_normal:Math.Vec2
+
+    init(
+        points:Math.Vec2[],
+        radius:float,
+        one_sided:bool = false,
+        front_normal:Math.Vec2 = Math.Vec2()
+    ) {
+        self.points = points
+        self.radius = radius
+        self.one_sided = one_sided
+        self.front_normal = front_normal
+    }
+}
+
+class SimplexVertex2D {
+    var index_a:int
+    var index_b:int
+    var point_a:Math.Vec2
+    var point_b:Math.Vec2
+    var difference:Math.Vec2
+    var weight:float
+
+    init() {
+        self.index_a = 0
+        self.index_b = 0
+        self.point_a = Math.Vec2()
+        self.point_b = Math.Vec2()
+        self.difference = Math.Vec2()
+        self.weight = 0.0
+    }
+}
+
+class Simplex2D {
+    var first:SimplexVertex2D
+    var second:SimplexVertex2D
+    var third:SimplexVertex2D
+    var count:int
+
+    init(first:SimplexVertex2D) {
+        self.first = first
+        self.second = SimplexVertex2D()
+        self.third = SimplexVertex2D()
+        self.count = 1
+    }
+
+    func vertex(index:int) SimplexVertex2D {
+        if index == 0 { return self.first }
+        if index == 1 { return self.second }
+        return self.third
+    }
+
+    func set_vertex(index:int, value:SimplexVertex2D) {
+        if index == 0 { self.first = value; return }
+        if index == 1 { self.second = value; return }
+        self.third = value
+    }
+}
+
+func shape_proxies(shape:Shape2D, transform:Transform2D) ConvexProxy2D[] {
+    var output:ConvexProxy2D[] = []
+    match shape {
+        box(value) => {
+            let half = value.size.multiply(0.5)
+            output.append(ConvexProxy2D(transform_points([
+                Math.Vec2(-half.x, -half.y),
+                Math.Vec2(half.x, -half.y),
+                Math.Vec2(half.x, half.y),
+                Math.Vec2(-half.x, half.y)
+            ], transform), value.radius))
+        }
+        capsule(value) => {
+            output.append(ConvexProxy2D(transform_points([
+                value.first,
+                value.second
+            ], transform), value.radius))
+        }
+        chain(value) => {
+            var index = 0
+            while index < value.segment_count() {
+                let next = (index + 1) % value.points.count()
+                let transformed = transform_points([
+                    value.points[index],
+                    value.points[next]
+                ], transform)
+                let edge = transformed[1].subtract(transformed[0])
+                output.append(ConvexProxy2D(
+                    transformed,
+                    0.0,
+                    true,
+                    Math.Vec2(edge.y, -edge.x).normalized()
+                ))
+                index++
+            }
+        }
+        circle(value) => {
+            output.append(ConvexProxy2D([transform.point(Math.Vec2())], value.radius))
+        }
+        polygon(value) => {
+            output.append(ConvexProxy2D(
+                transform_points(value.vertices, transform),
+                value.radius
+            ))
+        }
+        segment(value) => {
+            output.append(ConvexProxy2D(transform_points([
+                value.first,
+                value.second
+            ], transform), 0.0))
+        }
+    }
+    return output
+}
+
+func transform_points(
+    points:Math.Vec2[],
+    transform:Transform2D
+) Math.Vec2[] {
+    var output:Math.Vec2[] = []
+    for point in points { output.append(transform.point(point)) }
+    return output
+}
+
+func shape_distance(
+    first:ShapePlacement2D,
+    second:ShapePlacement2D,
+    use_radii:bool
+) DistanceResult2D {
+    var best = DistanceResult2D(
+        Math.Vec2(),
+        Math.Vec2(),
+        Math.Vec2(),
+        3.4028235e38
+    )
+    for first_proxy in shape_proxies(first.shape(), first.transform()) {
+        for second_proxy in shape_proxies(second.shape(), second.transform()) {
+            let candidate = proxy_distance(first_proxy, second_proxy, use_radii)
+            if candidate.distance < best.distance { best = candidate }
+        }
+    }
+    return best
+}
+
+// GJK distance and conservative advancement are adapted from Box2D v3.1.1
+// src/distance.c at 8c661469. The data model and implementation are native
+// Silex and intentionally do not reproduce Box2D's caches or internal layout.
+func proxy_distance(
+    first:ConvexProxy2D,
+    second:ConvexProxy2D,
+    use_radii:bool
+) DistanceResult2D {
+    var initial = SimplexVertex2D()
+    initial.index_a = 0
+    initial.index_b = 0
+    initial.point_a = first.points[0]
+    initial.point_b = second.points[0]
+    initial.difference = initial.point_a.subtract(initial.point_b)
+    initial.weight = 1.0
+    var simplex = Simplex2D(initial)
+    var last_direction = Math.Vec2()
+    var iteration = 0
+    while iteration < 20 {
+        var saved_a:int[] = []
+        var saved_b:int[] = []
+        var index = 0
+        while index < simplex.count {
+            saved_a.append(simplex.vertex(index).index_a)
+            saved_b.append(simplex.vertex(index).index_b)
+            index++
+        }
+
+        var direction = Math.Vec2()
+        if simplex.count == 1 {
+            direction = simplex.first.difference.negated()
+        } else if simplex.count == 2 {
+            direction = solve_simplex_two(simplex)
+        } else {
+            direction = solve_simplex_three(simplex)
+        }
+        if simplex.count == 3 {
+            let witness = simplex_witness(simplex)
+            return DistanceResult2D(
+                witness.first,
+                witness.first,
+                Math.Vec2(),
+                0.0
+            )
+        }
+        if direction.length_squared() < 0.000000000001 {
+            let witness = simplex_witness(simplex)
+            return DistanceResult2D(
+                witness.first,
+                witness.second,
+                Math.Vec2(),
+                0.0
+            )
+        }
+        last_direction = direction
+
+        var vertex = SimplexVertex2D()
+        vertex.index_a = support_index(first, direction)
+        vertex.point_a = first.points[vertex.index_a]
+        vertex.index_b = support_index(second, direction.negated())
+        vertex.point_b = second.points[vertex.index_b]
+        vertex.difference = vertex.point_a.subtract(vertex.point_b)
+
+        var duplicate = false
+        index = 0
+        while index < saved_a.count() {
+            if vertex.index_a == saved_a[index] &&
+                vertex.index_b == saved_b[index]
+            {
+                duplicate = true
+            }
+            index++
+        }
+        if duplicate { break }
+        simplex.set_vertex(simplex.count, vertex)
+        simplex.count++
+        iteration++
+    }
+
+    let witness = simplex_witness(simplex)
+    var normal = last_direction.normalized()
+    var distance = witness.first.distance(witness.second)
+    var first_point = witness.first
+    var second_point = witness.second
+    if distance > 0.0005 {
+        normal = second_point.subtract(first_point).normalized()
+    }
+    if use_radii && distance > 0.0005 {
+        distance = Math.max(0.0, distance - first.radius - second.radius)
+        first_point = first_point.add(normal.multiply(first.radius))
+        second_point = second_point.subtract(normal.multiply(second.radius))
+    }
+    return DistanceResult2D(first_point, second_point, normal, distance)
+}
+
+struct WitnessPoints2D {
+    let first:Math.Vec2
+    let second:Math.Vec2
+
+    init(first:Math.Vec2, second:Math.Vec2) {
+        self.first = first
+        self.second = second
+    }
+}
+
+func simplex_witness(simplex:Simplex2D) WitnessPoints2D {
+    if simplex.count == 1 {
+        return WitnessPoints2D(
+            simplex.first.point_a,
+            simplex.first.point_b
+        )
+    }
+    if simplex.count == 2 {
+        return WitnessPoints2D(
+            simplex.first.point_a.multiply(simplex.first.weight)
+                .add(simplex.second.point_a.multiply(simplex.second.weight)),
+            simplex.first.point_b.multiply(simplex.first.weight)
+                .add(simplex.second.point_b.multiply(simplex.second.weight))
+        )
+    }
+    let first = simplex.first.point_a.multiply(simplex.first.weight)
+        .add(simplex.second.point_a.multiply(simplex.second.weight))
+        .add(simplex.third.point_a.multiply(simplex.third.weight))
+    return WitnessPoints2D(first, first)
+}
+
+func solve_simplex_two(simplex:Simplex2D) Math.Vec2 {
+    let first = simplex.first.difference
+    let second = simplex.second.difference
+    let edge = second.subtract(first)
+    let second_weight = -first.dot(edge)
+    if second_weight <= 0.0 {
+        simplex.first.weight = 1.0
+        simplex.count = 1
+        return first.negated()
+    }
+    let first_weight = second.dot(edge)
+    if first_weight <= 0.0 {
+        simplex.second.weight = 1.0
+        simplex.first = simplex.second
+        simplex.count = 1
+        return second.negated()
+    }
+    let inverse = 1.0 / (first_weight + second_weight)
+    simplex.first.weight = first_weight * inverse
+    simplex.second.weight = second_weight * inverse
+    return triple_cross(first.add(second), edge, edge)
+}
+
+func solve_simplex_three(simplex:Simplex2D) Math.Vec2 {
+    let first = simplex.first.difference
+    let second = simplex.second.difference
+    let third = simplex.third.difference
+    let edge12 = second.subtract(first)
+    let edge13 = third.subtract(first)
+    let edge23 = third.subtract(second)
+    let d12_first = second.dot(edge12)
+    let d12_second = -first.dot(edge12)
+    let d13_first = third.dot(edge13)
+    let d13_third = -first.dot(edge13)
+    let d23_second = third.dot(edge23)
+    let d23_third = -second.dot(edge23)
+    let triangle = cross(edge12, edge13)
+    let d123_first = triangle * cross(second, third)
+    let d123_second = triangle * cross(third, first)
+    let d123_third = triangle * cross(first, second)
+
+    if d12_second <= 0.0 && d13_third <= 0.0 {
+        simplex.first.weight = 1.0
+        simplex.count = 1
+        return first.negated()
+    }
+    if d12_first > 0.0 && d12_second > 0.0 && d123_third <= 0.0 {
+        let inverse = 1.0 / (d12_first + d12_second)
+        simplex.first.weight = d12_first * inverse
+        simplex.second.weight = d12_second * inverse
+        simplex.count = 2
+        return triple_cross(first.add(second), edge12, edge12)
+    }
+    if d13_first > 0.0 && d13_third > 0.0 && d123_second <= 0.0 {
+        let inverse = 1.0 / (d13_first + d13_third)
+        simplex.first.weight = d13_first * inverse
+        simplex.third.weight = d13_third * inverse
+        simplex.second = simplex.third
+        simplex.count = 2
+        return triple_cross(first.add(third), edge13, edge13)
+    }
+    if d12_first <= 0.0 && d23_third <= 0.0 {
+        simplex.second.weight = 1.0
+        simplex.first = simplex.second
+        simplex.count = 1
+        return second.negated()
+    }
+    if d13_first <= 0.0 && d23_second <= 0.0 {
+        simplex.third.weight = 1.0
+        simplex.first = simplex.third
+        simplex.count = 1
+        return third.negated()
+    }
+    if d23_second > 0.0 && d23_third > 0.0 && d123_first <= 0.0 {
+        let inverse = 1.0 / (d23_second + d23_third)
+        simplex.second.weight = d23_second * inverse
+        simplex.third.weight = d23_third * inverse
+        simplex.first = simplex.third
+        simplex.count = 2
+        return triple_cross(second.add(third), edge23, edge23)
+    }
+    let inverse = 1.0 / (d123_first + d123_second + d123_third)
+    simplex.first.weight = d123_first * inverse
+    simplex.second.weight = d123_second * inverse
+    simplex.third.weight = d123_third * inverse
+    simplex.count = 3
+    return Math.Vec2()
+}
+
+func support_index(proxy:ConvexProxy2D, direction:Math.Vec2) int {
+    var selected = 0
+    var value = proxy.points[0].dot(direction)
+    var index = 1
+    while index < proxy.points.count() {
+        let candidate = proxy.points[index].dot(direction)
+        if candidate > value {
+            value = candidate
+            selected = index
+        }
+        index++
+    }
+    return selected
+}
+
+func convex_cast(
+    target_proxy:ConvexProxy2D,
+    moving_proxy:ConvexProxy2D,
+    translation:Math.Vec2,
+    max_fraction:float,
+    can_encroach:bool
+) CastResult2D {
+    let linear_slop = 0.005
+    let total_radius = target_proxy.radius + moving_proxy.radius
+    var target_distance = Math.max(linear_slop, total_radius - linear_slop)
+    let tolerance = 0.25 * linear_slop
+    var fraction = 0.0
+    var iteration = 0
+    while iteration < 20 {
+        var moved = translated_proxy(moving_proxy, translation.multiply(fraction))
+        let distance = proxy_distance(target_proxy, moved, false)
+        if distance.distance < target_distance + tolerance {
+            if iteration == 0 {
+                if can_encroach && distance.distance > 2.0 * linear_slop {
+                    target_distance = distance.distance - linear_slop
+                } else {
+                    var normal = distance.normal
+                    if normal.length_squared() < 0.000000000001 {
+                        normal = translation.negated().normalized()
+                    }
+                    let first = distance.first_point.add(
+                        normal.multiply(target_proxy.radius)
+                    )
+                    let second = distance.second_point.subtract(
+                        normal.multiply(moving_proxy.radius)
+                    )
+                    return CastResult2D(first.lerp(second, 0.5), normal, 0.0)
+                }
+            } else {
+                let point = distance.first_point.add(
+                    distance.normal.multiply(target_proxy.radius)
+                )
+                return CastResult2D(point, distance.normal, fraction)
+            }
+        }
+        if distance.distance <= 0.0 ||
+            distance.normal.length_squared() < 0.000000000001
+        {
+            return CastResult2D()
+        }
+        let denominator = translation.dot(distance.normal)
+        if denominator >= 0.0 { return CastResult2D() }
+        fraction += (target_distance - distance.distance) / denominator
+        if fraction < 0.0 || fraction >= max_fraction {
+            return CastResult2D()
+        }
+        iteration++
+    }
+    return CastResult2D()
+}
+
+func translated_proxy(
+    proxy:ConvexProxy2D,
+    translation:Math.Vec2
+) ConvexProxy2D {
+    var points:Math.Vec2[] = []
+    for point in proxy.points { points.append(point.add(translation)) }
+    return ConvexProxy2D(
+        points,
+        proxy.radius,
+        proxy.one_sided,
+        proxy.front_normal
+    )
+}
+
+func shape_manifold(
+    first:ShapePlacement2D,
+    second:ShapePlacement2D
+) Manifold2D {
+    var best = Manifold2D()
+    var best_separation = -3.4028235e38
+    for first_proxy in shape_proxies(first.shape(), first.transform()) {
+        for second_proxy in shape_proxies(second.shape(), second.transform()) {
+            if !proxy_front_allows(first_proxy, second_proxy) ||
+                !proxy_front_allows(second_proxy, first_proxy)
+            {
+                continue
+            }
+            let candidate = proxy_manifold(first_proxy, second_proxy)
+            if candidate.point_count() > 0 &&
+                candidate.points[0].separation > best_separation
+            {
+                best_separation = candidate.points[0].separation
+                best = candidate
+            }
+        }
+    }
+    return best
+}
+
+func proxy_manifold(
+    first:ConvexProxy2D,
+    second:ConvexProxy2D
+) Manifold2D {
+    let center_delta = proxy_center(second).subtract(proxy_center(first))
+    var axes:Math.Vec2[] = []
+    append_edge_axes(axes, first)
+    append_edge_axes(axes, second)
+    for first_point in first.points {
+        for second_point in second.points {
+            let axis = second_point.subtract(first_point)
+            if axis.length_squared() > 0.000000000001 {
+                axes.append(axis.normalized())
+            }
+        }
+    }
+    if axes.is_empty() { axes.append(Math.Vec2.right()) }
+
+    var best_normal = Math.Vec2.right()
+    var best_separation = -3.4028235e38
+    for raw_axis in axes {
+        var axis = raw_axis.normalized()
+        if center_delta.dot(axis) < 0.0 { axis = axis.negated() }
+        let separation = minimum_projection(second, axis) - second.radius -
+            maximum_projection(first, axis) - first.radius
+        if separation > 0.005 { return Manifold2D() }
+        if separation > best_separation {
+            best_separation = separation
+            best_normal = axis
+        }
+    }
+
+    let tangent = Math.Vec2(-best_normal.y, best_normal.x)
+    let first_tangent_min = minimum_projection(first, tangent) - first.radius
+    let first_tangent_max = maximum_projection(first, tangent) + first.radius
+    let second_tangent_min = minimum_projection(second, tangent) - second.radius
+    let second_tangent_max = maximum_projection(second, tangent) + second.radius
+    let tangent_min = Math.max(first_tangent_min, second_tangent_min)
+    let tangent_max = Math.min(first_tangent_max, second_tangent_max)
+    let surface_first = maximum_projection(first, best_normal) + first.radius
+    let surface_second = minimum_projection(second, best_normal) - second.radius
+    let surface = (surface_first + surface_second) * 0.5
+    if tangent_max - tangent_min > 0.005 &&
+        (first.points.count() > 2 || second.points.count() > 2)
+    {
+        var clipped:ManifoldPoint2D[] = []
+        clipped.append(ManifoldPoint2D(
+            best_normal.multiply(surface).add(tangent.multiply(tangent_min)),
+            best_separation
+        ))
+        clipped.append(ManifoldPoint2D(
+            best_normal.multiply(surface).add(tangent.multiply(tangent_max)),
+            best_separation
+        ))
+        return Manifold2D(best_normal, clipped)
+    }
+
+    let first_core = first.points[support_index(first, best_normal)]
+    let second_core = second.points[support_index(second, best_normal.negated())]
+    let first_surface = first_core.add(best_normal.multiply(first.radius))
+    let second_surface = second_core.subtract(best_normal.multiply(second.radius))
+    var contact_point = first_surface.lerp(second_surface, 0.5)
+    let witness = proxy_distance(first, second, true)
+    if witness.normal.dot(best_normal) > 0.99 {
+        contact_point = witness.first_point.lerp(witness.second_point, 0.5)
+    }
+    var points:ManifoldPoint2D[] = []
+    points.append(ManifoldPoint2D(
+        contact_point,
+        best_separation
+    ))
+    return Manifold2D(best_normal, points)
+}
+
+func append_edge_axes(output:&Math.Vec2[], proxy:ConvexProxy2D) {
+    if proxy.points.count() < 2 { return }
+    var edge_count = proxy.points.count()
+    if edge_count == 2 { edge_count = 1 }
+    var index = 0
+    while index < edge_count {
+        let next = (index + 1) % proxy.points.count()
+        let edge = proxy.points[next].subtract(proxy.points[index])
+        if edge.length_squared() > 0.000000000001 {
+            output.append(Math.Vec2(edge.y, -edge.x).normalized())
+        }
+        index++
+    }
+}
+
+func proxy_center(proxy:ConvexProxy2D) Math.Vec2 {
+    var center = Math.Vec2()
+    for point in proxy.points { center = center.add(point) }
+    return center.divide(proxy.points.count() as float)
+}
+
+func minimum_projection(proxy:ConvexProxy2D, axis:Math.Vec2) float {
+    var value = proxy.points[0].dot(axis)
+    var index = 1
+    while index < proxy.points.count() {
+        value = Math.min(value, proxy.points[index].dot(axis))
+        index++
+    }
+    return value
+}
+
+func maximum_projection(proxy:ConvexProxy2D, axis:Math.Vec2) float {
+    var value = proxy.points[0].dot(axis)
+    var index = 1
+    while index < proxy.points.count() {
+        value = Math.max(value, proxy.points[index].dot(axis))
+        index++
+    }
+    return value
+}
+
+// Chain segments follow Box2D's winding convention: only the right side of
+// point1 -> point2 is solid. The test is intentionally based on the query's
+// initial placement, matching one-sided ray and shape casts.
+func proxy_front_allows(
+    one_sided:ConvexProxy2D,
+    other:ConvexProxy2D
+) bool {
+    if !one_sided.one_sided { return true }
+    let relative = proxy_center(other).subtract(proxy_center(one_sided))
+    return relative.dot(one_sided.front_normal) >= -0.005
+}
+
+func triple_cross(
+    first:Math.Vec2,
+    second:Math.Vec2,
+    third:Math.Vec2
+) Math.Vec2 {
+    return Math.Vec2(
+        -cross(first, second) * third.y,
+        cross(first, second) * third.x
+    )
+}
+
+func cross(first:Math.Vec2, second:Math.Vec2) float {
+    return first.x * second.y - first.y * second.x
+}
+
+func finite(value:Math.Vec2) bool {
+    return finite_scalar(value.x) && finite_scalar(value.y)
+}
+
+func finite_scalar(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

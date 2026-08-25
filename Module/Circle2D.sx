@@ -2,9 +2,13 @@ public struct Circle2D {
     let radius:float
 
     init(radius:float = 0.5) {
-        if radius <= 0.0 {
-            panic("GFX.Physics.Circle2D requires a positive radius")
+        if !finite_circle_value(radius) || radius <= 0.0 {
+            panic("GFX.Physics.Circle2D requires a finite positive radius")
         }
         self.radius = radius
     }
+}
+
+func finite_circle_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
 }

@@ -31,6 +31,33 @@ opaque `RigidBody2D` handle; subsequent access fails explicitly. `is_valid()`
 allows code that retains handles across world updates to discard an invalid
 reference without learning its internal slot or generation.
 
+Collision geometry is also available without creating a world:
+
+```silex
+let capsule = Physics.ShapePlacement2D(
+    Physics.Shape2D.capsule(Physics.Capsule2D(
+        Math.Vec2(0.0, -0.5),
+        Math.Vec2(0.0, 0.5),
+        0.25
+    ))
+)
+let wall = Physics.ShapePlacement2D(
+    Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0, 4.0), 0.1)),
+    Physics.Transform2D(position:Math.Vec2(2.0, 0.0))
+)
+let hit = Physics.Geometry2D.shape_cast(
+    capsule,
+    Math.Vec2(4.0, 0.0),
+    wall
+)
+```
+
+This stateless layer supports boxes, circles, capsules, convex and rounded
+polygons, segments, one-sided chains, filters, distances, overlaps, manifolds,
+ray casts, and shape casts. Independent read queries can run concurrently. See
+[`Docs/Geometry.md`](Docs/Geometry.md) and the executable
+[`Examples/Geometry2D/Queries.sx`](Examples/Geometry2D/Queries.sx).
+
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:
 
@@ -88,9 +115,12 @@ profiling part of the normal step cost. See
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
 
-Forces, general shapes, joints, general-purpose continuous collision detection,
-and application plugins remain outside the current contract. The dense-circle
-sweep described above is deliberately narrower than a general CCD API.
+The existing `World2D` regression solver still accepts only boxes and circles;
+the additional forms currently belong to the stateless geometry API. Forces,
+joints, persistent contacts for those forms, general-purpose continuous dynamic
+collision response, and application plugins remain outside the current world
+contract. The public shape cast is a geometry query, while the dense-circle
+sweep described above remains narrower than general solver CCD.
 
 See [`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) for the
 complete graphical consumer program. Its interactive emitter is currently

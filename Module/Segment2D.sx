@@ -1,0 +1,25 @@
+use STD.Math
+
+public struct Segment2D {
+    let first:Math.Vec2
+    let second:Math.Vec2
+
+    init(first:Math.Vec2, second:Math.Vec2) {
+        if !finite_segment_point(first) || !finite_segment_point(second) {
+            panic("GFX.Physics.Segment2D requires finite endpoints")
+        }
+        if first.subtract(second).length_squared() <= 0.000000000001 {
+            panic("GFX.Physics.Segment2D requires two distinct endpoints")
+        }
+        self.first = first
+        self.second = second
+    }
+}
+
+func finite_segment_point(point:Math.Vec2) bool {
+    return finite_segment_value(point.x) && finite_segment_value(point.y)
+}
+
+func finite_segment_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
