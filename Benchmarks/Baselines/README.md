@@ -85,6 +85,25 @@ but are slower on these contact-free grids; the observation proves bounded
 cadence and deterministic scaling, not a parallel speedup. Every series has a
 MAD below 2.09%.
 
+## Spec 09 active-island observation
+
+[`2026-08-25-spec09-reference.jsonl`](2026-08-25-spec09-reference.jsonl) and
+[`2026-08-25-spec09-active-islands.jsonl`](2026-08-25-spec09-active-islands.jsonl)
+compare `c6b01ec` with the active-island candidate using the same `e2b68ac`
+compiler build. Both use one discarded warm-up followed by seven isolated
+Release processes. The contact-free 1,000-body scene keeps every body awake,
+so it is the worst case for rebuilding the contiguous active list rather than a
+favorable sleeping scene:
+
+| Workers | `c6b01ec` median | Active islands median | Change | Candidate MAD |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 0.501942 ms | 0.501425 ms | -0.10% | 1.76% |
+| 4 | 1.317367 ms | 1.315783 ms | -0.12% | 2.50% |
+
+Both series retain the exact state signature and pass the 4.00 ms cadence
+gate. The active compaction therefore removes sleepers from the motion path
+without regressing the established all-awake reference on this machine.
+
 After review, add `--enforce` for future candidates and pass the accepted
 4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
 expected: portable Silex changes use native GitHub Actions for correctness on

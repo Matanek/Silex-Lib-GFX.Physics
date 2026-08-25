@@ -58,20 +58,33 @@ public class Contact2D {
     func manifold() Manifold2D { return self.current_manifold }
 }
 
+package class ActiveBodySet2D {
+    var indices:int[]
+
+    init() { self.indices = [] }
+
+    func count() int { return self.indices.count() }
+    func body_at(index:int) int { return self.indices[index] }
+    func clear() { self.indices.clear() }
+    func append(body:int) { self.indices.append(body) }
+}
+
 struct IntegrateBodies2D:Threading.ParallelJob {
     var store:BodyStore2D
+    var active_bodies:ActiveBodySet2D
     var gravity:Math.Vec2
     var delta:float
 
     func execute(start:int, end:int) {
-        var index = start
-        while index < end {
-            if self.store.body_types[index] == BodyType2D.dynamic &&
-                self.store.awake[index]
-            {
-                integrate_body(self.store, self.gravity, index, self.delta)
-            }
-            index++
+        var work_item = start
+        while work_item < end {
+            integrate_body(
+                self.store,
+                self.gravity,
+                self.active_bodies.body_at(work_item),
+                self.delta
+            )
+            work_item++
         }
     }
 }
@@ -319,12 +332,16 @@ public class World2D {
     private var stable_for_sleep:bool[]
     private var severe_for_sleep:bool[]
     private var sleep_parents:int[]
-    private var sleep_ranks:int[]
     private var sleep_eligible:bool[]
     private var sleep_motion_squared:float[]
     private var island_body_counts:int[]
     private var island_ready_counts:int[]
     private var island_can_sleep:bool[]
+    private var island_write_offsets:int[]
+    private var active_bodies:ActiveBodySet2D
+    private var active_island_roots:int[]
+    private var active_island_offsets:int[]
+    private var active_island_bodies:int[]
     private var sleep_enabled_body_count:int
     private var current_candidate_pair_count:int
     private var current_moved_proxy_count:int
@@ -383,12 +400,16 @@ public class World2D {
         self.stable_for_sleep = []
         self.severe_for_sleep = []
         self.sleep_parents = []
-        self.sleep_ranks = []
         self.sleep_eligible = []
         self.sleep_motion_squared = []
         self.island_body_counts = []
         self.island_ready_counts = []
         self.island_can_sleep = []
+        self.island_write_offsets = []
+        self.active_bodies = ActiveBodySet2D()
+        self.active_island_roots = []
+        self.active_island_offsets = []
+        self.active_island_bodies = []
         self.sleep_enabled_body_count = 0
         self.current_candidate_pair_count = 0
         self.current_moved_proxy_count = 0
@@ -548,6 +569,18 @@ public class World2D {
     }
 
     package func collision_count() int { return self.collisions.count() }
+
+    package func active_island_count() int {
+        return self.active_island_roots.count()
+    }
+
+    package func active_body_count() int {
+        return self.active_bodies.count()
+    }
+
+    package func active_island_body_count() int {
+        return self.active_island_bodies.count()
+    }
 
     package func moved_proxy_count() int { return self.current_moved_proxy_count }
 
@@ -717,12 +750,12 @@ public class World2D {
         self.stable_for_sleep.append(true)
         self.severe_for_sleep.append(false)
         self.sleep_parents.append(index)
-        self.sleep_ranks.append(0)
         self.sleep_eligible.append(false)
         self.sleep_motion_squared.append(0.0)
         self.island_body_counts.append(0)
         self.island_ready_counts.append(0)
         self.island_can_sleep.append(true)
+        self.island_write_offsets.append(0)
         if settings.body_type == BodyType2D.dynamic && settings.allow_sleep {
             self.sleep_enabled_body_count++
         }
@@ -749,19 +782,31 @@ public class World2D {
         if self.profiling_enabled { profile_clock.tick() }
         self.dynamic_grid_active = self.maximum_dynamic_shape_radius > 0.0 &&
             (!self.parallel_enabled || self.dynamic_grid_eligible)
+        self.rebuild_active_bodies()
         var integrated_in_parallel = false
-        if self.store.count() >= 256 {
+        if self.active_bodies.count() >= 256 {
             if var executor = self.parallel_executor {
                 var shared = executor
                 shared.submit_parallel(
-                    self.store.count(),
+                    self.active_bodies.count(),
                     IntegrateBodies2D(
                         store:self.store,
+                        active_bodies:self.active_bodies,
                         gravity:self.current_gravity,
                         delta:delta
                     )
                 ).complete()
                 integrated_in_parallel = true
+            }
+        }
+        if !integrated_in_parallel {
+            for body in self.active_bodies.indices {
+                integrate_body(
+                    self.store,
+                    self.current_gravity,
+                    body,
+                    delta
+                )
             }
         }
         var index = 0
@@ -777,14 +822,6 @@ public class World2D {
             if self.store.body_types[index] == BodyType2D.dynamic &&
                 self.store.awake[index]
             {
-                if !integrated_in_parallel {
-                    integrate_body(
-                        self.store,
-                        self.current_gravity,
-                        index,
-                        delta
-                    )
-                }
                 previous_x = self.store.previous_positions_x[index]
                 previous_y = self.store.previous_positions_y[index]
             } else if !self.store.dirty_transforms[index] {
@@ -876,12 +913,12 @@ public class World2D {
             self.stable_for_sleep.swap(index, last)
             self.severe_for_sleep.swap(index, last)
             self.sleep_parents.swap(index, last)
-            self.sleep_ranks.swap(index, last)
             self.sleep_eligible.swap(index, last)
             self.sleep_motion_squared.swap(index, last)
             self.island_body_counts.swap(index, last)
             self.island_ready_counts.swap(index, last)
             self.island_can_sleep.swap(index, last)
+            self.island_write_offsets.swap(index, last)
         }
         self.proxies.take_last()
         self.tight_bounds.take_last()
@@ -895,12 +932,12 @@ public class World2D {
         self.stable_for_sleep.take_last()
         self.severe_for_sleep.take_last()
         self.sleep_parents.take_last()
-        self.sleep_ranks.take_last()
         self.sleep_eligible.take_last()
         self.sleep_motion_squared.take_last()
         self.island_body_counts.take_last()
         self.island_ready_counts.take_last()
         self.island_can_sleep.take_last()
+        self.island_write_offsets.take_last()
     }
 
     private func rebuild_after_body_destruction() {
@@ -925,7 +962,6 @@ public class World2D {
             self.circle_grid_cell_y[index] = 0
             self.direct_wake_pending[index] = false
             self.sleep_parents[index] = index
-            self.sleep_ranks[index] = 0
             self.store.dirty_transforms[index] = false
             if self.store.body_types[index] == BodyType2D.fixed {
                 self.fixed_bodies.append(index)
@@ -966,6 +1002,10 @@ public class World2D {
         self.compact_circle_collisions.clear()
         self.collision_entries.clear()
         self.direct_wake_bodies.clear()
+        self.active_bodies.clear()
+        self.active_island_roots.clear()
+        self.active_island_offsets.clear()
+        self.active_island_bodies.clear()
         self.current_candidate_pair_count = 0
         self.current_moved_proxy_count = self.broad_phase.moved_proxy_count()
         self.current_discovered_pair_count = 0
@@ -989,7 +1029,6 @@ public class World2D {
                 self.load_grace[index] - delta
             )
             self.sleep_parents[index] = index
-            self.sleep_ranks[index] = 0
             self.sleep_eligible[index] = false
             self.sleep_motion_squared[index] = 0.0
             self.island_body_counts[index] = 0
@@ -1059,6 +1098,39 @@ public class World2D {
             }
             collision_index++
         }
+        var candidate_index = 0
+        while candidate_index < self.candidate_pairs.count() {
+            if !self.candidate_enabled[candidate_index] ||
+                self.candidate_pairs[candidate_index].contact_count == 0
+            {
+                candidate_index++
+                continue
+            }
+            let pair = self.candidate_bodies[candidate_index]
+            if legacy_solver_pair(self.store, pair) {
+                candidate_index++
+                continue
+            }
+            let first = pair.first
+            let second = pair.second
+            let height_delta = self.store.positions_y[second] -
+                self.store.positions_y[first]
+            if height_delta > 0.05 {
+                self.load_grace[first] = 0.25
+                self.support_grace[second] = 0.25
+            } else if height_delta < -0.05 {
+                self.load_grace[second] = 0.25
+                self.support_grace[first] = 0.25
+            }
+            if self.store.body_types[first] == BodyType2D.dynamic &&
+                self.store.body_types[second] == BodyType2D.dynamic &&
+                self.store.awake[first] && self.store.awake[second] &&
+                self.store.allow_sleep[first] && self.store.allow_sleep[second]
+            {
+                self.union_sleep_bodies(first, second)
+            }
+            candidate_index++
+        }
         index = 0
         while index < self.store.count() {
             if self.store.body_types[index] == BodyType2D.dynamic {
@@ -1092,7 +1164,9 @@ public class World2D {
             }
             index++
         }
-        if self.dynamic_grid_active && self.maximum_dynamic_circle_radius > 0.0 {
+        if self.dynamic_grid_active && self.dynamic_grid_eligible &&
+            self.maximum_dynamic_circle_radius > 0.0
+        {
             var requires_sleep_audit = false
             index = 0
             while index < self.store.count() {
@@ -1154,23 +1228,94 @@ public class World2D {
             }
             index++
         }
-        index = 0
-        while index < self.store.count() {
-            if self.store.body_types[index] == BodyType2D.dynamic &&
-                self.store.awake[index]
+        self.build_active_island_layout()
+        var island = 0
+        while island < self.active_island_roots.count() {
+            let root = self.active_island_roots[island]
+            if self.island_can_sleep[root] &&
+                self.island_ready_counts[root] * sleep_quorum_denominator >=
+                    self.island_body_counts[root] * sleep_quorum_numerator
             {
-                let root = self.find_sleep_root(index)
-                if self.island_can_sleep[root] &&
-                    self.island_ready_counts[root] * sleep_quorum_denominator >=
-                        self.island_body_counts[root] * sleep_quorum_numerator
-                {
-                    self.store.velocities_x[index] = 0.0
-                    self.store.velocities_y[index] = 0.0
-                    self.store.angular_velocities[index] = 0.0
-                    self.store.awake[index] = false
+                var body_offset = self.active_island_offsets[island]
+                let body_end = self.active_island_offsets[island + 1]
+                while body_offset < body_end {
+                    let body = self.active_island_bodies[body_offset]
+                    self.store.velocities_x[body] = 0.0
+                    self.store.velocities_y[body] = 0.0
+                    self.store.angular_velocities[body] = 0.0
+                    self.store.awake[body] = false
+                    body_offset++
                 }
             }
-            index++
+            island++
+        }
+    }
+
+    private func rebuild_active_bodies() {
+        self.active_bodies.clear()
+        var slot = 0
+        while slot < self.store.slot_dense_indices.count() {
+            let body = self.store.slot_dense_indices[slot]
+            if body >= 0 &&
+                self.store.body_types[body] == BodyType2D.dynamic &&
+                self.store.awake[body]
+            {
+                self.active_bodies.append(body)
+            }
+            slot++
+        }
+    }
+
+    private func build_active_island_layout() {
+        self.active_island_roots.clear()
+        self.active_island_offsets.clear()
+        self.active_island_bodies.clear()
+        self.active_island_offsets.append(0)
+        var slot = 0
+        while slot < self.store.slot_dense_indices.count() {
+            let body = self.store.slot_dense_indices[slot]
+            if body >= 0 &&
+                self.store.body_types[body] == BodyType2D.dynamic &&
+                self.store.awake[body]
+            {
+                let root = self.find_sleep_root(body)
+                if root == body && self.island_body_counts[root] > 0 {
+                    self.active_island_roots.append(root)
+                    self.active_island_offsets.append(
+                        self.active_island_offsets[
+                            self.active_island_offsets.count() - 1
+                        ] + self.island_body_counts[root]
+                    )
+                }
+            }
+            slot++
+        }
+        var body_offset = 0
+        while body_offset < self.active_island_offsets[
+            self.active_island_offsets.count() - 1
+        ] {
+            self.active_island_bodies.append(0)
+            body_offset++
+        }
+        var island = 0
+        while island < self.active_island_roots.count() {
+            self.island_write_offsets[self.active_island_roots[island]] =
+                self.active_island_offsets[island]
+            island++
+        }
+        slot = 0
+        while slot < self.store.slot_dense_indices.count() {
+            let body = self.store.slot_dense_indices[slot]
+            if body >= 0 &&
+                self.store.body_types[body] == BodyType2D.dynamic &&
+                self.store.awake[body]
+            {
+                let root = self.find_sleep_root(body)
+                let destination = self.island_write_offsets[root]
+                self.active_island_bodies[destination] = body
+                self.island_write_offsets[root]++
+            }
+            slot++
         }
     }
 
@@ -1228,15 +1373,14 @@ public class World2D {
         var first_root = self.find_sleep_root(first)
         var second_root = self.find_sleep_root(second)
         if first_root == second_root { return }
-        if self.sleep_ranks[first_root] < self.sleep_ranks[second_root] {
+        if self.store.dense_slots[first_root] >
+            self.store.dense_slots[second_root]
+        {
             let swapped = first_root
             first_root = second_root
             second_root = swapped
         }
         self.sleep_parents[second_root] = first_root
-        if self.sleep_ranks[first_root] == self.sleep_ranks[second_root] {
-            self.sleep_ranks[first_root]++
-        }
     }
 
     private func update_candidate_pairs(discovered:@BodyPair2D[]) {
@@ -1579,6 +1723,7 @@ public class World2D {
             }
             let pair = self.candidate_bodies[candidate_index]
             if !legacy_solver_pair(self.store, pair) {
+                self.collect_general_direct_wake(candidate_index, pair)
                 candidate_index++
                 continue
             }
@@ -1646,6 +1791,53 @@ public class World2D {
             // sleeping support that was added to this step. Until that short
             // interval expires it cannot recursively wake the next layer.
             self.contact_wake_cooldowns[body] = 0.5
+        }
+    }
+
+    private func collect_general_direct_wake(
+        candidate_index:int,
+        pair:BodyPair2D
+    ) {
+        if self.candidate_pairs[candidate_index].contact_count == 0 ||
+            self.store.awake[pair.first] == self.store.awake[pair.second]
+        {
+            return
+        }
+        var sleeping = pair.first
+        if self.store.awake[pair.first] { sleeping = pair.second }
+        var awake_body = pair.second
+        if self.store.awake[pair.first] { awake_body = pair.first }
+        if self.store.body_types[sleeping] != BodyType2D.dynamic ||
+            self.contact_wake_cooldowns[awake_body] > 0.0
+        {
+            return
+        }
+        let manifold = contact_manifold(
+            self.store,
+            pair.first,
+            pair.second
+        )
+        if manifold.point_count() == 0 { return }
+        var penetration = 0.0
+        for point in manifold.points {
+            penetration = Math.max(penetration, -point.separation)
+        }
+        let point = manifold.points[0].point
+        let relative_velocity = velocity_at(
+            self.store,
+            pair.second,
+            point
+        ).subtract(velocity_at(
+            self.store,
+            pair.first,
+            point
+        ))
+        if (relative_velocity.dot(manifold.normal) < -0.35 ||
+                penetration > 0.01) &&
+            !self.direct_wake_pending[sleeping]
+        {
+            self.direct_wake_pending[sleeping] = true
+            self.direct_wake_bodies.append(sleeping)
         }
     }
 

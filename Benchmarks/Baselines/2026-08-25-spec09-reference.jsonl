@@ -1,0 +1,23 @@
+# captured=2026-08-25
+# os=macOS_26.5.2
+# architecture=arm64
+# cpu=Apple_M3_Pro
+# mode=release
+# package_commit=c6b01ec
+# compiler_commit=e2b68ac
+# protocol=one_discarded_warmup_then_seven_isolated_processes
+# scope=Spec_09_same_compiler_pre_change_sparse_reference
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=58.807 step_ms=0.49005833 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=59.638 step_ms=0.49698335 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=59.801003 step_ms=0.49834168 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=60.695 step_ms=0.50579166 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=60.649 step_ms=0.50540835 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=61.301 step_ms=0.51084167 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=1 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=60.233 step_ms=0.5019417 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=162.829 step_ms=1.3569083 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=162.891 step_ms=1.3574251 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=158.926 step_ms=1.3243833 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=156.90399 step_ms=1.3075333 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=155.92099 step_ms=1.2993416 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=158.084 step_ms=1.3173667 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1
+SILEX_PHYSICS_CORPUS engine=silex-current scenario=sparse-1000 mode=release workers=4 bodies=1000 steps=120 dt=0.016666668 elapsed_ms=157.341 step_ms=1.311175 centroid_x=65.87499 centroid_y=6.125 max_speed=2.0155644 min_y=0.4999997 max_overlap_mm=-1.0 awake=1000 contacts=0 state_signature=52183210.0 memory_bytes=-1

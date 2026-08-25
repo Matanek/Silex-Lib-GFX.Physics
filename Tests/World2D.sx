@@ -98,6 +98,39 @@ test "reuse a persistent general contact slot after separation" {
     assert(world.contact_count() == 1)
 }
 
+test "pack one general contact island and remove it from the active path" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < 3 {
+        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+                Math.Vec2(-0.5, 0.0),
+                Math.Vec2(0.5, 0.0),
+                0.25
+            ))
+            ..position = Math.Vec2(index as float * 1.3, 0.0)
+            ..gravity_scale = 0.0
+        ))
+        index++
+    }
+
+    world.step(1.0 / 60.0)
+    assert(world.active_body_count() == 3)
+    assert(world.active_island_count() == 1)
+    assert(world.active_island_body_count() == 3)
+    index = 0
+    while index < 31 {
+        world.step(1.0 / 60.0)
+        index++
+    }
+    for body in bodies { assert(!body.is_awake()) }
+    world.step(0.0)
+    assert(world.active_body_count() == 0)
+    assert(world.active_island_count() == 0)
+    assert(world.active_island_body_count() == 0)
+}
+
 test "advance a dynamic body under gravity" {
     var world = Physics.World2D()
     var body = world.create_rigid_body(Physics.RigidBody2DSettings()

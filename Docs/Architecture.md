@@ -160,14 +160,23 @@ passes: one count per proxy, a sequential prefix sum, then direct writes into
 disjoint slices of one reusable pair buffer. The steady-state step does not
 allocate per contact or per job.
 
+At the beginning of each step, awake dynamic bodies are gathered by stable body
+slot into a reusable contiguous list. Serial integration walks only that list;
+parallel integration partitions the same logical order into disjoint ranges.
+Sleeping data therefore leaves the motion hot path without making worker count
+observable.
+
 General-shape sleep is evaluated from a contact graph rebuilt deterministically
 after each solve. A reusable union-find groups touching awake dynamic bodies
-that allow sleep. Per-body timers use the linear velocity plus the angular
-surface motion: they advance below 5 cm/s, erode slowly between 5 and 10 cm/s,
-and reset above 10 cm/s. Small islands require every body to validate 0.5
-seconds of rest. In a dense general-contact island, 95 percent must validate
-that delay and no body may exceed the hard motion threshold; the complete
-island then sleeps atomically.
+that allow sleep. The lowest stable body slot is always the root, then a second
+reusable layout packs the bodies of each island contiguously in root and body
+identity order. Retained general contacts participate in this graph even before
+their dynamic response is enabled. Per-body timers use the linear velocity plus
+the angular surface motion: they advance below 5 cm/s, erode slowly between 5
+and 10 cm/s, and reset above 10 cm/s. Small islands require every body to
+validate 0.5 seconds of rest. In a dense general-contact island, 95 percent
+must validate that delay and no body may exceed the hard motion threshold; the
+complete island then sleeps atomically.
 
 The dense-circle grid path instead validates each body against current local
 overlap before sleeping it independently. This prevents a handful of noisy

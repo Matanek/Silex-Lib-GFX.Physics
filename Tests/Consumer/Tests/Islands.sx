@@ -1,0 +1,74 @@
+use GFX.Physics
+use STD.Math
+
+func capsule_settings(x:float) Physics.RigidBody2DSettings {
+    return Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.5, 0.0),
+            Math.Vec2(0.5, 0.0),
+            0.25
+        ))
+        ..position = Math.Vec2(x, 0.0)
+        ..gravity_scale = 0.0
+}
+
+func island_transition_signature(worker_count:int) int {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(worker_count)
+    var first = world.create_rigid_body(capsule_settings(0.0))
+    var second = world.create_rigid_body(capsule_settings(1.3))
+    var third = world.create_rigid_body(capsule_settings(2.6))
+    var step = 0
+    while step < 32 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(world.contact_count() == 2)
+    assert(!first.is_awake())
+    assert(!second.is_awake())
+    assert(!third.is_awake())
+
+    first.set_velocity(Math.Vec2(1.0, 0.0))
+    world.step(0.0)
+    var signature = 0
+    if first.is_awake() { signature += 4 }
+    if second.is_awake() { signature += 2 }
+    if third.is_awake() { signature += 1 }
+    assert(signature == 6)
+    return signature
+}
+
+test "sleep and wake a general contact island atomically" {
+    let signature = island_transition_signature(1)
+    assert(signature == 6)
+}
+
+test "preserve island transitions across worker counts" {
+    assert(island_transition_signature(1) == island_transition_signature(4))
+}
+
+test "preserve sleeping neighbours across creation and deletion" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(capsule_settings(0.0))
+    var middle = world.create_rigid_body(capsule_settings(1.3))
+    var last = world.create_rigid_body(capsule_settings(2.6))
+    var step = 0
+    while step < 32 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(!first.is_awake())
+    assert(!middle.is_awake())
+    assert(!last.is_awake())
+
+    var distant = world.create_rigid_body(capsule_settings(100.0))
+    world.step(0.0)
+    assert(!first.is_awake())
+    assert(!middle.is_awake())
+    assert(!last.is_awake())
+    world.destroy_rigid_body(distant)
+    world.destroy_rigid_body(middle)
+    world.step(0.0)
+    assert(!first.is_awake())
+    assert(!last.is_awake())
+}

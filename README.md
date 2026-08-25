@@ -112,6 +112,11 @@ sleeping-circle grid before discrete contact generation, preventing a ball that
 travels farther than its diameter in one step from entering the pile. Contact
 wake decisions use one state snapshot and newly awakened bodies cannot
 recursively wake the next support layer during their initial settling interval.
+Awake bodies and their deterministic islands are packed into reusable
+contiguous ranges, so sleeping bodies leave the integration hot path. The
+headless [`Examples/World2D/SleepIslands.sx`](Examples/World2D/SleepIslands.sx)
+demonstrates sleep, staged impact wake-up, and deletion; see
+[`Docs/Islands.md`](Docs/Islands.md) for the observable contract.
 
 Large moving worlds can opt into the persistent STD worker pool:
 
