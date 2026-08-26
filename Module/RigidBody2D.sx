@@ -315,12 +315,7 @@ package class BodyStore2D {
     var linear_dampings:float[]
     var angular_dampings:float[]
     var allow_sleep:bool[]
-    var bullets:bool[]
-    var sensors:bool[]
-    var move_events_enabled:bool[]
-    var contact_events_enabled:bool[]
-    var hit_events_enabled:bool[]
-    var sensor_events_enabled:bool[]
+    var behavior_flags:uint8[]
     var awake:bool[]
     var sleep_times:float[]
     var dirty_transforms:bool[]
@@ -365,12 +360,7 @@ package class BodyStore2D {
         self.linear_dampings = []
         self.angular_dampings = []
         self.allow_sleep = []
-        self.bullets = []
-        self.sensors = []
-        self.move_events_enabled = []
-        self.contact_events_enabled = []
-        self.hit_events_enabled = []
-        self.sensor_events_enabled = []
+        self.behavior_flags = []
         self.awake = []
         self.sleep_times = []
         self.dirty_transforms = []
@@ -442,12 +432,22 @@ package class BodyStore2D {
         self.linear_dampings.append(settings.linear_damping)
         self.angular_dampings.append(settings.angular_damping)
         self.allow_sleep.append(settings.allow_sleep)
-        self.bullets.append(settings.is_bullet)
-        self.sensors.append(settings.is_sensor)
-        self.move_events_enabled.append(settings.enable_move_events)
-        self.contact_events_enabled.append(settings.enable_contact_events)
-        self.hit_events_enabled.append(settings.enable_hit_events)
-        self.sensor_events_enabled.append(settings.enable_sensor_events)
+        var behavior_flags:uint8 = 0
+        if settings.is_bullet { behavior_flags += 1 }
+        if settings.is_sensor { behavior_flags += 2 }
+        if settings.enable_move_events {
+            behavior_flags += 4
+        }
+        if settings.enable_contact_events {
+            behavior_flags += 8
+        }
+        if settings.enable_hit_events {
+            behavior_flags += 16
+        }
+        if settings.enable_sensor_events {
+            behavior_flags += 32
+        }
+        self.behavior_flags.append(behavior_flags)
         self.awake.append(settings.body_type == BodyType2D.dynamic)
         self.sleep_times.append(0.0)
         self.dirty_transforms.append(true)
@@ -565,12 +565,7 @@ package class BodyStore2D {
         self.linear_dampings.swap(first, second)
         self.angular_dampings.swap(first, second)
         self.allow_sleep.swap(first, second)
-        self.bullets.swap(first, second)
-        self.sensors.swap(first, second)
-        self.move_events_enabled.swap(first, second)
-        self.contact_events_enabled.swap(first, second)
-        self.hit_events_enabled.swap(first, second)
-        self.sensor_events_enabled.swap(first, second)
+        self.behavior_flags.swap(first, second)
         self.awake.swap(first, second)
         self.sleep_times.swap(first, second)
         self.dirty_transforms.swap(first, second)
@@ -611,12 +606,7 @@ package class BodyStore2D {
         self.linear_dampings.take_last()
         self.angular_dampings.take_last()
         self.allow_sleep.take_last()
-        self.bullets.take_last()
-        self.sensors.take_last()
-        self.move_events_enabled.take_last()
-        self.contact_events_enabled.take_last()
-        self.hit_events_enabled.take_last()
-        self.sensor_events_enabled.take_last()
+        self.behavior_flags.take_last()
         self.awake.take_last()
         self.sleep_times.take_last()
         self.dirty_transforms.take_last()
@@ -679,11 +669,11 @@ public class RigidBody2D {
     }
 
     func is_bullet() bool {
-        return self.store.bullets[self.store.require(self.id)]
+        return (self.store.behavior_flags[self.store.require(self.id)] & 1) != 0
     }
 
     func is_sensor() bool {
-        return self.store.sensors[self.store.require(self.id)]
+        return (self.store.behavior_flags[self.store.require(self.id)] & 2) != 0
     }
 
     func is_awake() bool {

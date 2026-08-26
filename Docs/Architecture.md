@@ -12,7 +12,7 @@ The portable principal module contributes the package-owned `RigidBody2D` and
 catalogs. This changes only their public façade names: no implementation is
 merged into GFX, and catalog collisions remain compiler errors.
 
-The first vertical slice contains:
+The switched native Silex core contains:
 
 - `Physics.World2D`, the owner and clock boundary of a 2D simulation;
 - `Physics.RigidBody2D`, a body created and retained by that world;
@@ -97,10 +97,11 @@ geometry; rotational motion refines the first swept overlap. Sensor hits emit
 transitions without response. A world with no bullet returns before entering
 this dynamic-target path.
 
-Worker count no longer selects a different broad phase. Worlds with dynamic
-shapes use the same reusable deterministic grid for one or several workers;
-the tree remains the fixed-shape query structure. This keeps candidate sets,
-insertion order, and contact-cache evolution identical across worker counts.
+Worker count never selects a different broad phase or solver. Worlds with
+dynamic shapes use the same reusable deterministic grid for one or several
+workers; the tree remains the fixed-shape query structure. This keeps
+candidate sets, insertion order, and contact-cache evolution identical across
+worker counts.
 
 The general solver separates oriented boxes on their four face axes and handles
 circle-box contacts in the box's local frame. Circle-circle contacts use their
@@ -122,6 +123,10 @@ sweep. Friction runs on the second biased sweep; restitution and impulse-cache
 storage follow the substeps. One worker calls the same jobs directly, while a
 large color partitions the same kernel across the persistent executor. The
 twelfth overflow color remains explicitly ordered and scalar.
+
+The former discrete impulse backend and its warm-start path are not retained
+as a fallback. The colored Soft Step graph above is the only contact solver;
+worker and load thresholds change execution partitioning, never semantics.
 
 Joints use a separate generational dense store behind their typed public
 handles. Creation converts world anchors and axes to local body data; body
@@ -159,8 +164,9 @@ second grid containing only sleeping circles. A segment-circle intersection
 clips the moving centre to its earliest contact whenever one fixed step would
 carry it through a sleeping support. This targeted continuous test prevents the
 slow-emission case from tunnelling into an already settled pile without
-substepping the whole world. It is not general CCD: awake-awake, box, mixed
-shape, and arbitrary swept rotation remain discrete.
+substepping the whole world. Bullets additionally use the general swept path
+described above for awake targets, boxes, mixed convex shapes, and rotation;
+ordinary bodies do not pay that broader CCD cost.
 
 Parallelism is explicit at the world boundary. `enable_parallelism` creates a
 persistent STD executor. The common stage graph dispatches body ranges only at

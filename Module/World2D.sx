@@ -1636,7 +1636,8 @@ public class World2D {
         var mover = 0
         while mover < self.store.count() {
             if self.store.body_types[mover] != BodyType2D.dynamic ||
-                !self.store.awake[mover] || !self.store.bullets[mover]
+                !self.store.awake[mover] ||
+                (self.store.behavior_flags[mover] & 1) == 0
             {
                 mover++
                 continue
@@ -1666,7 +1667,8 @@ public class World2D {
                     continue
                 }
                 if self.store.body_types[target] == BodyType2D.dynamic &&
-                    self.store.bullets[target] && target < mover
+                    (self.store.behavior_flags[target] & 1) != 0 &&
+                    target < mover
                 {
                     target++
                     continue
@@ -1843,8 +1845,8 @@ public class World2D {
         }
         var sensor = 0
         while sensor < self.store.count() {
-            if !self.store.sensors[sensor] ||
-                !self.store.sensor_events_enabled[sensor]
+            if (self.store.behavior_flags[sensor] & 2) == 0 ||
+                (self.store.behavior_flags[sensor] & 32) == 0
             {
                 sensor++
                 continue
@@ -1900,7 +1902,7 @@ public class World2D {
                 body++
                 continue
             }
-            if !self.store.move_events_enabled[body] {
+            if (self.store.behavior_flags[body] & 4) == 0 {
                 body++
                 continue
             }
@@ -1976,8 +1978,8 @@ public class World2D {
     }
 
     private func append_sensor_begin_events(pair:BodyPair2D) {
-        if self.store.sensors[pair.first] &&
-            self.store.sensor_events_enabled[pair.first]
+        if (self.store.behavior_flags[pair.first] & 2) != 0 &&
+            (self.store.behavior_flags[pair.first] & 32) != 0
         {
             self.sensor_begin_events.append(SensorBeginEvent2D(
                 self.store,
@@ -1985,8 +1987,8 @@ public class World2D {
                 self.store.body_id_at(pair.second)
             ))
         }
-        if self.store.sensors[pair.second] &&
-            self.store.sensor_events_enabled[pair.second]
+        if (self.store.behavior_flags[pair.second] & 2) != 0 &&
+            (self.store.behavior_flags[pair.second] & 32) != 0
         {
             self.sensor_begin_events.append(SensorBeginEvent2D(
                 self.store,
@@ -1997,8 +1999,8 @@ public class World2D {
     }
 
     private func append_sensor_end_events(pair:BodyPair2D) {
-        if self.store.sensors[pair.first] &&
-            self.store.sensor_events_enabled[pair.first]
+        if (self.store.behavior_flags[pair.first] & 2) != 0 &&
+            (self.store.behavior_flags[pair.first] & 32) != 0
         {
             self.sensor_end_events.append(SensorEndEvent2D(
                 self.store,
@@ -2006,8 +2008,8 @@ public class World2D {
                 self.store.body_id_at(pair.second)
             ))
         }
-        if self.store.sensors[pair.second] &&
-            self.store.sensor_events_enabled[pair.second]
+        if (self.store.behavior_flags[pair.second] & 2) != 0 &&
+            (self.store.behavior_flags[pair.second] & 32) != 0
         {
             self.sensor_end_events.append(SensorEndEvent2D(
                 self.store,
@@ -2087,18 +2089,20 @@ public class World2D {
             self.direct_wake_pending[index] = false
             self.sleep_parents[index] = index
             self.store.dirty_transforms[index] = false
-            if self.store.bullets[index] { self.bullet_body_count++ }
-            if self.store.move_events_enabled[index] {
+            if (self.store.behavior_flags[index] & 1) != 0 {
+                self.bullet_body_count++
+            }
+            if (self.store.behavior_flags[index] & 4) != 0 {
                 self.move_event_body_count++
             }
-            if self.store.contact_events_enabled[index] {
+            if (self.store.behavior_flags[index] & 8) != 0 {
                 self.contact_event_body_count++
             }
-            if self.store.hit_events_enabled[index] {
+            if (self.store.behavior_flags[index] & 16) != 0 {
                 self.hit_event_body_count++
             }
-            if self.store.sensors[index] &&
-                self.store.sensor_events_enabled[index]
+            if (self.store.behavior_flags[index] & 2) != 0 &&
+                (self.store.behavior_flags[index] & 32) != 0
             {
                 self.sensor_event_body_count++
             }
@@ -2707,7 +2711,8 @@ public class World2D {
         while body < self.store.count() {
             if self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
-                self.store.awake[body] || self.store.sensors[body]
+                self.store.awake[body] ||
+                (self.store.behavior_flags[body] & 2) != 0
             {
                 body++
                 continue
@@ -2738,7 +2743,8 @@ public class World2D {
         while body < self.store.count() {
             if self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
-                !self.store.awake[body] || self.store.sensors[body]
+                !self.store.awake[body] ||
+                (self.store.behavior_flags[body] & 2) != 0
             {
                 body++
                 continue
@@ -3659,8 +3665,8 @@ public class World2D {
                 continue
             }
             for fixed_body in self.fixed_bodies {
-                if self.store.sensors[circle] ||
-                    self.store.sensors[fixed_body]
+                if (self.store.behavior_flags[circle] & 2) != 0 ||
+                    (self.store.behavior_flags[fixed_body] & 2) != 0
                 {
                     continue
                 }
@@ -3687,14 +3693,14 @@ public class World2D {
             let sweep_radius = Math.sqrt(
                 self.store.sweep_radii_squared[body]
             )
-            if !self.store.bullets[body] &&
+            if (self.store.behavior_flags[body] & 1) == 0 &&
                 motion.length() <= Math.max(0.05, sweep_radius * 0.5)
             {
                 continue
             }
             for fixed_body in self.fixed_bodies {
-                if self.store.sensors[body] ||
-                    self.store.sensors[fixed_body]
+                if (self.store.behavior_flags[body] & 2) != 0 ||
+                    (self.store.behavior_flags[fixed_body] & 2) != 0
                 {
                     continue
                 }
@@ -3875,20 +3881,21 @@ func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {
 }
 
 func pair_is_sensor(store:BodyStore2D, pair:BodyPair2D) bool {
-    return store.sensors[pair.first] || store.sensors[pair.second]
+    return (store.behavior_flags[pair.first] & 2) != 0 ||
+        (store.behavior_flags[pair.second] & 2) != 0
 }
 
 func pair_contact_events_enabled(
     store:BodyStore2D,
     pair:BodyPair2D
 ) bool {
-    return store.contact_events_enabled[pair.first] ||
-        store.contact_events_enabled[pair.second]
+    return (store.behavior_flags[pair.first] & 8) != 0 ||
+        (store.behavior_flags[pair.second] & 8) != 0
 }
 
 func pair_hit_events_enabled(store:BodyStore2D, pair:BodyPair2D) bool {
-    return store.hit_events_enabled[pair.first] ||
-        store.hit_events_enabled[pair.second]
+    return (store.behavior_flags[pair.first] & 16) != 0 ||
+        (store.behavior_flags[pair.second] & 16) != 0
 }
 
 func continuous_pair_hit(
@@ -4663,8 +4670,6 @@ struct Collision2D {
     var tangent_mass_second:float
     var normal_denominator_first:float
     var normal_denominator_second:float
-    var normal_velocity_bias_first:float
-    var normal_velocity_bias_second:float
     var first_anchor_a:Math.Vec2
     var first_anchor_b:Math.Vec2
     var second_anchor_a:Math.Vec2
@@ -4696,8 +4701,6 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
-        self.normal_velocity_bias_first = 0.0
-        self.normal_velocity_bias_second = 0.0
         self.first_anchor_a = Math.Vec2()
         self.first_anchor_b = Math.Vec2()
         self.second_anchor_a = Math.Vec2()
@@ -4771,8 +4774,6 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
-        self.normal_velocity_bias_first = 0.0
-        self.normal_velocity_bias_second = 0.0
         self.first_anchor_a = body_contact_cache_point(
             store,
             first_body,
@@ -4848,8 +4849,6 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
-        self.normal_velocity_bias_first = 0.0
-        self.normal_velocity_bias_second = 0.0
         self.first_anchor_a = body_contact_cache_point(
             store,
             first_body,
@@ -4875,16 +4874,6 @@ struct Collision2D {
         self.normal_coupling = 0.0
         self.normal_determinant = 0.0
         self.combined_friction = 0.0
-    }
-}
-
-struct ContactImpulse2D {
-    let normal:float
-    let tangent:float
-
-    init(normal:float, tangent:float) {
-        self.normal = normal
-        self.tangent = tangent
     }
 }
 
@@ -5382,20 +5371,12 @@ func prepare_collision_constraints(
     collision.tangent_mass_first = 1.0 / tangent_denominator
     collision.combined_friction = store.friction_roots[first] *
         store.friction_roots[second]
-    let restitution = Math.min(
-        store.restitutions[first],
-        store.restitutions[second]
-    )
     let first_normal_velocity = velocity_at(
         store,
         second,
         first_contact
     ).subtract(velocity_at(store, first, first_contact)).dot(normal)
     collision.initial_normal_velocity_first = first_normal_velocity
-    if first_normal_velocity < -1.0 {
-        collision.normal_velocity_bias_first =
-            -restitution * first_normal_velocity
-    }
 
     if collision.contacts.count == 2 {
         let contact = Math.Vec2(
@@ -5436,10 +5417,6 @@ func prepare_collision_constraints(
             contact
         ).subtract(velocity_at(store, first, contact)).dot(normal)
         collision.initial_normal_velocity_second = second_normal_velocity
-        if second_normal_velocity < -1.0 {
-            collision.normal_velocity_bias_second =
-                -restitution * second_normal_velocity
-        }
     }
 }
 
@@ -5480,23 +5457,6 @@ func prepare_circle_collision_constraints(
         (store.velocities_x[second] - store.velocities_x[first]) * normal_x +
         (store.velocities_y[second] - store.velocities_y[first]) * normal_y
     collision.initial_normal_velocity_first = relative_normal_velocity
-    if relative_normal_velocity < -1.0 {
-        collision.normal_velocity_bias_first = -Math.min(
-            store.restitutions[first],
-            store.restitutions[second]
-        ) * relative_normal_velocity
-    }
-}
-
-func resolve_collision_velocity(
-    store:BodyStore2D,
-    collision:&Collision2D
-) {
-    if collision.contacts.count == 1 {
-        resolve_contact(store, collision, collision.contacts.first, false)
-    } else {
-        resolve_two_contacts(store, collision)
-    }
 }
 
 func contact_anchor_vector(
@@ -6514,209 +6474,6 @@ func apply_soft_compact_restitution(
     impulses.normal = accumulated
 }
 
-func resolve_compact_circle_velocity(
-    store:BodyStore2D,
-    collision:@CompactCircleCollision2D
-) ContactImpulse2D {
-    let first = collision.first_body
-    let second = collision.second_body
-    let normal_x = collision.normal.x
-    let normal_y = collision.normal.y
-    let normal_velocity =
-        (store.velocities_x[second] - store.velocities_x[first]) * normal_x +
-        (store.velocities_y[second] - store.velocities_y[first]) * normal_y
-    let previous_normal = collision.normal_impulse
-    let normal_increment = -normal_velocity * collision.normal_mass
-    let accumulated_normal = Math.max(
-        previous_normal + normal_increment,
-        0.0
-    )
-    let applied_normal = accumulated_normal - previous_normal
-    let normal_impulse_x = normal_x * applied_normal
-    let normal_impulse_y = normal_y * applied_normal
-    let first_inverse_mass = store.inverse_masses[first]
-    let second_inverse_mass = store.inverse_masses[second]
-    store.velocities_x[first] -= normal_impulse_x * first_inverse_mass
-    store.velocities_y[first] -= normal_impulse_y * first_inverse_mass
-    store.velocities_x[second] += normal_impulse_x * second_inverse_mass
-    store.velocities_y[second] += normal_impulse_y * second_inverse_mass
-
-    if collision.combined_friction <= 0.0 {
-        return ContactImpulse2D(accumulated_normal, 0.0)
-    }
-
-    let first_angular = store.angular_velocities[first]
-    let second_angular = store.angular_velocities[second]
-    let tangent_x = -normal_y
-    let tangent_y = normal_x
-    let linear_tangent_velocity =
-        (store.velocities_x[second] - store.velocities_x[first]) * tangent_x +
-        (store.velocities_y[second] - store.velocities_y[first]) * tangent_y
-    let previous_tangent = collision.tangent_impulse
-    if Math.abs(linear_tangent_velocity) <= 0.000001 &&
-        first_angular == 0.0 && second_angular == 0.0
-    {
-        return ContactImpulse2D(accumulated_normal, previous_tangent)
-    }
-    let tangent_velocity = linear_tangent_velocity +
-        second_angular * collision.second_tangent_arm -
-        first_angular * collision.first_tangent_arm
-    if Math.abs(tangent_velocity) <= 0.000001 {
-        return ContactImpulse2D(accumulated_normal, previous_tangent)
-    }
-    let tangent_increment = -tangent_velocity * collision.tangent_mass
-    let friction_limit = collision.combined_friction * accumulated_normal
-    let accumulated_tangent = Math.max(
-        -friction_limit,
-        Math.min(previous_tangent + tangent_increment, friction_limit)
-    )
-    let applied_tangent = accumulated_tangent - previous_tangent
-    let tangent_impulse_x = tangent_x * applied_tangent
-    let tangent_impulse_y = tangent_y * applied_tangent
-    store.velocities_x[first] -= tangent_impulse_x * first_inverse_mass
-    store.velocities_y[first] -= tangent_impulse_y * first_inverse_mass
-    store.angular_velocities[first] -= collision.first_tangent_arm *
-        applied_tangent * store.inverse_inertias[first]
-    store.velocities_x[second] += tangent_impulse_x * second_inverse_mass
-    store.velocities_y[second] += tangent_impulse_y * second_inverse_mass
-    store.angular_velocities[second] += collision.second_tangent_arm *
-        applied_tangent * store.inverse_inertias[second]
-    return ContactImpulse2D(accumulated_normal, accumulated_tangent)
-}
-
-func resolve_single_collision_velocity(
-    store:BodyStore2D,
-    collision:@Collision2D
-) ContactImpulse2D {
-    let first = collision.first_body
-    let second = collision.second_body
-    let contact_x = collision.contacts.first.x
-    let contact_y = collision.contacts.first.y
-    let normal_x = collision.normal.x
-    let normal_y = collision.normal.y
-    let first_radius_x = contact_x - store.positions_x[first]
-    let first_radius_y = contact_y - store.positions_y[first]
-    let second_radius_x = contact_x - store.positions_x[second]
-    let second_radius_y = contact_y - store.positions_y[second]
-
-    let first_angular = store.angular_velocities[first]
-    let second_angular = store.angular_velocities[second]
-    let relative_x =
-        store.velocities_x[second] - second_angular * second_radius_y -
-        store.velocities_x[first] + first_angular * first_radius_y
-    let relative_y =
-        store.velocities_y[second] + second_angular * second_radius_x -
-        store.velocities_y[first] - first_angular * first_radius_x
-    let normal_velocity = relative_x * normal_x + relative_y * normal_y
-    let previous_normal = collision.normal_impulse_first
-    let normal_increment =
-        -(normal_velocity - collision.normal_velocity_bias_first) *
-        collision.normal_mass_first
-    let accumulated_normal = Math.max(
-        previous_normal + normal_increment,
-        0.0
-    )
-    let applied_normal = accumulated_normal - previous_normal
-    let normal_impulse_x = normal_x * applied_normal
-    let normal_impulse_y = normal_y * applied_normal
-    let first_inverse_mass = solver_inverse_mass(store, first)
-    let second_inverse_mass = solver_inverse_mass(store, second)
-    let first_inverse_inertia = solver_inverse_inertia(store, first)
-    let second_inverse_inertia = solver_inverse_inertia(store, second)
-    if first_inverse_mass > 0.0 || first_inverse_inertia > 0.0 {
-        store.velocities_x[first] -= normal_impulse_x * first_inverse_mass
-        store.velocities_y[first] -= normal_impulse_y * first_inverse_mass
-        store.angular_velocities[first] -=
-            (first_radius_x * normal_impulse_y -
-                first_radius_y * normal_impulse_x) * first_inverse_inertia
-    }
-    if second_inverse_mass > 0.0 || second_inverse_inertia > 0.0 {
-        store.velocities_x[second] += normal_impulse_x * second_inverse_mass
-        store.velocities_y[second] += normal_impulse_y * second_inverse_mass
-        store.angular_velocities[second] +=
-            (second_radius_x * normal_impulse_y -
-                second_radius_y * normal_impulse_x) * second_inverse_inertia
-    }
-
-    let updated_first_angular = store.angular_velocities[first]
-    let updated_second_angular = store.angular_velocities[second]
-    let updated_relative_x =
-        store.velocities_x[second] -
-        updated_second_angular * second_radius_y -
-        store.velocities_x[first] + updated_first_angular * first_radius_y
-    let updated_relative_y =
-        store.velocities_y[second] +
-        updated_second_angular * second_radius_x -
-        store.velocities_y[first] - updated_first_angular * first_radius_x
-    let tangent_x = -normal_y
-    let tangent_y = normal_x
-    let tangent_velocity =
-        updated_relative_x * tangent_x + updated_relative_y * tangent_y
-    let previous_tangent = collision.tangent_impulse_first
-    if Math.abs(tangent_velocity) <= 0.000001 {
-        return ContactImpulse2D(accumulated_normal, previous_tangent)
-    }
-    let tangent_increment = -tangent_velocity * collision.tangent_mass_first
-    let friction_limit = collision.combined_friction * accumulated_normal
-    let accumulated_tangent = Math.max(
-        -friction_limit,
-        Math.min(previous_tangent + tangent_increment, friction_limit)
-    )
-    let applied_tangent = accumulated_tangent - previous_tangent
-    let tangent_impulse_x = tangent_x * applied_tangent
-    let tangent_impulse_y = tangent_y * applied_tangent
-    if first_inverse_mass > 0.0 || first_inverse_inertia > 0.0 {
-        store.velocities_x[first] -= tangent_impulse_x * first_inverse_mass
-        store.velocities_y[first] -= tangent_impulse_y * first_inverse_mass
-        store.angular_velocities[first] -=
-            (first_radius_x * tangent_impulse_y -
-                first_radius_y * tangent_impulse_x) * first_inverse_inertia
-    }
-    if second_inverse_mass > 0.0 || second_inverse_inertia > 0.0 {
-        store.velocities_x[second] += tangent_impulse_x * second_inverse_mass
-        store.velocities_y[second] += tangent_impulse_y * second_inverse_mass
-        store.angular_velocities[second] +=
-            (second_radius_x * tangent_impulse_y -
-                second_radius_y * tangent_impulse_x) * second_inverse_inertia
-    }
-    return ContactImpulse2D(accumulated_normal, accumulated_tangent)
-}
-
-func warm_start_collision(store:BodyStore2D, collision:@Collision2D) {
-    apply_cached_impulse(
-        store,
-        collision,
-        collision.contacts.first,
-        collision.normal_impulse_first,
-        collision.tangent_impulse_first
-    )
-    if collision.contacts.count == 2 {
-        apply_cached_impulse(
-            store,
-            collision,
-            collision.contacts.second,
-            collision.normal_impulse_second,
-            collision.tangent_impulse_second
-        )
-    }
-}
-
-func apply_cached_impulse(
-    store:BodyStore2D,
-    collision:@Collision2D,
-    contact:Math.Vec2,
-    normal_impulse:float,
-    tangent_impulse:float
-) {
-    if normal_impulse == 0.0 && tangent_impulse == 0.0 { return }
-    let tangent = Math.Vec2(-collision.normal.y, collision.normal.x)
-    let impulse = collision.normal.multiply(normal_impulse).add(
-        tangent.multiply(tangent_impulse)
-    )
-    apply_impulse_at(store, collision.first_body, impulse.negated(), contact)
-    apply_impulse_at(store, collision.second_body, impulse, contact)
-}
-
 struct ClippedContactSegment2D {
     let first:Math.Vec2
     let second:Math.Vec2
@@ -6888,125 +6645,6 @@ func face_alignment(store:BodyStore2D, body:int, normal:Math.Vec2) float {
         Math.abs(body_axis_x(store, body).dot(normal)),
         Math.abs(body_axis_y(store, body).dot(normal))
     )
-}
-
-func resolve_contact(
-    store:BodyStore2D,
-    collision:&Collision2D,
-    contact:Math.Vec2,
-    second_contact:bool
-) {
-    let first:int = collision.first_body + 0
-    let second:int = collision.second_body + 0
-    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
-    let relative_velocity = velocity_at(store, second, contact).subtract(
-        velocity_at(store, first, contact)
-    )
-    let normal_velocity = relative_velocity.dot(normal)
-    var normal_mass:float = collision.normal_mass_first + 0.0
-    if second_contact { normal_mass = collision.normal_mass_second + 0.0 }
-    var velocity_bias = collision.normal_velocity_bias_first + 0.0
-    if second_contact {
-        velocity_bias = collision.normal_velocity_bias_second + 0.0
-    }
-    var previous:float = collision.normal_impulse_first + 0.0
-    if second_contact { previous = collision.normal_impulse_second + 0.0 }
-    let increment = -(normal_velocity - velocity_bias) * normal_mass
-    let accumulated = Math.max(previous + increment, 0.0)
-    let applied = accumulated - previous
-    let impulse = normal.multiply(applied)
-    apply_impulse_at(store, first, impulse.negated(), contact)
-    apply_impulse_at(store, second, impulse, contact)
-    if second_contact { collision.normal_impulse_second = accumulated }
-    else { collision.normal_impulse_first = accumulated }
-
-    resolve_friction(store, collision, contact, second_contact)
-}
-
-func resolve_two_contacts(
-    store:BodyStore2D,
-    collision:&Collision2D
-) {
-    let first:int = collision.first_body + 0
-    let second:int = collision.second_body + 0
-    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
-    let contacts = ContactPoints2D(
-        Math.Vec2(collision.contacts.first.x, collision.contacts.first.y),
-        Math.Vec2(collision.contacts.second.x, collision.contacts.second.y)
-    )
-    let mass_a = collision.normal_denominator_first + 0.0
-    let mass_b = collision.normal_denominator_second + 0.0
-    let coupling = collision.normal_coupling + 0.0
-    let determinant = collision.normal_determinant + 0.0
-    if determinant <= 0.00000001 {
-        resolve_contact(store, collision, contacts.first, false)
-        resolve_contact(store, collision, contacts.second, true)
-        return
-    }
-
-    let velocity_a = velocity_at(store, second, contacts.first).subtract(
-        velocity_at(store, first, contacts.first)
-    ).dot(normal)
-    let velocity_b = velocity_at(store, second, contacts.second).subtract(
-        velocity_at(store, first, contacts.second)
-    ).dot(normal)
-    let bias_a = velocity_a - collision.normal_velocity_bias_first
-    let bias_b = velocity_b - collision.normal_velocity_bias_second
-    let delta_a = (-mass_b * bias_a + coupling * bias_b) / determinant
-    let delta_b = (coupling * bias_a - mass_a * bias_b) / determinant
-    let impulse_a = collision.normal_impulse_first + delta_a
-    let impulse_b = collision.normal_impulse_second + delta_b
-    if impulse_a < 0.0 || impulse_b < 0.0 {
-        resolve_contact(store, collision, contacts.first, false)
-        resolve_contact(store, collision, contacts.second, true)
-        return
-    }
-
-    apply_impulse_at(store, first, normal.multiply(-delta_a), contacts.first)
-    apply_impulse_at(store, second, normal.multiply(delta_a), contacts.first)
-    apply_impulse_at(store, first, normal.multiply(-delta_b), contacts.second)
-    apply_impulse_at(store, second, normal.multiply(delta_b), contacts.second)
-    collision.normal_impulse_first = impulse_a
-    collision.normal_impulse_second = impulse_b
-    resolve_friction(store, collision, contacts.first, false)
-    resolve_friction(store, collision, contacts.second, true)
-}
-
-func resolve_friction(
-    store:BodyStore2D,
-    collision:&Collision2D,
-    contact:Math.Vec2,
-    second_contact:bool
-) {
-    let first:int = collision.first_body + 0
-    let second:int = collision.second_body + 0
-    let normal = Math.Vec2(collision.normal.x, collision.normal.y)
-    let relative_velocity = velocity_at(store, second, contact).subtract(
-        velocity_at(store, first, contact)
-    )
-    let tangent = Math.Vec2(-normal.y, normal.x)
-    let tangent_velocity = relative_velocity.dot(tangent)
-    if Math.abs(tangent_velocity) <= 0.000001 { return }
-
-    var tangent_mass:float = collision.tangent_mass_first + 0.0
-    var previous:float = collision.tangent_impulse_first + 0.0
-    var normal_impulse:float = collision.normal_impulse_first + 0.0
-    if second_contact {
-        previous = collision.tangent_impulse_second + 0.0
-        normal_impulse = collision.normal_impulse_second + 0.0
-        tangent_mass = collision.tangent_mass_second + 0.0
-    }
-    let increment = -tangent_velocity * tangent_mass
-    let friction_limit = collision.combined_friction * normal_impulse
-    let accumulated = Math.max(
-        -friction_limit,
-        Math.min(previous + increment, friction_limit)
-    )
-    let tangent_impulse = tangent.multiply(accumulated - previous)
-    apply_impulse_at(store, first, tangent_impulse.negated(), contact)
-    apply_impulse_at(store, second, tangent_impulse, contact)
-    if second_contact { collision.tangent_impulse_second = accumulated }
-    else { collision.tangent_impulse_first = accumulated }
 }
 
 func overlap_on_axis(
@@ -7245,27 +6883,6 @@ func solver_inverse_mass(store:BodyStore2D, index:int) float {
 func solver_inverse_inertia(store:BodyStore2D, index:int) float {
     if !store.awake[index] { return 0.0 }
     return store.inverse_inertias[index]
-}
-
-func apply_impulse_at(
-    store:BodyStore2D,
-    index:int,
-    impulse:Math.Vec2,
-    point:Math.Vec2
-) {
-    if !store.awake[index] { return }
-    if store.inverse_masses[index] <= 0.0 &&
-        store.inverse_inertias[index] <= 0.0
-    {
-        return
-    }
-    store.velocities_x[index] += impulse.x * store.inverse_masses[index]
-    store.velocities_y[index] += impulse.y * store.inverse_masses[index]
-    let radius_x = point.x - store.positions_x[index]
-    let radius_y = point.y - store.positions_y[index]
-    store.angular_velocities[index] +=
-        (radius_x * impulse.y - radius_y * impulse.x) *
-        store.inverse_inertias[index]
 }
 
 func cross(left:Math.Vec2, right:Math.Vec2) float {

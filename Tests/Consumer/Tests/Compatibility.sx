@@ -1,0 +1,60 @@
+use GFX.Components
+use GFX.Physics
+use GFX.Resources
+use STD.Math
+
+test "preserve the complete 0.4 world and body intent" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(4)
+    world.set_profiling_enabled(true)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 2.0)
+        ..velocity = Math.Vec2(2.0, -1.0)
+        ..rotation = 0.15
+        ..angular_velocity = 0.5
+        ..gravity_scale = 0.75
+        ..mass = 2.0
+        ..restitution = 0.25
+        ..friction = 0.75
+        ..linear_damping = 0.0
+        ..angular_damping = 0.0
+        ..allow_sleep = false
+    )
+
+    world.step(0.5)
+
+    assert(world.body_count() == 1)
+    assert(world.candidate_pair_count() == 0)
+    assert(body.body_type() == Physics.BodyType2D.dynamic)
+    assert(body.position().nearly_equal(Math.Vec2(2.0, 1.5), 0.000001))
+    assert(body.velocity().nearly_equal(Math.Vec2(2.0, -1.0), 0.000001))
+    assert(Math.nearly_equal(body.rotation(), 0.4, 0.000001))
+    assert(Math.nearly_equal(body.angular_velocity(), 0.5, 0.000001))
+    assert(Math.nearly_equal(body.gravity_scale(), 0.75, 0.000001))
+    assert(body.is_awake())
+
+    var values:Physics.BodyTransform2D[] = []
+    world.write_dynamic_body_transforms(values)
+    assert(values.count() == 1)
+    assert(values[0].position.nearly_equal(body.position(), 0.000001))
+
+    var buffer = Physics.BodyTransformBuffer2D()
+    world.write_dynamic_body_transforms(buffer)
+    assert(buffer.count() == 1)
+    assert(buffer.position(0).nearly_equal(body.position(), 0.000001))
+
+    let profile = world.step_profile()
+    assert(profile.motion_ms >= 0.0)
+    assert(profile.broad_phase_ms >= 0.0)
+    assert(profile.solve_ms >= 0.0)
+    assert(profile.sleep_ms >= 0.0)
+    assert(profile.total_ms >= 0.0)
+}
+
+test "preserve physics catalog aliases across the switch" {
+    var world = Resources.World2D(gravity:Math.Vec2())
+    var body:Components.RigidBody2D = world.create_rigid_body()
+
+    world.step(0.0)
+    assert(body.position() == Math.Vec2())
+}

@@ -1,7 +1,8 @@
 # GFX.Physics
 
-`GFX.Physics` is the optional physics extension for GFX. It begins with a
-small, headless 2D simulation API and grows through executable examples.
+`GFX.Physics` is the optional native Silex physics extension for GFX. Its
+headless 2D world uses one deterministic reconstruction based on the Box2D 3
+algorithmic model; no external engine is linked into applications.
 
 ```text
 silex install GFX.Physics
@@ -72,6 +73,10 @@ The headless [`Examples/World2D/Contacts.sx`](Examples/World2D/Contacts.sx)
 is the primary executable proof for contact creation, persistence, and
 invalidation. See [`Docs/Contacts.md`](Docs/Contacts.md) for filters,
 deterministic ordering, and the current solver boundary.
+
+Existing 0.4 world and body usage remains source-compatible across the switch.
+The intentional solver and lifetime changes are listed in
+[`Docs/Migration.md`](Docs/Migration.md).
 
 Bullets, sensors, and opt-in post-step movement, contact, hit, and sensor
 streams complete the gameplay feedback loop without worker callbacks. A bullet
@@ -159,9 +164,9 @@ dynamic pair, and application plugins remain outside the current world
 contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
-[`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) remains a
-historical integrated stress program, not the recommended first verification
-path. Its interactive emitter is currently
+[`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) is the
+retained integrated graphical stress consumer, not the recommended first
+verification path. Its interactive emitter is currently
 capped at 3,000 small dynamic circles, while explicit stress controls can still
 prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one persistent
 worker while rendering remains independent, and its reusable

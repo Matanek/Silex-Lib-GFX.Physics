@@ -194,10 +194,61 @@ target. Contact, hit, sensor and movement streams are opt-in, so this
 contact-free corpus constructs no event payload. This is an ARM64 workload
 result, not a general speedup claim.
 
-After review, add `--enforce` for future candidates and pass the accepted
-4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
-expected: portable Silex changes use native GitHub Actions for correctness on
-the exact pushed commit instead.
+## Spec 13 single-core switch candidate
+
+[`2026-08-26-spec13-switch.jsonl`](2026-08-26-spec13-switch.jsonl) records the
+final local switch candidate based on `3e9b837`, using Silex `0.41.0` at
+`a48d2dd`. Each timing series discards one warm-up and then records seven
+isolated one-worker Release processes. The raw arrays preserve process order;
+every run in a scenario retains the signature published beside it.
+
+| Scenario | Median | MAD | Change from Spec 10 | Gate |
+| --- | ---: | ---: | ---: | --- |
+| `release-parity` | 0.023242 ms/step | 2.37% | n/a | correction and variance pass |
+| `sparse-1000` | 0.791658 ms/step | 0.84% | +0.59% | passes 4.00 ms |
+| `sparse-5000` | 3.980625 ms/step | 0.60% | -2.44% | passes 16.67 ms |
+| `sparse-10000` | 8.072842 ms/step | 1.11% | -5.21% | passes 33.33 ms |
+| `pile-1000` | 6.500400 ms/step | 0.10% | -3.14% | passes 33.33 ms and containment |
+| `circle-1800` | 12.496713 ms/step | 0.25% | -1.14% | passes 16.67 ms and 12 mm overlap gate |
+| `circle-5000` | 53.174103 ms/step | 0.21% | -1.30% | passes 20 mm overlap gate; explicit 16.67 ms target remains open |
+
+The same file records the seven-process peak-RSS series after compacting the
+six opt-in body booleans into one internal flag byte:
+
+| Scenario | Median RSS | Incremental RSS | Change from Spec 10 | Gate |
+| --- | ---: | ---: | ---: | --- |
+| `release-parity` | 6,373,376 B | n/a | n/a | subtraction anchor |
+| `sparse-10000` | 13,615,104 B | 7,241,728 B, or 724.173 B/body | +1.61% | 1 KiB/body — passes |
+| `circle-5000` | 18,464,768 B | 12,091,392 B | +0.82% | body plus 16,194-pair allowance — passes |
+
+[`2026-08-26-spec13-gfx.log`](2026-08-26-spec13-gfx.log) contains the exact
+sentinel lines from the same acceptance session:
+
+| Sentinel | Median | MAD | Gate |
+| --- | ---: | ---: | --- |
+| Boids kernel, 4,000 | 83.573 FPS | 0.53% | +4.10% from 80.279 FPS; passes 95% floor |
+| Boids example, 2,000 | 689.761 FPS | 0.43% | passes 120 FPS |
+| World example, focused | 520.770 FPS | 1.53% | passes 120 FPS |
+| ShapeGallery | Release compilation and five-second smoke without diagnostics | n/a | automated smoke passes; final visual review pending |
+
+The isolated 0.5 consumer executes both the complete 0.4 world/body intent and
+the GFX catalog aliases. The public Events example also emits matching Mach-O
+ARM64, ELF X64, and PE/COFF X64 artifacts; only the ARM64 artifact was executed
+locally and reported one sensor begin/end pair, one contact begin/hit pair, and
+one movement event. X64 execution remains a release-matrix responsibility.
+The legacy discrete impulse and warm-start functions are absent from the
+candidate: worker count and workload can no longer select a second solver.
+
+Validate the archived graphical records with:
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckSentinels.py --enforce --boids-kernel-baseline 80.279 Packages/GFX.Physics/Benchmarks/Baselines/2026-08-26-spec13-gfx.log
+```
+
+Future candidates use `--enforce` and pass the accepted 4,000-boid median
+through `--boids-kernel-baseline`. No X64 timing baseline is expected:
+portable Silex changes use native GitHub Actions for correctness on the exact
+pushed commit instead.
 
 ## Infrastructure verification before capture
 

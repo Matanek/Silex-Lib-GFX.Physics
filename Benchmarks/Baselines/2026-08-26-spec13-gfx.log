@@ -1,0 +1,30 @@
+# captured=2026-08-26
+# os=macOS_26.5_arm64
+# cpu=Apple_M3_Pro
+# mode=release
+# compiler_version=0.41.0
+# compiler_commit=a48d2ddacd1b
+# protocol=one_discarded_warmup_then_seven_isolated_processes_per_sentinel
+SILEX_GFX_BOIDS count=4000 present=immediate fps=84.50352 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=84.13283 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=83.6202 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=83.12731 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=82.69096 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=83.572914 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=4000 present=immediate fps=83.35757 window=960.0x640.0 pixels=1920.0x1280.0 scale=2.0 density=2.0
+SILEX_GFX_BOIDS count=2000 present=immediate fps=693.62933
+SILEX_GFX_BOIDS count=2000 present=immediate fps=693.6773
+SILEX_GFX_BOIDS count=2000 present=immediate fps=686.8259
+SILEX_GFX_BOIDS count=2000 present=immediate fps=687.77435
+SILEX_GFX_BOIDS count=2000 present=immediate fps=692.6808
+SILEX_GFX_BOIDS count=2000 present=immediate fps=684.906
+SILEX_GFX_BOIDS count=2000 present=immediate fps=689.76086
+SILEX_GFX_WORLD seconds=5.000504 present=immediate grass=5000 moving=false focus=focused fps=528.7467 slowest_ms=17.948 pixels=1280.0x720.0 color_draws=28 shadow_draws=56 color_triangles=147903 shadow_triangles=148388
+SILEX_GFX_WORLD seconds=5.0009294 present=immediate grass=5000 moving=false focus=focused fps=554.097 slowest_ms=21.199999 pixels=1280.0x720.0 color_draws=18 shadow_draws=59 color_triangles=66603 shadow_triangles=176408
+SILEX_GFX_WORLD seconds=5.0022073 present=immediate grass=5000 moving=false focus=focused fps=520.7701 slowest_ms=18.276001 pixels=1280.0x720.0 color_draws=28 shadow_draws=56 color_triangles=147603 shadow_triangles=151328
+SILEX_GFX_WORLD seconds=5.0009694 present=immediate grass=5000 moving=false focus=focused fps=517.8996 slowest_ms=21.938 pixels=1280.0x720.0 color_draws=24 shadow_draws=57 color_triangles=112083 shadow_triangles=156128
+SILEX_GFX_WORLD seconds=5.000668 present=immediate grass=5000 moving=false focus=focused fps=519.5306 slowest_ms=22.016 pixels=1280.0x720.0 color_draws=23 shadow_draws=55 color_triangles=103383 shadow_triangles=137768
+SILEX_GFX_WORLD seconds=5.0004287 present=immediate grass=5000 moving=false focus=focused fps=540.55365 slowest_ms=23.27 pixels=1280.0x720.0 color_draws=26 shadow_draws=57 color_triangles=128523 shadow_triangles=158528
+SILEX_GFX_WORLD seconds=5.001377 present=immediate grass=5000 moving=false focus=focused fps=468.07108 slowest_ms=20.692 pixels=1280.0x720.0 color_draws=30 shadow_draws=57 color_triangles=162783 shadow_triangles=159248
+# ShapeGallery2D=Release_compilation_and_five_second_smoke_passed_without_diagnostics
+# ShapeGallery2D_visual_review=pending_human_confirmation
