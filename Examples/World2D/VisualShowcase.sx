@@ -353,19 +353,6 @@ func create_scene(
     create_joint_mechanism(scene, simulation, visuals)
 }
 
-func synchronize_bodies(
-    bodies:@Physics.RigidBody2D[],
-    body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
-) {
-    for (visual, transform) in body_visuals {
-        let body = bodies[visual.index]
-        transform.position = body.position().multiply(
-            Showcase.pixels_per_meter
-        )
-        transform.rotation = body.rotation()
-    }
-}
-
 func simulate(
     time:@Resources.FrameTime,
     simulation:&Simulation,
@@ -380,7 +367,13 @@ func simulate(
         simulation.world.step(Showcase.fixed_delta)
         simulation.accumulator -= Showcase.fixed_delta
     }
-    synchronize_bodies(simulation.bodies, body_visuals)
+    for (visual, transform) in body_visuals {
+        let body = simulation.bodies[visual.index]
+        transform.position = body.position().multiply(
+            Showcase.pixels_per_meter
+        )
+        transform.rotation = body.rotation()
+    }
     simulation.rendered_frames++
     if simulation.smoke_frames > 0 &&
         simulation.rendered_frames >= simulation.smoke_frames
