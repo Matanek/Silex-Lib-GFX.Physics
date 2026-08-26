@@ -28,7 +28,9 @@ The first vertical slice contains:
 - `Physics.Geometry2D`, the pure distance, overlap, manifold, ray-cast, and
   shape-cast boundary over transformed and filtered placements;
 - `Physics.BodyTransformBuffer2D`, reusable structure-of-arrays output for
-  bulk synchronization with a renderer or ECS.
+  bulk synchronization with a renderer or ECS;
+- typed distance, filter, motor, mouse, prismatic, revolute, weld, and wheel
+  joints created and owned by `Physics.World2D`.
 
 Body handles keep the direct public API while `World2D` stores hot body fields
 in parallel dense arrays: positions, velocities, inverse masses, inertias,
@@ -105,6 +107,17 @@ storage follow the substeps. One worker calls the same jobs directly, while a
 large color partitions the same kernel across the persistent executor. The
 twelfth overflow color remains explicitly ordered and scalar.
 
+Joints use a separate generational dense store behind their typed public
+handles. Creation converts world anchors and axes to local body data; body
+compaction therefore cannot invalidate a live constraint. Destroying a body
+first destroys every attached joint, while explicit joint destruction advances
+its own generation. Contact colors claim body masks first, then joint rows join
+the same twelve-color schedule. Warm start, biased sweeps, integration, and
+relaxation execute contacts and joints per color before advancing to the next
+color. The scalar overflow rule and 4,096-entry worker threshold are shared.
+Joint edges also enter the sleep union-find, and wake state propagates through
+an articulated component before active bodies are packed.
+
 Compact circle collisions are immutable during the solve; their normal,
 tangent, and accumulated restitution impulses live in a smaller mutable list.
 Groups of four normal constraints expose pairwise ARM64 SIMD opportunities
@@ -177,11 +190,11 @@ reports the four stable phases `motion_ms`, `broad_phase_ms`, `solve_ms`, and
 remain package-private.
 
 Every following capability must first appear in a focused executable example
-and a consumer-facing test. Forces, dynamic response for the new geometry,
-constraints, solver-level continuous collision detection, application
+and a consumer-facing test. External forces, dynamic response for the new
+geometry, solver-level continuous collision detection, application
 integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
-current contract. Dense contact
-joint solving extends the existing conflict-free constraint graph before it can
-safely use the worker pool. Additional SIMD kernels likewise depend on a
+current contract. Dense contact and joint solving already share the
+conflict-free constraint graph and worker pool. Additional SIMD kernels likewise
+depend on a
 portable vector surface in the Silex backend; the current SoA and contiguous
 constraint layouts are prepared for that work without exposing it publicly.

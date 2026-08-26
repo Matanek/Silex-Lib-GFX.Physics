@@ -6,6 +6,28 @@ use GFX.Physics.RigidBody2D.BodyStore2D
 use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.RigidBody2D.RigidBody2D
 use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.Joints2D.DistanceJoint2D
+use GFX.Physics.Joints2D.DistanceJoint2DSettings
+use GFX.Physics.Joints2D.FilterJoint2D
+use GFX.Physics.Joints2D.FilterJoint2DSettings
+use GFX.Physics.Joints2D.JointConstraint2D
+use GFX.Physics.Joints2D.JointId2D
+use GFX.Physics.Joints2D.JointKind2D
+use GFX.Physics.Joints2D.JointStore2D
+use GFX.Physics.Joints2D.MotorJoint2D
+use GFX.Physics.Joints2D.MotorJoint2DSettings
+use GFX.Physics.Joints2D.MouseJoint2D
+use GFX.Physics.Joints2D.MouseJoint2DSettings
+use GFX.Physics.Joints2D.PrismaticJoint2D
+use GFX.Physics.Joints2D.PrismaticJoint2DSettings
+use GFX.Physics.Joints2D.RevoluteJoint2D
+use GFX.Physics.Joints2D.RevoluteJoint2DSettings
+use GFX.Physics.Joints2D.SolveJoints2D
+use GFX.Physics.Joints2D.WarmStartJoints2D
+use GFX.Physics.Joints2D.WeldJoint2D
+use GFX.Physics.Joints2D.WeldJoint2DSettings
+use GFX.Physics.Joints2D.WheelJoint2D
+use GFX.Physics.Joints2D.WheelJoint2DSettings
 use GFX.Physics.BodyTransform2D.BodyTransform2D
 use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 use GFX.Physics.Geometry2D.Geometry2D
@@ -321,6 +343,7 @@ class SoftStepConstraintState2D {
 public class World2D {
     private var current_gravity:Math.Vec2
     private var store:BodyStore2D
+    private var joints:JointStore2D
     private var proxies:int[]
     private var tight_bounds:AABB2D[]
     private var broad_phase:BroadPhase2D
@@ -394,6 +417,7 @@ public class World2D {
     init(gravity:Math.Vec2 = Math.Vec2(0.0, -9.81)) {
         self.current_gravity = gravity
         self.store = BodyStore2D()
+        self.joints = JointStore2D(self.store)
         self.proxies = []
         self.tight_bounds = []
         self.broad_phase = BroadPhase2D()
@@ -648,6 +672,9 @@ public class World2D {
         for count in self.constraint_color_counts {
             if count > maximum { maximum = count }
         }
+        for count in self.joints.color_counts {
+            if count > maximum { maximum = count }
+        }
         return maximum
     }
 
@@ -844,15 +871,436 @@ public class World2D {
         return RigidBody2D(self.store, id)
     }
 
+    func joint_count() int { return self.joints.count() }
+
+    func create_distance_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:DistanceJoint2DSettings = DistanceJoint2DSettings()
+    ) DistanceJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        if settings.length < -1.0 || settings.minimum_length < 0.0 ||
+            settings.maximum_length < settings.minimum_length ||
+            settings.spring_hertz < 0.0 ||
+            settings.spring_damping_ratio < 0.0 ||
+            settings.maximum_motor_force < 0.0
+        {
+            panic("GFX.Physics distance joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.distance,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            first_index,
+            settings.first_anchor
+        )
+        joint.second_anchor = body_local_point(
+            self.store,
+            second_index,
+            settings.second_anchor
+        )
+        var length = settings.length
+        if length < 0.0 {
+            length = settings.second_anchor.subtract(
+                settings.first_anchor
+            ).length()
+        }
+        joint.scalar_target = length
+        joint.minimum = settings.minimum_length
+        joint.maximum = settings.maximum_length
+        joint.spring_hertz = settings.spring_hertz
+        joint.spring_damping_ratio = settings.spring_damping_ratio
+        joint.motor_speed = settings.motor_speed
+        joint.maximum_motor_force = settings.maximum_motor_force
+        joint.spring_enabled = settings.spring_enabled
+        joint.limit_enabled = settings.limit_enabled
+        joint.motor_enabled = settings.motor_enabled
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return DistanceJoint2D(self.joints, id)
+    }
+
+    func create_filter_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:FilterJoint2DSettings = FilterJoint2DSettings()
+    ) FilterJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        var joint = JointConstraint2D(
+            JointKind2D.filter,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.collide_connected = false
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return FilterJoint2D(self.joints, id)
+    }
+
+    func create_motor_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:MotorJoint2DSettings = MotorJoint2DSettings()
+    ) MotorJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        if settings.maximum_force < 0.0 || settings.maximum_torque < 0.0 ||
+            settings.correction_factor < 0.0 ||
+            settings.correction_factor > 1.0
+        {
+            panic("GFX.Physics motor joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.motor,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.linear_target = settings.linear_offset
+        joint.reference_angle = settings.angular_offset
+        joint.maximum_motor_force = settings.maximum_force
+        joint.maximum_motor_torque = settings.maximum_torque
+        joint.correction_factor = settings.correction_factor
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return MotorJoint2D(self.joints, id)
+    }
+
+    func create_mouse_joint(
+        body:RigidBody2D,
+        settings:MouseJoint2DSettings = MouseJoint2DSettings()
+    ) MouseJoint2D {
+        let body_index = self.require_joint_body(body)
+        if settings.spring_hertz < 0.0 ||
+            settings.spring_damping_ratio < 0.0 ||
+            settings.maximum_force < 0.0
+        {
+            panic("GFX.Physics mouse joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.mouse,
+            body.body_id(),
+            body.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            body_index,
+            settings.target
+        )
+        joint.linear_target = settings.target
+        joint.spring_hertz = settings.spring_hertz
+        joint.spring_damping_ratio = settings.spring_damping_ratio
+        joint.maximum_motor_force = settings.maximum_force
+        joint.spring_enabled = true
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(body_index, body_index, joint)
+        return MouseJoint2D(self.joints, id)
+    }
+
+    func create_prismatic_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:PrismaticJoint2DSettings = PrismaticJoint2DSettings()
+    ) PrismaticJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        let axis = normalized_joint_axis(settings.axis)
+        if settings.lower_translation > settings.upper_translation ||
+            settings.spring_hertz < 0.0 ||
+            settings.spring_damping_ratio < 0.0 ||
+            settings.maximum_motor_force < 0.0
+        {
+            panic("GFX.Physics prismatic joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.prismatic,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            first_index,
+            settings.anchor
+        )
+        joint.second_anchor = body_local_point(
+            self.store,
+            second_index,
+            settings.anchor
+        )
+        joint.local_axis = body_local_vector(self.store, first_index, axis)
+        joint.reference_angle = self.store.rotations[second_index] -
+            self.store.rotations[first_index]
+        joint.scalar_target = settings.target_translation
+        joint.minimum = settings.lower_translation
+        joint.maximum = settings.upper_translation
+        joint.spring_hertz = settings.spring_hertz
+        joint.spring_damping_ratio = settings.spring_damping_ratio
+        joint.motor_speed = settings.motor_speed
+        joint.maximum_motor_force = settings.maximum_motor_force
+        joint.spring_enabled = settings.spring_enabled
+        joint.limit_enabled = settings.limit_enabled
+        joint.motor_enabled = settings.motor_enabled
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return PrismaticJoint2D(self.joints, id)
+    }
+
+    func create_revolute_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:RevoluteJoint2DSettings = RevoluteJoint2DSettings()
+    ) RevoluteJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        if settings.lower_angle > settings.upper_angle ||
+            settings.spring_hertz < 0.0 ||
+            settings.spring_damping_ratio < 0.0 ||
+            settings.maximum_motor_torque < 0.0
+        {
+            panic("GFX.Physics revolute joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.revolute,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            first_index,
+            settings.anchor
+        )
+        joint.second_anchor = body_local_point(
+            self.store,
+            second_index,
+            settings.anchor
+        )
+        joint.reference_angle = self.store.rotations[second_index] -
+            self.store.rotations[first_index]
+        joint.scalar_target = settings.target_angle
+        joint.minimum = settings.lower_angle
+        joint.maximum = settings.upper_angle
+        joint.spring_hertz = settings.spring_hertz
+        joint.spring_damping_ratio = settings.spring_damping_ratio
+        joint.motor_speed = settings.motor_speed
+        joint.maximum_motor_torque = settings.maximum_motor_torque
+        joint.spring_enabled = settings.spring_enabled
+        joint.limit_enabled = settings.limit_enabled
+        joint.motor_enabled = settings.motor_enabled
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return RevoluteJoint2D(self.joints, id)
+    }
+
+    func create_weld_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:WeldJoint2DSettings = WeldJoint2DSettings()
+    ) WeldJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        if settings.linear_hertz < 0.0 ||
+            settings.linear_damping_ratio < 0.0 ||
+            settings.angular_hertz < 0.0 ||
+            settings.angular_damping_ratio < 0.0
+        {
+            panic("GFX.Physics weld joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.weld,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            first_index,
+            settings.anchor
+        )
+        joint.second_anchor = body_local_point(
+            self.store,
+            second_index,
+            settings.anchor
+        )
+        joint.reference_angle = self.store.rotations[second_index] -
+            self.store.rotations[first_index]
+        joint.spring_hertz = settings.linear_hertz
+        joint.spring_damping_ratio = settings.linear_damping_ratio
+        joint.angular_hertz = settings.angular_hertz
+        joint.angular_damping_ratio = settings.angular_damping_ratio
+        joint.spring_enabled = settings.linear_hertz > 0.0 ||
+            settings.angular_hertz > 0.0
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return WeldJoint2D(self.joints, id)
+    }
+
+    func create_wheel_joint(
+        first:RigidBody2D,
+        second:RigidBody2D,
+        settings:WheelJoint2DSettings = WheelJoint2DSettings()
+    ) WheelJoint2D {
+        let first_index = self.require_joint_body(first)
+        let second_index = self.require_joint_body(second)
+        self.require_distinct_joint_bodies(first, second)
+        let axis = normalized_joint_axis(settings.axis)
+        if settings.lower_translation > settings.upper_translation ||
+            settings.spring_hertz < 0.0 ||
+            settings.spring_damping_ratio < 0.0 ||
+            settings.maximum_motor_torque < 0.0
+        {
+            panic("GFX.Physics wheel joint settings are invalid")
+        }
+        var joint = JointConstraint2D(
+            JointKind2D.wheel,
+            first.body_id(),
+            second.body_id()
+        )
+        joint.first_anchor = body_local_point(
+            self.store,
+            first_index,
+            settings.anchor
+        )
+        joint.second_anchor = body_local_point(
+            self.store,
+            second_index,
+            settings.anchor
+        )
+        joint.local_axis = body_local_vector(self.store, first_index, axis)
+        joint.minimum = settings.lower_translation
+        joint.maximum = settings.upper_translation
+        joint.spring_hertz = settings.spring_hertz
+        joint.spring_damping_ratio = settings.spring_damping_ratio
+        joint.motor_speed = settings.motor_speed
+        joint.maximum_motor_torque = settings.maximum_motor_torque
+        joint.spring_enabled = settings.spring_enabled
+        joint.limit_enabled = settings.limit_enabled
+        joint.motor_enabled = settings.motor_enabled
+        joint.collide_connected = settings.collide_connected
+        let id = self.joints.append(joint)
+        self.finish_joint_creation(first_index, second_index, joint)
+        return WheelJoint2D(self.joints, id)
+    }
+
+    func destroy_joint(joint:DistanceJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:FilterJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:MotorJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:MouseJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:PrismaticJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:RevoluteJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:WeldJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+    func destroy_joint(joint:WheelJoint2D) {
+        self.destroy_joint_id(joint.belongs_to(self.joints), joint.joint_id())
+    }
+
     func destroy_rigid_body(body:RigidBody2D) {
         if !body.belongs_to(self.store) {
             panic("GFX.Physics.World2D cannot destroy a body owned by another world")
         }
         let id = body.body_id()
         let index = self.store.require(id)
+        self.joints.destroy_attached(id)
         self.swap_remove_world_body(index)
         self.store.destroy(id)
         self.rebuild_after_body_destruction()
+    }
+
+    private func require_joint_body(body:RigidBody2D) int {
+        if !body.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot join a body owned by another world")
+        }
+        return self.store.require(body.body_id())
+    }
+
+    private func require_distinct_joint_bodies(
+        first:RigidBody2D,
+        second:RigidBody2D
+    ) {
+        if first.body_id().slot == second.body_id().slot {
+            panic("GFX.Physics joint bodies must be distinct")
+        }
+    }
+
+    private func finish_joint_creation(
+        first:int,
+        second:int,
+        joint:JointConstraint2D
+    ) {
+        self.store.wake(first)
+        if second != first { self.store.wake(second) }
+        if !joint.collide_connected {
+            self.invalidate_candidate_between(first, second)
+        }
+    }
+
+    private func destroy_joint_id(owned:bool, id:JointId2D) {
+        if !owned {
+            panic("GFX.Physics.World2D cannot destroy a joint owned by another world")
+        }
+        let first_id = self.joints.first_body(id)
+        let second_id = self.joints.second_body(id)
+        var first = -1
+        var second = -1
+        if self.store.contains(first_id) { first = self.store.require(first_id) }
+        if self.store.contains(second_id) { second = self.store.require(second_id) }
+        self.joints.destroy(id)
+        if first >= 0 { self.broad_phase.touch_proxy(self.proxies[first]) }
+        if second >= 0 && second != first {
+            self.broad_phase.touch_proxy(self.proxies[second])
+        }
+    }
+
+    private func invalidate_candidate_between(first:int, second:int) {
+        if first == second { return }
+        var pair = BodyPair2D(first, second)
+        if first > second { pair = BodyPair2D(second, first) }
+        var index = 0
+        while index < self.candidate_bodies.count() {
+            if self.candidate_enabled[index] {
+                let current = self.candidate_bodies[index]
+                if current.first == pair.first && current.second == pair.second {
+                    self.candidate_pair_keys.remove(current)
+                    self.candidate_enabled[index] = false
+                    if self.free_candidate_count ==
+                        self.free_candidate_slots.count()
+                    {
+                        self.free_candidate_slots.append(index)
+                    } else {
+                        self.free_candidate_slots[self.free_candidate_count] = index
+                    }
+                    self.free_candidate_count++
+                    return
+                }
+            }
+            index++
+        }
     }
 
     func step(delta:float) {
@@ -862,6 +1310,7 @@ public class World2D {
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
         self.dynamic_grid_active = self.maximum_dynamic_shape_radius > 0.0
+        self.joints.propagate_wake()
         self.rebuild_active_bodies()
         var index = 0
         while index < self.store.count() {
@@ -1154,6 +1603,25 @@ public class World2D {
             }
             collision_index++
         }
+        var joint_index = 0
+        while joint_index < self.joints.joints.count() {
+            let joint = self.joints.joints[joint_index]
+            if joint.kind != JointKind2D.filter &&
+                joint.first_body.slot != joint.second_body.slot
+            {
+                let first = self.store.require(joint.first_body)
+                let second = self.store.require(joint.second_body)
+                if self.store.body_types[first] == BodyType2D.dynamic &&
+                    self.store.body_types[second] == BodyType2D.dynamic &&
+                    self.store.awake[first] && self.store.awake[second] &&
+                    self.store.allow_sleep[first] &&
+                    self.store.allow_sleep[second]
+                {
+                    self.union_sleep_bodies(first, second)
+                }
+            }
+            joint_index++
+        }
         var candidate_index = 0
         while candidate_index < self.candidate_pairs.count() {
             if !self.candidate_enabled[candidate_index] ||
@@ -1439,6 +1907,12 @@ public class World2D {
                 overlaps = self.tight_bounds[pair.first].overlaps(
                     self.tight_bounds[pair.second]
                 )
+            }
+            if overlaps && !self.joints.collision_allowed(
+                self.store.body_id_at(pair.first),
+                self.store.body_id_at(pair.second)
+            ) {
+                overlaps = false
             }
             if !overlaps {
                 self.candidate_pair_keys.remove(pair)
@@ -1917,6 +2391,12 @@ public class World2D {
         ) {
             return
         }
+        if !self.joints.collision_allowed(
+            self.store.body_id_at(pair.first),
+            self.store.body_id_at(pair.second)
+        ) {
+            return
+        }
         self.candidate_pair_keys.add(pair)
         if self.free_candidate_count > 0 {
             self.free_candidate_count--
@@ -2083,6 +2563,7 @@ public class World2D {
             self.constraint_color_cursors[color]++
             source++
         }
+        self.joints.build_colors(self.constraint_body_color_masks)
     }
 
     private func execute_begin_soft_step_bodies() {
@@ -2171,6 +2652,29 @@ public class World2D {
         job.execute(0, count)
     }
 
+    private func execute_warm_start_joint_color(color:int) {
+        let count = self.joints.color_count(color)
+        if count == 0 { return }
+        var job = WarmStartJoints2D(
+            bodies:self.store,
+            joints:self.joints,
+            offset:self.joints.color_offset(color),
+            count:count,
+            reverse:false
+        )
+        if self.parallel_enabled && color < 11 &&
+            count >= soft_step_constraint_parallel_threshold()
+        {
+            if var executor = self.parallel_executor {
+                var shared = executor
+                shared.submit_parallel(count, job).complete()
+                self.current_soft_step_parallel_dispatch_count++
+                return
+            }
+        }
+        job.execute(0, count)
+    }
+
     private func execute_solve_color(
         color:int,
         contact_softness:ContactSoftness2D,
@@ -2194,6 +2698,36 @@ public class World2D {
             inverse_delta:inverse_delta,
             use_bias:use_bias,
             solve_friction:solve_friction
+        )
+        if self.parallel_enabled && color < 11 &&
+            count >= soft_step_constraint_parallel_threshold()
+        {
+            if var executor = self.parallel_executor {
+                var shared = executor
+                shared.submit_parallel(count, job).complete()
+                self.current_soft_step_parallel_dispatch_count++
+                return
+            }
+        }
+        job.execute(0, count)
+    }
+
+    private func execute_solve_joint_color(
+        color:int,
+        inverse_delta:float,
+        use_bias:bool,
+        reverse:bool
+    ) {
+        let count = self.joints.color_count(color)
+        if count == 0 { return }
+        var job = SolveJoints2D(
+            bodies:self.store,
+            joints:self.joints,
+            offset:self.joints.color_offset(color),
+            count:count,
+            reverse:reverse,
+            inverse_delta:inverse_delta,
+            use_bias:use_bias
         )
         if self.parallel_enabled && color < 11 &&
             count >= soft_step_constraint_parallel_threshold()
@@ -2339,6 +2873,7 @@ public class World2D {
                 var color = 0
                 while color < 12 {
                     self.execute_warm_start_color(color)
+                    self.execute_warm_start_joint_color(color)
                     color++
                 }
                 self.current_soft_step_stages.append(4)
@@ -2360,6 +2895,12 @@ public class World2D {
                             solve_iteration == 1,
                             solve_iteration % 2 == 1
                         )
+                        self.execute_solve_joint_color(
+                            color,
+                            inverse_substep_delta,
+                            true,
+                            solve_iteration % 2 == 1
+                        )
                         color += color_step
                     }
                     self.current_soft_step_stages.append(5)
@@ -2378,6 +2919,12 @@ public class World2D {
                         false,
                         false
                     )
+                    self.execute_solve_joint_color(
+                        color,
+                        inverse_substep_delta,
+                        false,
+                        false
+                    )
                     color++
                 }
                 self.current_soft_step_stages.append(7)
@@ -2391,6 +2938,9 @@ public class World2D {
             self.current_soft_step_stages.append(8)
             self.clip_body_motion_against_fixed_boxes()
             self.current_soft_step_stages.append(9)
+            self.joints.finish_step(1.0 / delta)
+        } else {
+            self.joints.finish_step(0.0)
         }
         if self.profiling_enabled {
             self.current_collision_warm_start_ms = 0.0
@@ -2489,6 +3039,14 @@ public class World2D {
             if motion.dot(motion) <= 0.000000000001 { continue }
             for fixed_body in self.fixed_bodies {
                 if self.store.shape_kinds[fixed_body] != 0 { continue }
+                if !self.store.collision_filters[body].allows(
+                    self.store.collision_filters[fixed_body]
+                ) || !self.joints.collision_allowed(
+                    self.store.body_id_at(body),
+                    self.store.body_id_at(fixed_body)
+                ) {
+                    continue
+                }
                 let fixed_position = body_position(self.store, fixed_body)
                 let axis_x = body_axis_x(self.store, fixed_body)
                 let axis_y = body_axis_y(self.store, fixed_body)
@@ -5680,6 +6238,27 @@ func body_local_point(
         offset_x * cosine + offset_y * sine,
         offset_y * cosine - offset_x * sine
     )
+}
+
+func body_local_vector(
+    store:BodyStore2D,
+    index:int,
+    vector:Math.Vec2
+) Math.Vec2 {
+    let cosine = store.rotation_cosines[index]
+    let sine = store.rotation_sines[index]
+    return Math.Vec2(
+        vector.x * cosine + vector.y * sine,
+        vector.y * cosine - vector.x * sine
+    )
+}
+
+func normalized_joint_axis(axis:Math.Vec2) Math.Vec2 {
+    let length = axis.length()
+    if length <= 0.000001 {
+        panic("GFX.Physics joint axis must be non-zero")
+    }
+    return axis.multiply(1.0 / length)
 }
 
 func body_contact_cache_point(

@@ -15,6 +15,9 @@ silex run Packages/GFX.Physics/Benchmarks/Scale2D.sx --release
 silex compile Packages/GFX.Physics/Benchmarks/CircleScale2D.sx --release -o /tmp/gfx-circle-scale
 /tmp/gfx-circle-scale --count-5000 --long --awake
 /tmp/gfx-circle-scale --count-1800 --falling-body --medium --awake
+silex compile Packages/GFX.Physics/Benchmarks/JointScale2D.sx --release -o /tmp/gfx-joint-scale
+/tmp/gfx-joint-scale
+/tmp/gfx-joint-scale --workers-4
 ```
 
 `Scale2D.sx` enables four persistent workers. Its sparse case keeps every body
@@ -30,6 +33,14 @@ sleep, so the 5,000-body result measures all bodies and contacts on every one of
 graphical example's 0.05 m radius and 87-column layout; `--count-1800` makes the
 workload from the interactive performance panel reproducible without depending
 on emission timing.
+
+`JointScale2D.sx` isolates 4,096 awake bodies, each owned by one mouse joint in
+the same conflict-free color. Creation is outside the measured interval. The
+single-worker Release median is currently 54.970 ms/step and the four-worker
+median is 60.561 ms/step across seven isolated runs on the macOS ARM64 reference
+machine. Both retain the exact same state signature; four workers dispatch 16
+joint jobs per step but are 10.17% slower. This is a published scheduling and
+native-code optimization target, not a speedup claim or a cadence gate.
 
 The current budgets are:
 

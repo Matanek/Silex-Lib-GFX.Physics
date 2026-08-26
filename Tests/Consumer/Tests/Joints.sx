@@ -1,0 +1,278 @@
+use GFX.Physics
+use STD.Math
+
+test "constrain two bodies with a distance spring" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2()
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+    var joint = world.create_distance_joint(
+        fixed_body,
+        moving,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2()
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+            ..length = 1.0
+            ..spring_hertz = 6.0
+            ..spring_damping_ratio = 1.0
+            ..spring_enabled = true
+    )
+
+    world.step(1.0 / 120.0)
+    assert(joint.constraint_force().length() > 0.0)
+    var step = 1
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(joint.is_valid())
+    assert(Math.abs(joint.current_length() - 1.0) < 0.05)
+}
+
+test "disable connected collisions with a filter joint" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings())
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings())
+
+    world.step(0.0)
+    assert(world.candidate_pair_count() == 1)
+    var joint = world.create_filter_joint(first, second)
+    world.step(0.0)
+    assert(joint.is_valid())
+    assert(world.candidate_pair_count() == 0)
+
+    world.destroy_joint(joint)
+    world.step(0.0)
+    assert(!joint.is_valid())
+    assert(world.candidate_pair_count() == 1)
+}
+
+test "drive a body toward a motor joint offset" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(3.0, 0.0)
+        ..rotation = 0.8
+        ..allow_sleep = false
+    )
+    var joint = world.create_motor_joint(
+        fixed_body,
+        moving,
+        Physics.MotorJoint2DSettings()
+            ..linear_offset = Math.Vec2(1.0, 0.0)
+            ..angular_offset = 0.2
+            ..maximum_force = 100.0
+            ..maximum_torque = 100.0
+            ..correction_factor = 0.5
+    )
+
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(moving.position().nearly_equal(Math.Vec2(1.0, 0.0), 0.05))
+    assert(Math.abs(moving.rotation() - 0.2) < 0.05)
+    assert(joint.constraint_force().length() ==
+        joint.constraint_force().length())
+    assert(joint.constraint_torque() == joint.constraint_torque())
+}
+
+test "retarget a body through a mouse joint" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..allow_sleep = false
+    )
+    var joint = world.create_mouse_joint(
+        moving,
+        Physics.MouseJoint2DSettings()
+            ..target = Math.Vec2()
+            ..spring_hertz = 8.0
+            ..spring_damping_ratio = 1.0
+            ..maximum_force = 200.0
+    )
+    joint.set_target(Math.Vec2(2.0, 0.0))
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    assert(moving.position().x > 1.8)
+
+    joint.set_target(Math.Vec2(-1.0, 0.0))
+    step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    assert(moving.position().x < -0.8)
+    assert(joint.constraint_force().length() ==
+        joint.constraint_force().length())
+}
+
+test "enforce prismatic limits and a linear motor" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..velocity = Math.Vec2(8.0, 3.0)
+        ..allow_sleep = false
+    )
+    var joint = world.create_prismatic_joint(
+        fixed_body,
+        moving,
+        Physics.PrismaticJoint2DSettings()
+            ..anchor = Math.Vec2()
+            ..axis = Math.Vec2(1.0, 0.0)
+            ..lower_translation = -0.5
+            ..upper_translation = 0.5
+            ..motor_speed = 2.0
+            ..maximum_motor_force = 40.0
+            ..limit_enabled = true
+            ..motor_enabled = true
+    )
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(Math.abs(moving.position().y) < 0.03)
+    assert(joint.translation() <= 0.55)
+    assert(joint.translation() >= -0.55)
+    assert(joint.motor_force() <= 40.01)
+}
+
+test "rotate around a revolute anchor with limits and a motor" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+    )
+    var joint = world.create_revolute_joint(
+        fixed_body,
+        moving,
+        Physics.RevoluteJoint2DSettings()
+            ..anchor = Math.Vec2()
+            ..lower_angle = -0.4
+            ..upper_angle = 0.4
+            ..motor_speed = 1.0
+            ..maximum_motor_torque = 20.0
+            ..limit_enabled = true
+            ..motor_enabled = true
+    )
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(joint.angle() <= 0.45)
+    assert(joint.angle() >= -0.45)
+    assert(Math.abs(moving.position().length() - 1.0) < 0.05)
+    assert(Math.abs(joint.motor_torque()) <= 20.01)
+}
+
+test "preserve a welded relative transform" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+        ..velocity = Math.Vec2(0.0, 5.0)
+        ..angular_velocity = 4.0
+        ..allow_sleep = false
+    )
+    var joint = world.create_weld_joint(
+        fixed_body,
+        moving,
+        Physics.WeldJoint2DSettings()
+            ..anchor = Math.Vec2(0.5, 0.0)
+            ..linear_hertz = 8.0
+            ..linear_damping_ratio = 1.0
+            ..angular_hertz = 8.0
+            ..angular_damping_ratio = 1.0
+    )
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(moving.position().nearly_equal(Math.Vec2(1.0, 0.0), 0.05))
+    assert(Math.abs(moving.rotation()) < 0.05)
+    assert(joint.constraint_force().length() ==
+        joint.constraint_force().length())
+}
+
+test "suspend and drive a wheel joint" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var wheel = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.4)
+        ..allow_sleep = false
+    )
+    var joint = world.create_wheel_joint(
+        fixed_body,
+        wheel,
+        Physics.WheelJoint2DSettings()
+            ..anchor = Math.Vec2(0.0, 0.4)
+            ..axis = Math.Vec2(0.0, 1.0)
+            ..spring_hertz = 5.0
+            ..spring_damping_ratio = 1.0
+            ..lower_translation = -0.5
+            ..upper_translation = 0.5
+            ..motor_speed = 3.0
+            ..maximum_motor_torque = 20.0
+            ..spring_enabled = true
+            ..limit_enabled = true
+            ..motor_enabled = true
+    )
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(Math.abs(wheel.position().x) < 0.03)
+    assert(joint.translation() <= 0.55)
+    assert(joint.translation() >= -0.55)
+    assert(Math.abs(wheel.angular_velocity() - 3.0) < 0.2)
+    assert(Math.abs(joint.motor_torque()) <= 20.01)
+}
+
+test "invalidate attached joints when a body is destroyed" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings())
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+    )
+    var joint = world.create_distance_joint(
+        first,
+        second,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2()
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+    )
+
+    assert(world.joint_count() == 1)
+    world.destroy_rigid_body(second)
+    assert(!joint.is_valid())
+    assert(world.joint_count() == 0)
+}

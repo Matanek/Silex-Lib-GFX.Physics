@@ -1,0 +1,14 @@
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3302.0781,"per_step_ms":55.034634,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3294.5671,"per_step_ms":54.90945,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3298.2122,"per_step_ms":54.970203,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3316.246,"per_step_ms":55.270767,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3289.897,"per_step_ms":54.831615,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3288.8032,"per_step_ms":54.81339,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":1,"steps":60,"elapsed_ms":3299.053,"per_step_ms":54.984215,"dispatches":0,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3696.244,"per_step_ms":61.604065,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3616.5728,"per_step_ms":60.27621,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3646.149,"per_step_ms":60.76915,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3646.525,"per_step_ms":60.775414,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3623.5408,"per_step_ms":60.392345,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3612.588,"per_step_ms":60.209797,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}
+SILEX_PHYSICS_JOINTS {"scenario":"mouse-4096","workers":4,"steps":60,"elapsed_ms":3633.667,"per_step_ms":60.561115,"dispatches":960,"signature_x":16773632.0,"signature_y":0.0}

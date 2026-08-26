@@ -151,6 +151,29 @@ storage. The checker now requires `persistent_pairs` for dense RSS records and
 passes this baseline with `--enforce` while continuing to report the missed
 `circle-5000` cadence target.
 
+## Spec 11 joint-color observation
+
+[`2026-08-26-spec11-joints.jsonl`](2026-08-26-spec11-joints.jsonl) records the
+new `mouse-4096` workload on the same MacBook Pro `Mac15,7`, Apple M3 Pro,
+macOS 26.5.2 ARM64 host. It uses Silex `0.41.0` at `a48d2dd` and the Spec 11
+candidate based on GFX.Physics `a89031b`. Creation is outside the measured
+region; each isolated Release process advances 4,096 awake bodies and mouse
+joints for 60 steps. One discarded warm-up per worker configuration precedes
+seven recorded processes.
+
+| Workers | Median | MAD | Dispatches/process | State signature |
+| --- | ---: | ---: | ---: | --- |
+| 1 | 54.970 ms/step | 0.12% | 0 | `16773632.0, 0.0` |
+| 4 | 60.561 ms/step | 0.35% | 960 | `16773632.0, 0.0` |
+
+The exact signature and the focused correctness test prove that the parallel
+joint color executes deterministically. They do not prove a speedup: four
+workers are 10.17% slower on this workload because the sixteen joint-stage
+dispatches per step cost more than their partitioned work saves. Spec 11 sets
+no cadence gate for this new workload, so this is a published optimization
+target rather than a waived regression. It must not be generalized to X64 or
+to contact-heavy scenes.
+
 After review, add `--enforce` for future candidates and pass the accepted
 4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
 expected: portable Silex changes use native GitHub Actions for correctness on

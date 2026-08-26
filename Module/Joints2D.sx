@@ -1,0 +1,1615 @@
+use GFX.Physics.RigidBody2D.BodyId2D
+use GFX.Physics.RigidBody2D.BodyStore2D
+use STD.Math
+use STD.Threading
+
+public struct DistanceJoint2DSettings {
+    var first_anchor:Math.Vec2
+    var second_anchor:Math.Vec2
+    var length:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var minimum_length:float
+    var maximum_length:float
+    var motor_speed:float
+    var maximum_motor_force:float
+    var spring_enabled:bool
+    var limit_enabled:bool
+    var motor_enabled:bool
+    var collide_connected:bool
+
+    init() {
+        self.first_anchor = Math.Vec2()
+        self.second_anchor = Math.Vec2()
+        self.length = -1.0
+        self.spring_hertz = 0.0
+        self.spring_damping_ratio = 0.0
+        self.minimum_length = 0.0
+        self.maximum_length = 1_000_000.0
+        self.motor_speed = 0.0
+        self.maximum_motor_force = 0.0
+        self.spring_enabled = false
+        self.limit_enabled = false
+        self.motor_enabled = false
+        self.collide_connected = false
+    }
+}
+
+public struct MotorJoint2DSettings {
+    var linear_offset:Math.Vec2
+    var angular_offset:float
+    var maximum_force:float
+    var maximum_torque:float
+    var correction_factor:float
+    var collide_connected:bool
+
+    init() {
+        self.linear_offset = Math.Vec2()
+        self.angular_offset = 0.0
+        self.maximum_force = 1.0
+        self.maximum_torque = 1.0
+        self.correction_factor = 0.3
+        self.collide_connected = false
+    }
+}
+
+public struct MouseJoint2DSettings {
+    var target:Math.Vec2
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var maximum_force:float
+
+    init() {
+        self.target = Math.Vec2()
+        self.spring_hertz = 5.0
+        self.spring_damping_ratio = 0.7
+        self.maximum_force = 1.0
+    }
+}
+
+public struct FilterJoint2DSettings {
+    init() {}
+}
+
+public struct PrismaticJoint2DSettings {
+    var anchor:Math.Vec2
+    var axis:Math.Vec2
+    var target_translation:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var lower_translation:float
+    var upper_translation:float
+    var motor_speed:float
+    var maximum_motor_force:float
+    var spring_enabled:bool
+    var limit_enabled:bool
+    var motor_enabled:bool
+    var collide_connected:bool
+
+    init() {
+        self.anchor = Math.Vec2()
+        self.axis = Math.Vec2(1.0, 0.0)
+        self.target_translation = 0.0
+        self.spring_hertz = 0.0
+        self.spring_damping_ratio = 0.0
+        self.lower_translation = 0.0
+        self.upper_translation = 0.0
+        self.motor_speed = 0.0
+        self.maximum_motor_force = 0.0
+        self.spring_enabled = false
+        self.limit_enabled = false
+        self.motor_enabled = false
+        self.collide_connected = false
+    }
+}
+
+public struct RevoluteJoint2DSettings {
+    var anchor:Math.Vec2
+    var target_angle:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var lower_angle:float
+    var upper_angle:float
+    var motor_speed:float
+    var maximum_motor_torque:float
+    var spring_enabled:bool
+    var limit_enabled:bool
+    var motor_enabled:bool
+    var collide_connected:bool
+
+    init() {
+        self.anchor = Math.Vec2()
+        self.target_angle = 0.0
+        self.spring_hertz = 0.0
+        self.spring_damping_ratio = 0.0
+        self.lower_angle = 0.0
+        self.upper_angle = 0.0
+        self.motor_speed = 0.0
+        self.maximum_motor_torque = 0.0
+        self.spring_enabled = false
+        self.limit_enabled = false
+        self.motor_enabled = false
+        self.collide_connected = false
+    }
+}
+
+public struct WeldJoint2DSettings {
+    var anchor:Math.Vec2
+    var linear_hertz:float
+    var linear_damping_ratio:float
+    var angular_hertz:float
+    var angular_damping_ratio:float
+    var collide_connected:bool
+
+    init() {
+        self.anchor = Math.Vec2()
+        self.linear_hertz = 0.0
+        self.linear_damping_ratio = 1.0
+        self.angular_hertz = 0.0
+        self.angular_damping_ratio = 1.0
+        self.collide_connected = false
+    }
+}
+
+public struct WheelJoint2DSettings {
+    var anchor:Math.Vec2
+    var axis:Math.Vec2
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var lower_translation:float
+    var upper_translation:float
+    var motor_speed:float
+    var maximum_motor_torque:float
+    var spring_enabled:bool
+    var limit_enabled:bool
+    var motor_enabled:bool
+    var collide_connected:bool
+
+    init() {
+        self.anchor = Math.Vec2()
+        self.axis = Math.Vec2(0.0, 1.0)
+        self.spring_hertz = 1.0
+        self.spring_damping_ratio = 0.7
+        self.lower_translation = 0.0
+        self.upper_translation = 0.0
+        self.motor_speed = 0.0
+        self.maximum_motor_torque = 0.0
+        self.spring_enabled = true
+        self.limit_enabled = false
+        self.motor_enabled = false
+        self.collide_connected = false
+    }
+}
+
+package enum JointKind2D {
+    distance
+    filter
+    motor
+    mouse
+    prismatic
+    revolute
+    weld
+    wheel
+}
+
+package struct JointId2D {
+    let slot:int
+    let generation:int
+
+    init() {
+        self.slot = -1
+        self.generation = 0
+    }
+
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package struct JointConstraint2D {
+    var kind:JointKind2D
+    var first_body:BodyId2D
+    var second_body:BodyId2D
+    var first_anchor:Math.Vec2
+    var second_anchor:Math.Vec2
+    var local_axis:Math.Vec2
+    var linear_target:Math.Vec2
+    var reference_angle:float
+    var scalar_target:float
+    var minimum:float
+    var maximum:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
+    var angular_hertz:float
+    var angular_damping_ratio:float
+    var motor_speed:float
+    var maximum_motor_force:float
+    var maximum_motor_torque:float
+    var correction_factor:float
+    var spring_enabled:bool
+    var limit_enabled:bool
+    var motor_enabled:bool
+    var collide_connected:bool
+    var linear_impulse:Math.Vec2
+    var axial_impulse:float
+    var angular_impulse:float
+    var motor_impulse:float
+    var lower_impulse:float
+    var upper_impulse:float
+    var current_translation:float
+    var current_speed:float
+    var current_angle:float
+    var reaction_force:Math.Vec2
+    var reaction_torque:float
+    var current_motor_force:float
+    var current_motor_torque:float
+
+    init(kind:JointKind2D, first_body:BodyId2D, second_body:BodyId2D) {
+        self.kind = kind
+        self.first_body = first_body
+        self.second_body = second_body
+        self.first_anchor = Math.Vec2()
+        self.second_anchor = Math.Vec2()
+        self.local_axis = Math.Vec2(1.0, 0.0)
+        self.linear_target = Math.Vec2()
+        self.reference_angle = 0.0
+        self.scalar_target = 0.0
+        self.minimum = 0.0
+        self.maximum = 0.0
+        self.spring_hertz = 0.0
+        self.spring_damping_ratio = 0.0
+        self.angular_hertz = 0.0
+        self.angular_damping_ratio = 0.0
+        self.motor_speed = 0.0
+        self.maximum_motor_force = 0.0
+        self.maximum_motor_torque = 0.0
+        self.correction_factor = 0.3
+        self.spring_enabled = false
+        self.limit_enabled = false
+        self.motor_enabled = false
+        self.collide_connected = false
+        self.linear_impulse = Math.Vec2()
+        self.axial_impulse = 0.0
+        self.angular_impulse = 0.0
+        self.motor_impulse = 0.0
+        self.lower_impulse = 0.0
+        self.upper_impulse = 0.0
+        self.current_translation = 0.0
+        self.current_speed = 0.0
+        self.current_angle = 0.0
+        self.reaction_force = Math.Vec2()
+        self.reaction_torque = 0.0
+        self.current_motor_force = 0.0
+        self.current_motor_torque = 0.0
+    }
+}
+
+package class JointStore2D {
+    var bodies:BodyStore2D
+    var slot_generations:int[]
+    var slot_dense_indices:int[]
+    var dense_slots:int[]
+    var free_slots:int[]
+    var joints:JointConstraint2D[]
+    var colored_entries:int[]
+    var color_counts:int[]
+    var color_offsets:int[]
+    var entry_colors:int[]
+
+    init() {
+        self.bodies = BodyStore2D()
+        self.slot_generations = []
+        self.slot_dense_indices = []
+        self.dense_slots = []
+        self.free_slots = []
+        self.joints = []
+        self.colored_entries = []
+        self.color_counts = []
+        self.color_offsets = []
+        self.entry_colors = []
+    }
+
+    init(bodies:BodyStore2D) {
+        self.bodies = bodies
+        self.slot_generations = []
+        self.slot_dense_indices = []
+        self.dense_slots = []
+        self.free_slots = []
+        self.joints = []
+        self.colored_entries = []
+        self.color_counts = []
+        self.color_offsets = []
+        self.entry_colors = []
+    }
+
+    func count() int { return self.joints.count() }
+
+    func append(joint:JointConstraint2D) JointId2D {
+        var slot = self.slot_generations.count()
+        if !self.free_slots.is_empty() {
+            slot = self.free_slots.take_last()
+        } else {
+            self.slot_generations.append(1)
+            self.slot_dense_indices.append(-1)
+        }
+        self.slot_dense_indices[slot] = self.joints.count()
+        self.dense_slots.append(slot)
+        self.joints.append(joint)
+        return JointId2D(slot, self.slot_generations[slot])
+    }
+
+    func contains(id:JointId2D) bool {
+        return id.slot >= 0 && id.slot < self.slot_generations.count() &&
+            self.slot_generations[id.slot] == id.generation &&
+            self.slot_dense_indices[id.slot] >= 0
+    }
+
+    func require(id:JointId2D) int {
+        if !self.contains(id) {
+            panic("GFX.Physics joint handle no longer refers to a live joint")
+        }
+        return self.slot_dense_indices[id.slot]
+    }
+
+    func destroy(id:JointId2D) {
+        let index = self.require(id)
+        self.wake_joint(index)
+        let last = self.joints.count() - 1
+        if index != last {
+            self.joints.swap(index, last)
+            self.dense_slots.swap(index, last)
+            self.slot_dense_indices[self.dense_slots[index]] = index
+        }
+        self.joints.take_last()
+        self.dense_slots.take_last()
+        self.slot_dense_indices[id.slot] = -1
+        self.slot_generations[id.slot]++
+        self.free_slots.append(id.slot)
+    }
+
+    func destroy_attached(body:BodyId2D) {
+        var index = self.joints.count() - 1
+        while index >= 0 {
+            let joint = self.joints[index]
+            if joint.first_body.slot == body.slot ||
+                joint.second_body.slot == body.slot
+            {
+                let slot = self.dense_slots[index]
+                self.destroy(JointId2D(slot, self.slot_generations[slot]))
+            }
+            index--
+        }
+    }
+
+    func collision_allowed(first:BodyId2D, second:BodyId2D) bool {
+        for joint in self.joints {
+            if joint.collide_connected { continue }
+            let direct = joint.first_body.slot == first.slot &&
+                joint.second_body.slot == second.slot
+            let reverse = joint.first_body.slot == second.slot &&
+                joint.second_body.slot == first.slot
+            if direct || reverse { return false }
+        }
+        return true
+    }
+
+    func reaction_force(id:JointId2D) Math.Vec2 {
+        return self.joints[self.require(id)].reaction_force
+    }
+
+    func reaction_torque(id:JointId2D) float {
+        return self.joints[self.require(id)].reaction_torque
+    }
+
+    func current_translation(id:JointId2D) float {
+        return self.joints[self.require(id)].current_translation
+    }
+
+    func current_speed(id:JointId2D) float {
+        return self.joints[self.require(id)].current_speed
+    }
+
+    func current_angle(id:JointId2D) float {
+        return self.joints[self.require(id)].current_angle
+    }
+
+    func motor_force(id:JointId2D) float {
+        return self.joints[self.require(id)].current_motor_force
+    }
+
+    func motor_torque(id:JointId2D) float {
+        return self.joints[self.require(id)].current_motor_torque
+    }
+
+    func set_target(id:JointId2D, target:Math.Vec2) {
+        let index = self.require(id)
+        self.joints[index].linear_target = target
+        self.wake_joint(index)
+    }
+
+    func set_motor(id:JointId2D, speed:float, maximum:float) {
+        let index = self.require(id)
+        self.joints[index].motor_speed = speed
+        if self.joints[index].kind == JointKind2D.revolute ||
+            self.joints[index].kind == JointKind2D.wheel
+        {
+            self.joints[index].maximum_motor_torque = maximum
+        } else {
+            self.joints[index].maximum_motor_force = maximum
+        }
+        self.joints[index].motor_enabled = maximum > 0.0
+        self.wake_joint(index)
+    }
+
+    func first_body(id:JointId2D) BodyId2D {
+        return self.joints[self.require(id)].first_body
+    }
+
+    func second_body(id:JointId2D) BodyId2D {
+        return self.joints[self.require(id)].second_body
+    }
+
+    func wake_joint(index:int) {
+        let joint = self.joints[index]
+        if self.bodies.contains(joint.first_body) {
+            self.bodies.wake(self.bodies.require(joint.first_body))
+        }
+        if self.bodies.contains(joint.second_body) {
+            self.bodies.wake(self.bodies.require(joint.second_body))
+        }
+    }
+
+    func propagate_wake() {
+        var changed = true
+        while changed {
+            changed = false
+            var index = 0
+            while index < self.joints.count() {
+                let joint = self.joints[index]
+                if joint.kind == JointKind2D.filter ||
+                    joint.first_body.slot == joint.second_body.slot
+                {
+                    index++
+                    continue
+                }
+                let first = self.bodies.require(joint.first_body)
+                let second = self.bodies.require(joint.second_body)
+                if self.bodies.awake[first] &&
+                    self.bodies.inverse_masses[second] > 0.0 &&
+                    !self.bodies.awake[second]
+                {
+                    self.bodies.wake(second)
+                    changed = true
+                } else if self.bodies.awake[second] &&
+                    self.bodies.inverse_masses[first] > 0.0 &&
+                    !self.bodies.awake[first]
+                {
+                    self.bodies.wake(first)
+                    changed = true
+                }
+                index++
+            }
+        }
+    }
+
+    func build_colors(body_masks:&uint32[]) {
+        self.colored_entries.clear()
+        self.color_counts.clear()
+        self.color_offsets.clear()
+        self.entry_colors.clear()
+        var color = 0
+        while color < 12 {
+            self.color_counts.append(0)
+            self.color_offsets.append(0)
+            color++
+        }
+        self.color_offsets.append(0)
+
+        var index = 0
+        while index < self.joints.count() {
+            let joint = self.joints[index]
+            if joint.kind == JointKind2D.filter {
+                self.entry_colors.append(-1)
+                index++
+                continue
+            }
+            let first = self.bodies.require(joint.first_body)
+            let second = self.bodies.require(joint.second_body)
+            var first_mask:uint32 = 0
+            var second_mask:uint32 = 0
+            if self.bodies.inverse_masses[first] > 0.0 &&
+                self.bodies.awake[first]
+            {
+                first_mask = body_masks[first]
+            }
+            if second != first && self.bodies.inverse_masses[second] > 0.0 &&
+                self.bodies.awake[second]
+            {
+                second_mask = body_masks[second]
+            }
+            color = 0
+            var bit:uint32 = 1
+            while color < 11 &&
+                ((first_mask & bit) != 0 || (second_mask & bit) != 0)
+            {
+                color++
+                bit = bit * 2
+            }
+            if color >= 11 { color = 11 }
+            self.entry_colors.append(color)
+            self.color_counts[color]++
+            if color < 11 {
+                if self.bodies.inverse_masses[first] > 0.0 &&
+                    self.bodies.awake[first]
+                {
+                    body_masks[first] = body_masks[first] + bit
+                }
+                if second != first && self.bodies.inverse_masses[second] > 0.0 &&
+                    self.bodies.awake[second]
+                {
+                    body_masks[second] = body_masks[second] + bit
+                }
+            }
+            index++
+        }
+
+        var offset = 0
+        color = 0
+        while color < 12 {
+            self.color_offsets[color] = offset
+            offset += self.color_counts[color]
+            color++
+        }
+        self.color_offsets[12] = offset
+        index = 0
+        while index < offset {
+            self.colored_entries.append(0)
+            index++
+        }
+        var cursors:int[] = []
+        color = 0
+        while color < 12 {
+            cursors.append(self.color_offsets[color])
+            color++
+        }
+        index = 0
+        while index < self.joints.count() {
+            color = self.entry_colors[index]
+            if color >= 0 {
+                self.colored_entries[cursors[color]] = index
+                cursors[color]++
+            }
+            index++
+        }
+    }
+
+    func color_count(color:int) int { return self.color_counts[color] }
+    func color_offset(color:int) int { return self.color_offsets[color] }
+
+    func finish_step(inverse_delta:float) {
+        var index = 0
+        while index < self.joints.count() {
+            var joint = self.joints[index]
+            var axis_impulse = joint.axial_impulse + joint.lower_impulse -
+                joint.upper_impulse
+            if joint.kind == JointKind2D.distance ||
+                joint.kind == JointKind2D.prismatic
+            {
+                axis_impulse += joint.motor_impulse
+            }
+            var axis = joint_world_vector(
+                self.bodies,
+                self.bodies.require(joint.first_body),
+                joint.local_axis
+            )
+            if joint.kind == JointKind2D.distance {
+                let first = self.bodies.require(joint.first_body)
+                let second = self.bodies.require(joint.second_body)
+                let delta = joint_world_point(
+                    self.bodies,
+                    second,
+                    joint.second_anchor
+                ).subtract(joint_world_point(
+                    self.bodies,
+                    first,
+                    joint.first_anchor
+                ))
+                if delta.length() > 0.000001 {
+                    axis = delta.multiply(1.0 / delta.length())
+                }
+            }
+            joint.reaction_force = joint.linear_impulse.add(
+                axis.multiply(axis_impulse)
+            ).multiply(inverse_delta)
+            var torque_impulse = joint.angular_impulse + 0.0
+            if joint.kind == JointKind2D.revolute ||
+                joint.kind == JointKind2D.wheel
+            {
+                torque_impulse += joint.motor_impulse
+            }
+            joint.reaction_torque = torque_impulse * inverse_delta
+            joint.current_motor_force = 0.0
+            joint.current_motor_torque = 0.0
+            if joint.kind == JointKind2D.distance ||
+                joint.kind == JointKind2D.prismatic
+            {
+                joint.current_motor_force = joint.motor_impulse * inverse_delta
+            }
+            if joint.kind == JointKind2D.revolute ||
+                joint.kind == JointKind2D.wheel
+            {
+                joint.current_motor_torque = joint.motor_impulse * inverse_delta
+            }
+            self.joints[index] = joint
+            index++
+        }
+    }
+}
+
+struct WarmStartJoints2D:Threading.ParallelJob {
+    var bodies:BodyStore2D
+    var joints:JointStore2D
+    var offset:int
+    var count:int
+    var reverse:bool
+
+    func execute(start:int, end:int) {
+        var item = start
+        while item < end {
+            var source = self.offset + item
+            if self.reverse {
+                source = self.offset + self.count - item - 1
+            }
+            let joint_index = self.joints.colored_entries[source]
+            warm_start_joint(self.bodies, self.joints.joints[joint_index])
+            item++
+        }
+    }
+}
+
+struct SolveJoints2D:Threading.ParallelJob {
+    var bodies:BodyStore2D
+    var joints:JointStore2D
+    var offset:int
+    var count:int
+    var reverse:bool
+    var inverse_delta:float
+    var use_bias:bool
+
+    func execute(start:int, end:int) {
+        var item = start
+        while item < end {
+            var source = self.offset + item
+            if self.reverse {
+                source = self.offset + self.count - item - 1
+            }
+            let joint_index = self.joints.colored_entries[source]
+            var joint = self.joints.joints[joint_index]
+            solve_joint(
+                self.bodies,
+                joint,
+                self.inverse_delta,
+                self.use_bias
+            )
+            self.joints.joints[joint_index] = joint
+            item++
+        }
+    }
+}
+
+func joint_world_point(
+    bodies:BodyStore2D,
+    index:int,
+    local_value:Math.Vec2
+) Math.Vec2 {
+    let cosine = bodies.rotation_cosines[index]
+    let sine = bodies.rotation_sines[index]
+    return Math.Vec2(
+        bodies.positions_x[index] + cosine * local_value.x -
+            sine * local_value.y,
+        bodies.positions_y[index] + sine * local_value.x +
+            cosine * local_value.y
+    )
+}
+
+func joint_world_vector(
+    bodies:BodyStore2D,
+    index:int,
+    local_value:Math.Vec2
+) Math.Vec2 {
+    let cosine = bodies.rotation_cosines[index]
+    let sine = bodies.rotation_sines[index]
+    return Math.Vec2(
+        cosine * local_value.x - sine * local_value.y,
+        sine * local_value.x + cosine * local_value.y
+    )
+}
+
+func joint_velocity_at(
+    bodies:BodyStore2D,
+    index:int,
+    point:Math.Vec2
+) Math.Vec2 {
+    let radius_x = point.x - bodies.positions_x[index]
+    let radius_y = point.y - bodies.positions_y[index]
+    return Math.Vec2(
+        bodies.velocities_x[index] -
+            bodies.angular_velocities[index] * radius_y,
+        bodies.velocities_y[index] +
+            bodies.angular_velocities[index] * radius_x
+    )
+}
+
+func joint_cross(left:Math.Vec2, right:Math.Vec2) float {
+    return left.x * right.y - left.y * right.x
+}
+
+func joint_inverse_mass_on_axis(
+    bodies:BodyStore2D,
+    index:int,
+    point:Math.Vec2,
+    axis:Math.Vec2
+) float {
+    if !bodies.awake[index] { return 0.0 }
+    let radius = point.subtract(Math.Vec2(
+        bodies.positions_x[index],
+        bodies.positions_y[index]
+    ))
+    let arm = joint_cross(radius, axis)
+    return bodies.inverse_masses[index] +
+        arm * arm * bodies.inverse_inertias[index]
+}
+
+func apply_joint_impulse(
+    bodies:BodyStore2D,
+    index:int,
+    impulse:Math.Vec2,
+    point:Math.Vec2
+) {
+    if !bodies.awake[index] { return }
+    bodies.velocities_x[index] += impulse.x * bodies.inverse_masses[index]
+    bodies.velocities_y[index] += impulse.y * bodies.inverse_masses[index]
+    let radius_x = point.x - bodies.positions_x[index]
+    let radius_y = point.y - bodies.positions_y[index]
+    bodies.angular_velocities[index] +=
+        (radius_x * impulse.y - radius_y * impulse.x) *
+        bodies.inverse_inertias[index]
+}
+
+func apply_joint_pair_impulse(
+    bodies:BodyStore2D,
+    first:int,
+    second:int,
+    impulse:Math.Vec2,
+    first_point:Math.Vec2,
+    second_point:Math.Vec2
+) {
+    apply_joint_impulse(bodies, first, impulse.negated(), first_point)
+    apply_joint_impulse(bodies, second, impulse, second_point)
+}
+
+func clamped_joint_vector(value:Math.Vec2, maximum:float) Math.Vec2 {
+    if maximum < 0.0 { return value }
+    let length = value.length()
+    if length <= maximum || length <= 0.000001 { return value }
+    return value.multiply(maximum / length)
+}
+
+func joint_bias_rate(
+    hertz:float,
+    damping_ratio:float,
+    inverse_delta:float,
+    use_bias:bool
+) float {
+    if hertz > 0.0 {
+        let omega = 2.0 * Math.pi() * hertz
+        let damping_scale = 1.0 +
+            2.0 * damping_ratio * omega / inverse_delta
+        return Math.min(0.5 * inverse_delta, omega) / damping_scale
+    }
+    if use_bias { return 0.2 * inverse_delta }
+    return 0.0
+}
+
+func solve_joint_point_pair(
+    bodies:BodyStore2D,
+    joint:&JointConstraint2D,
+    first:int,
+    second:int,
+    target:Math.Vec2,
+    hertz:float,
+    damping_ratio:float,
+    maximum_impulse:float,
+    inverse_delta:float,
+    use_bias:bool
+) {
+    let first_point = joint_world_point(bodies, first, joint.first_anchor)
+    let second_point = joint_world_point(bodies, second, joint.second_anchor)
+    let error = second_point.subtract(first_point).subtract(target)
+    let relative_velocity = joint_velocity_at(
+        bodies,
+        second,
+        second_point
+    ).subtract(joint_velocity_at(bodies, first, first_point))
+    let bias_rate = joint_bias_rate(
+        hertz,
+        damping_ratio,
+        inverse_delta,
+        use_bias
+    )
+    let x_axis = Math.Vec2(1.0, 0.0)
+    let y_axis = Math.Vec2(0.0, 1.0)
+    let x_inverse_mass = joint_inverse_mass_on_axis(
+        bodies,
+        first,
+        first_point,
+        x_axis
+    ) + joint_inverse_mass_on_axis(
+        bodies,
+        second,
+        second_point,
+        x_axis
+    )
+    let y_inverse_mass = joint_inverse_mass_on_axis(
+        bodies,
+        first,
+        first_point,
+        y_axis
+    ) + joint_inverse_mass_on_axis(
+        bodies,
+        second,
+        second_point,
+        y_axis
+    )
+    var increment = Math.Vec2()
+    if x_inverse_mass > 0.0 {
+        increment.x = -(relative_velocity.x + bias_rate * error.x) /
+            x_inverse_mass
+    }
+    if y_inverse_mass > 0.0 {
+        increment.y = -(relative_velocity.y + bias_rate * error.y) /
+            y_inverse_mass
+    }
+    let previous = Math.Vec2(
+        joint.linear_impulse.x + 0.0,
+        joint.linear_impulse.y + 0.0
+    )
+    joint.linear_impulse = clamped_joint_vector(
+        previous.add(increment),
+        maximum_impulse
+    )
+    apply_joint_pair_impulse(
+        bodies,
+        first,
+        second,
+        joint.linear_impulse.subtract(previous),
+        first_point,
+        second_point
+    )
+}
+
+func solve_joint_point_target(
+    bodies:BodyStore2D,
+    joint:&JointConstraint2D,
+    body:int,
+    maximum_impulse:float,
+    inverse_delta:float,
+    use_bias:bool
+) {
+    let point = joint_world_point(bodies, body, joint.first_anchor)
+    let error = point.subtract(joint.linear_target)
+    let velocity = joint_velocity_at(bodies, body, point)
+    let bias_rate = joint_bias_rate(
+        joint.spring_hertz,
+        joint.spring_damping_ratio,
+        inverse_delta,
+        use_bias
+    )
+    let x_axis = Math.Vec2(1.0, 0.0)
+    let y_axis = Math.Vec2(0.0, 1.0)
+    let x_inverse_mass = joint_inverse_mass_on_axis(
+        bodies,
+        body,
+        point,
+        x_axis
+    )
+    let y_inverse_mass = joint_inverse_mass_on_axis(
+        bodies,
+        body,
+        point,
+        y_axis
+    )
+    var increment = Math.Vec2()
+    if x_inverse_mass > 0.0 {
+        increment.x = -(velocity.x + bias_rate * error.x) / x_inverse_mass
+    }
+    if y_inverse_mass > 0.0 {
+        increment.y = -(velocity.y + bias_rate * error.y) / y_inverse_mass
+    }
+    let previous = Math.Vec2(
+        joint.linear_impulse.x + 0.0,
+        joint.linear_impulse.y + 0.0
+    )
+    joint.linear_impulse = clamped_joint_vector(
+        previous.add(increment),
+        maximum_impulse
+    )
+    apply_joint_impulse(
+        bodies,
+        body,
+        joint.linear_impulse.subtract(previous),
+        point
+    )
+}
+
+func solve_joint_axis(
+    bodies:BodyStore2D,
+    first:int,
+    second:int,
+    first_point:Math.Vec2,
+    second_point:Math.Vec2,
+    axis:Math.Vec2,
+    error:float,
+    target_speed:float,
+    previous:float,
+    minimum:float,
+    maximum:float,
+    hertz:float,
+    damping_ratio:float,
+    inverse_delta:float,
+    use_bias:bool
+) float {
+    let inverse_mass = joint_inverse_mass_on_axis(
+        bodies,
+        first,
+        first_point,
+        axis
+    ) + joint_inverse_mass_on_axis(
+        bodies,
+        second,
+        second_point,
+        axis
+    )
+    if inverse_mass <= 0.0 { return previous }
+    let relative_velocity = joint_velocity_at(
+        bodies,
+        second,
+        second_point
+    ).subtract(joint_velocity_at(
+        bodies,
+        first,
+        first_point
+    )).dot(axis)
+    let bias = joint_bias_rate(
+        hertz,
+        damping_ratio,
+        inverse_delta,
+        use_bias
+    ) * error
+    let increment = (target_speed - relative_velocity - bias) / inverse_mass
+    let accumulated = Math.max(minimum, Math.min(previous + increment, maximum))
+    apply_joint_pair_impulse(
+        bodies,
+        first,
+        second,
+        axis.multiply(accumulated - previous),
+        first_point,
+        second_point
+    )
+    return accumulated
+}
+
+func solve_joint_angle(
+    bodies:BodyStore2D,
+    first:int,
+    second:int,
+    error:float,
+    target_speed:float,
+    previous:float,
+    minimum:float,
+    maximum:float,
+    hertz:float,
+    damping_ratio:float,
+    inverse_delta:float,
+    use_bias:bool
+) float {
+    var inverse_inertia = 0.0
+    if bodies.awake[first] { inverse_inertia += bodies.inverse_inertias[first] }
+    if bodies.awake[second] { inverse_inertia += bodies.inverse_inertias[second] }
+    if inverse_inertia <= 0.0 { return previous }
+    let relative_velocity = bodies.angular_velocities[second] -
+        bodies.angular_velocities[first]
+    let bias = joint_bias_rate(
+        hertz,
+        damping_ratio,
+        inverse_delta,
+        use_bias
+    ) * error
+    let increment = (target_speed - relative_velocity - bias) /
+        inverse_inertia
+    let accumulated = Math.max(minimum, Math.min(previous + increment, maximum))
+    let applied = accumulated - previous
+    if bodies.awake[first] {
+        bodies.angular_velocities[first] -=
+            applied * bodies.inverse_inertias[first]
+    }
+    if bodies.awake[second] {
+        bodies.angular_velocities[second] +=
+            applied * bodies.inverse_inertias[second]
+    }
+    return accumulated
+}
+
+func warm_start_joint(bodies:BodyStore2D, joint:JointConstraint2D) {
+    if joint.kind == JointKind2D.filter { return }
+    let first = bodies.require(joint.first_body)
+    let second = bodies.require(joint.second_body)
+    let first_point = joint_world_point(bodies, first, joint.first_anchor)
+    if joint.kind == JointKind2D.mouse {
+        apply_joint_impulse(bodies, first, joint.linear_impulse, first_point)
+        return
+    }
+    let second_point = joint_world_point(bodies, second, joint.second_anchor)
+    apply_joint_pair_impulse(
+        bodies,
+        first,
+        second,
+        joint.linear_impulse,
+        first_point,
+        second_point
+    )
+    var axis = joint_world_vector(bodies, first, joint.local_axis)
+    if joint.kind == JointKind2D.distance {
+        let delta = second_point.subtract(first_point)
+        if delta.length() > 0.000001 {
+            axis = delta.multiply(1.0 / delta.length())
+        }
+    }
+    var axial = joint.axial_impulse + joint.lower_impulse - joint.upper_impulse
+    if joint.kind == JointKind2D.distance ||
+        joint.kind == JointKind2D.prismatic
+    {
+        axial += joint.motor_impulse
+    }
+    apply_joint_pair_impulse(
+        bodies,
+        first,
+        second,
+        axis.multiply(axial),
+        first_point,
+        second_point
+    )
+    var angular = joint.angular_impulse
+    if joint.kind == JointKind2D.revolute ||
+        joint.kind == JointKind2D.wheel
+    {
+        angular += joint.motor_impulse
+    }
+    if bodies.awake[first] {
+        bodies.angular_velocities[first] -=
+            angular * bodies.inverse_inertias[first]
+    }
+    if bodies.awake[second] {
+        bodies.angular_velocities[second] +=
+            angular * bodies.inverse_inertias[second]
+    }
+}
+
+func solve_joint(
+    bodies:BodyStore2D,
+    joint:&JointConstraint2D,
+    inverse_delta:float,
+    use_bias:bool
+) {
+    if joint.kind == JointKind2D.filter { return }
+    let first = bodies.require(joint.first_body)
+    let second = bodies.require(joint.second_body)
+    let delta = 1.0 / inverse_delta
+    if joint.kind == JointKind2D.mouse {
+        solve_joint_point_target(
+            bodies,
+            joint,
+            first,
+            joint.maximum_motor_force * delta,
+            inverse_delta,
+            use_bias
+        )
+        return
+    }
+
+    let first_point = joint_world_point(bodies, first, joint.first_anchor)
+    let second_point = joint_world_point(bodies, second, joint.second_anchor)
+    let anchor_delta = second_point.subtract(first_point)
+
+    if joint.kind == JointKind2D.distance {
+        var axis = Math.Vec2(1.0, 0.0)
+        let length = anchor_delta.length()
+        if length > 0.000001 { axis = anchor_delta.multiply(1.0 / length) }
+        joint.current_translation = length
+        joint.current_speed = joint_velocity_at(
+            bodies,
+            second,
+            second_point
+        ).subtract(joint_velocity_at(
+            bodies,
+            first,
+            first_point
+        )).dot(axis)
+        var constrained = true
+        if joint.limit_enabled { constrained = false }
+        var error = length - (joint.scalar_target + 0.0)
+        var hertz = 0.0
+        var damping = 0.0
+        if joint.spring_enabled {
+            constrained = true
+            hertz = joint.spring_hertz
+            damping = joint.spring_damping_ratio
+        }
+        if joint.limit_enabled {
+            if length < joint.minimum {
+                constrained = true
+                error = length - joint.minimum
+            } else if length > joint.maximum {
+                constrained = true
+                error = length - joint.maximum
+            } else {
+                if joint.spring_enabled == false {
+                    constrained = false
+                    joint.axial_impulse = 0.0
+                }
+            }
+        }
+        if constrained {
+            joint.axial_impulse = solve_joint_axis(
+                bodies,
+                first,
+                second,
+                first_point,
+                second_point,
+                axis,
+                error,
+                0.0,
+                joint.axial_impulse,
+                -1_000_000_000.0,
+                1_000_000_000.0,
+                hertz,
+                damping,
+                inverse_delta,
+                use_bias
+            )
+        }
+        if joint.motor_enabled {
+            let maximum = joint.maximum_motor_force * delta
+            joint.motor_impulse = solve_joint_axis(
+                bodies,
+                first,
+                second,
+                first_point,
+                second_point,
+                axis,
+                0.0,
+                joint.motor_speed,
+                joint.motor_impulse,
+                -maximum,
+                maximum,
+                0.0,
+                0.0,
+                inverse_delta,
+                false
+            )
+        }
+        return
+    }
+
+    if joint.kind == JointKind2D.motor {
+        let target = joint_world_vector(bodies, first, joint.linear_target)
+        solve_joint_point_pair(
+            bodies,
+            joint,
+            first,
+            second,
+            target,
+            0.0,
+            0.0,
+            joint.maximum_motor_force * delta,
+            inverse_delta * joint.correction_factor,
+            true
+        )
+        let angular_error = bodies.rotations[second] -
+            bodies.rotations[first] - joint.reference_angle
+        joint.angular_impulse = solve_joint_angle(
+            bodies,
+            first,
+            second,
+            angular_error,
+            0.0,
+            joint.angular_impulse,
+            -joint.maximum_motor_torque * delta,
+            joint.maximum_motor_torque * delta,
+            0.0,
+            0.0,
+            inverse_delta * joint.correction_factor,
+            true
+        )
+        joint.current_angle = angular_error
+        return
+    }
+
+    if joint.kind == JointKind2D.revolute ||
+        joint.kind == JointKind2D.weld
+    {
+        solve_joint_point_pair(
+            bodies,
+            joint,
+            first,
+            second,
+            Math.Vec2(),
+            joint.spring_hertz,
+            joint.spring_damping_ratio,
+            -1.0,
+            inverse_delta,
+            use_bias
+        )
+    }
+
+    let relative_angle = bodies.rotations[second] -
+        bodies.rotations[first] - joint.reference_angle
+    joint.current_angle = relative_angle
+
+    if joint.kind == JointKind2D.weld {
+        joint.angular_impulse = solve_joint_angle(
+            bodies,
+            first,
+            second,
+            relative_angle,
+            0.0,
+            joint.angular_impulse,
+            -1_000_000_000.0,
+            1_000_000_000.0,
+            joint.angular_hertz,
+            joint.angular_damping_ratio,
+            inverse_delta,
+            use_bias
+        )
+        return
+    }
+
+    if joint.kind == JointKind2D.revolute {
+        var constrain_angle = false
+        if joint.spring_enabled { constrain_angle = true }
+        var angular_error = relative_angle - (joint.scalar_target + 0.0)
+        var hertz = joint.spring_hertz + 0.0
+        var damping = joint.spring_damping_ratio + 0.0
+        if joint.limit_enabled {
+            if relative_angle < joint.minimum {
+                constrain_angle = true
+                angular_error = relative_angle - joint.minimum
+                hertz = 0.0
+                damping = 0.0
+            } else if relative_angle > joint.maximum {
+                constrain_angle = true
+                angular_error = relative_angle - joint.maximum
+                hertz = 0.0
+                damping = 0.0
+            } else {
+                if joint.spring_enabled == false {
+                    joint.angular_impulse = 0.0
+                }
+            }
+        }
+        if constrain_angle {
+            joint.angular_impulse = solve_joint_angle(
+                bodies,
+                first,
+                second,
+                angular_error,
+                0.0,
+                joint.angular_impulse,
+                -1_000_000_000.0,
+                1_000_000_000.0,
+                hertz,
+                damping,
+                inverse_delta,
+                use_bias
+            )
+        }
+        if joint.motor_enabled {
+            let maximum = joint.maximum_motor_torque * delta
+            joint.motor_impulse = solve_joint_angle(
+                bodies,
+                first,
+                second,
+                0.0,
+                joint.motor_speed,
+                joint.motor_impulse,
+                -maximum,
+                maximum,
+                0.0,
+                0.0,
+                inverse_delta,
+                false
+            )
+        }
+        return
+    }
+
+    var axis = joint_world_vector(bodies, first, joint.local_axis)
+    let axis_length = axis.length()
+    if axis_length > 0.000001 { axis = axis.multiply(1.0 / axis_length) }
+    let perpendicular = Math.Vec2(-axis.y, axis.x)
+    let translation = anchor_delta.dot(axis)
+    joint.current_translation = translation
+    joint.current_speed = joint_velocity_at(
+        bodies,
+        second,
+        second_point
+    ).subtract(joint_velocity_at(
+        bodies,
+        first,
+        first_point
+    )).dot(axis)
+    let previous_perpendicular = joint.linear_impulse.dot(perpendicular)
+    let next_perpendicular = solve_joint_axis(
+        bodies,
+        first,
+        second,
+        first_point,
+        second_point,
+        perpendicular,
+        anchor_delta.dot(perpendicular),
+        0.0,
+        previous_perpendicular,
+        -1_000_000_000.0,
+        1_000_000_000.0,
+        0.0,
+        0.0,
+        inverse_delta,
+        use_bias
+    )
+    joint.linear_impulse = perpendicular.multiply(next_perpendicular)
+
+    if joint.kind == JointKind2D.prismatic {
+        joint.angular_impulse = solve_joint_angle(
+            bodies,
+            first,
+            second,
+            relative_angle,
+            0.0,
+            joint.angular_impulse,
+            -1_000_000_000.0,
+            1_000_000_000.0,
+            0.0,
+            0.0,
+            inverse_delta,
+            use_bias
+        )
+    }
+
+    var constrain_axis = false
+    if joint.spring_enabled { constrain_axis = true }
+    var axis_error = translation - (joint.scalar_target + 0.0)
+    var axis_hertz = joint.spring_hertz + 0.0
+    var axis_damping = joint.spring_damping_ratio + 0.0
+    if joint.limit_enabled {
+        if translation < joint.minimum {
+            constrain_axis = true
+            axis_error = translation - joint.minimum
+            axis_hertz = 0.0
+            axis_damping = 0.0
+        } else if translation > joint.maximum {
+            constrain_axis = true
+            axis_error = translation - joint.maximum
+            axis_hertz = 0.0
+            axis_damping = 0.0
+        } else {
+            if joint.spring_enabled == false {
+                joint.axial_impulse = 0.0
+            }
+        }
+    }
+    if constrain_axis {
+        joint.axial_impulse = solve_joint_axis(
+            bodies,
+            first,
+            second,
+            first_point,
+            second_point,
+            axis,
+            axis_error,
+            0.0,
+            joint.axial_impulse,
+            -1_000_000_000.0,
+            1_000_000_000.0,
+            axis_hertz,
+            axis_damping,
+            inverse_delta,
+            use_bias
+        )
+    }
+    if joint.motor_enabled {
+        if joint.kind == JointKind2D.wheel {
+            let maximum = joint.maximum_motor_torque * delta
+            joint.motor_impulse = solve_joint_angle(
+                bodies,
+                first,
+                second,
+                0.0,
+                joint.motor_speed,
+                joint.motor_impulse,
+                -maximum,
+                maximum,
+                0.0,
+                0.0,
+                inverse_delta,
+                false
+            )
+        } else {
+            let maximum = joint.maximum_motor_force * delta
+            joint.motor_impulse = solve_joint_axis(
+                bodies,
+                first,
+                second,
+                first_point,
+                second_point,
+                axis,
+                0.0,
+                joint.motor_speed,
+                joint.motor_impulse,
+                -maximum,
+                maximum,
+                0.0,
+                0.0,
+                inverse_delta,
+                false
+            )
+        }
+    }
+}
+
+public class DistanceJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func current_length() float { return self.store.current_translation(self.id) }
+    func motor_force() float { return self.store.motor_force(self.id) }
+    func set_motor(speed:float, maximum_force:float) {
+        self.store.set_motor(self.id, speed, maximum_force)
+    }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class MotorJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class MouseJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func set_target(target:Math.Vec2) { self.store.set_target(self.id, target) }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class FilterJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class PrismaticJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func translation() float { return self.store.current_translation(self.id) }
+    func speed() float { return self.store.current_speed(self.id) }
+    func motor_force() float { return self.store.motor_force(self.id) }
+    func set_motor(speed:float, maximum_force:float) {
+        self.store.set_motor(self.id, speed, maximum_force)
+    }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class RevoluteJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func angle() float { return self.store.current_angle(self.id) }
+    func motor_torque() float { return self.store.motor_torque(self.id) }
+    func set_motor(speed:float, maximum_torque:float) {
+        self.store.set_motor(self.id, speed, maximum_torque)
+    }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class WeldJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}
+
+public class WheelJoint2D {
+    private var store:JointStore2D
+    private let id:JointId2D
+
+    package init(store:JointStore2D, id:JointId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func translation() float { return self.store.current_translation(self.id) }
+    func speed() float { return self.store.current_speed(self.id) }
+    func motor_torque() float { return self.store.motor_torque(self.id) }
+    func set_motor(speed:float, maximum_torque:float) {
+        self.store.set_motor(self.id, speed, maximum_torque)
+    }
+    package func belongs_to(store:JointStore2D) bool { return self.store == store }
+    package func joint_id() JointId2D { return self.id }
+}

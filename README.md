@@ -118,6 +118,15 @@ demonstrates sleep, staged impact wake-up, and deletion; see
 second headless proof that settles 128 circles, asserts containment and overlap,
 and prints the measured final envelope.
 
+`World2D` also owns typed distance, filter, motor, mouse, prismatic, revolute,
+weld, and wheel joints. World-space anchors and axes become private local
+constraint data; limits, motors, springs, and completed-step reaction forces
+remain observable through the corresponding typed handle. Destroying either
+attached body invalidates its joints. Contacts and joints share one deterministic
+color graph, including the same parallel dispatch threshold for large
+conflict-free colors. See [`Docs/Joints.md`](Docs/Joints.md) and the headless
+[`Examples/World2D/Joints.sx`](Examples/World2D/Joints.sx).
+
 Large moving worlds can opt into the persistent STD worker pool:
 
 ```silex
@@ -135,10 +144,10 @@ profiling part of the normal step cost. See
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
 
-The existing `World2D` regression solver still resolves only unrounded boxes
+The existing `World2D` regression contact solver still resolves only unrounded boxes
 and circles. Additional forms can be attached to the world and produce
 persistent geometric contacts, but do not receive impulses or positional
-correction yet. Forces, joints, general-purpose continuous dynamic collision
+correction yet. External forces, general-purpose continuous dynamic collision
 response, and application plugins remain outside the current world contract.
 The public shape cast is a geometry query, while the dense-circle sweep
 described above remains narrower than general solver CCD.

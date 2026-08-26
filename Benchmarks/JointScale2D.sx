@@ -1,0 +1,73 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+use STD.Time.Clock
+
+func option_requested(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == expected { return true }
+            }
+        }
+    }
+    return false
+}
+
+func requested_workers() int {
+    if option_requested("--workers-4") { return 4 }
+    return 1
+}
+
+func requested_count() int {
+    if option_requested("--count-16384") { return 16_384 }
+    if option_requested("--count-8192") { return 8_192 }
+    return 4_096
+}
+
+func main() {
+    let body_count = requested_count()
+    let step_count = 60
+    let workers = requested_workers()
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
+    var bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < body_count {
+        let position = Math.Vec2(index as float * 2.0, 0.0)
+        var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = position
+            ..allow_sleep = false
+        )
+        bodies.append(body)
+        var joint = world.create_mouse_joint(
+            body,
+            Physics.MouseJoint2DSettings()
+                ..target = position
+                ..spring_hertz = 6.0
+                ..spring_damping_ratio = 1.0
+                ..maximum_force = 100.0
+        )
+        joint.set_target(position.add(Math.Vec2(0.25, 0.0)))
+        index++
+    }
+
+    var clock = Clock()
+    clock.tick()
+    var dispatches = 0
+    var step = 0
+    while step < step_count {
+        world.step(1.0 / 120.0)
+        dispatches += world.soft_step_parallel_dispatch_count()
+        step++
+    }
+    let elapsed_ms = clock.tick() * 1000.0
+    var signature_x = 0.0
+    var signature_y = 0.0
+    for body in bodies {
+        signature_x += body.position().x
+        signature_y += body.position().y
+    }
+    print("SILEX_PHYSICS_JOINTS {\"scenario\":\"mouse-$(body_count)\",\"workers\":$(workers),\"steps\":$(step_count),\"elapsed_ms\":$(elapsed_ms),\"per_step_ms\":$(elapsed_ms / step_count as float),\"dispatches\":$(dispatches),\"signature_x\":$(signature_x),\"signature_y\":$(signature_y)}")
+}

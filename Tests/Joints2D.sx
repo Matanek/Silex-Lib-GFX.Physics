@@ -1,0 +1,122 @@
+use GFX.Physics
+use STD.Math
+
+test "preserve a joint mechanism across worker counts" {
+    var scalar = Physics.World2D(gravity:Math.Vec2())
+    var parallel = Physics.World2D(gravity:Math.Vec2())
+    scalar.enable_parallelism(1)
+    parallel.enable_parallelism(4)
+
+    var scalar_fixed = scalar.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var parallel_fixed = parallel.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var scalar_arm = scalar.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+    )
+    var parallel_arm = parallel.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+    )
+    var scalar_weight = scalar.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+    var parallel_weight = parallel.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+
+    scalar.create_revolute_joint(
+        scalar_fixed,
+        scalar_arm,
+        Physics.RevoluteJoint2DSettings()
+            ..anchor = Math.Vec2()
+            ..motor_speed = 1.5
+            ..maximum_motor_torque = 30.0
+            ..motor_enabled = true
+    )
+    parallel.create_revolute_joint(
+        parallel_fixed,
+        parallel_arm,
+        Physics.RevoluteJoint2DSettings()
+            ..anchor = Math.Vec2()
+            ..motor_speed = 1.5
+            ..maximum_motor_torque = 30.0
+            ..motor_enabled = true
+    )
+    scalar.create_distance_joint(
+        scalar_arm,
+        scalar_weight,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2(1.0, 0.0)
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+            ..length = 1.0
+            ..spring_hertz = 5.0
+            ..spring_damping_ratio = 0.8
+            ..spring_enabled = true
+    )
+    parallel.create_distance_joint(
+        parallel_arm,
+        parallel_weight,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2(1.0, 0.0)
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+            ..length = 1.0
+            ..spring_hertz = 5.0
+            ..spring_damping_ratio = 0.8
+            ..spring_enabled = true
+    )
+
+    var step = 0
+    while step < 240 {
+        scalar.step(1.0 / 120.0)
+        parallel.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(scalar_arm.position() == parallel_arm.position())
+    assert(scalar_weight.position() == parallel_weight.position())
+    assert(scalar_arm.rotation() == parallel_arm.rotation())
+    assert(scalar_weight.rotation() == parallel_weight.rotation())
+}
+
+test "dispatch a stable joint color across four workers" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(4)
+    var bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < 4_096 {
+        let position = Math.Vec2(index as float * 2.0, 0.0)
+        var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = position
+            ..allow_sleep = false
+        )
+        bodies.append(body)
+        world.create_mouse_joint(
+            body,
+            Physics.MouseJoint2DSettings()
+                ..target = position
+                ..maximum_force = 100.0
+        )
+        index++
+    }
+
+    var step = 0
+    while step < 8 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    assert(world.soft_step_maximum_color_count() == 4_096)
+    assert(world.soft_step_parallel_dispatch_count() > 0)
+    index = 0
+    while index < bodies.count() {
+        assert(bodies[index].position() ==
+            Math.Vec2(index as float * 2.0, 0.0))
+        index += 257
+    }
+}
