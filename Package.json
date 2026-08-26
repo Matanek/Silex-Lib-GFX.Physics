@@ -11,6 +11,7 @@
     "STD": "^0.16.0"
   },
   "devDependencies": {
+    "GFX.Animation": "^0.3.0",
     "GFX.ECS": "^0.1.0",
     "GFX.Rendering": "^0.1.0",
     "GFX.Stats": "^0.2.0"
