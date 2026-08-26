@@ -186,8 +186,8 @@ class PhysicsAsync {
     var executor:Threading.Executor
     var buffers:PhysicsTransformBuffer[]
     var fences:Threading.Fence[]
+    var output_indices:int[]
     var next_completion:int
-    var active_output_index:int
     var next_output_index:int
     var published_index:int
     var revision:int
@@ -210,8 +210,8 @@ class PhysicsAsync {
             PhysicsTransformBuffer()
         ]
         self.fences = []
+        self.output_indices = []
         self.next_completion = 0
-        self.active_output_index = -1
         self.next_output_index = 0
         self.published_index = -1
         self.revision = 0
@@ -230,16 +230,35 @@ class PhysicsAsync {
             panic("FallingBody physics batch is outside its buffer capacity")
         }
         self.fences = []
+        self.output_indices = []
         self.next_completion = 0
-        self.active_output_index = self.next_output_index
         self.batch_clock.reset()
         self.batch_clock.tick()
-        var batch = self.executor.submit(PhysicsStepJob(
+        let first_output_index = self.next_output_index
+        var first = self.executor.submit(PhysicsStepJob(
             physics:physics,
-            output:self.buffers[self.active_output_index],
-            step_count:step_count
+            output:self.buffers[first_output_index],
+            step_count:1
         ))
-        self.fences.append(batch.fence())
+        self.fences.append(first.fence())
+        self.output_indices.append(first_output_index)
+        var step = 1
+        while step < step_count {
+            let output_index = (self.next_output_index + step) %
+                self.buffers.count()
+            // The executor takes the newest ready job first. Chaining each
+            // fixed step preserves simulation order and makes every completed
+            // transform snapshot observable instead of publishing only the
+            // end of a catch-up batch.
+            var submitted = self.executor.submit(PhysicsStepJob(
+                physics:physics,
+                output:self.buffers[output_index],
+                step_count:1
+            ), after:self.fences[step - 1])
+            self.fences.append(submitted.fence())
+            self.output_indices.append(output_index)
+            step++
+        }
         self.pending_steps = step_count
     }
 
@@ -252,23 +271,27 @@ class PhysicsAsync {
             self.fences[self.next_completion].is_complete()
         {
             self.fences[self.next_completion].complete()
-            self.published_index = self.active_output_index
+            self.published_index = self.output_indices[self.next_completion]
             self.collected_ms += self.buffers[self.published_index].physics_ms
             self.collected_transfer_ms +=
                 self.buffers[self.published_index].transfer_ms
-            self.collected_latency_ms = self.batch_clock.tick() * 1_000.0
             self.next_completion++
             self.revision++
-            completed += self.pending_steps
+            completed++
+        }
+        if completed > 0 {
+            self.collected_latency_ms = self.batch_clock.tick() * 1_000.0
         }
         if self.next_completion == self.fences.count() &&
             self.fences.count() > 0
         {
             self.fences = []
+            self.output_indices = []
             self.next_completion = 0
+            self.next_output_index = (self.next_output_index +
+                self.pending_steps) %
+                self.buffers.count()
             self.pending_steps = 0
-            self.next_output_index = 1 - self.active_output_index
-            self.active_output_index = -1
         }
         return completed
     }
@@ -1259,6 +1282,9 @@ func update_simulation(
         print("  motion: $(profile.motion_ms) ms")
         print("  broad phase: $(profile.broad_phase_ms) ms")
         print("  solve: $(profile.solve_ms) ms")
+        print("    collision build: $(simulation.physics.collision_build_ms()) ms")
+        print("    Soft Step: $(simulation.physics.collision_velocity_ms()) ms")
+        print("    contact cache: $(simulation.physics.collision_cache_ms()) ms")
         print("  sleep: $(profile.sleep_ms) ms")
         print("  maximum speed: $(maximum_speed) m/s")
         print("  maximum angular speed: $(maximum_angular_speed) rad/s")
@@ -1289,25 +1315,15 @@ func synchronize_physics_visuals(
     if simulation.render_only || !simulation.synchronize_visuals { return }
     let revision = async.current_revision()
     if revision == simulation.snapshot_revision { return }
-    if simulation.stress_count > 0 {
-        if var snapshots = async.published_buffer() {
-            for (visual, transform) in body_visuals {
-                transform.position = snapshots.transforms.position(
-                    visual.index
-                ).multiply(Constants.pixels_per_meter)
-                transform.rotation = snapshots.transforms.rotation(
-                    visual.index
-                )
-            }
-        }
-    } else {
-        let bodies = @simulation.bodies[0:simulation.bodies.count()]
+    if var snapshots = async.published_buffer() {
         for (visual, transform) in body_visuals {
-            let simulated = bodies[visual.index]
-            transform.position = simulated.body.position().multiply(
-                Constants.pixels_per_meter
+            if visual.index >= snapshots.transforms.count() { continue }
+            transform.position = snapshots.transforms.position(
+                visual.index
+            ).multiply(Constants.pixels_per_meter)
+            transform.rotation = snapshots.transforms.rotation(
+                visual.index
             )
-            transform.rotation = simulated.body.rotation()
         }
     }
     simulation.snapshot_revision = revision
@@ -1316,8 +1332,11 @@ func synchronize_physics_visuals(
 func main() {
     var rendering_settings = Plugins.Rendering.Settings()
         ..clear = Color.slate_950()
-    if option_requested("--immediate") {
-        rendering_settings.present_mode = Rendering.PresentMode.immediate
+        ..present_mode = Rendering.PresentMode.immediate
+    if option_requested("--synchronized") {
+        rendering_settings.present_mode = Rendering.PresentMode.synchronized
+    } elif option_requested("--mailbox") {
+        rendering_settings.present_mode = Rendering.PresentMode.mailbox
     }
     var application = Application()
         ..add_resource(Simulation(

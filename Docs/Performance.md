@@ -15,6 +15,7 @@ silex run Packages/GFX.Physics/Benchmarks/Scale2D.sx --release
 silex compile Packages/GFX.Physics/Benchmarks/CircleScale2D.sx --release -o /tmp/gfx-circle-scale
 /tmp/gfx-circle-scale --count-5000 --long --awake
 /tmp/gfx-circle-scale --count-1800 --falling-body --medium --awake
+/tmp/gfx-circle-scale --count-600 --falling-body --medium --awake --mixed
 silex compile Packages/GFX.Physics/Benchmarks/JointScale2D.sx --release -o /tmp/gfx-joint-scale
 /tmp/gfx-joint-scale
 /tmp/gfx-joint-scale --workers-4
@@ -33,6 +34,9 @@ sleep, so the 5,000-body result measures all bodies and contacts on every one of
 graphical example's 0.05 m radius and 87-column layout; `--count-1800` makes the
 workload from the interactive performance panel reproducible without depending
 on emission timing.
+`--mixed` alternates circles and boxes so the benchmark also reproduces the
+general-contact load of `World2D/FallingBody.sx`; combine it with
+`--falling-body --awake` when investigating the integrated stress path.
 
 `JointScale2D.sx` isolates 4,096 awake bodies, each owned by one mouse joint in
 the same conflict-free color. Creation is outside the measured interval. The
@@ -50,6 +54,7 @@ The current budgets are:
 | 5,000 moving, sparse | 16.67 ms | Met |
 | 10,000 moving, sparse | 33.33 ms | Met |
 | 1,000-body settling pile | 33.33 ms | Met |
+| 600-body mixed graphical layout, all awake | 16.67 ms | Met |
 | 1,800-circle graphical layout, all awake | 16.67 ms | Met |
 | 5,000-circle dense pile, all awake | 16.67 ms | Not met |
 
@@ -72,6 +77,16 @@ native sample attributes most remaining time to the constraint stage and shows
 large stack frames and aggregate traffic in call-containing hot functions.
 This is recorded as a backend optimization target; it is not hidden behind a
 second scalar solver or a relaxed overlap threshold.
+
+The mixed graphical gate was added on 2026-08-26 after the integrated example
+exposed the missing general-contact workload. Across three isolated 300-step
+Release runs, its median is 12.975 ms/step (12.929–13.175 ms), down from
+15.385 ms/step (15.372–15.493 ms) before the scalar single-contact Soft Step
+kernel. Both candidates finish below the floor tolerance with zero circle pair
+above 0.5 mm overlap. In the graphical 600-body all-awake control, the worker
+capacity rises from 54.5 Hz to 63.1 Hz; per-step snapshot publication raises
+visual cadence from 7.4 Hz to the completed physics cadence instead of hiding
+the intermediate states inside an eight-step catch-up batch.
 
 The separate memory switch gates pass after correcting the corpus ownership.
 The first harness retained every `RigidBody2D` class handle merely to inspect
@@ -189,16 +204,21 @@ allows settled circles to sleep by default; pass `--awake` only for an
 all-active physics workload. Every smoke run still prints the complete final
 statistics to stdout.
 
-The interactive example uses synchronized presentation and one physics step
-per published transform snapshot by default. `--immediate` and `--batch-4`
-are explicit benchmark controls; neither is enabled silently by a stress mode.
+The interactive performance example uses immediate presentation by default so
+the reported render rate exposes application headroom instead of quantizing it
+at the display refresh boundary. Pass `--synchronized` for display-paced
+presentation or `--mailbox` for mailbox presentation; `--immediate` remains an
+accepted compatibility flag. Catch-up batches preserve fixed-step FIFO order
+and publish one transform snapshot per completed physics step. `--batch-4`
+limits the number of already-due steps queued together; it no longer reduces
+visual publication to one snapshot for the whole batch.
 The rendering panel reports submitted application frames as `RENDER FPS`.
 The physics panel reports completed fixed steps as `PHYSICS HZ`, simulation
 speed relative to the 60 Hz target, and the percentage of render frames that
-repeated the previous snapshot. In the default one-step batch, visual snapshot
-cadence equals physics cadence and is deliberately not repeated as another live
-row. Bounded benchmark output retains `visual Hz`, where it remains useful for
-explicit multi-step batches. The panel also separates the complete scheduled cycle, worker
+repeated the previous snapshot. Visual snapshot cadence follows completed
+physics cadence and is deliberately not repeated as another live row. Bounded
+benchmark output retains `visual Hz` for automated cadence checks. The panel
+also separates the complete scheduled cycle, worker
 execution, resubmission delay, queue/poll delay, and raw worker capacity. When
 physics is overloaded, the visual cadence and time outside the solver are
 therefore reported honestly even though the independent renderer remains

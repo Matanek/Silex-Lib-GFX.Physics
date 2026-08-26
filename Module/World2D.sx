@@ -764,6 +764,14 @@ public class World2D {
         return self.soft_constraints.collisions.count()
     }
 
+    package func single_contact_collision_count() int {
+        var count = 0
+        for collision in self.soft_constraints.collisions {
+            if collision.contacts.count == 1 { count++ }
+        }
+        return count
+    }
+
     package func compact_collision_count() int {
         return self.soft_constraints.compact_collisions.count()
     }
@@ -5173,12 +5181,15 @@ func solve_soft_constraint_range(
                 compact_impulses[entry] = impulses
             } else {
                 var collision = state.collisions[-entry - 1]
-                let softness = collision_softness(
-                    store,
-                    collision,
-                    contact_softness,
-                    static_softness
-                )
+                var softness = contact_softness
+                let first = collision.first_body
+                let second = collision.second_body
+                if !store.awake[first] || !store.awake[second] ||
+                    store.inverse_masses[first] <= 0.0 ||
+                    store.inverse_masses[second] <= 0.0
+                {
+                    softness = static_softness
+                }
                 solve_soft_collision(
                     store,
                     collision,
@@ -5473,20 +5484,6 @@ func contact_anchor_vector(
     )
 }
 
-func collision_softness(
-    store:BodyStore2D,
-    collision:@Collision2D,
-    contact:ContactSoftness2D,
-    fixed_contact:ContactSoftness2D
-) ContactSoftness2D {
-    if solver_inverse_mass(store, collision.first_body) <= 0.0 ||
-        solver_inverse_mass(store, collision.second_body) <= 0.0
-    {
-        return fixed_contact
-    }
-    return contact
-}
-
 func apply_soft_contact_impulse(
     store:BodyStore2D,
     first:int,
@@ -5495,10 +5492,18 @@ func apply_soft_contact_impulse(
     second_anchor:Math.Vec2,
     impulse:Math.Vec2
 ) {
-    let first_inverse_mass = solver_inverse_mass(store, first)
-    let first_inverse_inertia = solver_inverse_inertia(store, first)
-    let second_inverse_mass = solver_inverse_mass(store, second)
-    let second_inverse_inertia = solver_inverse_inertia(store, second)
+    var first_inverse_mass = 0.0
+    var first_inverse_inertia = 0.0
+    if store.awake[first] {
+        first_inverse_mass = store.inverse_masses[first]
+        first_inverse_inertia = store.inverse_inertias[first]
+    }
+    var second_inverse_mass = 0.0
+    var second_inverse_inertia = 0.0
+    if store.awake[second] {
+        second_inverse_mass = store.inverse_masses[second]
+        second_inverse_inertia = store.inverse_inertias[second]
+    }
     if first_inverse_mass > 0.0 || first_inverse_inertia > 0.0 {
         store.velocities_x[first] -= impulse.x * first_inverse_mass
         store.velocities_y[first] -= impulse.y * first_inverse_mass
@@ -5554,10 +5559,71 @@ func warm_start_soft_collision(
     store:BodyStore2D,
     collision:@Collision2D
 ) {
+    if collision.contacts.count == 1 {
+        warm_start_soft_single_collision(store, collision)
+        return
+    }
     warm_start_soft_collision_point(store, collision, false)
     if collision.contacts.count > 1 {
         warm_start_soft_collision_point(store, collision, true)
     }
+}
+
+func warm_start_soft_single_collision(
+    store:BodyStore2D,
+    collision:@Collision2D
+) {
+    let normal_impulse = collision.normal_impulse_first
+    let tangent_impulse = collision.tangent_impulse_first
+    if normal_impulse == 0.0 && tangent_impulse == 0.0 { return }
+    let first = collision.first_body
+    let second = collision.second_body
+    var first_anchor_x:float = collision.first_anchor_a.x + 0.0
+    var first_anchor_y:float = collision.first_anchor_a.y + 0.0
+    if store.shape_kinds[first] != 1 {
+        let cosine = store.rotation_cosines[first]
+        let sine = store.rotation_sines[first]
+        let local_x = first_anchor_x
+        let local_y = first_anchor_y
+        first_anchor_x = local_x * cosine - local_y * sine
+        first_anchor_y = local_x * sine + local_y * cosine
+    }
+    var second_anchor_x:float = collision.first_anchor_b.x + 0.0
+    var second_anchor_y:float = collision.first_anchor_b.y + 0.0
+    if store.shape_kinds[second] != 1 {
+        let cosine = store.rotation_cosines[second]
+        let sine = store.rotation_sines[second]
+        let local_x = second_anchor_x
+        let local_y = second_anchor_y
+        second_anchor_x = local_x * cosine - local_y * sine
+        second_anchor_y = local_x * sine + local_y * cosine
+    }
+    let impulse_x = collision.normal.x * normal_impulse -
+        collision.normal.y * tangent_impulse
+    let impulse_y = collision.normal.y * normal_impulse +
+        collision.normal.x * tangent_impulse
+    var first_inverse_mass = 0.0
+    var first_inverse_inertia = 0.0
+    if store.awake[first] {
+        first_inverse_mass = store.inverse_masses[first]
+        first_inverse_inertia = store.inverse_inertias[first]
+    }
+    var second_inverse_mass = 0.0
+    var second_inverse_inertia = 0.0
+    if store.awake[second] {
+        second_inverse_mass = store.inverse_masses[second]
+        second_inverse_inertia = store.inverse_inertias[second]
+    }
+    store.velocities_x[first] -= impulse_x * first_inverse_mass
+    store.velocities_y[first] -= impulse_y * first_inverse_mass
+    store.angular_velocities[first] -=
+        (first_anchor_x * impulse_y - first_anchor_y * impulse_x) *
+        first_inverse_inertia
+    store.velocities_x[second] += impulse_x * second_inverse_mass
+    store.velocities_y[second] += impulse_y * second_inverse_mass
+    store.angular_velocities[second] +=
+        (second_anchor_x * impulse_y - second_anchor_y * impulse_x) *
+        second_inverse_inertia
 }
 
 func warm_start_soft_collision_point(
@@ -5621,6 +5687,17 @@ func solve_soft_collision(
     reverse_points:bool = false,
     solve_friction:bool = true
 ) {
+    if collision.contacts.count == 1 {
+        solve_soft_single_collision(
+            store,
+            collision,
+            softness,
+            inverse_delta,
+            use_bias,
+            solve_friction
+        )
+        return
+    }
     let solved_block = collision.contacts.count > 1 &&
         solve_soft_collision_block_normals(
             store,
@@ -5668,6 +5745,134 @@ func solve_soft_collision(
             solve_soft_collision_friction_point(store, collision, true)
         }
     }
+}
+
+func solve_soft_single_collision(
+    store:BodyStore2D,
+    collision:&Collision2D,
+    softness:ContactSoftness2D,
+    inverse_delta:float,
+    use_bias:bool,
+    solve_friction:bool
+) {
+    // Scalar projection of the general one-point equations below. Keep its
+    // bias, accumulated impulses and friction limits in exact lockstep.
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    let normal_x:float = collision.normal.x + 0.0
+    let normal_y:float = collision.normal.y + 0.0
+    let base_separation:float = collision.base_separation_first + 0.0
+    let normal_mass:float = collision.normal_mass_first + 0.0
+    let tangent_mass:float = collision.tangent_mass_first + 0.0
+    let combined_friction:float = collision.combined_friction + 0.0
+    let previous_normal:float = collision.normal_impulse_first + 0.0
+    let previous_tangent:float = collision.tangent_impulse_first + 0.0
+    var first_anchor_x:float = collision.first_anchor_a.x + 0.0
+    var first_anchor_y:float = collision.first_anchor_a.y + 0.0
+    if store.shape_kinds[first] != 1 {
+        let cosine = store.rotation_cosines[first]
+        let sine = store.rotation_sines[first]
+        let local_x = first_anchor_x
+        let local_y = first_anchor_y
+        first_anchor_x = local_x * cosine - local_y * sine
+        first_anchor_y = local_x * sine + local_y * cosine
+    }
+    var second_anchor_x:float = collision.first_anchor_b.x + 0.0
+    var second_anchor_y:float = collision.first_anchor_b.y + 0.0
+    if store.shape_kinds[second] != 1 {
+        let cosine = store.rotation_cosines[second]
+        let sine = store.rotation_sines[second]
+        let local_x = second_anchor_x
+        let local_y = second_anchor_y
+        second_anchor_x = local_x * cosine - local_y * sine
+        second_anchor_y = local_x * sine + local_y * cosine
+    }
+    let separation = base_separation +
+        (store.positions_x[second] - store.positions_x[first] +
+            second_anchor_x - first_anchor_x) * normal_x +
+        (store.positions_y[second] - store.positions_y[first] +
+            second_anchor_y - first_anchor_y) * normal_y
+    var velocity_bias = 0.0
+    var mass_scale = 1.0
+    var impulse_scale = 0.0
+    if separation > 0.0 {
+        velocity_bias = separation * inverse_delta
+    } else if use_bias {
+        velocity_bias = Math.max(softness.bias_rate * separation, -3.0)
+        mass_scale = softness.mass_scale
+        impulse_scale = softness.impulse_scale
+    }
+    var relative_x:float = store.velocities_x[second] -
+        store.angular_velocities[second] * second_anchor_y -
+        store.velocities_x[first] +
+        store.angular_velocities[first] * first_anchor_y
+    var relative_y:float = store.velocities_y[second] +
+        store.angular_velocities[second] * second_anchor_x -
+        store.velocities_y[first] -
+        store.angular_velocities[first] * first_anchor_x
+    let normal_velocity = relative_x * normal_x + relative_y * normal_y
+    let increment = -normal_mass * mass_scale *
+        (normal_velocity + velocity_bias) -
+        impulse_scale * previous_normal
+    let accumulated_normal = Math.max(previous_normal + increment, 0.0)
+    let applied_normal = accumulated_normal - previous_normal
+    let normal_impulse_x = normal_x * applied_normal
+    let normal_impulse_y = normal_y * applied_normal
+    var first_inverse_mass = 0.0
+    var first_inverse_inertia = 0.0
+    if store.awake[first] {
+        first_inverse_mass = store.inverse_masses[first]
+        first_inverse_inertia = store.inverse_inertias[first]
+    }
+    var second_inverse_mass = 0.0
+    var second_inverse_inertia = 0.0
+    if store.awake[second] {
+        second_inverse_mass = store.inverse_masses[second]
+        second_inverse_inertia = store.inverse_inertias[second]
+    }
+    store.velocities_x[first] -= normal_impulse_x * first_inverse_mass
+    store.velocities_y[first] -= normal_impulse_y * first_inverse_mass
+    store.angular_velocities[first] -=
+        (first_anchor_x * normal_impulse_y -
+            first_anchor_y * normal_impulse_x) * first_inverse_inertia
+    store.velocities_x[second] += normal_impulse_x * second_inverse_mass
+    store.velocities_y[second] += normal_impulse_y * second_inverse_mass
+    store.angular_velocities[second] +=
+        (second_anchor_x * normal_impulse_y -
+            second_anchor_y * normal_impulse_x) * second_inverse_inertia
+    collision.normal_impulse_first = accumulated_normal
+    collision.total_normal_impulse_first += accumulated_normal
+    if !solve_friction { return }
+
+    relative_x = store.velocities_x[second] -
+        store.angular_velocities[second] * second_anchor_y -
+        store.velocities_x[first] +
+        store.angular_velocities[first] * first_anchor_y
+    relative_y = store.velocities_y[second] +
+        store.angular_velocities[second] * second_anchor_x -
+        store.velocities_y[first] -
+        store.angular_velocities[first] * first_anchor_x
+    let tangent_velocity = relative_y * normal_x - relative_x * normal_y
+    let tangent_increment = -tangent_mass * tangent_velocity
+    let friction_limit = combined_friction * accumulated_normal
+    let accumulated_tangent = Math.max(
+        -friction_limit,
+        Math.min(previous_tangent + tangent_increment, friction_limit)
+    )
+    let applied_tangent = accumulated_tangent - previous_tangent
+    let tangent_impulse_x = -normal_y * applied_tangent
+    let tangent_impulse_y = normal_x * applied_tangent
+    store.velocities_x[first] -= tangent_impulse_x * first_inverse_mass
+    store.velocities_y[first] -= tangent_impulse_y * first_inverse_mass
+    store.angular_velocities[first] -=
+        (first_anchor_x * tangent_impulse_y -
+            first_anchor_y * tangent_impulse_x) * first_inverse_inertia
+    store.velocities_x[second] += tangent_impulse_x * second_inverse_mass
+    store.velocities_y[second] += tangent_impulse_y * second_inverse_mass
+    store.angular_velocities[second] +=
+        (second_anchor_x * tangent_impulse_y -
+            second_anchor_y * tangent_impulse_x) * second_inverse_inertia
+    collision.tangent_impulse_first = accumulated_tangent
 }
 
 func solve_soft_collision_block_normals(
@@ -5950,10 +6155,94 @@ func apply_soft_collision_restitution(
     store:BodyStore2D,
     collision:&Collision2D
 ) {
+    if collision.contacts.count == 1 {
+        apply_soft_single_collision_restitution(store, collision)
+        return
+    }
     apply_soft_collision_restitution_point(store, collision, false)
     if collision.contacts.count > 1 {
         apply_soft_collision_restitution_point(store, collision, true)
     }
+}
+
+func apply_soft_single_collision_restitution(
+    store:BodyStore2D,
+    collision:&Collision2D
+) {
+    let restitution:float = collision.restitution + 0.0
+    let initial_velocity:float =
+        collision.initial_normal_velocity_first + 0.0
+    let total_impulse:float = collision.total_normal_impulse_first + 0.0
+    let normal_mass:float = collision.normal_mass_first + 0.0
+    let previous:float = collision.normal_impulse_first + 0.0
+    let normal_x:float = collision.normal.x + 0.0
+    let normal_y:float = collision.normal.y + 0.0
+    if restitution <= 0.0 || initial_velocity > -1.0 ||
+        total_impulse <= 0.0
+    {
+        return
+    }
+    let first:int = collision.first_body + 0
+    let second:int = collision.second_body + 0
+    var first_anchor_x:float = collision.first_anchor_a.x + 0.0
+    var first_anchor_y:float = collision.first_anchor_a.y + 0.0
+    if store.shape_kinds[first] != 1 {
+        let cosine = store.rotation_cosines[first]
+        let sine = store.rotation_sines[first]
+        let local_x = first_anchor_x
+        let local_y = first_anchor_y
+        first_anchor_x = local_x * cosine - local_y * sine
+        first_anchor_y = local_x * sine + local_y * cosine
+    }
+    var second_anchor_x:float = collision.first_anchor_b.x + 0.0
+    var second_anchor_y:float = collision.first_anchor_b.y + 0.0
+    if store.shape_kinds[second] != 1 {
+        let cosine = store.rotation_cosines[second]
+        let sine = store.rotation_sines[second]
+        let local_x = second_anchor_x
+        let local_y = second_anchor_y
+        second_anchor_x = local_x * cosine - local_y * sine
+        second_anchor_y = local_x * sine + local_y * cosine
+    }
+    let relative_x = store.velocities_x[second] -
+        store.angular_velocities[second] * second_anchor_y -
+        store.velocities_x[first] +
+        store.angular_velocities[first] * first_anchor_y
+    let relative_y = store.velocities_y[second] +
+        store.angular_velocities[second] * second_anchor_x -
+        store.velocities_y[first] -
+        store.angular_velocities[first] * first_anchor_x
+    let normal_velocity = relative_x * normal_x + relative_y * normal_y
+    let increment = -normal_mass * (
+        normal_velocity + restitution * initial_velocity
+    )
+    let accumulated = Math.max(previous + increment, 0.0)
+    let applied = accumulated - previous
+    let impulse_x = normal_x * applied
+    let impulse_y = normal_y * applied
+    var first_inverse_mass = 0.0
+    var first_inverse_inertia = 0.0
+    if store.awake[first] {
+        first_inverse_mass = store.inverse_masses[first]
+        first_inverse_inertia = store.inverse_inertias[first]
+    }
+    var second_inverse_mass = 0.0
+    var second_inverse_inertia = 0.0
+    if store.awake[second] {
+        second_inverse_mass = store.inverse_masses[second]
+        second_inverse_inertia = store.inverse_inertias[second]
+    }
+    store.velocities_x[first] -= impulse_x * first_inverse_mass
+    store.velocities_y[first] -= impulse_y * first_inverse_mass
+    store.angular_velocities[first] -=
+        (first_anchor_x * impulse_y - first_anchor_y * impulse_x) *
+        first_inverse_inertia
+    store.velocities_x[second] += impulse_x * second_inverse_mass
+    store.velocities_y[second] += impulse_y * second_inverse_mass
+    store.angular_velocities[second] +=
+        (second_anchor_x * impulse_y - second_anchor_y * impulse_x) *
+        second_inverse_inertia
+    collision.normal_impulse_first = accumulated
 }
 
 func apply_soft_collision_restitution_point(
