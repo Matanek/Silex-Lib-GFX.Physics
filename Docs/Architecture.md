@@ -16,8 +16,8 @@ The switched native Silex core contains:
 
 - `Physics.World2D`, the owner and clock boundary of a 2D simulation;
 - `Physics.RigidBody2D`, a body created and retained by that world;
-- `Physics.RigidBody2DSettings`, its fixed or dynamic behavior, initial motion,
-  rotation, mass, friction, damping, and response to gravity;
+- `Physics.RigidBody2DSettings`, its fixed, kinematic, or dynamic behavior,
+  initial motion, rotation, mass, friction, damping, and response to gravity;
 - `Physics.Shape2D`, the explicit choice between box, capsule, chain, circle,
   convex polygon, and segment;
 - `Physics.Box2D`, an oriented and optionally rounded rectangle retained as
@@ -91,11 +91,18 @@ reads an event. Movement, solid contact, hit, and sensor streams are opt-in so
 an ordinary world does not construct unused payloads.
 
 Continuous motion keeps two costs distinct. Fast ordinary bodies retain the
-fixed-box boundary guard already used by the solver. Bodies created with
+non-dynamic-box boundary guard already used by the solver. Bodies created with
 `is_bullet` additionally sweep against dynamic targets and public convex
 geometry; rotational motion refines the first swept overlap. Sensor hits emit
 transitions without response. A world with no bullet returns before entering
 this dynamic-target path.
+
+Kinematic bodies retain zero inverse mass and inertia, so contacts never alter
+their prescribed motion. `World2D.step` advances their linear and angular
+velocities before contact generation, excludes them from gravity and sleep,
+and exposes their surface velocity to dynamic contact response. They share the
+non-dynamic broad-phase set with fixed bodies but keep their previous transform
+for bullet sweeps and opt-in movement events.
 
 Worker count never selects a different broad phase or solver. Worlds with
 dynamic shapes use the same reusable deterministic grid for one or several

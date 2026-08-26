@@ -6,6 +6,7 @@ use STD.Math
 
 public enum BodyType2D {
     fixed
+    kinematic
     dynamic
 }
 
@@ -389,7 +390,7 @@ package class BodyStore2D {
         let half_height = metrics.half_height
         let radius = metrics.radius
         let sweep_radius_squared = metrics.sweep_radius_squared
-        if settings.body_type == BodyType2D.dynamic && shape_kind == 3 {
+        if settings.body_type != BodyType2D.fixed && shape_kind == 3 {
             panic("GFX.Physics.World2D requires chain body shapes to be fixed")
         }
         var inverse_mass = 0.0
@@ -448,7 +449,7 @@ package class BodyStore2D {
             behavior_flags += 32
         }
         self.behavior_flags.append(behavior_flags)
-        self.awake.append(settings.body_type == BodyType2D.dynamic)
+        self.awake.append(settings.body_type != BodyType2D.fixed)
         self.sleep_times.append(0.0)
         self.dirty_transforms.append(true)
         return BodyId2D(slot, self.slot_generations[slot])

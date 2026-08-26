@@ -100,10 +100,13 @@ These are reexports contributed by `GFX.Physics`; their implementation and
 ownership remain in this package.
 
 The current 2D slice integrates linear and angular motion with a semi-implicit
-Euler step. Oriented boxes and circles can be fixed or dynamic. Box-box,
-circle-box, and circle-circle contacts use an iterative impulse solver with the
-appropriate inertia, restitution, and Coulomb friction. Boxes remain the
-default shape when `shape` is omitted, preserving existing consumers.
+Euler step. Oriented boxes and circles can be fixed, kinematic, or dynamic.
+Kinematic bodies follow their prescribed linear and angular velocities without
+gravity or impulse response, while their surface velocity moves and wakes
+dynamic contacts. Box-box, circle-box, and circle-circle contacts use an
+iterative impulse solver with the appropriate inertia, restitution, and
+Coulomb friction. Boxes remain the default shape when `shape` is omitted,
+preserving existing consumers.
 
 A balanced dynamic AABB tree retains fixed-shape queries. Worlds with dynamic
 shapes use the same reusable deterministic grid regardless of worker count, so
@@ -164,17 +167,16 @@ dynamic pair, and application plugins remain outside the current world
 contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
-[`Examples/World2D/VisualShowcase.sx`](Examples/World2D/VisualShowcase.sx) is
-the recommended visual introduction: it displays 60 dynamic balls inside a
-four-wall container whose successive 45-degree turns keep the same direction
-and are driven every two seconds by a looping `GFX.Animation` timeline with
-bounce easing. The centered composition keeps the animated physics interaction
-as its only subject. The focused
-Contacts, Events, Joints, SleepIslands, and SoftStepPile programs remain
-executable assertion examples for diagnostics and automation.
+[`Examples/World2D/BoxRotation.sx`](Examples/World2D/BoxRotation.sx) is the
+recommended visual introduction: it displays 60 dynamic balls inside a
+four-wall kinematic container whose successive 45-degree turns keep the same
+direction and are driven by a looping `GFX.Animation` timeline. The centered
+composition keeps the animated physics interaction as its only subject. The
+focused Contacts, Events, Joints, SleepIslands, and SoftStepPile programs
+remain executable assertion examples for diagnostics and automation.
 
 ```text
-silex run Packages/GFX.Physics/Examples/World2D/VisualShowcase.sx --release
+silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release
 ```
 
 [`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) is the

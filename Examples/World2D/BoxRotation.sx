@@ -20,8 +20,8 @@ static struct Showcase {
     let container_half_extent:float = 2.35
     let container_wall_thickness:float = 0.2
     let container_pixels:int = 468
-    let container_turn_duration:float = 1.8
-    let container_turn_interval:float = 2.0
+    let container_turn_duration:float = 0.25
+    let container_turn_interval:float = 0.8
 }
 
 struct BodyVisual {
@@ -136,7 +136,7 @@ func create_container_wall(
 ) Physics.RigidBody2D {
     return simulation.world.create_rigid_body(
         Physics.RigidBody2DSettings()
-        ..body_type = Physics.BodyType2D.fixed
+        ..body_type = Physics.BodyType2D.kinematic
         ..shape = Physics.Shape2D.box(Physics.Box2D(size))
         ..position = offset
         ..friction = 0.85
@@ -176,73 +176,94 @@ func update_container_walls(simulation:&Simulation, angle:float) {
     let thickness = Showcase.container_wall_thickness
     let offset = half + thickness * 0.5
     if var wall = simulation.container_left {
-        wall.set_position(rotate_offset(Math.Vec2(-offset, 0.0), angle))
-        wall.set_rotation(angle)
+        let target = rotate_offset(Math.Vec2(-offset, 0.0), angle)
+        wall.set_velocity(target.subtract(wall.position()).multiply(
+            1.0 / Showcase.fixed_delta
+        ))
+        wall.set_angular_velocity(
+            (angle - wall.rotation()) / Showcase.fixed_delta
+        )
     }
     if var wall = simulation.container_right {
-        wall.set_position(rotate_offset(Math.Vec2(offset, 0.0), angle))
-        wall.set_rotation(angle)
+        let target = rotate_offset(Math.Vec2(offset, 0.0), angle)
+        wall.set_velocity(target.subtract(wall.position()).multiply(
+            1.0 / Showcase.fixed_delta
+        ))
+        wall.set_angular_velocity(
+            (angle - wall.rotation()) / Showcase.fixed_delta
+        )
     }
     if var wall = simulation.container_bottom {
-        wall.set_position(rotate_offset(Math.Vec2(0.0, -offset), angle))
-        wall.set_rotation(angle)
+        let target = rotate_offset(Math.Vec2(0.0, -offset), angle)
+        wall.set_velocity(target.subtract(wall.position()).multiply(
+            1.0 / Showcase.fixed_delta
+        ))
+        wall.set_angular_velocity(
+            (angle - wall.rotation()) / Showcase.fixed_delta
+        )
     }
     if var wall = simulation.container_top {
-        wall.set_position(rotate_offset(Math.Vec2(0.0, offset), angle))
-        wall.set_rotation(angle)
+        let target = rotate_offset(Math.Vec2(0.0, offset), angle)
+        wall.set_velocity(target.subtract(wall.position()).multiply(
+            1.0 / Showcase.fixed_delta
+        ))
+        wall.set_angular_velocity(
+            (angle - wall.rotation()) / Showcase.fixed_delta
+        )
     }
 }
 
 func container_rotation() Animation.Timeline {
     let pause = Showcase.container_turn_interval -
         Showcase.container_turn_duration
+    let easing = Animation.Easing.in_out
     return Animation.sequence([
         Animation.rotate_to(
             Math.pi() * 0.25,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 0.5,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 0.75,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi(),
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 1.25,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 1.5,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 1.75,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause),
         Animation.rotate_to(
             Math.pi() * 2.0,
             Showcase.container_turn_duration,
-            easing:Animation.Easing.bounce_out
+            easing:easing
         ),
         Animation.wait(pause)
     ])..loop()
@@ -394,7 +415,7 @@ func simulate(
         assert(simulation.world.joint_count() == 0)
         assert(simulation.world.contact_count() > 0)
         print(
-            "VisualShowcase smoke: balls=$(simulation.bodies.count()), " +
+            "BoxRotation smoke: balls=$(simulation.bodies.count()), " +
             "container=$(simulation.container_angle), " +
             "elapsed=$(simulation.elapsed), " +
             "awake=$(simulation.world.awake_body_count()), " +
