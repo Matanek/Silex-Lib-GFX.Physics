@@ -39,6 +39,12 @@ architecture:
 - the retained API adds convex geometry queries, persistent contacts, joints,
   bullets, sensors, and opt-in completed-step event streams.
 
+The former body-level `shape`, `friction`, `restitution`, `collision_filter`,
+sensor, and event settings now create one equivalent implicit `Collider2D`.
+Existing source does not need to change. New compound-body code can set
+`create_implicit_collider = false` and use `World2D.create_collider`; an empty
+body has no meaningful `shape()` compatibility value.
+
 Applications only opt into the new costs they request. Ordinary bodies do not
 enter bullet CCD, disabled event streams do not construct event payloads, and
 parallel execution never selects a different solver.

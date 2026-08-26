@@ -18,6 +18,10 @@ The switched native Silex core contains:
 - `Physics.RigidBody2D`, a body created and retained by that world;
 - `Physics.RigidBody2DSettings`, its fixed, kinematic, or dynamic behavior,
   initial motion, rotation, mass, friction, damping, and response to gravity;
+- `Physics.Collider2D` and `Physics.Collider2DSettings`, the stable per-body
+  geometry, density, material, filter, sensor, and event boundary;
+- `Physics.PhysicsMaterial2D` and its typed application identifier,
+  including common or per-segment chain material selection;
 - `Physics.Shape2D`, the explicit choice between box, capsule, chain, circle,
   convex polygon, and segment;
 - `Physics.Box2D`, an oriented and optionally rounded rectangle retained as
@@ -43,10 +47,13 @@ stale handle fail explicitly. Freed slots are reused without revalidating any
 older copy of a handle. Neither slot, dense index nor generation leaks into the
 public contract.
 
-World shapes use their own generational dense pool. A body owns a private linked set
-of shape slots, so body compaction does not move or expose shape identities and
-body destruction releases all of its shapes. The retained public `shape()`
-accessor still reports the primary box or circle used by the regression solver.
+World colliders use their own generational dense pool. A body owns a private
+linked set of collider slots, so body compaction does not move or expose
+collider identities and body destruction invalidates all of its colliders.
+Collider topology mutations mark derived world data dirty; the broad phase,
+candidate cache, sensor pairs, and event counters are rebuilt before the next
+step. The retained public `shape()` accessor still reports the primary box or
+circle used by the regression solver and fails explicitly for an empty body.
 The broader `Shape2D` vocabulary is accepted by `ShapePlacement2D` for pure
 geometry queries and by `World2D` for persistent geometric contacts. The
 dynamic-response solver currently resolves only the box and circle subset.
@@ -74,9 +81,10 @@ After a public body destruction, their derived indices and reusable buffers are
 rebuilt from the surviving dense body state; ordinary stepping then continues
 without preserving a pair or contact that referenced the removed body.
 
-General-shape world contacts reuse that lifecycle without entering the
-dynamic-response path. Each body stores local geometry bounds and a collision
-filter. The
+General-shape and compound-body world contacts reuse that lifecycle without
+entering the dynamic-response path. Compound broad-phase bounds union every
+collider, while narrow-phase filtering and sensor discovery use each collider's
+own filter and flags. The
 broad phase retains stable candidate slots; a general pair refreshes its
 manifold in place and clears the slot when the shapes separate. Public
 `Contact2D` values are read-only snapshots reconstructed in stable body-slot

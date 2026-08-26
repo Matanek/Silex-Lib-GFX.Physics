@@ -74,6 +74,14 @@ is the primary executable proof for contact creation, persistence, and
 invalidation. See [`Docs/Contacts.md`](Docs/Contacts.md) for filters,
 deterministic ordering, and the current solver boundary.
 
+Bodies can also own zero, one, or several stable `Collider2D` handles. Each
+collider carries its geometry, density, typed material, collision filter,
+sensor state, and event options; fixed chains may select one common material or
+one material per segment. The existing body-level shape and material fields
+remain an exact one-collider shortcut. See
+[`Docs/Colliders.md`](Docs/Colliders.md) for creation, mutation, destruction,
+invalidation, and the current response boundary.
+
 Existing 0.4 world and body usage remains source-compatible across the switch.
 The intentional solver and lifetime changes are listed in
 [`Docs/Migration.md`](Docs/Migration.md).

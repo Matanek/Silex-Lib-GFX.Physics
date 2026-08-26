@@ -10,6 +10,54 @@ public enum BodyType2D {
     dynamic
 }
 
+public struct PhysicsMaterialId2D {
+    private let current_value:uint64
+
+    init(value:uint64 = 0) { self.current_value = value }
+
+    func value() uint64 { return self.current_value }
+}
+
+public struct PhysicsMaterial2D {
+    var friction:float
+    var restitution:float
+    var rolling_resistance:float
+    var tangent_speed:float
+    var application_id:PhysicsMaterialId2D
+
+    init() {
+        self.friction = 0.6
+        self.restitution = 0.0
+        self.rolling_resistance = 0.0
+        self.tangent_speed = 0.0
+        self.application_id = PhysicsMaterialId2D()
+    }
+}
+
+public struct Collider2DSettings {
+    var shape:Shape2D?
+    var density:float
+    var material:PhysicsMaterial2D
+    var segment_materials:PhysicsMaterial2D[]
+    var collision_filter:CollisionFilter2D
+    var is_sensor:bool
+    var enable_contact_events:bool
+    var enable_hit_events:bool
+    var enable_sensor_events:bool
+
+    init() {
+        self.shape = null
+        self.density = 1.0
+        self.material = PhysicsMaterial2D()
+        self.segment_materials = []
+        self.collision_filter = CollisionFilter2D()
+        self.is_sensor = false
+        self.enable_contact_events = false
+        self.enable_hit_events = false
+        self.enable_sensor_events = false
+    }
+}
+
 public struct RigidBody2DSettings {
     var body_type:BodyType2D
     var shape:Shape2D?
@@ -31,6 +79,7 @@ public struct RigidBody2DSettings {
     var enable_hit_events:bool
     var enable_sensor_events:bool
     var collision_filter:CollisionFilter2D
+    var create_implicit_collider:bool
 
     init() {
         self.body_type = BodyType2D.dynamic
@@ -53,6 +102,7 @@ public struct RigidBody2DSettings {
         self.enable_hit_events = false
         self.enable_sensor_events = false
         self.collision_filter = CollisionFilter2D()
+        self.create_implicit_collider = true
     }
 }
 
@@ -86,6 +136,15 @@ package struct ShapeId2D {
     }
 }
 
+package class ColliderMaterialList2D {
+    var values:PhysicsMaterial2D[]
+
+    init(values:PhysicsMaterial2D[]) { self.values = values }
+    func count() int { return self.values.count() }
+    func copy() PhysicsMaterial2D[] { return self.values }
+    func replace(values:PhysicsMaterial2D[]) { self.values = values }
+}
+
 package class ShapeStore2D {
     var slot_generations:int[]
     var slot_dense_indices:int[]
@@ -94,6 +153,11 @@ package class ShapeStore2D {
     var body_slots:int[]
     var shapes:Shape2D[]
     var next_body_shape_slots:int[]
+    var densities:float[]
+    var materials:PhysicsMaterial2D[]
+    var segment_materials:ColliderMaterialList2D[]
+    var collision_filters:CollisionFilter2D[]
+    var behavior_flags:uint8[]
 
     init() {
         self.slot_generations = []
@@ -103,11 +167,20 @@ package class ShapeStore2D {
         self.body_slots = []
         self.shapes = []
         self.next_body_shape_slots = []
+        self.densities = []
+        self.materials = []
+        self.segment_materials = []
+        self.collision_filters = []
+        self.behavior_flags = []
     }
 
     func count() int { return self.dense_slots.count() }
 
-    func append(body_slot:int, shape:Shape2D, next_slot:int) ShapeId2D {
+    func append(
+        body_slot:int,
+        settings:Collider2DSettings,
+        next_slot:int
+    ) ShapeId2D {
         var slot = self.slot_generations.count()
         if !self.free_slots.is_empty() {
             slot = self.free_slots.take_last()
@@ -119,14 +192,26 @@ package class ShapeStore2D {
         self.slot_dense_indices[slot] = dense_index
         self.dense_slots.append(slot)
         self.body_slots.append(body_slot)
-        self.shapes.append(shape)
+        self.shapes.append(collider_settings_shape(settings))
         self.next_body_shape_slots.append(next_slot)
+        self.densities.append(settings.density)
+        self.materials.append(settings.material)
+        self.segment_materials.append(ColliderMaterialList2D(
+            settings.segment_materials
+        ))
+        self.collision_filters.append(settings.collision_filter)
+        var flags:uint8 = 0
+        if settings.is_sensor { flags += 1 }
+        if settings.enable_contact_events { flags += 2 }
+        if settings.enable_hit_events { flags += 4 }
+        if settings.enable_sensor_events { flags += 8 }
+        self.behavior_flags.append(flags)
         return ShapeId2D(slot, self.slot_generations[slot])
     }
 
     func require(id:ShapeId2D) int {
         if !self.contains(id) {
-            panic("GFX.Physics shape handle no longer refers to a live shape")
+            panic("GFX.Physics.Collider2D no longer refers to a live collider")
         }
         return self.slot_dense_indices[id.slot]
     }
@@ -145,12 +230,22 @@ package class ShapeStore2D {
             self.body_slots.swap(dense_index, last)
             self.shapes.swap(dense_index, last)
             self.next_body_shape_slots.swap(dense_index, last)
+            self.densities.swap(dense_index, last)
+            self.materials.swap(dense_index, last)
+            self.segment_materials.swap(dense_index, last)
+            self.collision_filters.swap(dense_index, last)
+            self.behavior_flags.swap(dense_index, last)
             self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
         }
         self.dense_slots.take_last()
         self.body_slots.take_last()
         self.shapes.take_last()
         self.next_body_shape_slots.take_last()
+        self.densities.take_last()
+        self.materials.take_last()
+        self.segment_materials.take_last()
+        self.collision_filters.take_last()
+        self.behavior_flags.take_last()
         self.slot_dense_indices[id.slot] = -1
         self.slot_generations[id.slot]++
         self.free_slots.append(id.slot)
@@ -284,6 +379,7 @@ package class BodyStore2D {
     var free_slots:int[]
     var shape_store:ShapeStore2D
     var first_shape_slots:int[]
+    var primary_shape_slots:int[]
     var shape_counts:int[]
     var body_types:BodyType2D[]
     var shapes:Shape2D[]
@@ -321,6 +417,7 @@ package class BodyStore2D {
     var sleep_times:float[]
     var dirty_transforms:bool[]
     var world_locked:bool
+    var topology_dirty:bool
 
     init() {
         self.slot_generations = []
@@ -329,6 +426,7 @@ package class BodyStore2D {
         self.free_slots = []
         self.shape_store = ShapeStore2D()
         self.first_shape_slots = []
+        self.primary_shape_slots = []
         self.shape_counts = []
         self.body_types = []
         self.shapes = []
@@ -366,6 +464,7 @@ package class BodyStore2D {
         self.sleep_times = []
         self.dirty_transforms = []
         self.world_locked = false
+        self.topology_dirty = false
     }
 
     func count() int { return self.positions_x.count() }
@@ -399,9 +498,34 @@ package class BodyStore2D {
             inverse_mass = 1.0 / settings.mass
             inverse_inertia = metrics.inverse_inertia_factor / settings.mass
         }
-        let shape_id = self.shape_store.append(slot, selected_shape, -1)
-        self.first_shape_slots.append(shape_id.slot)
-        self.shape_counts.append(1)
+        var first_shape_slot = -1
+        var primary_shape_slot = -1
+        var shape_count = 0
+        if settings.create_implicit_collider {
+            let implicit_material = PhysicsMaterial2D()
+                ..friction = settings.friction
+                ..restitution = settings.restitution
+            let collider_settings = Collider2DSettings()
+                ..shape = selected_shape
+                ..material = implicit_material
+                ..collision_filter = settings.collision_filter
+                ..is_sensor = settings.is_sensor
+                ..enable_contact_events = settings.enable_contact_events
+                ..enable_hit_events = settings.enable_hit_events
+                ..enable_sensor_events = settings.enable_sensor_events
+            validate_collider_settings(collider_settings)
+            let shape_id = self.shape_store.append(
+                slot,
+                collider_settings,
+                -1
+            )
+            first_shape_slot = shape_id.slot
+            primary_shape_slot = shape_id.slot
+            shape_count = 1
+        }
+        self.first_shape_slots.append(first_shape_slot)
+        self.primary_shape_slots.append(primary_shape_slot)
+        self.shape_counts.append(shape_count)
         self.body_types.append(settings.body_type)
         self.shapes.append(selected_shape)
         self.shape_kinds.append(shape_kind)
@@ -435,17 +559,19 @@ package class BodyStore2D {
         self.allow_sleep.append(settings.allow_sleep)
         var behavior_flags:uint8 = 0
         if settings.is_bullet { behavior_flags += 1 }
-        if settings.is_sensor { behavior_flags += 2 }
+        if settings.create_implicit_collider && settings.is_sensor {
+            behavior_flags += 2
+        }
         if settings.enable_move_events {
             behavior_flags += 4
         }
-        if settings.enable_contact_events {
+        if settings.create_implicit_collider && settings.enable_contact_events {
             behavior_flags += 8
         }
-        if settings.enable_hit_events {
+        if settings.create_implicit_collider && settings.enable_hit_events {
             behavior_flags += 16
         }
-        if settings.enable_sensor_events {
+        if settings.create_implicit_collider && settings.enable_sensor_events {
             behavior_flags += 32
         }
         self.behavior_flags.append(behavior_flags)
@@ -478,15 +604,237 @@ package class BodyStore2D {
     }
 
     func attach_shape(id:BodyId2D, shape:Shape2D) ShapeId2D {
+        return self.attach_collider(
+            id,
+            Collider2DSettings() ..shape = shape
+        )
+    }
+
+    func attach_collider(
+        id:BodyId2D,
+        settings:Collider2DSettings
+    ) ShapeId2D {
+        validate_collider_settings(settings)
         let index = self.require(id)
+        let selected_shape = collider_settings_shape(settings)
+        let metrics = shape_metrics(selected_shape)
+        if self.body_types[index] != BodyType2D.fixed && metrics.kind == 3 {
+            panic("GFX.Physics.World2D requires chain colliders to belong to fixed bodies")
+        }
         let shape_id = self.shape_store.append(
             id.slot,
-            shape,
+            settings,
             self.first_shape_slots[index]
         )
         self.first_shape_slots[index] = shape_id.slot
         self.shape_counts[index]++
+        if self.primary_shape_slots[index] < 0 {
+            self.primary_shape_slots[index] = shape_id.slot
+            self.apply_primary_collider(index)
+        } else {
+            self.refresh_collider_flags(index)
+        }
+        self.dirty_transforms[index] = true
+        self.topology_dirty = true
+        self.wake(index)
         return shape_id
+    }
+
+    func destroy_collider(id:ShapeId2D) {
+        let dense = self.shape_store.require(id)
+        let body_slot = self.shape_store.body_slots[dense]
+        if body_slot < 0 || body_slot >= self.slot_dense_indices.count() ||
+            self.slot_dense_indices[body_slot] < 0
+        {
+            panic("GFX.Physics.Collider2D no longer belongs to a live body")
+        }
+        let body = self.slot_dense_indices[body_slot]
+        var previous_slot = -1
+        var slot = self.first_shape_slots[body]
+        while slot >= 0 && slot != id.slot {
+            let current = self.shape_store.slot_dense_indices[slot]
+            previous_slot = slot
+            slot = self.shape_store.next_body_shape_slots[current]
+        }
+        if slot < 0 {
+            panic("GFX.Physics.Collider2D is not attached to its body")
+        }
+        let next_slot = self.shape_store.next_body_shape_slots[dense]
+        if previous_slot < 0 {
+            self.first_shape_slots[body] = next_slot
+        } else {
+            let previous_dense = self.shape_store.slot_dense_indices[previous_slot]
+            self.shape_store.next_body_shape_slots[previous_dense] = next_slot
+        }
+        self.shape_counts[body]--
+        if self.primary_shape_slots[body] == id.slot {
+            self.primary_shape_slots[body] = self.first_shape_slots[body]
+        }
+        self.shape_store.destroy(id)
+        self.apply_primary_collider(body)
+        self.dirty_transforms[body] = true
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    func set_collider_shape(id:ShapeId2D, shape:Shape2D) {
+        let dense = self.shape_store.require(id)
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        let metrics = shape_metrics(shape)
+        if self.body_types[body] != BodyType2D.fixed && metrics.kind == 3 {
+            panic("GFX.Physics.World2D requires chain colliders to belong to fixed bodies")
+        }
+        if self.shape_store.segment_materials[dense].count() > 0 {
+            match shape {
+                chain(value) => {
+                    if self.shape_store.segment_materials[dense].count() !=
+                        value.segment_count()
+                    {
+                        panic("GFX.Physics.Collider2D segment material count must match the chain segment count")
+                    }
+                }
+                else => {
+                    panic("GFX.Physics.Collider2D segment materials require a chain shape")
+                }
+            }
+        }
+        self.shape_store.shapes[dense] = shape
+        if self.primary_shape_slots[body] == id.slot {
+            self.apply_primary_collider(body)
+        }
+        self.dirty_transforms[body] = true
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    func set_collider_material(id:ShapeId2D, material:PhysicsMaterial2D) {
+        validate_material(material)
+        let dense = self.shape_store.require(id)
+        self.shape_store.materials[dense] = material
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        if self.primary_shape_slots[body] == id.slot {
+            self.apply_primary_collider(body)
+        }
+        self.wake(body)
+    }
+
+    func set_collider_density(id:ShapeId2D, density:float) {
+        if !finite_body_value(density) || density < 0.0 {
+            panic("GFX.Physics.Collider2D density must be finite and non-negative")
+        }
+        let dense = self.shape_store.require(id)
+        self.shape_store.densities[dense] = density
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        self.wake(body)
+    }
+
+    func set_collider_filter(id:ShapeId2D, filter:CollisionFilter2D) {
+        let dense = self.shape_store.require(id)
+        self.shape_store.collision_filters[dense] = filter
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        if self.primary_shape_slots[body] == id.slot {
+            self.apply_primary_collider(body)
+        }
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    func set_collider_sensor(id:ShapeId2D, sensor:bool) {
+        let dense = self.shape_store.require(id)
+        if sensor && (self.shape_store.behavior_flags[dense] & 1) == 0 {
+            self.shape_store.behavior_flags[dense] += 1
+        } else if !sensor && (self.shape_store.behavior_flags[dense] & 1) != 0 {
+            self.shape_store.behavior_flags[dense] -= 1
+        }
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        self.refresh_collider_flags(body)
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    func set_collider_event_options(
+        id:ShapeId2D,
+        contact_events:bool,
+        hit_events:bool,
+        sensor_events:bool
+    ) {
+        let dense = self.shape_store.require(id)
+        var flags:uint8 = self.shape_store.behavior_flags[dense] & 1
+        if contact_events { flags += 2 }
+        if hit_events { flags += 4 }
+        if sensor_events { flags += 8 }
+        self.shape_store.behavior_flags[dense] = flags
+        let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        self.refresh_collider_flags(body)
+        self.topology_dirty = true
+    }
+
+    func set_collider_segment_materials(
+        id:ShapeId2D,
+        materials:PhysicsMaterial2D[]
+    ) {
+        let dense = self.shape_store.require(id)
+        validate_segment_materials(self.shape_store.shapes[dense], materials)
+        for material in materials { validate_material(material) }
+        self.shape_store.segment_materials[dense].replace(materials)
+        self.topology_dirty = true
+    }
+
+    private func apply_primary_collider(body:int) {
+        let slot = self.primary_shape_slots[body]
+        if slot < 0 {
+            let fallback = Shape2D.box(Box2D())
+            let metrics = shape_metrics(fallback)
+            self.shapes[body] = fallback
+            self.apply_primary_metrics(body, metrics)
+            self.inverse_inertias[body] = 0.0
+            self.collision_filters[body] = CollisionFilter2D()
+            self.restitutions[body] = 0.0
+            self.friction_roots[body] = Math.sqrt(0.6)
+            self.refresh_collider_flags(body)
+            return
+        }
+        let dense = self.shape_store.slot_dense_indices[slot]
+        self.shapes[body] = self.shape_store.shapes[dense]
+        self.apply_primary_metrics(body, shape_metrics(self.shapes[body]))
+        self.collision_filters[body] = self.shape_store.collision_filters[dense]
+        let material = self.shape_store.materials[dense]
+        self.restitutions[body] = material.restitution
+        self.friction_roots[body] = Math.sqrt(material.friction)
+        self.refresh_collider_flags(body)
+    }
+
+    private func apply_primary_metrics(body:int, metrics:ShapeMetrics2D) {
+        self.shape_kinds[body] = metrics.kind
+        self.half_widths[body] = metrics.half_width
+        self.half_heights[body] = metrics.half_height
+        self.radii[body] = metrics.radius
+        self.sweep_radii_squared[body] = metrics.sweep_radius_squared
+        self.local_lower_x[body] = metrics.lower.x
+        self.local_lower_y[body] = metrics.lower.y
+        self.local_upper_x[body] = metrics.upper.x
+        self.local_upper_y[body] = metrics.upper.y
+        if self.body_types[body] == BodyType2D.dynamic {
+            self.inverse_inertias[body] =
+                metrics.inverse_inertia_factor * self.inverse_masses[body]
+        } else {
+            self.inverse_inertias[body] = 0.0
+        }
+    }
+
+    private func refresh_collider_flags(body:int) {
+        var flags:uint8 = self.behavior_flags[body] & 5
+        var slot = self.first_shape_slots[body]
+        while slot >= 0 {
+            let dense = self.shape_store.slot_dense_indices[slot]
+            let collider_flags = self.shape_store.behavior_flags[dense]
+            if (collider_flags & 1) != 0 && (flags & 2) == 0 { flags += 2 }
+            if (collider_flags & 2) != 0 && (flags & 8) == 0 { flags += 8 }
+            if (collider_flags & 4) != 0 && (flags & 16) == 0 { flags += 16 }
+            if (collider_flags & 8) != 0 && (flags & 32) == 0 { flags += 32 }
+            slot = self.shape_store.next_body_shape_slots[dense]
+        }
+        self.behavior_flags[body] = flags
     }
 
     func destroy(id:BodyId2D) int {
@@ -534,6 +882,7 @@ package class BodyStore2D {
     private func swap_dense(first:int, second:int) {
         self.dense_slots.swap(first, second)
         self.first_shape_slots.swap(first, second)
+        self.primary_shape_slots.swap(first, second)
         self.shape_counts.swap(first, second)
         self.body_types.swap(first, second)
         self.shapes.swap(first, second)
@@ -575,6 +924,7 @@ package class BodyStore2D {
     private func take_last_dense() {
         self.dense_slots.take_last()
         self.first_shape_slots.take_last()
+        self.primary_shape_slots.take_last()
         self.shape_counts.take_last()
         self.body_types.take_last()
         self.shapes.take_last()
@@ -614,6 +964,131 @@ package class BodyStore2D {
     }
 }
 
+public class Collider2D {
+    private var store:BodyStore2D
+    private let id:ShapeId2D
+
+    module init(store:BodyStore2D, id:ShapeId2D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.shape_store.contains(self.id) }
+
+    package func belongs_to(store:BodyStore2D) bool {
+        return self.store == store
+    }
+
+    package func collider_id() ShapeId2D { return self.id }
+
+    func body() RigidBody2D {
+        let dense = self.store.shape_store.require(self.id)
+        let slot = self.store.shape_store.body_slots[dense]
+        return RigidBody2D(
+            self.store,
+            BodyId2D(slot, self.store.slot_generations[slot])
+        )
+    }
+
+    func shape() Shape2D {
+        return self.store.shape_store.shapes[
+            self.store.shape_store.require(self.id)
+        ]
+    }
+
+    func density() float {
+        return self.store.shape_store.densities[
+            self.store.shape_store.require(self.id)
+        ]
+    }
+
+    func material() PhysicsMaterial2D {
+        return self.store.shape_store.materials[
+            self.store.shape_store.require(self.id)
+        ]
+    }
+
+    func segment_materials() PhysicsMaterial2D[] {
+        return self.store.shape_store.segment_materials[
+            self.store.shape_store.require(self.id)
+        ].copy()
+    }
+
+    func collision_filter() CollisionFilter2D {
+        return self.store.shape_store.collision_filters[
+            self.store.shape_store.require(self.id)
+        ]
+    }
+
+    func is_sensor() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 1) != 0
+    }
+
+    func contact_events_enabled() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 2) != 0
+    }
+
+    func hit_events_enabled() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 4) != 0
+    }
+
+    func sensor_events_enabled() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 8) != 0
+    }
+
+    func set_shape(shape:Shape2D) {
+        self.store.require_mutable()
+        self.store.set_collider_shape(self.id, shape)
+    }
+
+    func set_density(density:float) {
+        self.store.require_mutable()
+        self.store.set_collider_density(self.id, density)
+    }
+
+    func set_material(material:PhysicsMaterial2D) {
+        self.store.require_mutable()
+        self.store.set_collider_material(self.id, material)
+    }
+
+    func set_segment_materials(materials:PhysicsMaterial2D[]) {
+        self.store.require_mutable()
+        self.store.set_collider_segment_materials(self.id, materials)
+    }
+
+    func set_collision_filter(filter:CollisionFilter2D) {
+        self.store.require_mutable()
+        self.store.set_collider_filter(self.id, filter)
+    }
+
+    func set_sensor(sensor:bool) {
+        self.store.require_mutable()
+        self.store.set_collider_sensor(self.id, sensor)
+    }
+
+    func set_event_options(
+        contact_events:bool,
+        hit_events:bool,
+        sensor_events:bool
+    ) {
+        self.store.require_mutable()
+        self.store.set_collider_event_options(
+            self.id,
+            contact_events,
+            hit_events,
+            sensor_events
+        )
+    }
+}
+
 public class RigidBody2D {
     private var store:BodyStore2D
     private let id:BodyId2D
@@ -638,7 +1113,26 @@ public class RigidBody2D {
 
     func shape() Shape2D {
         let index = self.store.require(self.id)
+        if self.store.primary_shape_slots[index] < 0 {
+            panic("GFX.Physics.RigidBody2D.shape requires at least one collider")
+        }
         return self.store.shapes[index]
+    }
+
+    func collider_count() int { return self.store.shape_count(self.id) }
+
+    func write_colliders(output:&Collider2D[]) {
+        output.clear()
+        let body = self.store.require(self.id)
+        var slot = self.store.first_shape_slots[body]
+        while slot >= 0 {
+            let dense = self.store.shape_store.slot_dense_indices[slot]
+            output.append(Collider2D(
+                self.store,
+                ShapeId2D(slot, self.store.shape_store.slot_generations[slot])
+            ))
+            slot = self.store.shape_store.next_body_shape_slots[dense]
+        }
     }
 
     func position() Math.Vec2 {
@@ -740,4 +1234,61 @@ func validate_settings(settings:RigidBody2DSettings) {
     if settings.linear_damping < 0.0 || settings.angular_damping < 0.0 {
         panic("GFX.Physics.RigidBody2D damping must be non-negative")
     }
+}
+
+func validate_collider_settings(settings:Collider2DSettings) {
+    if !finite_body_value(settings.density) || settings.density < 0.0 {
+        panic("GFX.Physics.Collider2D density must be finite and non-negative")
+    }
+    validate_material(settings.material)
+    for material in settings.segment_materials { validate_material(material) }
+    validate_segment_materials(
+        collider_settings_shape(settings),
+        settings.segment_materials
+    )
+}
+
+func collider_settings_shape(settings:Collider2DSettings) Shape2D {
+    if let shape = settings.shape { return shape }
+    return Shape2D.box(Box2D())
+}
+
+func validate_material(material:PhysicsMaterial2D) {
+    if !finite_body_value(material.friction) || material.friction < 0.0 {
+        panic("GFX.Physics.PhysicsMaterial2D friction must be finite and non-negative")
+    }
+    if !finite_body_value(material.restitution) ||
+        material.restitution < 0.0 || material.restitution > 1.0
+    {
+        panic("GFX.Physics.PhysicsMaterial2D restitution must be between zero and one")
+    }
+    if !finite_body_value(material.rolling_resistance) ||
+        material.rolling_resistance < 0.0
+    {
+        panic("GFX.Physics.PhysicsMaterial2D rolling resistance must be finite and non-negative")
+    }
+    if !finite_body_value(material.tangent_speed) {
+        panic("GFX.Physics.PhysicsMaterial2D tangent speed must be finite")
+    }
+}
+
+func validate_segment_materials(
+    shape:Shape2D,
+    materials:PhysicsMaterial2D[]
+) {
+    if materials.count() == 0 { return }
+    match shape {
+        chain(value) => {
+            if materials.count() != value.segment_count() {
+                panic("GFX.Physics.Collider2D segment material count must match the chain segment count")
+            }
+        }
+        else => {
+            panic("GFX.Physics.Collider2D segment materials require a chain shape")
+        }
+    }
+}
+
+func finite_body_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
 }

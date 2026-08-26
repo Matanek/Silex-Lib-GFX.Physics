@@ -1,0 +1,19 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+    )
+    world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0, 0.0),
+                Math.Vec2(-1.0, 1.0),
+                Math.Vec2(1.0, 1.0),
+                Math.Vec2(2.0, 0.0)
+            ]))
+    )
+}

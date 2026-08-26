@@ -1,0 +1,193 @@
+use GFX.Physics
+use STD.Math
+
+test "compose a body from stable public colliders" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+    )
+
+    assert(body.collider_count() == 0)
+
+    let rubber = Physics.PhysicsMaterial2D()
+        ..friction = 0.9
+        ..restitution = 0.7
+        ..rolling_resistance = 0.1
+        ..tangent_speed = 2.0
+        ..application_id = Physics.PhysicsMaterialId2D(42)
+    var circle = world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+            ..density = 2.5
+            ..material = rubber
+            ..collision_filter = Physics.CollisionFilter2D(
+                category_bits:2,
+                mask_bits:4
+            )
+    )
+    var box = world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0, 1.0)))
+            ..is_sensor = true
+            ..enable_sensor_events = true
+    )
+
+    assert(body.collider_count() == 2)
+    assert(circle.body().is_valid())
+    assert(circle.density() == 2.5)
+    assert(circle.material().application_id.value() == 42)
+    assert(circle.collision_filter().category_bits == 2)
+    assert(box.is_sensor())
+    assert(box.sensor_events_enabled())
+
+    var colliders:Physics.Collider2D[] = []
+    body.write_colliders(colliders)
+    assert(colliders.count() == 2)
+
+    circle.set_shape(Physics.Shape2D.box(Physics.Box2D(Math.Vec2(3.0, 1.0))))
+    circle.set_material(Physics.PhysicsMaterial2D()
+        ..friction = 0.25
+        ..restitution = 0.1
+        ..application_id = Physics.PhysicsMaterialId2D(7)
+    )
+    circle.set_density(3.0)
+    circle.set_sensor(true)
+    circle.set_event_options(false, false, true)
+    world.step(0.0)
+
+    assert(circle.density() == 3.0)
+    assert(circle.material().application_id.value() == 7)
+    assert(circle.is_sensor())
+    assert(circle.sensor_events_enabled())
+
+    world.destroy_collider(box)
+    assert(!box.is_valid())
+    assert(body.collider_count() == 1)
+
+    world.destroy_rigid_body(body)
+    assert(!body.is_valid())
+    assert(!circle.is_valid())
+}
+
+test "retain the body shape shortcut as one equivalent implicit collider" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.75))
+        ..friction = 0.4
+        ..restitution = 0.3
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+
+    var colliders:Physics.Collider2D[] = []
+    body.write_colliders(colliders)
+    assert(colliders.count() == 1)
+    assert(colliders[0].is_sensor())
+    assert(colliders[0].sensor_events_enabled())
+    assert(Math.nearly_equal(colliders[0].material().friction, 0.4, 0.000001))
+    assert(Math.nearly_equal(
+        colliders[0].material().restitution,
+        0.3,
+        0.000001
+    ))
+    match colliders[0].shape() {
+        circle(value) => { assert(value.radius == 0.75) }
+        else => { panic("the body shortcut did not create its circle collider") }
+    }
+}
+
+test "store one material per chain segment" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    let first = Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(10)
+    let second = Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(11)
+    let third = Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(12)
+    var chain = world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0, 0.0),
+                Math.Vec2(-1.0, 1.0),
+                Math.Vec2(1.0, 1.0),
+                Math.Vec2(2.0, 0.0)
+            ]))
+            ..segment_materials = [first, second, third]
+    )
+
+    let materials = chain.segment_materials()
+    assert(materials.count() == 3)
+    assert(materials[1].application_id.value() == 11)
+}
+
+test "apply collider filters and sensor events independently from the body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var sensor_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(
+        sensor_body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+            ..collision_filter = Physics.CollisionFilter2D(
+                category_bits:2,
+                mask_bits:4
+            )
+            ..is_sensor = true
+            ..enable_sensor_events = true
+    )
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 0)
+
+    var visitor_colliders:Physics.Collider2D[] = []
+    visitor.write_colliders(visitor_colliders)
+    visitor_colliders[0].set_collision_filter(Physics.CollisionFilter2D(
+        category_bits:4,
+        mask_bits:2
+    ))
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 1)
+}
+
+test "discover contact through a secondary collider of a compound body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var compound = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(
+        compound,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+    )
+    world.create_collider(
+        compound,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+                Math.Vec2(3.0, -1.0),
+                Math.Vec2(3.0, 1.0)
+            ))
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(3.0, 0.0)
+    )
+
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+}

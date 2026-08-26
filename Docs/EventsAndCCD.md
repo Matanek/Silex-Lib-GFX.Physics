@@ -23,8 +23,10 @@ let projectile = Physics.RigidBody2DSettings()
     ..enable_hit_events = true
 ```
 
-`is_sensor` disables physical response but keeps overlap filtering.
-`enable_sensor_events` belongs to the sensor; an ordinary visitor does not need
+`Collider2DSettings.is_sensor` disables physical response for that collider but
+keeps its overlap filtering. The retained body-level fields configure the
+implicit compatibility collider. `enable_sensor_events` belongs to the sensor;
+an ordinary visitor does not need
 to opt in. When two enabled sensors overlap, each receives its own event role.
 Contact and hit events are enabled when either solid body requests that stream.
 

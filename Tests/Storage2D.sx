@@ -1,6 +1,7 @@
 use GFX.Physics.Box2D.Box2D
 use GFX.Physics.Circle2D.Circle2D
 use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.Collider2DSettings
 use GFX.Physics.RigidBody2D.RigidBody2DSettings
 use GFX.Physics.Shape2D.Shape2D
 use STD.Math
@@ -50,4 +51,31 @@ test "reuse generation slots while keeping body and shape pools dense" {
     assert(!store.shape_store.contains(extra_shape))
     assert(store.count() == 2)
     assert(store.shape_store.count() == 2)
+}
+
+test "retain explicit body mass while collider density awaits mass properties" {
+    var store = BodyStore2D()
+    let body = store.append(RigidBody2DSettings()
+        ..mass = 4.0
+        ..create_implicit_collider = false
+    )
+    let collider = store.attach_collider(
+        body,
+        Collider2DSettings()
+            ..shape = Shape2D.circle(Circle2D(0.5))
+            ..density = 3.0
+    )
+    let index = store.require(body)
+
+    assert(store.inverse_masses[index] == 0.25)
+    assert(store.shape_store.densities[
+        store.shape_store.require(collider)
+    ] == 3.0)
+
+    store.set_collider_density(collider, 8.0)
+    assert(store.inverse_masses[index] == 0.25)
+
+    store.destroy_collider(collider)
+    assert(store.inverse_masses[index] == 0.25)
+    assert(store.inverse_inertias[index] == 0.0)
 }
