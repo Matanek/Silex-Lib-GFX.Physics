@@ -165,10 +165,11 @@ contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
 [`Examples/World2D/VisualShowcase.sx`](Examples/World2D/VisualShowcase.sx) is
-the recommended visual introduction: it displays 20 dynamic balls inside a
-four-wall container whose 45-degree turns are driven every two seconds by a
-looping `GFX.Animation` timeline with bounce easing. The centered composition
-keeps the animated physics interaction as its only subject. The focused
+the recommended visual introduction: it displays 60 dynamic balls inside a
+four-wall container whose successive 45-degree turns keep the same direction
+and are driven every two seconds by a looping `GFX.Animation` timeline with
+bounce easing. The centered composition keeps the animated physics interaction
+as its only subject. The focused
 Contacts, Events, Joints, SleepIslands, and SoftStepPile programs remain
 executable assertion examples for diagnostics and automation.
 

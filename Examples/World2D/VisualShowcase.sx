@@ -14,7 +14,7 @@ use STD.Process
 static struct Showcase {
     let pixels_per_meter:float = 90.0
     let fixed_delta:float = 1.0 / 60.0
-    let ball_count:int = 20
+    let ball_count:int = 60
     let ball_diameter:float = 0.28
     let ball_pixels:int = 28
     let container_half_extent:float = 2.35
@@ -41,6 +41,8 @@ class Simulation {
     var container_top:Physics.RigidBody2D?
     var container_center:Math.Vec2
     var container_angle:float
+    var container_visual_angle:float
+    var container_cycle_offset:float
     var container_target_angle:float
     var accumulator:float
     var elapsed:float
@@ -55,6 +57,8 @@ class Simulation {
         self.container_top = null
         self.container_center = Math.Vec2()
         self.container_angle = 0.0
+        self.container_visual_angle = 0.0
+        self.container_cycle_offset = 0.0
         self.container_target_angle = 0.0
         self.accumulator = 0.0
         self.elapsed = 0.0
@@ -200,19 +204,43 @@ func container_rotation() Animation.Timeline {
         ),
         Animation.wait(pause),
         Animation.rotate_to(
-            0.0,
+            Math.pi() * 0.5,
             Showcase.container_turn_duration,
             easing:Animation.Easing.bounce_out
         ),
         Animation.wait(pause),
         Animation.rotate_to(
-            -Math.pi() * 0.25,
+            Math.pi() * 0.75,
             Showcase.container_turn_duration,
             easing:Animation.Easing.bounce_out
         ),
         Animation.wait(pause),
         Animation.rotate_to(
-            0.0,
+            Math.pi(),
+            Showcase.container_turn_duration,
+            easing:Animation.Easing.bounce_out
+        ),
+        Animation.wait(pause),
+        Animation.rotate_to(
+            Math.pi() * 1.25,
+            Showcase.container_turn_duration,
+            easing:Animation.Easing.bounce_out
+        ),
+        Animation.wait(pause),
+        Animation.rotate_to(
+            Math.pi() * 1.5,
+            Showcase.container_turn_duration,
+            easing:Animation.Easing.bounce_out
+        ),
+        Animation.wait(pause),
+        Animation.rotate_to(
+            Math.pi() * 1.75,
+            Showcase.container_turn_duration,
+            easing:Animation.Easing.bounce_out
+        ),
+        Animation.wait(pause),
+        Animation.rotate_to(
+            Math.pi() * 2.0,
             Showcase.container_turn_duration,
             easing:Animation.Easing.bounce_out
         ),
@@ -267,16 +295,16 @@ func create_scene(
     )
     var index = 0
     while index < Showcase.ball_count {
-        let column = index % 5
-        let row = index / 5
+        let column = index % 10
+        let row = index / 10
         spawn_ball(
             scene,
             simulation,
             visuals,
             index,
             Math.Vec2(
-                (column - 2) as float * 0.58,
-                -0.9 + row as float * 0.54
+                (column as float - 4.5) * 0.42,
+                -1.25 + row as float * 0.42
             )
         )
         index++
@@ -289,7 +317,14 @@ func sync_container(
 ) {
     for (container, transform) in containers {
         simulation.container_center = container.center
-        simulation.container_target_angle = transform.rotation
+        if simulation.container_visual_angle > Math.pi() * 1.75 &&
+            transform.rotation < Math.pi() * 0.25
+        {
+            simulation.container_cycle_offset += Math.pi() * 2.0
+        }
+        simulation.container_visual_angle = transform.rotation
+        simulation.container_target_angle =
+            simulation.container_cycle_offset + transform.rotation
     }
 }
 
@@ -354,7 +389,8 @@ func simulate(
         assert(simulation.container_right != null)
         assert(simulation.container_bottom != null)
         assert(simulation.container_top != null)
-        assert(simulation.container_angle > 0.7)
+        assert(simulation.container_cycle_offset >= Math.pi() * 2.0)
+        assert(simulation.container_angle > Math.pi() * 2.0)
         assert(simulation.world.joint_count() == 0)
         assert(simulation.world.contact_count() > 0)
         print(
@@ -373,7 +409,7 @@ func smoke_duration() float {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {
-                if argument == "--smoke" { return 10.0 }
+                if argument == "--smoke" { return 16.25 }
             }
         }
     }
