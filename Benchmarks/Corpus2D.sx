@@ -109,7 +109,10 @@ func measure(
     var mode = "release"
     if option_requested("--debug-build") { mode = "debug" }
     print(
-        "SILEX_PHYSICS_CORPUS engine=silex-current scenario=$(scenario) " +
+        "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current " +
+        "engine_version=gfx-physics-0.5.0 oracle_version=3.1.1 " +
+        "oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 " +
+        "solver=soft-step substeps=4 scenario=$(scenario) " +
         "mode=$(mode) workers=$(workers) bodies=$(body_count) steps=$(step_count) dt=$(delta) " +
         "elapsed_ms=$(elapsed_ms) step_ms=$(elapsed_ms / step_count as float) " +
         "centroid_x=$(centroid_x) centroid_y=$(centroid_y) max_speed=$(maximum_speed) min_y=$(minimum_y) " +

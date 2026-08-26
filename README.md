@@ -159,6 +159,9 @@ profiling part of the normal step cost. See
 [`Docs/Performance.md`](Docs/Performance.md) for the reproducible 1k/5k/10k
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
+The executable parity boundary and every currently covered, partial, planned,
+divergent or excluded Box2D capability are documented in
+[`Docs/Completeness.md`](Docs/Completeness.md).
 
 The existing `World2D` regression contact solver still resolves only unrounded boxes
 and circles. Additional forms can be attached to the world and produce

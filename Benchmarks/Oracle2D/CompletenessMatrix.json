@@ -1,0 +1,583 @@
+{
+  "schema": 1,
+  "upstream": {
+    "project": "Box2D",
+    "version": "3.1.1",
+    "revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+    "headers": {
+      "base.h": 10,
+      "math_functions.h": 10,
+      "types.h": 17,
+      "collision.h": 72,
+      "box2d.h": 313
+    },
+    "symbol_count": 422
+  },
+  "tracking_specs": [
+    "Physique 2D complète 02 — Colliders multiples et matériaux",
+    "Physique 2D complète 03 — Masse, forces et contrôle des corps",
+    "Physique 2D complète 04 — Réponse dynamique de toutes les formes",
+    "Physique 2D complète 05 — Réglages complets du monde",
+    "Physique 2D complète 06 — Collision continue générale",
+    "Physique 2D complète 07 — Requêtes spatiales du monde",
+    "Physique 2D complète 08 — Filtrage avancé et pré-solve",
+    "Physique 2D complète 09 — Joints entièrement configurables",
+    "Physique 2D complète 10 — Événements et introspection des contacts",
+    "Physique 2D complète 11 — Mouvement cinématique de personnage",
+    "Physique 2D complète 12 — Explosions et forces radiales",
+    "Physique 2D complète 13 — Debug draw physique"
+  ],
+  "capabilities": [
+    {
+      "id": "platform-runtime-hooks",
+      "domain": "integration",
+      "capability": "allocator, assertion, clock, yield and hash hooks",
+      "status": "excluded",
+      "patterns": ["^b2(?:SetAllocator|SetAssertFcn|InternalAssertFcn|GetByteCount|GetTicks|GetMilliseconds|GetMillisecondsAndReset|Yield|Hash)$"],
+      "silex_contract": "The compiler, STD and the host runtime own these process-wide facilities.",
+      "rationale": "They are Box2D C integration hooks, not rigid-body gameplay capabilities; exposing them would leak runtime plumbing into GFX.Physics."
+    },
+    {
+      "id": "oracle-version",
+      "domain": "integration",
+      "capability": "engine version record",
+      "status": "covered",
+      "patterns": ["^b2GetVersion$"],
+      "silex_contract": "Every differential corpus record names both engine versions and the immutable oracle revision.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Benchmarks/Oracle2D/Box2DOracle.c", "Benchmarks/Oracle2D/CheckCorpus.py"]
+    },
+    {
+      "id": "generic-math",
+      "domain": "integration",
+      "capability": "generic trigonometry and rotation helpers",
+      "status": "excluded",
+      "patterns": ["^b2(?:Atan2|ComputeCosSin|ComputeRotationBetweenUnitVectors)$"],
+      "silex_contract": "Physics consumes STD.Math values instead of publishing an engine-specific math library.",
+      "rationale": "These functions support Box2D's C value model but are not physics-domain intentions."
+    },
+    {
+      "id": "fixed-meter-units",
+      "domain": "world",
+      "capability": "world scale units",
+      "status": "divergent",
+      "patterns": ["^b2(?:SetLengthUnitsPerMeter|GetLengthUnitsPerMeter)$"],
+      "silex_contract": "GFX.Physics worlds use meters, seconds and kilograms without mutable process-global scaling.",
+      "evidence": ["Docs/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
+      "rationale": "A fixed unit contract is safer and at least as expressive because applications convert at their boundary without shared global state."
+    },
+    {
+      "id": "validated-values",
+      "domain": "collision",
+      "capability": "finite and valid public geometry",
+      "status": "divergent",
+      "patterns": ["^b2IsValid(?:Float|Vec2|Rotation|AABB|Plane|Ray)$"],
+      "silex_contract": "Constructors and public operations reject invalid values directly instead of requiring validation helper calls.",
+      "evidence": ["Tests/Consumer/check-invalid-geometry.sh", "Tests/Consumer/Tests/Geometry.sx"],
+      "rationale": "Validity is enforced at the intention boundary and does not need a parallel boolean-helper API."
+    },
+    {
+      "id": "default-world-settings",
+      "domain": "world",
+      "capability": "default world configuration",
+      "status": "partial",
+      "patterns": ["^b2DefaultWorldDef$"],
+      "silex_contract": "World2D has stable defaults; World2DSettings will make every developer-owned creation choice explicit.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx"],
+      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+    },
+    {
+      "id": "default-body-settings",
+      "domain": "body",
+      "capability": "default body configuration",
+      "status": "partial",
+      "patterns": ["^b2DefaultBodyDef$"],
+      "silex_contract": "RigidBody2DSettings owns value defaults and will cover all body-control choices.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx"],
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "default-collider-settings",
+      "domain": "shape",
+      "capability": "default collider, chain, filter and material configuration",
+      "status": "planned",
+      "patterns": ["^b2Default(?:ShapeDef|ChainDef|Filter|SurfaceMaterial)$"],
+      "silex_contract": "Collider2DSettings, PhysicsMaterial2D and chain materials will express these defaults as typed Silex values.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "default-query-settings",
+      "domain": "query",
+      "capability": "default spatial query filter",
+      "status": "planned",
+      "patterns": ["^b2DefaultQueryFilter$"],
+      "silex_contract": "World queries will accept a distinct typed query filter with explicit defaults.",
+      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+    },
+    {
+      "id": "default-joint-settings",
+      "domain": "joint",
+      "capability": "default typed joint configuration",
+      "status": "partial",
+      "patterns": ["^b2Default(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)JointDef$"],
+      "silex_contract": "Eight typed Silex settings already construct joints; their full runtime configuration remains scheduled.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"],
+      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+    },
+    {
+      "id": "default-explosion-settings",
+      "domain": "world",
+      "capability": "default radial explosion configuration",
+      "status": "planned",
+      "patterns": ["^b2DefaultExplosionDef$"],
+      "silex_contract": "Explosion2DSettings will provide typed defaults for radial impulse gameplay.",
+      "tracking": "Physique 2D complète 12 — Explosions et forces radiales"
+    },
+    {
+      "id": "default-debug-draw-settings",
+      "domain": "debug",
+      "capability": "default physics debug rendering configuration",
+      "status": "planned",
+      "patterns": ["^b2DefaultDebugDraw$"],
+      "silex_contract": "World2DDebugSettings will produce retained Canvas/Scene2D commands without native callbacks.",
+      "tracking": "Physique 2D complète 13 — Debug draw physique"
+    },
+    {
+      "id": "geometry-values",
+      "domain": "collision",
+      "capability": "convex geometry construction and transforms",
+      "status": "covered",
+      "patterns": ["^b2(?:MakePolygon|MakeOffsetPolygon|MakeOffsetRoundedPolygon|MakeSquare|MakeBox|MakeRoundedBox|MakeOffsetBox|MakeOffsetRoundedBox|TransformPolygon|ComputeHull|ValidateHull)$"],
+      "silex_contract": "Box2D, Polygon2D and Transform2D construct validated value geometry with input-order-independent convex hulls.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Benchmarks/GeometryOracle2D.sx"]
+    },
+    {
+      "id": "collision-proxies",
+      "domain": "collision",
+      "capability": "low-level convex proxy construction",
+      "status": "divergent",
+      "patterns": ["^b2(?:MakeProxy|MakeOffsetProxy)$"],
+      "silex_contract": "ShapePlacement2D accepts domain shapes and transforms while convex proxies remain private.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Examples/Geometry2D/Queries.sx"],
+      "rationale": "The proxy is an algorithm input representation, not a gameplay concept that consumers need to own."
+    },
+    {
+      "id": "shape-mass-properties",
+      "domain": "shape",
+      "capability": "mass properties from collider geometry and density",
+      "status": "planned",
+      "patterns": ["^b2Compute(?:Circle|Capsule|Polygon)Mass$"],
+      "silex_contract": "Collider mass properties and composed body mass will be observable through typed world-owned colliders.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "shape-bounds",
+      "domain": "query",
+      "capability": "shape and body world bounds",
+      "status": "planned",
+      "patterns": ["^b2Compute(?:Circle|Capsule|Polygon|Segment)AABB$", "^b2Body_ComputeAABB$", "^b2Shape_GetAABB$"],
+      "silex_contract": "Living colliders and bodies will expose deterministic world bounds without proxy identities.",
+      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+    },
+    {
+      "id": "point-tests",
+      "domain": "query",
+      "capability": "point containment against geometry and living colliders",
+      "status": "partial",
+      "patterns": ["^b2PointIn(?:Circle|Capsule|Polygon)$", "^b2Shape_TestPoint$"],
+      "silex_contract": "Geometry2D covers value overlap; Collider2D will add direct point testing against the living world.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx"],
+      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+    },
+    {
+      "id": "stateless-distance",
+      "domain": "collision",
+      "capability": "closest points and distance between shapes",
+      "status": "covered",
+      "patterns": ["^b2(?:SegmentDistance|ShapeDistance)$"],
+      "silex_contract": "Geometry2D.distance returns closest points, normal and non-negative separation over value placements.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Benchmarks/GeometryOracle2D.sx"]
+    },
+    {
+      "id": "stateless-ray-casts",
+      "domain": "collision",
+      "capability": "ray casts against every convex shape",
+      "status": "covered",
+      "patterns": ["^b2RayCast(?:Circle|Capsule|Segment|Polygon)$"],
+      "silex_contract": "Geometry2D.ray_cast handles every Shape2D placement and one-sided chains.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Benchmarks/GeometryOracle2D.sx"]
+    },
+    {
+      "id": "stateless-shape-casts",
+      "domain": "collision",
+      "capability": "convex shape casts",
+      "status": "covered",
+      "patterns": ["^b2ShapeCast(?:Circle|Capsule|Segment|Polygon)?$"],
+      "silex_contract": "Geometry2D.shape_cast returns the earliest typed hit and supports controlled encroachment.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Benchmarks/GeometryOracle2D.sx"]
+    },
+    {
+      "id": "collision-manifolds",
+      "domain": "collision",
+      "capability": "manifolds for all Box2D rigid-shape families",
+      "status": "partial",
+      "patterns": ["^b2Collide(?:Circles|CapsuleAndCircle|SegmentAndCircle|PolygonAndCircle|Capsules|SegmentAndCapsule|PolygonAndCapsule|Polygons|SegmentAndPolygon|ChainSegmentAndCircle|ChainSegmentAndCapsule|ChainSegmentAndPolygon)$"],
+      "silex_contract": "Geometry2D exposes all geometric manifolds; every valid world pair will join one complete Soft Step response path.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/Contacts.sx"],
+      "tracking": "Physique 2D complète 04 — Réponse dynamique de toutes les formes"
+    },
+    {
+      "id": "continuous-collision-kernel",
+      "domain": "collision",
+      "capability": "sweep transform and time of impact",
+      "status": "partial",
+      "patterns": ["^b2(?:GetSweepTransform|TimeOfImpact)$"],
+      "silex_contract": "Bullets already use shape casts; the complete solver will sweep every relevant translation and rotation to a resolved TOI.",
+      "evidence": ["Tests/CCD2D.sx", "Tests/Consumer/Tests/Events.sx"],
+      "tracking": "Physique 2D complète 06 — Collision continue générale"
+    },
+    {
+      "id": "character-plane-solver",
+      "domain": "character",
+      "capability": "collision-plane collection and clipped movement",
+      "status": "planned",
+      "patterns": ["^b2(?:SolvePlanes|ClipVector)$"],
+      "silex_contract": "CharacterMover2D will expose intentional capsule movement and value results instead of raw plane callbacks.",
+      "tracking": "Physique 2D complète 11 — Mouvement cinématique de personnage"
+    },
+    {
+      "id": "dynamic-tree",
+      "domain": "integration",
+      "capability": "raw dynamic tree ownership and proxy operations",
+      "status": "excluded",
+      "patterns": ["^b2DynamicTree_.*$"],
+      "silex_contract": "World2D owns spatial acceleration privately and exposes gameplay queries over Collider2D handles.",
+      "rationale": "Proxy ids, user data, tree rebuilds and validation are storage and tuning mechanisms explicitly outside the public Silex contract."
+    },
+    {
+      "id": "world-lifecycle",
+      "domain": "world",
+      "capability": "world creation, validity and destruction",
+      "status": "covered",
+      "patterns": ["^b2(?:CreateWorld|DestroyWorld|World_IsValid)$"],
+      "silex_contract": "World2D owns the simulation and invalidates every retained handle on destruction.",
+      "evidence": ["Tests/Consumer/Tests/Lifecycle.sx", "Tests/Consumer/check-stale-handle.sh"]
+    },
+    {
+      "id": "world-step",
+      "domain": "world",
+      "capability": "deterministic world stepping",
+      "status": "partial",
+      "patterns": ["^b2World_Step$"],
+      "silex_contract": "World2D.step runs the native Soft Step graph; explicit substep count will complement the four-substep default.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Tests/World2D.sx"],
+      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+    },
+    {
+      "id": "world-debug-draw",
+      "domain": "debug",
+      "capability": "physics world debug rendering",
+      "status": "planned",
+      "patterns": ["^b2World_Draw$"],
+      "silex_contract": "A reusable value snapshot will render through GFX.Canvas and GFX.Scene2D without native callbacks.",
+      "tracking": "Physique 2D complète 13 — Debug draw physique"
+    },
+    {
+      "id": "world-events",
+      "domain": "event",
+      "capability": "post-step movement, contact, hit and sensor streams",
+      "status": "partial",
+      "patterns": ["^b2World_Get(?:Body|Sensor|Contact)Events$"],
+      "silex_contract": "Reusable post-step buffers already avoid worker callbacks; complete events will identify colliders and resolved contact data.",
+      "evidence": ["Tests/Consumer/Tests/Events.sx", "Examples/World2D/Events.sx"],
+      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+    },
+    {
+      "id": "world-spatial-queries",
+      "domain": "query",
+      "capability": "overlap, ray and shape queries against living colliders",
+      "status": "planned",
+      "patterns": ["^b2World_(?:OverlapAABB|OverlapShape|CastRay|CastRayClosest|CastShape)$"],
+      "silex_contract": "World2D will write stable Collider2D results into caller-owned buffers and provide closest, any and all intentions.",
+      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+    },
+    {
+      "id": "world-character-queries",
+      "domain": "character",
+      "capability": "capsule mover cast and collision planes",
+      "status": "planned",
+      "patterns": ["^b2World_(?:CastMover|CollideMover)$"],
+      "silex_contract": "CharacterMover2D will collect, solve and report a safe displaced capsule path.",
+      "tracking": "Physique 2D complète 11 — Mouvement cinématique de personnage"
+    },
+    {
+      "id": "world-settings",
+      "domain": "world",
+      "capability": "sleep, warm start, restitution and speed tuning",
+      "status": "partial",
+      "patterns": ["^b2World_(?:EnableSleeping|IsSleepingEnabled|EnableContinuous|IsContinuousEnabled|SetRestitutionThreshold|GetRestitutionThreshold|SetHitEventThreshold|GetHitEventThreshold|SetContactTuning|SetMaximumLinearSpeed|GetMaximumLinearSpeed|EnableWarmStarting|IsWarmStartingEnabled)$"],
+      "silex_contract": "Existing gravity, sleep and hit behavior will be completed by typed, validated World2D settings and explicit wake policies.",
+      "evidence": ["Tests/Consumer/Tests/Islands.sx", "Tests/Consumer/Tests/Events.sx"],
+      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+    },
+    {
+      "id": "world-gravity",
+      "domain": "world",
+      "capability": "read and change world gravity",
+      "status": "partial",
+      "patterns": ["^b2World_(?:SetGravity|GetGravity)$"],
+      "silex_contract": "World2D accepts gravity at creation; runtime mutation and wake policy join the complete settings contract.",
+      "evidence": ["Tests/World2D.sx"],
+      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+    },
+    {
+      "id": "contact-policies",
+      "domain": "collision",
+      "capability": "custom pair filtering, material combination and pre-solve",
+      "status": "planned",
+      "patterns": ["^b2World_Set(?:CustomFilter|PreSolve|Friction|Restitution)Callback$"],
+      "silex_contract": "Typed main-thread policies will return immutable decisions without exposing callback context pointers.",
+      "tracking": "Physique 2D complète 08 — Filtrage avancé et pré-solve"
+    },
+    {
+      "id": "world-explosion",
+      "domain": "world",
+      "capability": "radial world impulse",
+      "status": "planned",
+      "patterns": ["^b2World_Explode$"],
+      "silex_contract": "World2D.explode will aggregate collider contributions into deterministic typed body results.",
+      "tracking": "Physique 2D complète 12 — Explosions et forces radiales"
+    },
+    {
+      "id": "world-observation",
+      "domain": "world",
+      "capability": "awake counts, profiling and logical counters",
+      "status": "partial",
+      "patterns": ["^b2World_Get(?:AwakeBodyCount|Profile|Counters)$"],
+      "silex_contract": "World2D exposes awake bodies and opt-in timings; complete logical counters will avoid internal array capacities.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/Performance.md"],
+      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+    },
+    {
+      "id": "world-user-data",
+      "domain": "integration",
+      "capability": "untyped world user pointer",
+      "status": "excluded",
+      "patterns": ["^b2World_(?:SetUserData|GetUserData)$"],
+      "silex_contract": "World ownership stays in typed Silex values and resources.",
+      "rationale": "Untyped C pointers are explicitly outside the public contract."
+    },
+    {
+      "id": "world-internal-maintenance",
+      "domain": "integration",
+      "capability": "static-tree rebuild, speculative test mode and memory dump",
+      "status": "excluded",
+      "patterns": ["^b2World_(?:RebuildStaticTree|EnableSpeculative|DumpMemoryStats)$"],
+      "silex_contract": "World2D selects and maintains its acceleration and solver structures privately.",
+      "rationale": "These are diagnostic or implementation-tuning controls rather than stable gameplay intentions."
+    },
+    {
+      "id": "body-lifecycle",
+      "domain": "body",
+      "capability": "body creation, validity, ownership and destruction",
+      "status": "covered",
+      "patterns": ["^b2(?:CreateBody|DestroyBody|Body_IsValid|Body_GetWorld)$"],
+      "silex_contract": "World2D owns stable invalidable RigidBody2D handles.",
+      "evidence": ["Tests/Consumer/Tests/Lifecycle.sx", "Tests/Consumer/check-stale-handle.sh"]
+    },
+    {
+      "id": "body-basic-motion",
+      "domain": "body",
+      "capability": "body transform, velocity, type, wake and bullet state",
+      "status": "partial",
+      "patterns": ["^b2Body_(?:GetPosition|GetRotation|GetTransform|GetLinearVelocity|GetAngularVelocity|GetType|IsAwake|IsBullet|SetTransform|SetLinearVelocity|SetAngularVelocity|SetAwake|SetBullet|SetType)$"],
+      "silex_contract": "RigidBody2D already exposes direct motion and state; all mutations will share explicit locking and wake semantics.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/World2D.sx"],
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "body-forces-and-mass",
+      "domain": "body",
+      "capability": "forces, torques, impulses, mass and inertia",
+      "status": "planned",
+      "patterns": ["^b2Body_(?:ApplyForce|ApplyForceToCenter|ApplyTorque|ApplyLinearImpulse|ApplyLinearImpulseToCenter|ApplyAngularImpulse|GetMass|GetRotationalInertia|GetLocalCenterOfMass|GetWorldCenterOfMass|GetMassData|SetMassData|ApplyMassFromShapes)$"],
+      "silex_contract": "RigidBody2D will expose physical actions and composed or overridden mass without manual velocity integration.",
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "body-coordinate-utilities",
+      "domain": "body",
+      "capability": "local/world point, vector and point-velocity conversion",
+      "status": "planned",
+      "patterns": ["^b2Body_Get(?:LocalPoint|LocalVector|WorldPoint|WorldVector|LocalPointVelocity|WorldPointVelocity)$"],
+      "silex_contract": "RigidBody2D will provide typed coordinate and point-velocity conversions.",
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "body-runtime-control",
+      "domain": "body",
+      "capability": "damping, gravity, sleep, fixed rotation, activation and kinematic target",
+      "status": "partial",
+      "patterns": ["^b2Body_(?:GetAngularDamping|GetGravityScale|GetLinearDamping|GetSleepThreshold|IsEnabled|IsFixedRotation|IsSleepEnabled|SetAngularDamping|SetFixedRotation|SetGravityScale|SetLinearDamping|SetSleepThreshold|SetTargetTransform|Enable|Disable|EnableSleep)$"],
+      "silex_contract": "Several creation settings already exist; complete runtime control will be validated and locked outside step.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/Consumer/Tests/Islands.sx"],
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "body-colliders",
+      "domain": "shape",
+      "capability": "enumerate a body's living colliders",
+      "status": "planned",
+      "patterns": ["^b2Body_Get(?:ShapeCount|Shapes)$"],
+      "silex_contract": "RigidBody2D will enumerate stable Collider2D handles without exposing dense slots.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "body-contacts",
+      "domain": "event",
+      "capability": "write current body contact data",
+      "status": "planned",
+      "patterns": ["^b2Body_Get(?:ContactCapacity|ContactData)$"],
+      "silex_contract": "Bodies and colliders will write completed contact snapshots into caller-owned buffers.",
+      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+    },
+    {
+      "id": "body-joints",
+      "domain": "joint",
+      "capability": "enumerate a body's joints",
+      "status": "planned",
+      "patterns": ["^b2Body_Get(?:JointCount|Joints)$"],
+      "silex_contract": "Bodies and worlds will enumerate a tagged Joint2D view while preserving typed handles.",
+      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+    },
+    {
+      "id": "body-event-options",
+      "domain": "event",
+      "capability": "legacy body-wide contact and hit event toggles",
+      "status": "divergent",
+      "patterns": ["^b2Body_Enable(?:Contact|Hit)Events$"],
+      "silex_contract": "Event options belong to each Collider2D so distinct surfaces on one body remain identifiable.",
+      "evidence": ["Tests/Consumer/Tests/Events.sx"],
+      "rationale": "Collider granularity is more expressive than a body-wide toggle and remains source-compatible through the implicit collider.",
+      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+    },
+    {
+      "id": "body-label",
+      "domain": "body",
+      "capability": "body debug label",
+      "status": "planned",
+      "patterns": ["^b2Body_(?:SetName|GetName)$"],
+      "silex_contract": "RigidBody2D.debug_label will provide typed diagnostics without C string lifetime rules.",
+      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+    },
+    {
+      "id": "body-user-data",
+      "domain": "integration",
+      "capability": "untyped body user pointer",
+      "status": "excluded",
+      "patterns": ["^b2Body_(?:SetUserData|GetUserData)$"],
+      "silex_contract": "Typed body handles and application maps carry gameplay identity.",
+      "rationale": "Untyped C pointers are explicitly outside the public contract."
+    },
+    {
+      "id": "collider-lifecycle",
+      "domain": "shape",
+      "capability": "living collider creation, identity, ownership and destruction",
+      "status": "planned",
+      "patterns": ["^b2(?:CreateCapsuleShape|CreateCircleShape|CreatePolygonShape|CreateSegmentShape|DestroyShape)$", "^b2Shape_(?:IsValid|GetWorld|GetBody|GetType|GetParentChain)$"],
+      "silex_contract": "World2D will own stable Collider2D handles distinct from Shape2D geometry values.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "collider-geometry",
+      "domain": "shape",
+      "capability": "inspect and replace collider geometry",
+      "status": "planned",
+      "patterns": ["^b2Shape_(?:GetCapsule|GetChainSegment|GetCircle|GetPolygon|GetSegment|SetCapsule|SetCircle|SetPolygon|SetSegment)$"],
+      "silex_contract": "Collider2D will read and replace validated Shape2D values while retaining its living identity.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "collider-material-and-filter",
+      "domain": "shape",
+      "capability": "collider density, material, filter and sensor state",
+      "status": "planned",
+      "patterns": ["^b2Shape_(?:GetDensity|GetFilter|GetFriction|GetMassData|GetMaterial|GetRestitution|GetSurfaceMaterial|IsSensor|SetDensity|SetFilter|SetFriction|SetMaterial|SetRestitution|SetSurfaceMaterial)$"],
+      "silex_contract": "Collider2DSettings and PhysicsMaterial2D will own every surface and mass property per collider.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "collider-local-queries",
+      "domain": "query",
+      "capability": "living collider ray cast and closest point",
+      "status": "planned",
+      "patterns": ["^b2Shape_(?:RayCast|GetClosestPoint)$"],
+      "silex_contract": "Collider2D will expose local query intentions using world transforms and typed results.",
+      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+    },
+    {
+      "id": "collider-contact-events",
+      "domain": "event",
+      "capability": "per-collider contact, hit, pre-solve and sensor streams",
+      "status": "planned",
+      "patterns": ["^b2Shape_(?:AreContactEventsEnabled|AreHitEventsEnabled|ArePreSolveEventsEnabled|AreSensorEventsEnabled|EnableContactEvents|EnableHitEvents|EnablePreSolveEvents|EnableSensorEvents|GetContactCapacity|GetContactData|GetSensorCapacity|GetSensorOverlaps)$"],
+      "silex_contract": "Collider2D event options and completed snapshots will retain deterministic collider identities.",
+      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+    },
+    {
+      "id": "collider-user-data",
+      "domain": "integration",
+      "capability": "untyped collider user pointer",
+      "status": "excluded",
+      "patterns": ["^b2Shape_(?:SetUserData|GetUserData)$"],
+      "silex_contract": "Typed Collider2D handles and material identifiers carry application identity.",
+      "rationale": "Untyped C pointers are explicitly outside the public contract."
+    },
+    {
+      "id": "chain-colliders",
+      "domain": "shape",
+      "capability": "chain collider lifetime, segments and materials",
+      "status": "planned",
+      "patterns": ["^b2(?:CreateChain|DestroyChain)$", "^b2Chain_.*$"],
+      "silex_contract": "Collider2D will retain one-sided Chain2D geometry with common or per-segment typed materials.",
+      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+    },
+    {
+      "id": "joint-lifecycle",
+      "domain": "joint",
+      "capability": "typed joint creation, validity and destruction",
+      "status": "covered",
+      "patterns": ["^b2Create(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)Joint$", "^b2DestroyJoint$", "^b2Joint_IsValid$"],
+      "silex_contract": "World2D owns eight typed invalidable joint handles.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"]
+    },
+    {
+      "id": "joint-common-introspection",
+      "domain": "joint",
+      "capability": "joint bodies, kind, world, anchors, axis, reaction and separation",
+      "status": "partial",
+      "patterns": ["^b2Joint_(?:GetType|GetBodyA|GetBodyB|GetWorld|GetLocalAnchorA|GetLocalAnchorB|GetReferenceAngle|GetLocalAxisA|GetCollideConnected|WakeBodies|GetConstraintForce|GetConstraintTorque|GetLinearSeparation|GetAngularSeparation|GetConstraintTuning|SetLocalAnchorA|SetLocalAnchorB|SetReferenceAngle|SetLocalAxisA|SetCollideConnected|SetConstraintTuning)$"],
+      "silex_contract": "Typed handles already expose completed-step reactions; complete common runtime inspection and mutation remain scheduled.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
+      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+    },
+    {
+      "id": "joint-family-configuration",
+      "domain": "joint",
+      "capability": "complete runtime configuration for all eight joint families",
+      "status": "partial",
+      "patterns": ["^b2(?:Distance|Motor|Mouse|Prismatic|Revolute|Weld|Wheel)Joint_.*$"],
+      "silex_contract": "Each typed joint will expose its relevant limits, motors, springs, offsets, targets and measurements.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"],
+      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+    },
+    {
+      "id": "joint-user-data",
+      "domain": "integration",
+      "capability": "untyped joint user pointer",
+      "status": "excluded",
+      "patterns": ["^b2Joint_(?:SetUserData|GetUserData)$"],
+      "silex_contract": "Typed joint handles and application maps carry gameplay identity.",
+      "rationale": "Untyped C pointers are explicitly outside the public contract."
+    }
+  ]
+}

@@ -39,6 +39,8 @@ CADENCE_TARGETS_MS = {
 
 BODY_RSS_BUDGET_BYTES = 1024
 PERSISTENT_PAIR_RSS_BUDGET_BYTES = 512
+ORACLE_VERSION = "3.1.1"
+ORACLE_REVISION = "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3"
 
 
 def parse_record(line: str, source: str, line_number: int) -> dict[str, str]:
@@ -66,6 +68,37 @@ def parse_record(line: str, source: str, line_number: int) -> dict[str, str]:
     missing = sorted(required - record.keys())
     if missing:
         raise ValueError(f"{source}:{line_number}: missing fields: {', '.join(missing)}")
+    schema = record.get("schema")
+    if schema is not None and schema != "2":
+        raise ValueError(f"{source}:{line_number}: unsupported schema {schema!r}")
+    if schema == "2":
+        configuration_fields = {
+            "engine_version",
+            "oracle_version",
+            "oracle_revision",
+            "solver",
+            "substeps",
+        }
+        missing_configuration = sorted(configuration_fields - record.keys())
+        if missing_configuration:
+            raise ValueError(
+                f"{source}:{line_number}: schema 2 missing configuration fields: "
+                f"{', '.join(missing_configuration)}"
+            )
+        if record["oracle_version"] != ORACLE_VERSION:
+            raise ValueError(
+                f"{source}:{line_number}: oracle_version is not {ORACLE_VERSION}"
+            )
+        if record["oracle_revision"] != ORACLE_REVISION:
+            raise ValueError(
+                f"{source}:{line_number}: oracle_revision is not {ORACLE_REVISION}"
+            )
+        if not record["engine_version"] or not record["solver"]:
+            raise ValueError(
+                f"{source}:{line_number}: engine_version and solver must be non-empty"
+            )
+        if int(record["substeps"]) <= 0:
+            raise ValueError(f"{source}:{line_number}: substeps must be positive")
     for key in FLOAT_FIELDS:
         value = float(record[key])
         if not math.isfinite(value):

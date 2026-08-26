@@ -18,6 +18,29 @@ Conceptual study without copied code still cites the project and revision in
 the relevant design note. Jolt is not built by this corpus and is not a 2D
 performance comparator.
 
+## Executable completeness contract
+
+[`CompletenessMatrix.json`](CompletenessMatrix.json) classifies every
+`B2_API` symbol from the five stable public headers of the pinned Box2D
+revision. The matrix groups C symbols by gameplay capability rather than
+copying the C API into Silex. `covered`, `partial`, `planned`, `divergent` and
+`excluded` rows respectively require executable evidence, evidence plus a
+future Spec, a future Spec, evidence plus a rationale, or an explicit
+rationale.
+
+Run the validator against the immutable source checkout:
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \
+    --box2d-source /tmp/silex-box2d-v3.1.1
+```
+
+The validator checks the revision, version, per-header counts, unique ownership
+of all public symbols, evidence paths and required tracking or rationale. The
+CMake project also registers it as `gfx_physics_box2d_completeness` for CTest.
+See [`../../Docs/Completeness.md`](../../Docs/Completeness.md) for the contract
+boundary and current status.
+
 ## Build and run
 
 From the workspace root:
@@ -65,7 +88,9 @@ For Debug correctness, configure the Box2D witness with
 `--debug-build` to the Silex executable so its record names the configuration
 truthfully. Debug records carry no cadence budget.
 
-Every run emits one `SILEX_PHYSICS_CORPUS` record. Archive the complete record,
+Every run emits one schema-2 `SILEX_PHYSICS_CORPUS` record. Both implementations
+name `engine_version`, the pinned `oracle_version` and `oracle_revision`, the
+solver configuration and substep count using the same fields. Archive the complete record,
 the executable commit, OS, architecture, CPU, compiler version, build mode,
 worker count and process peak RSS. Compilation and the initial world/body
 construction stay outside `elapsed_ms`; the reported timing contains only the

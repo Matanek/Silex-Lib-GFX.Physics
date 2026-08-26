@@ -161,7 +161,9 @@ static void print_metrics(
     Metrics metrics)
 {
     printf(
-        "SILEX_PHYSICS_CORPUS engine=box2d-3.1.1 scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
+        "SILEX_PHYSICS_CORPUS schema=2 engine=box2d-3.1.1 engine_version=3.1.1 "
+        "oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 "
+        "solver=box2d-soft-step substeps=4 scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
         "elapsed_ms=%.6f step_ms=%.6f centroid_x=%.9f centroid_y=%.9f max_speed=%.9f min_y=%.9f "
         "max_overlap_mm=%.9f awake=%d contacts=%d state_signature=%.9f memory_bytes=%d\n",
         scenario,
