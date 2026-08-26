@@ -88,6 +88,29 @@ capacity rises from 54.5 Hz to 63.1 Hz; per-step snapshot publication raises
 visual cadence from 7.4 Hz to the completed physics cadence instead of hiding
 the intermediate states inside an eight-step catch-up batch.
 
+The progressive mixed-pile sleep gate was measured on 2026-08-26 on the idle
+macOS 26.5.2 ARM64 development machine with Silex 0.41.0. Each Release run used
+`FallingBody --settle-1000 --smoke-30 --batch-4 --immediate --no-panel`, emitted
+1,000 bodies over 20 seconds, and retained ten seconds of settling. Across
+three isolated runs, local primitive-contact sleep changed these medians:
+
+| Metric | Atomic primitive island | Local primitive sleep |
+| --- | ---: | ---: |
+| Final awake bodies | 1,000 (999–1,000) | 16 (11–16) |
+| Physics capacity | 62.570 Hz (61.853–62.703) | 164.197 Hz (164.070–171.619) |
+| Worker time / step | 15.982 ms (15.948–16.167) | 6.090 ms (5.827–6.095) |
+| Completed physics cadence | 44.387 Hz (44.203–44.486) | 59.940 Hz (59.938–59.949) |
+| Final solve time | 28.478 ms (28.413–28.523) | 0.931 ms (0.663–1.007) |
+| Maximum circle overlap | 6.009 mm (5.739–14.515) | 5.105 mm (4.870–6.138) |
+
+The timing values include the graphical application and its asynchronous
+physics scheduling but exclude the diagnostic panels. The final solve value is
+one completed-step snapshot, while worker time and capacity aggregate the
+whole measured interval. Correctness remains gated separately by containment,
+the 12 mm overlap limit, direct-impact wake-up, atomic joint/general islands,
+and the headless active-surface regression; no timing value is asserted by a
+test.
+
 The separate memory switch gates pass after correcting the corpus ownership.
 The first harness retained every `RigidBody2D` class handle merely to inspect
 final state, so its 176,406,528-byte and 99,336,192-byte peaks mostly measured

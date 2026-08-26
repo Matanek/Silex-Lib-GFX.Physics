@@ -154,10 +154,12 @@ coupled 2×2 normal solve and clipped per-point separations. There is no legacy
 positional projection phase hidden behind a worker-count or load threshold.
 
 Bodies ready to sleep receive a final overlap audit from current AABBs, and
-sleeping bodies are not translated afterward. Cached impulses record the awake
-state of both bodies and are discarded across every sleep/wake transition,
-preventing an old stack load computed for different effective masses from being
-released into a neighbour.
+sleeping bodies are not translated afterward. Primitive box and circle contacts
+sleep locally, allowing quiet depth to leave the hot path while the pile surface
+remains active; joint and non-primitive general-shape islands retain atomic
+sleep. Cached impulses record the awake state of both bodies and are discarded
+across every sleep/wake transition, preventing an old stack load computed for
+different effective masses from being released into a neighbour.
 
 Before that narrow phase, a reusable deterministic grid discovers candidates
 from tight bounds for every world containing dynamic shapes. A custom
@@ -188,28 +190,30 @@ parallel integration partitions the same logical order into disjoint ranges.
 Sleeping data therefore leaves the motion hot path without making worker count
 observable.
 
-General-shape sleep is evaluated from a contact graph rebuilt deterministically
-after each solve. A reusable union-find groups touching awake dynamic bodies
-that allow sleep. The lowest stable body slot is always the root, then a second
-reusable layout packs the bodies of each island contiguously in root and body
-identity order. Retained general contacts participate in this graph even before
-their dynamic response is enabled. Per-body timers use the linear velocity plus
-the angular surface motion: they advance below 5 cm/s, erode slowly between 5
-and 10 cm/s, and reset above 10 cm/s. Small islands require every body to
-validate 0.5 seconds of rest. In a dense general-contact island, 95 percent
-must validate that delay and no body may exceed the hard motion threshold; the
-complete island then sleeps atomically.
+General-shape and joint sleep is evaluated from a graph rebuilt
+deterministically after each solve. A reusable union-find groups touching awake
+non-primitive dynamic bodies and articulated bodies that allow sleep. The
+lowest stable body slot is always the root, then a second reusable layout packs
+the bodies of each island contiguously in root and body identity order. Retained
+general contacts participate in this graph even before their dynamic response
+is enabled.
+Per-body timers use the linear velocity plus the angular surface motion: they
+advance below 5 cm/s, erode slowly between 5 and 10 cm/s, and reset above
+10 cm/s. Small islands require every body to validate 0.5 seconds of rest. In a
+dense general-shape island, 95 percent must validate that delay and no body may
+exceed the hard motion threshold; the complete island then sleeps atomically.
 
-The dense-circle grid path instead validates each body against current local
-overlap before sleeping it independently. This prevents a handful of noisy
-surface circles from holding thousands of supported circles awake. A dynamic
-body with sleep disabled forms an activity boundary instead of blocking
-unrelated resting bodies. A sleeping body acts as a fixed support until a
-meaningful relative impact wakes it. Circle wake decisions are collected from
-one immutable awake-state snapshot before active pairs are filtered. The newly
-awakened surface body therefore receives its sleeping support contacts in the
-same step, while a 0.5-second propagation cooldown prevents that wake from
-walking downward one layer per frame. Slow positional correction moves the
+Primitive box and circle contacts instead sleep each quiet body independently.
+This prevents a handful of noisy surface bodies from holding thousands of
+supported bodies awake. The dense-circle grid additionally validates current
+local overlap before sleep. A dynamic body with sleep disabled forms an
+activity boundary instead of blocking unrelated resting bodies. A sleeping
+body acts as a fixed support until a meaningful relative impact wakes it.
+Primitive-contact wake decisions are collected from one immutable awake-state
+snapshot before active pairs are filtered. The newly awakened surface body
+therefore receives its sleeping support contacts in the same step, while a
+0.5-second propagation cooldown prevents that wake from walking downward one
+layer per frame. Slow positional correction moves the
 awake body against the rigid support without restarting an entire compressed
 pile.
 

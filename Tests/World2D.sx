@@ -765,6 +765,52 @@ test "settle a dense mixed pile without decompression" {
     assert(maximum_circle_overlap <= 0.012)
 }
 
+test "sleep quiet primitive depth below an active surface" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..friction = 0.9
+    )
+    var bodies:Physics.RigidBody2D[] = []
+    let size = 0.1
+    var index = 0
+    while index < 120 {
+        let column = index % 12
+        let row = index / 12
+        var shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(size)))
+        if index % 2 == 0 {
+            shape = Physics.Shape2D.circle(Physics.Circle2D(size * 0.5))
+        }
+        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = shape
+            ..position = Math.Vec2(
+                (column as float - 5.5) * 0.098,
+                size * 0.5 + row as float * 0.098
+            )
+            ..friction = 0.75
+        ))
+        index++
+    }
+
+    var step = 0
+    while step < 600 {
+        bodies[115].set_angular_velocity(1.0)
+        world.step(1.0 / 60.0)
+        step++
+    }
+
+    var awake_depth = 0
+    index = 0
+    while index < 48 {
+        if bodies[index].is_awake() { awake_depth++ }
+        index++
+    }
+    assert(awake_depth <= 8)
+    assert(world.awake_body_count() < 40)
+}
+
 test "remove circle overlap without waking a resting pair forever" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var first = world.create_rigid_body(Physics.RigidBody2DSettings()

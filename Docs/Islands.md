@@ -18,19 +18,20 @@ that list. Parallel integration partitions the same list into disjoint ranges;
 sleeping bodies therefore leave the motion hot path without changing logical
 order between worker counts.
 
-After contact generation, a reusable union-find connects touching awake bodies.
-Its root is always the lowest stable body identity in the component. Bodies are
-then packed by island into contiguous ranges, also in stable identity order.
-The retained general-shape contacts and the historical box/circle constraints
-feed the same activation graph even though dynamic response for general shapes
-still waits for the Soft Step solver.
+After contact generation, a reusable union-find connects articulated bodies and
+touching awake general shapes. Its root is always the lowest stable body
+identity in the component. Bodies are then packed by island into contiguous
+ranges, also in stable identity order. Primitive box and circle contacts already
+have complete Soft Step response and sleep locally instead: a quiet buried body
+can leave the hot path while motion continues at the surface of the pile.
 
-An island sleeps atomically after its linear and angular surface motion remains
-below the documented thresholds. A body with sleep disabled stays awake but
-does not prevent an unrelated island from sleeping. A meaningful impact wakes
-only the directly touched sleeping body from one immutable awake-state
-snapshot. A short cooldown prevents that wake from cascading through an entire
-resting chain in the same settling interval.
+An articulated or general-contact island sleeps atomically after its linear and
+angular surface motion remains below the documented thresholds. A body with
+sleep disabled stays awake but does not prevent an unrelated island from
+sleeping. Primitive contacts retain per-body sleep eligibility. A meaningful
+impact wakes only the directly touched sleeping body from one immutable
+awake-state snapshot. A short cooldown prevents that wake from cascading
+through an entire resting chain in the same settling interval.
 
 Creating or destroying an unrelated body does not wake existing sleepers.
 Destroying a member invalidates and rebuilds private derived storage while

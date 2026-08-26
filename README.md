@@ -116,10 +116,11 @@ colored by body conflict and execute one common four-substep Soft Step graph:
 velocity integration, warm start, two alternating biased sweeps, position
 integration, normal relaxation, restitution, and cache storage. A load threshold
 may dispatch a color to workers but never selects a historical solver.
-General-contact islands sleep atomically after their residual surface motion
-remains below the stability thresholds. The dense-circle path audits current
-overlap and rests each quiet, supported body independently, so one noisy ball
-does not keep an entire pile awake. Fast awake circles are swept against the
+Joint and non-primitive general-shape islands sleep atomically after their
+residual surface motion remains below the stability thresholds. Primitive box
+and circle contacts rest each quiet body independently, so one noisy surface
+region does not keep an entire mixed pile awake. The dense-circle path also
+audits current overlap before sleep. Fast awake circles are swept against the
 sleeping-circle grid before discrete contact generation, preventing a ball that
 travels farther than its diameter in one step from entering the pile. Contact
 wake decisions use one state snapshot and newly awakened bodies cannot

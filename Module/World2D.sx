@@ -2231,13 +2231,6 @@ public class World2D {
                 self.load_grace[second] = 0.25
                 self.support_grace[first] = 0.25
             }
-            if self.store.body_types[first] == BodyType2D.dynamic &&
-                self.store.body_types[second] == BodyType2D.dynamic &&
-                self.store.awake[first] && self.store.awake[second] &&
-                self.store.allow_sleep[first] && self.store.allow_sleep[second]
-            {
-                self.union_sleep_bodies(first, second)
-            }
             collision_index++
         }
         collision_index = 0
@@ -2253,11 +2246,6 @@ public class World2D {
             } else if height_delta < -0.05 {
                 self.load_grace[second] = 0.25
                 self.support_grace[first] = 0.25
-            }
-            if self.store.awake[first] && self.store.awake[second] &&
-                self.store.allow_sleep[first] && self.store.allow_sleep[second]
-            {
-                self.union_sleep_bodies(first, second)
             }
             collision_index++
         }
