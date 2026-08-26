@@ -3058,7 +3058,6 @@ public class World2D {
     }
 
     private func insert_candidate_pair(pair:BodyPair2D) {
-        if pair_is_sensor(self.store, pair) { return }
         if self.store.inverse_masses[pair.first] +
             self.store.inverse_masses[pair.second] <= 0.0
         {
@@ -3910,6 +3909,12 @@ func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {
 }
 
 func pair_is_sensor(store:BodyStore2D, pair:BodyPair2D) bool {
+    if store.shape_counts[pair.first] == 1 &&
+        store.shape_counts[pair.second] == 1
+    {
+        return (store.behavior_flags[pair.first] & 2) != 0 ||
+            (store.behavior_flags[pair.second] & 2) != 0
+    }
     return !body_pair_has_solid_collider_pair(store, pair)
 }
 
@@ -4152,6 +4157,9 @@ func body_bounds(store:BodyStore2D, index:int) AABB2D {
     if store.shape_counts[index] == 0 {
         return AABB2D(body_position(store, index), Math.Vec2())
     }
+    if store.shape_counts[index] == 1 {
+        return primary_body_bounds(store, index)
+    }
     var slot = store.first_shape_slots[index]
     var lower = Math.Vec2(3.4028235e38)
     var upper = Math.Vec2(-3.4028235e38)
@@ -4165,6 +4173,36 @@ func body_bounds(store:BodyStore2D, index:int) AABB2D {
         slot = store.shape_store.next_body_shape_slots[dense]
     }
     return AABB2D(lower, upper, true)
+}
+
+func primary_body_bounds(store:BodyStore2D, index:int) AABB2D {
+    if store.shape_kinds[index] == 1 {
+        return AABB2D(
+            body_position(store, index),
+            Math.Vec2(store.radii[index])
+        )
+    }
+    if store.shape_kinds[index] == 0 {
+        let cosine = Math.abs(store.rotation_cosines[index])
+        let sine = Math.abs(store.rotation_sines[index])
+        return AABB2D(
+            body_position(store, index),
+            Math.Vec2(
+                store.half_widths[index] * cosine +
+                    store.half_heights[index] * sine,
+                store.half_widths[index] * sine +
+                    store.half_heights[index] * cosine
+            )
+        )
+    }
+    return transformed_local_bounds(
+        store,
+        index,
+        store.local_lower_x[index],
+        store.local_lower_y[index],
+        store.local_upper_x[index],
+        store.local_upper_y[index]
+    )
 }
 
 func body_maximum_sweep_radius(store:BodyStore2D, body:int) float {
@@ -4189,13 +4227,33 @@ func collider_bounds(
     collider_dense:int
 ) AABB2D {
     let metrics = shape_metrics(store.shape_store.shapes[collider_dense])
+    if metrics.kind == 1 {
+        return AABB2D(
+            body_position(store, body),
+            Math.Vec2(metrics.radius)
+        )
+    }
+    return transformed_local_bounds(
+        store,
+        body,
+        metrics.lower.x,
+        metrics.lower.y,
+        metrics.upper.x,
+        metrics.upper.y
+    )
+}
+
+func transformed_local_bounds(
+    store:BodyStore2D,
+    body:int,
+    lower_x:float,
+    lower_y:float,
+    upper_x:float,
+    upper_y:float
+) AABB2D {
     let cosine = store.rotation_cosines[body]
     let sine = store.rotation_sines[body]
     let position = body_position(store, body)
-    let lower_x = metrics.lower.x
-    let lower_y = metrics.lower.y
-    let upper_x = metrics.upper.x
-    let upper_y = metrics.upper.y
     let first = Math.Vec2(
         position.x + cosine * lower_x - sine * lower_y,
         position.y + sine * lower_x + cosine * lower_y
@@ -4228,7 +4286,6 @@ func collider_bounds(
 func primitive_contact_pair(store:BodyStore2D, pair:BodyPair2D) bool {
     return store.shape_counts[pair.first] == 1 &&
         store.shape_counts[pair.second] == 1 &&
-        body_pair_has_solid_collider_pair(store, pair) &&
         store.shape_kinds[pair.first] <= 1 &&
         store.shape_kinds[pair.second] <= 1
 }
@@ -4249,6 +4306,14 @@ func contact_manifold(
     first_body:int,
     second_body:int
 ) Manifold2D {
+    if store.shape_counts[first_body] == 1 &&
+        store.shape_counts[second_body] == 1
+    {
+        return Geometry2D.manifold(
+            body_placement(store, first_body),
+            body_placement(store, second_body)
+        )
+    }
     var first_slot = store.first_shape_slots[first_body]
     while first_slot >= 0 {
         let first_dense = store.shape_store.slot_dense_indices[first_slot]
@@ -4296,6 +4361,15 @@ func body_pair_has_solid_collider_pair(
     store:BodyStore2D,
     pair:BodyPair2D
 ) bool {
+    if store.shape_counts[pair.first] == 1 &&
+        store.shape_counts[pair.second] == 1
+    {
+        return (store.behavior_flags[pair.first] & 2) == 0 &&
+            (store.behavior_flags[pair.second] & 2) == 0 &&
+            store.collision_filters[pair.first].allows(
+                store.collision_filters[pair.second]
+            )
+    }
     var first_slot = store.first_shape_slots[pair.first]
     while first_slot >= 0 {
         let first_dense = store.shape_store.slot_dense_indices[first_slot]
@@ -4323,6 +4397,16 @@ func sensor_pair_overlaps(
     sensor_body:int,
     other_body:int
 ) bool {
+    if store.shape_counts[sensor_body] == 1 &&
+        store.shape_counts[other_body] == 1
+    {
+        return (store.behavior_flags[sensor_body] & 2) != 0 &&
+            (store.behavior_flags[sensor_body] & 32) != 0 &&
+            Geometry2D.overlaps(
+                body_placement(store, sensor_body),
+                body_placement(store, other_body)
+            )
+    }
     var sensor_slot = store.first_shape_slots[sensor_body]
     while sensor_slot >= 0 {
         let sensor_dense = store.shape_store.slot_dense_indices[sensor_slot]

@@ -587,6 +587,25 @@ test "retain the public circle shape of a rigid body" {
     }
 }
 
+test "keep rotating circle broad phase bounds independent of rotation" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2()
+        ..rotation = Math.pi() * 0.25
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(1.1, 0.0)
+        ..rotation = -Math.pi() * 0.25
+    )
+
+    world.step(0.0)
+
+    assert(world.candidate_pair_count() == 0)
+    assert(world.contact_count() == 0)
+}
+
 test "rest a dynamic circle on a fixed box" {
     var world = Physics.World2D()
     world.create_rigid_body(Physics.RigidBody2DSettings()
