@@ -164,11 +164,20 @@ dynamic pair, and application plugins remain outside the current world
 contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
+[`Examples/World2D/VisualShowcase.sx`](Examples/World2D/VisualShowcase.sx) is
+the recommended visual introduction: it displays a mixed Soft Step pile and a
+motorized revolute mechanism connected to a damped distance spring in one
+window. The focused Contacts, Events, Joints, SleepIslands, and SoftStepPile
+programs remain executable assertion examples for diagnostics and automation.
+
+```text
+silex run Packages/GFX.Physics/Examples/World2D/VisualShowcase.sx --release
+```
+
 [`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) is the
-retained integrated graphical stress consumer, not the recommended first
-verification path. Its interactive emitter is currently
-capped at 3,000 small dynamic circles, while explicit stress controls can still
-prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one persistent
-worker while rendering remains independent, and its reusable
+retained integrated graphical stress consumer. Its interactive emitter is
+capped at 3,000 small circles and boxes, while explicit stress controls can
+still prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one
+persistent worker while rendering remains independent, and its reusable
 `BodyTransformBuffer2D` transfers all dynamic transforms without allocating a
 handle object per body and frame.

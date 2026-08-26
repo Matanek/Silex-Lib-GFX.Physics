@@ -1,0 +1,433 @@
+use GFX.Application
+use GFX.Canvas
+use GFX.Color
+use GFX.Components
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Rendering
+use GFX.Resources
+use STD.Math
+use STD.Process
+
+static struct Showcase {
+    let pixels_per_meter:float = 80.0
+    let fixed_delta:float = 1.0 / 60.0
+    let body_size:float = 0.24
+    let body_pixels:int = 24
+}
+
+struct BodyVisual {
+    let index:int
+}
+
+class Simulation {
+    var world:Physics.World2D
+    var bodies:Physics.RigidBody2D[]
+    var accumulator:float
+    var smoke_frames:int
+    var rendered_frames:int
+
+    init(smoke_frames:int) {
+        self.world = Physics.World2D()
+        self.bodies = []
+        self.accumulator = 0.0
+        self.smoke_frames = smoke_frames
+        self.rendered_frames = 0
+    }
+}
+
+class Visuals {
+    var circle:Canvas
+    var box:Canvas
+    var arm:Canvas
+
+    init() {
+        let center = Showcase.body_pixels as float * 0.5
+        self.circle = Canvas()
+            ..paint(func(painter:&Canvas.Painter) {
+                painter.fill(
+                    Canvas.Circle(
+                        Math.Vec2(center),
+                        Showcase.body_size * Showcase.pixels_per_meter * 0.5
+                    ),
+                    Canvas.Fill.solid(Color.white())
+                )
+            })
+        self.box = Canvas()
+            ..paint(func(painter:&Canvas.Painter) {
+                let extent = Showcase.body_size *
+                    Showcase.pixels_per_meter
+                painter.fill(
+                    Canvas.Rect(
+                        Math.Vec2(center - extent * 0.5),
+                        Math.Vec2(extent),
+                        2.0
+                    ),
+                    Canvas.Fill.solid(Color.white())
+                )
+            })
+        self.arm = Canvas()
+            ..paint(func(painter:&Canvas.Painter) {
+                painter.fill(
+                    Canvas.Rect(
+                        Math.Vec2(2.0, 5.0),
+                        Math.Vec2(92.0, 14.0),
+                        7.0
+                    ),
+                    Canvas.Fill.solid(Color.white())
+                )
+            })
+    }
+
+    func body_component(is_circle:bool) Components.Canvas {
+        var drawing = self.box
+        if is_circle { drawing = self.circle }
+        return Components.Canvas(
+            drawing,
+            Showcase.body_pixels,
+            Showcase.body_pixels
+        )
+    }
+
+    func arm_component() Components.Canvas {
+        return Components.Canvas(self.arm, 96, 24)
+    }
+}
+
+func body_color(index:int) Color {
+    if index % 4 == 0 { return Color.cyan_400() }
+    if index % 4 == 1 { return Color.sky_400() }
+    if index % 4 == 2 { return Color.violet_400() }
+    return Color.fuchsia_400()
+}
+
+func create_fixed_box(
+    simulation:&Simulation,
+    position:Math.Vec2,
+    size:Math.Vec2
+) {
+    simulation.world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(size))
+        ..position = position
+        ..friction = 0.9
+    )
+}
+
+func spawn_body_visual(
+    scene:&Resources.World,
+    simulation:&Simulation,
+    body:Physics.RigidBody2D,
+    requested_component:Components.Canvas,
+    color:Color
+) {
+    var component = requested_component
+    component.color = color
+    scene.spawn(ECS.EntityRecipe()
+        ..with(BodyVisual(index:simulation.bodies.count()))
+        ..with(Components.Transform2D(
+            position:body.position().multiply(Showcase.pixels_per_meter),
+            rotation:body.rotation()
+        ))
+        ..with(component)
+    )
+    simulation.bodies.append(body)
+}
+
+func create_mixed_pile(
+    scene:&Resources.World,
+    simulation:&Simulation,
+    visuals:@Visuals
+) {
+    var index = 0
+    while index < 48 {
+        let column = index % 8
+        let row = index / 8
+        let is_circle = index % 2 == 0
+        var shape = Physics.Shape2D.box(
+            Physics.Box2D(Math.Vec2(Showcase.body_size))
+        )
+        if is_circle {
+            shape = Physics.Shape2D.circle(
+                Physics.Circle2D(Showcase.body_size * 0.5)
+            )
+        }
+        var body = simulation.world.create_rigid_body(
+            Physics.RigidBody2DSettings()
+                ..shape = shape
+                ..position = Math.Vec2(
+                    -3.65 + column as float * 0.43,
+                    -1.9 + row as float * 0.43
+                )
+                ..rotation = (index % 5 - 2) as float * 0.06
+                ..friction = 0.75
+                ..angular_damping = 0.12
+        )
+        if is_circle {
+            spawn_body_visual(
+                scene,
+                simulation,
+                body,
+                visuals.body_component(true),
+                body_color(index)
+            )
+        } else {
+            spawn_body_visual(
+                scene,
+                simulation,
+                body,
+                visuals.body_component(false),
+                body_color(index)
+            )
+        }
+        index++
+    }
+}
+
+func create_joint_mechanism(
+    scene:&Resources.World,
+    simulation:&Simulation,
+    visuals:@Visuals
+) {
+    var anchor = simulation.world.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed
+            ..position = Math.Vec2(1.5, 0.9)
+    )
+    var arm = simulation.world.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.box(
+                Physics.Box2D(Math.Vec2(1.2, 0.18))
+            )
+            ..position = Math.Vec2(2.1, 0.9)
+            ..allow_sleep = false
+            ..friction = 0.6
+    )
+    var payload = simulation.world.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.18))
+            ..position = Math.Vec2(3.55, 0.9)
+            ..allow_sleep = false
+            ..friction = 0.7
+    )
+    simulation.world.create_revolute_joint(
+        anchor,
+        arm,
+        Physics.RevoluteJoint2DSettings()
+            ..anchor = Math.Vec2(1.5, 0.9)
+            ..lower_angle = -1.1
+            ..upper_angle = 1.1
+            ..motor_speed = 1.4
+            ..maximum_motor_torque = 45.0
+            ..limit_enabled = true
+            ..motor_enabled = true
+    )
+    simulation.world.create_distance_joint(
+        arm,
+        payload,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2(2.7, 0.9)
+            ..second_anchor = Math.Vec2(3.55, 0.9)
+            ..length = 0.85
+            ..spring_hertz = 4.0
+            ..spring_damping_ratio = 0.75
+            ..spring_enabled = true
+    )
+    spawn_body_visual(
+        scene,
+        simulation,
+        arm,
+        visuals.arm_component(),
+        Color.amber_400()
+    )
+    spawn_body_visual(
+        scene,
+        simulation,
+        payload,
+        visuals.body_component(true),
+        Color.rose_400()
+    )
+}
+
+func backdrop() Canvas {
+    return Canvas()
+        ..paint(func(painter:&Canvas.Painter) {
+            painter.stroke(
+                Canvas.Rect(Math.Vec2(2.0), Math.Vec2(916.0, 596.0), 8.0),
+                Canvas.Stroke(Color.slate_500(), 3.0)
+            )
+            painter.stroke(
+                Canvas.Line(Math.Vec2(460.0, 70.0), Math.Vec2(460.0, 530.0)),
+                Canvas.Stroke(Color.slate_700(), 2.0)
+            )
+            painter.stroke(
+                Canvas.Line(Math.Vec2(40.0, 508.0), Math.Vec2(880.0, 508.0)),
+                Canvas.Stroke(Color.slate_600(), 3.0)
+            )
+            painter.fill(
+                Canvas.Circle(Math.Vec2(580.0, 228.0), 7.0),
+                Canvas.Fill.solid(Color.amber_300())
+            )
+        })
+}
+
+func legend() Canvas {
+    return Canvas()
+        ..paint(func(painter:&Canvas.Painter) {
+            painter.text(
+                "SOFT STEP — MIXED PILE",
+                Math.Vec2(0.0, 0.0),
+                Canvas.TextStyle(
+                    size:18.0,
+                    color:Color.cyan_300(),
+                    weight:Canvas.TextWeight.bold
+                )
+            )
+            painter.text(
+                "48 circles and boxes • friction • sleep islands",
+                Math.Vec2(0.0, 28.0),
+                Canvas.TextStyle(size:13.0, color:Color.slate_300())
+            )
+            painter.text(
+                "JOINTS — MOTOR + SPRING",
+                Math.Vec2(500.0, 0.0),
+                Canvas.TextStyle(
+                    size:18.0,
+                    color:Color.amber_300(),
+                    weight:Canvas.TextWeight.bold
+                )
+            )
+            painter.text(
+                "revolute limits • motor torque • damped distance joint",
+                Math.Vec2(500.0, 28.0),
+                Canvas.TextStyle(size:13.0, color:Color.slate_300())
+            )
+        })
+}
+
+func create_scene(
+    scene:&Resources.World,
+    simulation:&Simulation,
+    visuals:@Visuals
+) {
+    scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D())
+        ..with(Components.Camera2D())
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(0.0, -3.2),
+        Math.Vec2(11.0, 1.2)
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(-4.9, 0.0),
+        Math.Vec2(1.0, 7.0)
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(0.0, 0.0),
+        Math.Vec2(0.35, 7.0)
+    )
+    create_fixed_box(
+        simulation,
+        Math.Vec2(4.9, 0.0),
+        Math.Vec2(1.0, 7.0)
+    )
+    var frame = backdrop()
+    scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D())
+        ..with(Components.Canvas(frame, 920, 600))
+    )
+    var labels = legend()
+    scene.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform2D(position:Math.Vec2(30.0, 22.0)))
+        ..with(Components.Canvas(labels, 900, 62)
+            ..space = Components.CanvasSpace.viewport
+            ..pivot = Math.Vec2()
+            ..layer = 100
+        )
+    )
+    create_mixed_pile(scene, simulation, visuals)
+    create_joint_mechanism(scene, simulation, visuals)
+}
+
+func synchronize_bodies(
+    bodies:@Physics.RigidBody2D[],
+    body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
+) {
+    for (visual, transform) in body_visuals {
+        let body = bodies[visual.index]
+        transform.position = body.position().multiply(
+            Showcase.pixels_per_meter
+        )
+        transform.rotation = body.rotation()
+    }
+}
+
+func simulate(
+    time:@Resources.FrameTime,
+    simulation:&Simulation,
+    controller:&Application.Controller,
+    body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
+) {
+    simulation.accumulator = Math.min(
+        simulation.accumulator + time.delta,
+        Showcase.fixed_delta * 8.0
+    )
+    while simulation.accumulator >= Showcase.fixed_delta {
+        simulation.world.step(Showcase.fixed_delta)
+        simulation.accumulator -= Showcase.fixed_delta
+    }
+    synchronize_bodies(simulation.bodies, body_visuals)
+    simulation.rendered_frames++
+    if simulation.smoke_frames > 0 &&
+        simulation.rendered_frames >= simulation.smoke_frames
+    {
+        assert(simulation.bodies.count() == 50)
+        assert(simulation.world.joint_count() == 2)
+        assert(simulation.world.contact_count() > 0)
+        print(
+            "VisualShowcase smoke: bodies=$(simulation.bodies.count()), " +
+            "awake=$(simulation.world.awake_body_count()), " +
+            "contacts=$(simulation.world.contact_count()), " +
+            "joints=$(simulation.world.joint_count())"
+        )
+        controller.stop()
+    }
+}
+
+func smoke_frame_count() int {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == "--smoke" { return 300 }
+            }
+        }
+    }
+    return 0
+}
+
+func main() {
+    Application()
+        ..add_resource(Simulation(smoke_frame_count()))
+        ..add_resource(Visuals())
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
+            ..title = "GFX.Physics — Visual showcase"
+            ..width = 960
+            ..height = 640
+            ..resizable = false
+        ))
+        ..add_plugin(Plugins.Rendering(Plugins.Rendering.Settings()
+            ..clear = Color.slate_950()
+            ..present_mode = Rendering.PresentMode.immediate
+        ))
+        ..add_plugin(Plugins.Scene2D())
+        ..add_plugin(Plugins.Time())
+        ..add_plugin(Plugins.PerformancePanel())
+        ..add_system(Application.Schedule.startup, create_scene)
+        ..add_system(Application.Schedule.update, simulate)
+        ..run()
+}
