@@ -1,0 +1,51 @@
+use GFX.Physics
+use STD.Math
+
+test "leave the CCD pair path empty for ordinary slow bodies" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var index = 0
+    while index < 256 {
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(index as float * 2.0, 0.0)
+            ..velocity = Math.Vec2(2.0, 0.25)
+            ..allow_sleep = false
+        )
+        index++
+    }
+    world.step(1.0 / 60.0)
+    assert(world.ccd_body_count() == 0)
+    assert(world.ccd_pair_test_count() == 0)
+}
+
+test "restrict dynamic target sweeps to bullets" {
+    var ordinary_world = Physics.World2D(gravity:Math.Vec2())
+    ordinary_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..allow_sleep = false
+    )
+    ordinary_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+    )
+    ordinary_world.step(1.0 / 60.0)
+    assert(ordinary_world.ccd_body_count() == 0)
+    assert(ordinary_world.ccd_pair_test_count() == 0)
+
+    var bullet_world = Physics.World2D(gravity:Math.Vec2())
+    bullet_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..allow_sleep = false
+    )
+    bullet_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+    )
+    bullet_world.step(1.0 / 60.0)
+    assert(bullet_world.ccd_body_count() == 1)
+    assert(bullet_world.ccd_pair_test_count() == 1)
+}

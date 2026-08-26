@@ -23,6 +23,12 @@ public struct RigidBody2DSettings {
     var linear_damping:float
     var angular_damping:float
     var allow_sleep:bool
+    var is_bullet:bool
+    var is_sensor:bool
+    var enable_move_events:bool
+    var enable_contact_events:bool
+    var enable_hit_events:bool
+    var enable_sensor_events:bool
     var collision_filter:CollisionFilter2D
 
     init() {
@@ -39,6 +45,12 @@ public struct RigidBody2DSettings {
         self.linear_damping = 0.0
         self.angular_damping = 0.0
         self.allow_sleep = true
+        self.is_bullet = false
+        self.is_sensor = false
+        self.enable_move_events = false
+        self.enable_contact_events = false
+        self.enable_hit_events = false
+        self.enable_sensor_events = false
         self.collision_filter = CollisionFilter2D()
     }
 }
@@ -288,6 +300,7 @@ package class BodyStore2D {
     var positions_y:float[]
     var previous_positions_x:float[]
     var previous_positions_y:float[]
+    var previous_rotations:float[]
     var velocities_x:float[]
     var velocities_y:float[]
     var rotations:float[]
@@ -302,9 +315,16 @@ package class BodyStore2D {
     var linear_dampings:float[]
     var angular_dampings:float[]
     var allow_sleep:bool[]
+    var bullets:bool[]
+    var sensors:bool[]
+    var move_events_enabled:bool[]
+    var contact_events_enabled:bool[]
+    var hit_events_enabled:bool[]
+    var sensor_events_enabled:bool[]
     var awake:bool[]
     var sleep_times:float[]
     var dirty_transforms:bool[]
+    var world_locked:bool
 
     init() {
         self.slot_generations = []
@@ -330,6 +350,7 @@ package class BodyStore2D {
         self.positions_y = []
         self.previous_positions_x = []
         self.previous_positions_y = []
+        self.previous_rotations = []
         self.velocities_x = []
         self.velocities_y = []
         self.rotations = []
@@ -344,9 +365,16 @@ package class BodyStore2D {
         self.linear_dampings = []
         self.angular_dampings = []
         self.allow_sleep = []
+        self.bullets = []
+        self.sensors = []
+        self.move_events_enabled = []
+        self.contact_events_enabled = []
+        self.hit_events_enabled = []
+        self.sensor_events_enabled = []
         self.awake = []
         self.sleep_times = []
         self.dirty_transforms = []
+        self.world_locked = false
     }
 
     func count() int { return self.positions_x.count() }
@@ -399,6 +427,7 @@ package class BodyStore2D {
         self.positions_y.append(settings.position.y)
         self.previous_positions_x.append(settings.position.x)
         self.previous_positions_y.append(settings.position.y)
+        self.previous_rotations.append(settings.rotation)
         self.velocities_x.append(settings.velocity.x)
         self.velocities_y.append(settings.velocity.y)
         self.rotations.append(settings.rotation)
@@ -413,6 +442,12 @@ package class BodyStore2D {
         self.linear_dampings.append(settings.linear_damping)
         self.angular_dampings.append(settings.angular_damping)
         self.allow_sleep.append(settings.allow_sleep)
+        self.bullets.append(settings.is_bullet)
+        self.sensors.append(settings.is_sensor)
+        self.move_events_enabled.append(settings.enable_move_events)
+        self.contact_events_enabled.append(settings.enable_contact_events)
+        self.hit_events_enabled.append(settings.enable_hit_events)
+        self.sensor_events_enabled.append(settings.enable_sensor_events)
         self.awake.append(settings.body_type == BodyType2D.dynamic)
         self.sleep_times.append(0.0)
         self.dirty_transforms.append(true)
@@ -484,6 +519,12 @@ package class BodyStore2D {
         self.sleep_times[index] = 0.0
     }
 
+    func require_mutable() {
+        if self.world_locked {
+            panic("GFX.Physics.World2D cannot be modified during step")
+        }
+    }
+
     func cache_rotation(index:int) {
         self.rotation_cosines[index] = Math.cos(self.rotations[index])
         self.rotation_sines[index] = Math.sin(self.rotations[index])
@@ -509,6 +550,7 @@ package class BodyStore2D {
         self.positions_y.swap(first, second)
         self.previous_positions_x.swap(first, second)
         self.previous_positions_y.swap(first, second)
+        self.previous_rotations.swap(first, second)
         self.velocities_x.swap(first, second)
         self.velocities_y.swap(first, second)
         self.rotations.swap(first, second)
@@ -523,6 +565,12 @@ package class BodyStore2D {
         self.linear_dampings.swap(first, second)
         self.angular_dampings.swap(first, second)
         self.allow_sleep.swap(first, second)
+        self.bullets.swap(first, second)
+        self.sensors.swap(first, second)
+        self.move_events_enabled.swap(first, second)
+        self.contact_events_enabled.swap(first, second)
+        self.hit_events_enabled.swap(first, second)
+        self.sensor_events_enabled.swap(first, second)
         self.awake.swap(first, second)
         self.sleep_times.swap(first, second)
         self.dirty_transforms.swap(first, second)
@@ -548,6 +596,7 @@ package class BodyStore2D {
         self.positions_y.take_last()
         self.previous_positions_x.take_last()
         self.previous_positions_y.take_last()
+        self.previous_rotations.take_last()
         self.velocities_x.take_last()
         self.velocities_y.take_last()
         self.rotations.take_last()
@@ -562,6 +611,12 @@ package class BodyStore2D {
         self.linear_dampings.take_last()
         self.angular_dampings.take_last()
         self.allow_sleep.take_last()
+        self.bullets.take_last()
+        self.sensors.take_last()
+        self.move_events_enabled.take_last()
+        self.contact_events_enabled.take_last()
+        self.hit_events_enabled.take_last()
+        self.sensor_events_enabled.take_last()
         self.awake.take_last()
         self.sleep_times.take_last()
         self.dirty_transforms.take_last()
@@ -623,11 +678,20 @@ public class RigidBody2D {
         return self.store.gravity_scales[self.store.require(self.id)]
     }
 
+    func is_bullet() bool {
+        return self.store.bullets[self.store.require(self.id)]
+    }
+
+    func is_sensor() bool {
+        return self.store.sensors[self.store.require(self.id)]
+    }
+
     func is_awake() bool {
         return self.store.awake[self.store.require(self.id)]
     }
 
     func set_position(position:Math.Vec2) {
+        self.store.require_mutable()
         let index = self.store.require(self.id)
         self.store.positions_x[index] = position.x
         self.store.positions_y[index] = position.y
@@ -636,6 +700,7 @@ public class RigidBody2D {
     }
 
     func set_velocity(velocity:Math.Vec2) {
+        self.store.require_mutable()
         let index = self.store.require(self.id)
         self.store.velocities_x[index] = velocity.x
         self.store.velocities_y[index] = velocity.y
@@ -643,6 +708,7 @@ public class RigidBody2D {
     }
 
     func set_rotation(rotation:float) {
+        self.store.require_mutable()
         let index = self.store.require(self.id)
         self.store.rotations[index] = rotation
         self.store.cache_rotation(index)
@@ -651,18 +717,21 @@ public class RigidBody2D {
     }
 
     func set_angular_velocity(velocity:float) {
+        self.store.require_mutable()
         let index = self.store.require(self.id)
         self.store.angular_velocities[index] = velocity
         self.store.wake(index)
     }
 
     func set_gravity_scale(scale:float) {
+        self.store.require_mutable()
         let index = self.store.require(self.id)
         self.store.gravity_scales[index] = scale
         self.store.wake(index)
     }
 
     func wake_up() {
+        self.store.require_mutable()
         self.store.wake(self.store.require(self.id))
     }
 }

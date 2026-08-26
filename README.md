@@ -73,6 +73,13 @@ is the primary executable proof for contact creation, persistence, and
 invalidation. See [`Docs/Contacts.md`](Docs/Contacts.md) for filters,
 deterministic ordering, and the current solver boundary.
 
+Bullets, sensors, and opt-in post-step movement, contact, hit, and sensor
+streams complete the gameplay feedback loop without worker callbacks. A bullet
+extends continuous collision to dynamic targets; sensors retain filtering but
+never produce physical response. See
+[`Docs/EventsAndCCD.md`](Docs/EventsAndCCD.md) and the headless
+[`Examples/World2D/Events.sx`](Examples/World2D/Events.sx).
+
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:
 
@@ -147,10 +154,10 @@ cases. The reconstruction corpus and pinned Box2D oracle are documented in
 The existing `World2D` regression contact solver still resolves only unrounded boxes
 and circles. Additional forms can be attached to the world and produce
 persistent geometric contacts, but do not receive impulses or positional
-correction yet. External forces, general-purpose continuous dynamic collision
-response, and application plugins remain outside the current world contract.
-The public shape cast is a geometry query, while the dense-circle sweep
-described above remains narrower than general solver CCD.
+correction yet. External forces, continuous response for every ordinary
+dynamic pair, and application plugins remain outside the current world
+contract. The public shape cast is also the geometry foundation of bullet CCD;
+ordinary bodies do not silently opt into its dynamic-target cost.
 
 [`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) remains a
 historical integrated stress program, not the recommended first verification

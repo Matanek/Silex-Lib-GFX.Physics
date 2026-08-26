@@ -423,12 +423,14 @@ package class JointStore2D {
     }
 
     func set_target(id:JointId2D, target:Math.Vec2) {
+        self.bodies.require_mutable()
         let index = self.require(id)
         self.joints[index].linear_target = target
         self.wake_joint(index)
     }
 
     func set_motor(id:JointId2D, speed:float, maximum:float) {
+        self.bodies.require_mutable()
         let index = self.require(id)
         self.joints[index].motor_speed = speed
         if self.joints[index].kind == JointKind2D.revolute ||

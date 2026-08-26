@@ -1,0 +1,274 @@
+use GFX.Physics
+use STD.Math
+
+func sensor_trace(worker_count:int) float[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    if worker_count > 1 { world.enable_parallelism(worker_count) }
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.75))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.75))
+        ..position = Math.Vec2(2.0, 0.0)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..allow_sleep = false
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+    world.step(0.0)
+    var events:Physics.SensorBeginEvent2D[] = []
+    world.write_sensor_begin_events(events)
+    var trace:float[] = []
+    for event in events {
+        trace.append(event.sensor_body().position().x)
+        trace.append(event.visitor_body().position().x)
+    }
+    return trace
+}
+
+test "report deterministic sensor begin and end transitions without response" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var sensor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..allow_sleep = false
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+    var ended:Physics.SensorEndEvent2D[] = []
+
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    world.write_sensor_end_events(ended)
+    assert(began.count() == 1)
+    assert(ended.count() == 0)
+    assert(began[0].sensor_body().is_sensor())
+    assert(began[0].sensor_body().position().nearly_equal(
+        sensor.position(),
+        0.000001
+    ))
+    assert(began[0].visitor_body().position().nearly_equal(
+        visitor.position(),
+        0.000001
+    ))
+    assert(world.contact_count() == 0)
+
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    world.write_sensor_end_events(ended)
+    assert(began.count() == 0)
+    assert(ended.count() == 0)
+
+    visitor.set_position(Math.Vec2(4.0, 0.0))
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    world.write_sensor_end_events(ended)
+    assert(began.count() == 0)
+    assert(ended.count() == 1, "sensor end count: $(ended.count())")
+    assert(ended[0].sensor_body().is_sensor())
+}
+
+test "apply collision filters to sensors" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..is_sensor = true
+        ..enable_sensor_events = true
+        ..collision_filter = Physics.CollisionFilter2D(
+            category_bits:0x1,
+            mask_bits:0x1
+        )
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..collision_filter = Physics.CollisionFilter2D(
+            category_bits:0x2,
+            mask_bits:0x2
+        )
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 0)
+}
+
+test "retain a complete trigger crossing inside one fast step" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..is_bullet = true
+        ..allow_sleep = false
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+    var ended:Physics.SensorEndEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_sensor_begin_events(began)
+    world.write_sensor_end_events(ended)
+    assert(visitor.position().x > 2.0)
+    assert(began.count() == 1)
+    assert(ended.count() == 1)
+}
+
+test "preserve sensor event order across worker counts" {
+    let serial = sensor_trace(1)
+    let parallel = sensor_trace(4)
+    assert(serial.count() == 4)
+    assert(parallel.count() == serial.count())
+    var index = 0
+    while index < serial.count() {
+        assert(Math.nearly_equal(serial[index], parallel[index], 0.000001))
+        index++
+    }
+}
+
+test "report contact begin hit and end transitions" {
+    var world = Physics.World2D(
+        gravity:Math.Vec2(),
+        hit_event_threshold:1.0
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..enable_contact_events = true
+        ..enable_hit_events = true
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(0.9, 0.0)
+        ..velocity = Math.Vec2(-5.0, 0.0)
+        ..allow_sleep = false
+    )
+    var began:Physics.ContactBeginEvent2D[] = []
+    var ended:Physics.ContactEndEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+
+    world.step(0.0)
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    world.write_contact_hit_events(hits)
+    assert(began.count() == 1)
+    assert(began[0].manifold().point_count() == 1)
+    assert(ended.count() == 0)
+    assert(hits.count() == 1)
+    assert(hits[0].approach_speed() >= 4.9)
+
+    moving.set_position(Math.Vec2(3.0, 0.0))
+    moving.set_velocity(Math.Vec2())
+    world.step(0.0)
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    world.write_contact_hit_events(hits)
+    assert(began.count() == 0)
+    assert(ended.count() == 1, "contact end count: $(ended.count())")
+    assert(hits.count() == 0)
+}
+
+test "stop bullets at dynamic targets and publish the CCD impact" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..allow_sleep = false
+    )
+    var bullet = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+        ..enable_contact_events = true
+        ..enable_hit_events = true
+    )
+    var began:Physics.ContactBeginEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(began)
+    world.write_contact_hit_events(hits)
+    assert(bullet.is_bullet())
+    assert(bullet.position().x < 0.0)
+    assert(bullet.velocity().x < 0.001)
+    assert(began.count() == 1)
+    assert(hits.count() == 1)
+    assert(hits[0].approach_speed() > 250.0)
+}
+
+test "detect fast rotation between non-overlapping endpoint poses" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var rotor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.1)))
+        ..angular_velocity = 188.49556
+        ..allow_sleep = false
+        ..is_bullet = true
+        ..enable_hit_events = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..position = Math.Vec2(1.4, 1.4)
+    )
+    var hits:Physics.ContactHitEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_contact_hit_events(hits)
+    assert(rotor.rotation() < 3.0)
+    assert(Math.abs(rotor.angular_velocity()) < 0.001)
+    assert(hits.count() == 1)
+}
+
+test "publish movement and the completed sleep transition" {
+    var moving_world = Physics.World2D(gravity:Math.Vec2())
+    moving_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..velocity = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+        ..enable_move_events = true
+    )
+    var moves:Physics.BodyMoveEvent2D[] = []
+    moving_world.step(0.25)
+    moving_world.write_body_move_events(moves)
+    assert(moves.count() == 1)
+    assert(Math.nearly_equal(moves[0].transform().position.x, 0.25, 0.0001))
+    assert(!moves[0].fell_asleep())
+
+    var sleeping_world = Physics.World2D(gravity:Math.Vec2())
+    sleeping_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..enable_move_events = true
+    )
+    var found_sleep = false
+    var step = 0
+    while step < 40 {
+        sleeping_world.step(1.0 / 60.0)
+        sleeping_world.write_body_move_events(moves)
+        if moves.count() == 1 && moves[0].fell_asleep() {
+            found_sleep = true
+        }
+        step++
+    }
+    assert(found_sleep)
+}

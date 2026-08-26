@@ -29,6 +29,8 @@ The first vertical slice contains:
   shape-cast boundary over transformed and filtered placements;
 - `Physics.BodyTransformBuffer2D`, reusable structure-of-arrays output for
   bulk synchronization with a renderer or ECS;
+- value snapshots for opt-in movement, contact begin/end/hit, and sensor
+  begin/end streams collected after `World2D.step`;
 - typed distance, filter, motor, mouse, prismatic, revolute, weld, and wheel
   joints created and owned by `Physics.World2D`.
 
@@ -80,6 +82,20 @@ manifold in place and clears the slot when the shapes separate. Public
 `Contact2D` values are read-only snapshots reconstructed in stable body-slot
 order, so BVH nodes, pair hashes, dense indices, and cached impulses do not
 cross the API boundary.
+
+Sensors retain the geometry and collision-filter path but never enter contact
+islands or the impulse solver. Their overlap pairs and all other event streams
+are deterministic completed-step buffers, not callbacks. Event storage uses
+reusable value arrays and creates opaque body handles only when consumer code
+reads an event. Movement, solid contact, hit, and sensor streams are opt-in so
+an ordinary world does not construct unused payloads.
+
+Continuous motion keeps two costs distinct. Fast ordinary bodies retain the
+fixed-box boundary guard already used by the solver. Bodies created with
+`is_bullet` additionally sweep against dynamic targets and public convex
+geometry; rotational motion refines the first swept overlap. Sensor hits emit
+transitions without response. A world with no bullet returns before entering
+this dynamic-target path.
 
 Worker count no longer selects a different broad phase. Worlds with dynamic
 shapes use the same reusable deterministic grid for one or several workers;

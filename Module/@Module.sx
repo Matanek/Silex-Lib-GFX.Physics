@@ -16,6 +16,12 @@ public use GFX.Physics.Geometry2D.Ray2D
 public use GFX.Physics.Geometry2D.ShapePlacement2D
 public use GFX.Physics.BodyTransform2D.BodyTransform2D
 public use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
+public use GFX.Physics.Events2D.BodyMoveEvent2D
+public use GFX.Physics.Events2D.ContactBeginEvent2D
+public use GFX.Physics.Events2D.ContactEndEvent2D
+public use GFX.Physics.Events2D.ContactHitEvent2D
+public use GFX.Physics.Events2D.SensorBeginEvent2D
+public use GFX.Physics.Events2D.SensorEndEvent2D
 public use GFX.Physics.RigidBody2D.BodyType2D
 public use GFX.Physics.RigidBody2D.RigidBody2D
 public use GFX.Physics.RigidBody2D.RigidBody2DSettings

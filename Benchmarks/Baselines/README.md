@@ -174,6 +174,26 @@ no cadence gate for this new workload, so this is a published optimization
 target rather than a waived regression. It must not be generalized to X64 or
 to contact-heavy scenes.
 
+## Spec 12 event and CCD isolation observation
+
+[`2026-08-26-spec12-events.jsonl`](2026-08-26-spec12-events.jsonl) compares
+the exact pre-Spec-12 worktree with the retained candidate on the same Apple
+M3 Pro, Silex `0.41.0` at `a48d2dd`, one-worker Release configuration. The
+`sparse-10000` scene contains no fixed obstacle, bullet, sensor or enabled
+event stream. Seven isolated processes were recorded on each side; every run
+retains the exact `16374087000.0` state signature.
+
+| Revision | Median | MAD | CCD bodies/pairs | Change |
+| --- | ---: | ---: | ---: | ---: |
+| Before Spec 12 | 8.439 ms/step | 0.37% | `0 / 0` | reference |
+| Spec 12 candidate | 8.018 ms/step | 0.81% | `0 / 0` | -4.99% |
+
+The structural `CCD2D` test separately verifies that ordinary slow bodies do
+not enter the CCD pair path and that only a bullet expands a sweep to a dynamic
+target. Contact, hit, sensor and movement streams are opt-in, so this
+contact-free corpus constructs no event payload. This is an ARM64 workload
+result, not a general speedup claim.
+
 After review, add `--enforce` for future candidates and pass the accepted
 4,000-boid median through `--boids-kernel-baseline`. No X64 timing baseline is
 expected: portable Silex changes use native GitHub Actions for correctness on

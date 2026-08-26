@@ -28,6 +28,11 @@ the number of touching pairs without materializing snapshots;
 mask, and group rules as stateless geometry queries. Rejected pairs never
 enter the persistent contact table.
 
+Sensor bodies use the same filters but remain outside `contact_count`,
+`write_contacts`, contact islands, and the impulse solver. Their opt-in overlap
+transitions, along with solid contact, hit, move, and sleep events, are
+documented in [`EventsAndCCD.md`](EventsAndCCD.md).
+
 The broad phase selects the same reusable deterministic grid for dynamic worlds
 at every worker count. Pair insertion, contact refresh, and snapshot ordering
 therefore remain deterministic across worker counts; fixed-shape queries keep

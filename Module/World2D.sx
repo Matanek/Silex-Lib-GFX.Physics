@@ -30,6 +30,12 @@ use GFX.Physics.Joints2D.WheelJoint2D
 use GFX.Physics.Joints2D.WheelJoint2DSettings
 use GFX.Physics.BodyTransform2D.BodyTransform2D
 use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
+use GFX.Physics.Events2D.BodyMoveEvent2D
+use GFX.Physics.Events2D.ContactBeginEvent2D
+use GFX.Physics.Events2D.ContactEndEvent2D
+use GFX.Physics.Events2D.ContactHitEvent2D
+use GFX.Physics.Events2D.SensorBeginEvent2D
+use GFX.Physics.Events2D.SensorEndEvent2D
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.Geometry2D.ShapePlacement2D
@@ -137,6 +143,21 @@ class PairSet2D {
     }
 
     func count() int { return self.entry_count }
+
+    func clear() {
+        self.first_bodies.clear()
+        self.second_bodies.clear()
+        self.states.clear()
+        var index = 0
+        while index < 256 {
+            self.first_bodies.append(0)
+            self.second_bodies.append(0)
+            self.states.append(0)
+            index++
+        }
+        self.entry_count = 0
+        self.removed_count = 0
+    }
 
     func contains(pair:BodyPair2D) bool {
         return self.find(pair) >= 0
@@ -249,6 +270,27 @@ class PairSet2D {
         self.second_bodies[slot] = pair.second
         self.states[slot] = 1
         self.entry_count++
+    }
+}
+
+struct ContinuousHit2D {
+    let hit:bool
+    let fraction:float
+    let point:Math.Vec2
+    let normal:Math.Vec2
+
+    init() {
+        self.hit = false
+        self.fraction = 0.0
+        self.point = Math.Vec2()
+        self.normal = Math.Vec2()
+    }
+
+    init(fraction:float, point:Math.Vec2, normal:Math.Vec2) {
+        self.hit = true
+        self.fraction = fraction
+        self.point = point
+        self.normal = normal
     }
 }
 
@@ -392,6 +434,11 @@ public class World2D {
     private var active_island_offsets:int[]
     private var active_island_bodies:int[]
     private var sleep_enabled_body_count:int
+    private var bullet_body_count:int
+    private var move_event_body_count:int
+    private var contact_event_body_count:int
+    private var hit_event_body_count:int
+    private var sensor_event_body_count:int
     private var current_candidate_pair_count:int
     private var current_moved_proxy_count:int
     private var current_discovered_pair_count:int
@@ -413,8 +460,34 @@ public class World2D {
     private var parallel_enabled:bool
     private var current_soft_step_stages:int[]
     private var current_soft_step_parallel_dispatch_count:int
+    private var previous_touching_pairs:BodyPair2D[]
+    private var previous_touching_keys:PairSet2D
+    private var current_touching_keys:PairSet2D
+    private var sensor_pairs:BodyPair2D[]
+    private var sensor_pair_keys:PairSet2D
+    private var current_sensor_pairs:BodyPair2D[]
+    private var current_sensor_pair_keys:PairSet2D
+    private var hit_pair_keys:PairSet2D
+    private var step_start_awake:bool[]
+    private var body_move_events:BodyMoveEvent2D[]
+    private var contact_begin_events:ContactBeginEvent2D[]
+    private var contact_end_events:ContactEndEvent2D[]
+    private var contact_hit_events:ContactHitEvent2D[]
+    private var sensor_begin_events:SensorBeginEvent2D[]
+    private var sensor_end_events:SensorEndEvent2D[]
+    private var current_hit_event_threshold:float
+    private var current_ccd_body_count:int
+    private var current_ccd_pair_test_count:int
 
-    init(gravity:Math.Vec2 = Math.Vec2(0.0, -9.81)) {
+    init(
+        gravity:Math.Vec2 = Math.Vec2(0.0, -9.81),
+        hit_event_threshold:float = 1.0
+    ) {
+        if !finite_world_value(hit_event_threshold) ||
+            hit_event_threshold < 0.0
+        {
+            panic("GFX.Physics.World2D hit event threshold must be finite and non-negative")
+        }
         self.current_gravity = gravity
         self.store = BodyStore2D()
         self.joints = JointStore2D(self.store)
@@ -466,6 +539,11 @@ public class World2D {
         self.active_island_offsets = []
         self.active_island_bodies = []
         self.sleep_enabled_body_count = 0
+        self.bullet_body_count = 0
+        self.move_event_body_count = 0
+        self.contact_event_body_count = 0
+        self.hit_event_body_count = 0
+        self.sensor_event_body_count = 0
         self.current_candidate_pair_count = 0
         self.current_moved_proxy_count = 0
         self.current_discovered_pair_count = 0
@@ -487,10 +565,29 @@ public class World2D {
         self.parallel_enabled = false
         self.current_soft_step_stages = []
         self.current_soft_step_parallel_dispatch_count = 0
+        self.previous_touching_pairs = []
+        self.previous_touching_keys = PairSet2D()
+        self.current_touching_keys = PairSet2D()
+        self.sensor_pairs = []
+        self.sensor_pair_keys = PairSet2D()
+        self.current_sensor_pairs = []
+        self.current_sensor_pair_keys = PairSet2D()
+        self.hit_pair_keys = PairSet2D()
+        self.step_start_awake = []
+        self.body_move_events = []
+        self.contact_begin_events = []
+        self.contact_end_events = []
+        self.contact_hit_events = []
+        self.sensor_begin_events = []
+        self.sensor_end_events = []
+        self.current_hit_event_threshold = hit_event_threshold
+        self.current_ccd_body_count = 0
+        self.current_ccd_pair_test_count = 0
     }
 
     func gravity() Math.Vec2 { return self.current_gravity }
     func set_gravity(gravity:Math.Vec2) {
+        self.store.require_mutable()
         self.current_gravity = gravity
         var index = 0
         while index < self.store.count() {
@@ -561,7 +658,8 @@ public class World2D {
         var index = 0
         while index < self.candidate_pairs.count() {
             if self.candidate_enabled[index] &&
-                self.candidate_pairs[index].contact_count > 0
+                self.candidate_pairs[index].contact_count > 0 &&
+                !pair_is_sensor(self.store, self.candidate_bodies[index])
             {
                 count++
             }
@@ -574,7 +672,8 @@ public class World2D {
         var index = 0
         while index < self.candidate_pairs.count() {
             if !self.candidate_enabled[index] ||
-                self.candidate_pairs[index].contact_count <= 0
+                self.candidate_pairs[index].contact_count <= 0 ||
+                pair_is_sensor(self.store, self.candidate_bodies[index])
             {
                 index++
                 continue
@@ -598,9 +697,45 @@ public class World2D {
             index++
         }
     }
-    func set_profiling_enabled(enabled:bool) { self.profiling_enabled = enabled }
+    func write_body_move_events(output:&BodyMoveEvent2D[]) {
+        output.clear()
+        for event in self.body_move_events { output.append(event) }
+    }
+    func write_contact_begin_events(output:&ContactBeginEvent2D[]) {
+        output.clear()
+        for event in self.contact_begin_events { output.append(event) }
+    }
+    func write_contact_end_events(output:&ContactEndEvent2D[]) {
+        output.clear()
+        for event in self.contact_end_events { output.append(event) }
+    }
+    func write_contact_hit_events(output:&ContactHitEvent2D[]) {
+        output.clear()
+        for event in self.contact_hit_events { output.append(event) }
+    }
+    func write_sensor_begin_events(output:&SensorBeginEvent2D[]) {
+        output.clear()
+        for event in self.sensor_begin_events { output.append(event) }
+    }
+    func write_sensor_end_events(output:&SensorEndEvent2D[]) {
+        output.clear()
+        for event in self.sensor_end_events { output.append(event) }
+    }
+    func hit_event_threshold() float { return self.current_hit_event_threshold }
+    func set_hit_event_threshold(threshold:float) {
+        self.store.require_mutable()
+        if !finite_world_value(threshold) || threshold < 0.0 {
+            panic("GFX.Physics.World2D hit event threshold must be finite and non-negative")
+        }
+        self.current_hit_event_threshold = threshold
+    }
+    func set_profiling_enabled(enabled:bool) {
+        self.store.require_mutable()
+        self.profiling_enabled = enabled
+    }
     func step_profile() World2DStepProfile { return self.current_step_profile }
     func enable_parallelism(worker_count:int) {
+        self.store.require_mutable()
         if worker_count < 1 {
             panic("GFX.Physics.World2D parallel worker count must be positive")
         }
@@ -665,6 +800,11 @@ public class World2D {
 
     package func soft_step_parallel_dispatch_count() int {
         return self.current_soft_step_parallel_dispatch_count
+    }
+
+    package func ccd_body_count() int { return self.current_ccd_body_count }
+    package func ccd_pair_test_count() int {
+        return self.current_ccd_pair_test_count
     }
 
     package func soft_step_maximum_color_count() int {
@@ -820,6 +960,7 @@ public class World2D {
     func create_rigid_body(
         settings:RigidBody2DSettings = RigidBody2DSettings()
     ) RigidBody2D {
+        self.store.require_mutable()
         let id = self.store.append(settings)
         let index = self.store.require(id)
         let bounds = body_bounds(self.store, index)
@@ -866,6 +1007,13 @@ public class World2D {
         self.island_write_offsets.append(0)
         if settings.body_type == BodyType2D.dynamic && settings.allow_sleep {
             self.sleep_enabled_body_count++
+        }
+        if settings.is_bullet { self.bullet_body_count++ }
+        if settings.enable_move_events { self.move_event_body_count++ }
+        if settings.enable_contact_events { self.contact_event_body_count++ }
+        if settings.enable_hit_events { self.hit_event_body_count++ }
+        if settings.is_sensor && settings.enable_sensor_events {
+            self.sensor_event_body_count++
         }
         self.store.dirty_transforms[index] = false
         return RigidBody2D(self.store, id)
@@ -1221,6 +1369,7 @@ public class World2D {
     }
 
     func destroy_rigid_body(body:RigidBody2D) {
+        self.store.require_mutable()
         if !body.belongs_to(self.store) {
             panic("GFX.Physics.World2D cannot destroy a body owned by another world")
         }
@@ -1233,6 +1382,7 @@ public class World2D {
     }
 
     private func require_joint_body(body:RigidBody2D) int {
+        self.store.require_mutable()
         if !body.belongs_to(self.store) {
             panic("GFX.Physics.World2D cannot join a body owned by another world")
         }
@@ -1261,6 +1411,7 @@ public class World2D {
     }
 
     private func destroy_joint_id(owned:bool, id:JointId2D) {
+        self.store.require_mutable()
         if !owned {
             panic("GFX.Physics.World2D cannot destroy a joint owned by another world")
         }
@@ -1307,6 +1458,9 @@ public class World2D {
         if delta < 0.0 {
             panic("GFX.Physics.World2D.step requires a non-negative delta")
         }
+        self.store.require_mutable()
+        self.begin_step_events()
+        self.store.world_locked = true
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
         self.dynamic_grid_active = self.maximum_dynamic_shape_radius > 0.0
@@ -1378,6 +1532,7 @@ public class World2D {
         self.refresh_general_contacts()
         self.wake_direct_impacts()
         self.update_active_pairs()
+        self.collect_discrete_hit_events()
         self.current_candidate_pair_count = self.active_pairs.count()
         if self.profiling_enabled {
             self.current_pair_filter_ms = profile_clock.tick() * 1000.0
@@ -1387,10 +1542,14 @@ public class World2D {
                 self.current_pair_filter_ms
         }
         self.solve_collisions(self.active_pairs, delta)
+        self.solve_continuous_motion()
         if self.profiling_enabled {
             self.current_step_profile.solve_ms = profile_clock.tick() * 1000.0
         }
         self.update_sleep(delta)
+        self.collect_contact_events()
+        self.collect_sensor_events()
+        self.collect_body_move_events()
         if self.profiling_enabled {
             self.current_step_profile.sleep_ms = profile_clock.tick() * 1000.0
             self.current_step_profile.total_ms =
@@ -1398,6 +1557,463 @@ public class World2D {
                 self.current_step_profile.broad_phase_ms +
                 self.current_step_profile.solve_ms +
                 self.current_step_profile.sleep_ms
+        }
+        self.store.world_locked = false
+    }
+
+    private func begin_step_events() {
+        self.body_move_events.clear()
+        self.contact_begin_events.clear()
+        self.contact_end_events.clear()
+        self.contact_hit_events.clear()
+        self.sensor_begin_events.clear()
+        self.sensor_end_events.clear()
+        self.previous_touching_pairs.clear()
+        self.current_ccd_body_count = 0
+        self.current_ccd_pair_test_count = 0
+
+        if self.hit_event_body_count > 0 { self.hit_pair_keys.clear() }
+        if self.contact_event_body_count > 0 {
+            self.previous_touching_keys.clear()
+            self.current_touching_keys.clear()
+            var candidate = 0
+            while candidate < self.candidate_pairs.count() {
+                if self.candidate_enabled[candidate] &&
+                    self.candidate_pairs[candidate].contact_count > 0
+                {
+                    let pair = self.candidate_bodies[candidate]
+                    if pair_contact_events_enabled(self.store, pair) {
+                        self.previous_touching_pairs.append(pair)
+                        self.previous_touching_keys.add(pair)
+                    }
+                }
+                candidate++
+            }
+        }
+
+        self.step_start_awake.clear()
+        if self.move_event_body_count > 0 {
+            var body = 0
+            while body < self.store.count() {
+                self.step_start_awake.append(self.store.awake[body])
+                body++
+            }
+        }
+    }
+
+    private func collect_discrete_hit_events() {
+        if self.hit_event_body_count == 0 { return }
+        for candidate in self.active_pairs {
+            let pair = self.candidate_bodies[candidate]
+            if pair_is_sensor(self.store, pair) ||
+                !pair_hit_events_enabled(self.store, pair)
+            {
+                continue
+            }
+            let manifold = contact_manifold(
+                self.store,
+                pair.first,
+                pair.second
+            )
+            if manifold.point_count() == 0 { continue }
+            let point = manifold.points[0].point
+            let relative = velocity_at(self.store, pair.second, point)
+                .subtract(velocity_at(self.store, pair.first, point))
+            let approach_speed = -relative.dot(manifold.normal)
+            if approach_speed >= self.current_hit_event_threshold {
+                self.append_contact_hit_event(
+                    pair,
+                    point,
+                    manifold.normal,
+                    approach_speed
+                )
+            }
+        }
+    }
+
+    private func solve_continuous_motion() {
+        if self.bullet_body_count == 0 { return }
+        var mover = 0
+        while mover < self.store.count() {
+            if self.store.body_types[mover] != BodyType2D.dynamic ||
+                !self.store.awake[mover] || !self.store.bullets[mover]
+            {
+                mover++
+                continue
+            }
+            let motion = body_position(self.store, mover).subtract(Math.Vec2(
+                self.store.previous_positions_x[mover],
+                self.store.previous_positions_y[mover]
+            ))
+            let angular_motion = self.store.rotations[mover] -
+                self.store.previous_rotations[mover]
+            let sweep_radius = Math.sqrt(
+                self.store.sweep_radii_squared[mover]
+            )
+            let surface_motion = motion.length() +
+                Math.abs(angular_motion) * sweep_radius
+            if surface_motion <= 0.000001 {
+                mover++
+                continue
+            }
+            self.current_ccd_body_count++
+            var earliest = ContinuousHit2D()
+            var earliest_target = -1
+            var target = 0
+            while target < self.store.count() {
+                if target == mover {
+                    target++
+                    continue
+                }
+                if self.store.body_types[target] == BodyType2D.dynamic &&
+                    self.store.bullets[target] && target < mover
+                {
+                    target++
+                    continue
+                }
+                let pair = ordered_body_pair(mover, target)
+                if !self.store.collision_filters[pair.first].allows(
+                    self.store.collision_filters[pair.second]
+                ) || !self.joints.collision_allowed(
+                    self.store.body_id_at(pair.first),
+                    self.store.body_id_at(pair.second)
+                ) {
+                    target++
+                    continue
+                }
+                self.current_ccd_pair_test_count++
+                let hit = continuous_pair_hit(self.store, mover, target)
+                if !hit.hit {
+                    target++
+                    continue
+                }
+                if pair_is_sensor(self.store, pair) {
+                    let finishes_overlapping = Geometry2D.overlaps(
+                        body_placement(self.store, pair.first),
+                        body_placement(self.store, pair.second)
+                    )
+                    if !self.sensor_pair_keys.contains(pair) &&
+                        !finishes_overlapping
+                    {
+                        self.append_sensor_begin_events(pair)
+                        self.append_sensor_end_events(pair)
+                    }
+                } else if !earliest.hit || hit.fraction < earliest.fraction {
+                    earliest = hit
+                    earliest_target = target
+                }
+                target++
+            }
+            if earliest_target >= 0 {
+                self.apply_continuous_hit(mover, earliest_target, earliest)
+            }
+            mover++
+        }
+    }
+
+    private func apply_continuous_hit(
+        mover:int,
+        target:int,
+        hit:ContinuousHit2D
+    ) {
+        let start = Math.Vec2(
+            self.store.previous_positions_x[mover],
+            self.store.previous_positions_y[mover]
+        )
+        let finish = body_position(self.store, mover)
+        let motion = finish.subtract(start)
+        let start_rotation = self.store.previous_rotations[mover]
+        let rotation_motion = self.store.rotations[mover] - start_rotation
+        let fraction = Math.min(1.0, hit.fraction + 0.00001)
+        self.store.positions_x[mover] = start.x + motion.x * fraction
+        self.store.positions_y[mover] = start.y + motion.y * fraction
+        self.store.rotations[mover] = start_rotation + rotation_motion * fraction
+        self.store.cache_rotation(mover)
+        let approach = -velocity_at(self.store, mover, hit.point)
+            .subtract(velocity_at(self.store, target, hit.point))
+            .dot(hit.normal)
+        let inward_velocity = Math.min(
+            0.0,
+            self.store.velocities_x[mover] * hit.normal.x +
+                self.store.velocities_y[mover] * hit.normal.y
+        )
+        self.store.velocities_x[mover] -= inward_velocity * hit.normal.x
+        self.store.velocities_y[mover] -= inward_velocity * hit.normal.y
+        if Math.abs(rotation_motion) > 0.000001 {
+            self.store.angular_velocities[mover] = 0.0
+        }
+        self.store.dirty_transforms[mover] = true
+        self.tight_bounds[mover] = body_bounds(self.store, mover)
+
+        let pair = ordered_body_pair(mover, target)
+        self.insert_candidate_pair(pair)
+        self.refresh_event_contact(pair)
+        if approach >= self.current_hit_event_threshold &&
+            pair_hit_events_enabled(self.store, pair)
+        {
+            var normal = hit.normal
+            if pair.first == mover { normal = normal.negated() }
+            self.append_contact_hit_event(
+                pair,
+                hit.point,
+                normal,
+                approach
+            )
+        }
+    }
+
+    private func refresh_event_contact(expected:BodyPair2D) {
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            if !self.candidate_enabled[index] ||
+                self.candidate_bodies[index].first != expected.first ||
+                self.candidate_bodies[index].second != expected.second
+            {
+                index++
+                continue
+            }
+            let pair = self.candidate_bodies[index]
+            let manifold = contact_manifold(
+                self.store,
+                pair.first,
+                pair.second
+            )
+            if manifold.point_count() == 0 {
+                self.candidate_pairs[index].contact_count = 0
+                return
+            }
+            self.candidate_pairs[index].normal = manifold.normal
+            self.candidate_pairs[index].first_contact =
+                body_contact_cache_point(
+                    self.store,
+                    pair.first,
+                    manifold.points[0].point
+                )
+            self.candidate_pairs[index].second_contact =
+                self.candidate_pairs[index].first_contact
+            if manifold.point_count() > 1 {
+                self.candidate_pairs[index].second_contact =
+                    body_contact_cache_point(
+                        self.store,
+                        pair.first,
+                        manifold.points[1].point
+                    )
+            }
+            self.candidate_pairs[index].contact_count = manifold.point_count()
+            return
+        }
+    }
+
+    private func collect_contact_events() {
+        if self.contact_event_body_count == 0 { return }
+        self.current_touching_keys.clear()
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            if !self.candidate_enabled[index] ||
+                self.candidate_pairs[index].contact_count <= 0
+            {
+                index++
+                continue
+            }
+            let pair = self.candidate_bodies[index]
+            if !pair_contact_events_enabled(self.store, pair) {
+                index++
+                continue
+            }
+            self.current_touching_keys.add(pair)
+            if !self.previous_touching_keys.contains(pair) {
+                self.append_contact_begin_event(pair)
+            }
+            index++
+        }
+        for pair in self.previous_touching_pairs {
+            if !self.current_touching_keys.contains(pair) {
+                self.append_contact_end_event(pair)
+            }
+        }
+    }
+
+    private func collect_sensor_events() {
+        self.current_sensor_pairs.clear()
+        self.current_sensor_pair_keys.clear()
+        if self.sensor_event_body_count == 0 {
+            self.sensor_pairs.clear()
+            self.sensor_pair_keys.clear()
+            return
+        }
+        var sensor = 0
+        while sensor < self.store.count() {
+            if !self.store.sensors[sensor] ||
+                !self.store.sensor_events_enabled[sensor]
+            {
+                sensor++
+                continue
+            }
+            var other = 0
+            while other < self.store.count() {
+                if other == sensor {
+                    other++
+                    continue
+                }
+                let pair = ordered_body_pair(sensor, other)
+                if self.current_sensor_pair_keys.contains(pair) {
+                    other++
+                    continue
+                }
+                if self.store.collision_filters[pair.first].allows(
+                    self.store.collision_filters[pair.second]
+                ) && self.joints.collision_allowed(
+                    self.store.body_id_at(pair.first),
+                    self.store.body_id_at(pair.second)
+                ) && Geometry2D.overlaps(
+                    body_placement(self.store, pair.first),
+                    body_placement(self.store, pair.second)
+                ) {
+                    self.current_sensor_pairs.append(pair)
+                    self.current_sensor_pair_keys.add(pair)
+                    if !self.sensor_pair_keys.contains(pair) {
+                        self.append_sensor_begin_events(pair)
+                    }
+                }
+                other++
+            }
+            sensor++
+        }
+        for pair in self.sensor_pairs {
+            if !self.current_sensor_pair_keys.contains(pair) {
+                self.append_sensor_end_events(pair)
+            }
+        }
+        self.sensor_pairs.clear()
+        self.sensor_pair_keys.clear()
+        for pair in self.current_sensor_pairs {
+            self.sensor_pairs.append(pair)
+            self.sensor_pair_keys.add(pair)
+        }
+    }
+
+    private func collect_body_move_events() {
+        if self.move_event_body_count == 0 { return }
+        var body = 0
+        while body < self.store.count() {
+            if self.store.body_types[body] != BodyType2D.dynamic {
+                body++
+                continue
+            }
+            if !self.store.move_events_enabled[body] {
+                body++
+                continue
+            }
+            let moved = Math.abs(
+                self.store.positions_x[body] -
+                    self.store.previous_positions_x[body]
+            ) > 0.000000001 || Math.abs(
+                self.store.positions_y[body] -
+                    self.store.previous_positions_y[body]
+            ) > 0.000000001 || Math.abs(
+                self.store.rotations[body] - self.store.previous_rotations[body]
+            ) > 0.000000001
+            let fell_asleep = self.step_start_awake[body] &&
+                !self.store.awake[body]
+            if moved || fell_asleep {
+                self.body_move_events.append(BodyMoveEvent2D(
+                    self.store,
+                    self.store.body_id_at(body),
+                    Transform2D(
+                        position:body_position(self.store, body),
+                        rotation:self.store.rotations[body]
+                    ),
+                    fell_asleep
+                ))
+            }
+            body++
+        }
+    }
+
+    private func append_contact_begin_event(pair:BodyPair2D) {
+        let stable = stable_body_pair(self.store, pair)
+        let manifold = contact_manifold(
+            self.store,
+            stable.first,
+            stable.second
+        )
+        self.contact_begin_events.append(ContactBeginEvent2D(
+            self.store,
+            self.store.body_id_at(stable.first),
+            self.store.body_id_at(stable.second),
+            manifold
+        ))
+    }
+
+    private func append_contact_end_event(pair:BodyPair2D) {
+        let stable = stable_body_pair(self.store, pair)
+        self.contact_end_events.append(ContactEndEvent2D(
+            self.store,
+            self.store.body_id_at(stable.first),
+            self.store.body_id_at(stable.second)
+        ))
+    }
+
+    private func append_contact_hit_event(
+        pair:BodyPair2D,
+        point:Math.Vec2,
+        normal:Math.Vec2,
+        approach_speed:float
+    ) {
+        if self.hit_pair_keys.contains(pair) { return }
+        self.hit_pair_keys.add(pair)
+        let stable = stable_body_pair(self.store, pair)
+        var stable_normal = normal
+        if stable.first != pair.first { stable_normal = normal.negated() }
+        self.contact_hit_events.append(ContactHitEvent2D(
+            self.store,
+            self.store.body_id_at(stable.first),
+            self.store.body_id_at(stable.second),
+            point,
+            stable_normal,
+            approach_speed
+        ))
+    }
+
+    private func append_sensor_begin_events(pair:BodyPair2D) {
+        if self.store.sensors[pair.first] &&
+            self.store.sensor_events_enabled[pair.first]
+        {
+            self.sensor_begin_events.append(SensorBeginEvent2D(
+                self.store,
+                self.store.body_id_at(pair.first),
+                self.store.body_id_at(pair.second)
+            ))
+        }
+        if self.store.sensors[pair.second] &&
+            self.store.sensor_events_enabled[pair.second]
+        {
+            self.sensor_begin_events.append(SensorBeginEvent2D(
+                self.store,
+                self.store.body_id_at(pair.second),
+                self.store.body_id_at(pair.first)
+            ))
+        }
+    }
+
+    private func append_sensor_end_events(pair:BodyPair2D) {
+        if self.store.sensors[pair.first] &&
+            self.store.sensor_events_enabled[pair.first]
+        {
+            self.sensor_end_events.append(SensorEndEvent2D(
+                self.store,
+                self.store.body_id_at(pair.first),
+                self.store.body_id_at(pair.second)
+            ))
+        }
+        if self.store.sensors[pair.second] &&
+            self.store.sensor_events_enabled[pair.second]
+        {
+            self.sensor_end_events.append(SensorEndEvent2D(
+                self.store,
+                self.store.body_id_at(pair.second),
+                self.store.body_id_at(pair.first)
+            ))
         }
     }
 
@@ -1454,6 +2070,11 @@ public class World2D {
         self.dynamic_grid_active = false
         self.dynamic_grid_eligible = true
         self.sleep_enabled_body_count = 0
+        self.bullet_body_count = 0
+        self.move_event_body_count = 0
+        self.contact_event_body_count = 0
+        self.hit_event_body_count = 0
+        self.sensor_event_body_count = 0
 
         var index = 0
         while index < self.store.count() {
@@ -1466,6 +2087,21 @@ public class World2D {
             self.direct_wake_pending[index] = false
             self.sleep_parents[index] = index
             self.store.dirty_transforms[index] = false
+            if self.store.bullets[index] { self.bullet_body_count++ }
+            if self.store.move_events_enabled[index] {
+                self.move_event_body_count++
+            }
+            if self.store.contact_events_enabled[index] {
+                self.contact_event_body_count++
+            }
+            if self.store.hit_events_enabled[index] {
+                self.hit_event_body_count++
+            }
+            if self.store.sensors[index] &&
+                self.store.sensor_events_enabled[index]
+            {
+                self.sensor_event_body_count++
+            }
             if self.store.body_types[index] == BodyType2D.fixed {
                 self.fixed_bodies.append(index)
             } else {
@@ -1514,6 +2150,10 @@ public class World2D {
         self.current_candidate_pair_count = 0
         self.current_moved_proxy_count = self.broad_phase.moved_proxy_count()
         self.current_discovered_pair_count = 0
+        self.sensor_pairs.clear()
+        self.sensor_pair_keys.clear()
+        self.current_sensor_pairs.clear()
+        self.current_sensor_pair_keys.clear()
     }
 
     private func update_sleep(delta:float) {
@@ -2067,7 +2707,7 @@ public class World2D {
         while body < self.store.count() {
             if self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
-                self.store.awake[body]
+                self.store.awake[body] || self.store.sensors[body]
             {
                 body++
                 continue
@@ -2098,7 +2738,7 @@ public class World2D {
         while body < self.store.count() {
             if self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
-                !self.store.awake[body]
+                !self.store.awake[body] || self.store.sensors[body]
             {
                 body++
                 continue
@@ -2381,6 +3021,7 @@ public class World2D {
     }
 
     private func insert_candidate_pair(pair:BodyPair2D) {
+        if pair_is_sensor(self.store, pair) { return }
         if self.store.inverse_masses[pair.first] +
             self.store.inverse_masses[pair.second] <= 0.0
         {
@@ -3018,6 +3659,11 @@ public class World2D {
                 continue
             }
             for fixed_body in self.fixed_bodies {
+                if self.store.sensors[circle] ||
+                    self.store.sensors[fixed_body]
+                {
+                    continue
+                }
                 if self.store.shape_kinds[fixed_body] != 0 { continue }
                 if !self.tight_bounds[fixed_body].overlaps(
                     self.tight_bounds[circle]
@@ -3029,6 +3675,7 @@ public class World2D {
     }
 
     private func clip_body_motion_against_fixed_boxes() {
+        if self.fixed_bodies.is_empty() { return }
         for body in self.active_bodies.indices {
             let start = Math.Vec2(
                 self.store.previous_positions_x[body],
@@ -3037,7 +3684,20 @@ public class World2D {
             let finish = body_position(self.store, body)
             let motion = finish.subtract(start)
             if motion.dot(motion) <= 0.000000000001 { continue }
+            let sweep_radius = Math.sqrt(
+                self.store.sweep_radii_squared[body]
+            )
+            if !self.store.bullets[body] &&
+                motion.length() <= Math.max(0.05, sweep_radius * 0.5)
+            {
+                continue
+            }
             for fixed_body in self.fixed_bodies {
+                if self.store.sensors[body] ||
+                    self.store.sensors[fixed_body]
+                {
+                    continue
+                }
                 if self.store.shape_kinds[fixed_body] != 0 { continue }
                 if !self.store.collision_filters[body].allows(
                     self.store.collision_filters[fixed_body]
@@ -3198,9 +3858,225 @@ public class World2D {
 
 }
 
+func ordered_body_pair(first:int, second:int) BodyPair2D {
+    if first < second { return BodyPair2D(first, second) }
+    return BodyPair2D(second, first)
+}
+
+func finite_world_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+
+func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {
+    if store.dense_slots[pair.first] < store.dense_slots[pair.second] {
+        return pair
+    }
+    return BodyPair2D(pair.second, pair.first)
+}
+
+func pair_is_sensor(store:BodyStore2D, pair:BodyPair2D) bool {
+    return store.sensors[pair.first] || store.sensors[pair.second]
+}
+
+func pair_contact_events_enabled(
+    store:BodyStore2D,
+    pair:BodyPair2D
+) bool {
+    return store.contact_events_enabled[pair.first] ||
+        store.contact_events_enabled[pair.second]
+}
+
+func pair_hit_events_enabled(store:BodyStore2D, pair:BodyPair2D) bool {
+    return store.hit_events_enabled[pair.first] ||
+        store.hit_events_enabled[pair.second]
+}
+
+func continuous_pair_hit(
+    store:BodyStore2D,
+    mover:int,
+    target:int
+) ContinuousHit2D {
+    let mover_start = Transform2D(
+        position:Math.Vec2(
+            store.previous_positions_x[mover],
+            store.previous_positions_y[mover]
+        ),
+        rotation:store.previous_rotations[mover]
+    )
+    var target_start_position = Math.Vec2(
+        store.previous_positions_x[target],
+        store.previous_positions_y[target]
+    )
+    var target_start_rotation = store.previous_rotations[target]
+    if store.body_types[target] == BodyType2D.fixed {
+        target_start_position = body_position(store, target)
+        target_start_rotation = store.rotations[target]
+    }
+    let target_start = Transform2D(
+        position:target_start_position,
+        rotation:target_start_rotation
+    )
+    let mover_motion = body_position(store, mover).subtract(
+        mover_start.position
+    )
+    let target_motion = body_position(store, target).subtract(
+        target_start.position
+    )
+    let mover_rotation_motion = store.rotations[mover] - mover_start.rotation
+    let target_rotation_motion = store.rotations[target] - target_start.rotation
+    let mover_placement = ShapePlacement2D(
+        store.shapes[mover],
+        mover_start,
+        store.collision_filters[mover]
+    )
+    let target_placement = ShapePlacement2D(
+        store.shapes[target],
+        target_start,
+        store.collision_filters[target]
+    )
+    if Geometry2D.overlaps(mover_placement, target_placement) {
+        return ContinuousHit2D()
+    }
+    if Math.abs(mover_rotation_motion) <= 0.000001 &&
+        Math.abs(target_rotation_motion) <= 0.000001
+    {
+        let cast = Geometry2D.shape_cast(
+            mover_placement,
+            mover_motion.subtract(target_motion),
+            target_placement
+        )
+        if cast.hit {
+            return ContinuousHit2D(cast.fraction, cast.point, cast.normal)
+        }
+        return ContinuousHit2D()
+    }
+
+    var sample_count = (
+        Math.floor(
+            (Math.abs(mover_rotation_motion) +
+                Math.abs(target_rotation_motion)) * 16.0
+        ) as int
+    ) + 4
+    if sample_count < 8 { sample_count = 8 }
+    if sample_count > 64 { sample_count = 64 }
+    var previous_fraction = 0.0
+    var sample = 1
+    while sample <= sample_count {
+        let fraction = sample as float / sample_count as float
+        let moving = continuous_placement_at(
+            store,
+            mover,
+            mover_start,
+            mover_motion,
+            mover_rotation_motion,
+            fraction
+        )
+        let other = continuous_placement_at(
+            store,
+            target,
+            target_start,
+            target_motion,
+            target_rotation_motion,
+            fraction
+        )
+        if Geometry2D.overlaps(moving, other) {
+            var lower = previous_fraction
+            var upper = fraction
+            var iteration = 0
+            while iteration < 12 {
+                let middle = (lower + upper) * 0.5
+                if Geometry2D.overlaps(
+                    continuous_placement_at(
+                        store,
+                        mover,
+                        mover_start,
+                        mover_motion,
+                        mover_rotation_motion,
+                        middle
+                    ),
+                    continuous_placement_at(
+                        store,
+                        target,
+                        target_start,
+                        target_motion,
+                        target_rotation_motion,
+                        middle
+                    )
+                ) {
+                    upper = middle
+                } else {
+                    lower = middle
+                }
+                iteration++
+            }
+            let hit_mover = continuous_placement_at(
+                store,
+                mover,
+                mover_start,
+                mover_motion,
+                mover_rotation_motion,
+                upper
+            )
+            let hit_target = continuous_placement_at(
+                store,
+                target,
+                target_start,
+                target_motion,
+                target_rotation_motion,
+                upper
+            )
+            let manifold = Geometry2D.manifold(hit_target, hit_mover)
+            if manifold.point_count() > 0 {
+                return ContinuousHit2D(
+                    upper,
+                    manifold.points[0].point,
+                    manifold.normal
+                )
+            }
+            var normal = hit_mover.transform().position.subtract(
+                hit_target.transform().position
+            )
+            if normal.length_squared() <= 0.000000001 {
+                normal = Math.Vec2.right()
+            } else {
+                normal = normal.normalized()
+            }
+            return ContinuousHit2D(
+                upper,
+                hit_mover.transform().position.add(
+                    hit_target.transform().position
+                ).multiply(0.5),
+                normal
+            )
+        }
+        previous_fraction = fraction
+        sample++
+    }
+    return ContinuousHit2D()
+}
+
+func continuous_placement_at(
+    store:BodyStore2D,
+    body:int,
+    start:Transform2D,
+    motion:Math.Vec2,
+    rotation_motion:float,
+    fraction:float
+) ShapePlacement2D {
+    return ShapePlacement2D(
+        store.shapes[body],
+        Transform2D(
+            position:start.position.add(motion.multiply(fraction)),
+            rotation:start.rotation + rotation_motion * fraction
+        ),
+        store.collision_filters[body]
+    )
+}
+
 func begin_soft_step_motion(store:BodyStore2D, index:int) {
     store.previous_positions_x[index] = store.positions_x[index]
     store.previous_positions_y[index] = store.positions_y[index]
+    store.previous_rotations[index] = store.rotations[index]
 }
 
 func integrate_body_velocity(

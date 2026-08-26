@@ -1,0 +1,56 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(
+        gravity:Math.Vec2(),
+        hit_event_threshold:1.0
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+        ..enable_move_events = true
+        ..enable_contact_events = true
+        ..enable_hit_events = true
+    )
+
+    world.step(1.0 / 60.0)
+
+    var sensor_began:Physics.SensorBeginEvent2D[] = []
+    var sensor_ended:Physics.SensorEndEvent2D[] = []
+    var contact_began:Physics.ContactBeginEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+    var moves:Physics.BodyMoveEvent2D[] = []
+    world.write_sensor_begin_events(sensor_began)
+    world.write_sensor_end_events(sensor_ended)
+    world.write_contact_begin_events(contact_began)
+    world.write_contact_hit_events(hits)
+    world.write_body_move_events(moves)
+
+    assert(sensor_began.count() == 1)
+    assert(sensor_ended.count() == 1)
+    assert(contact_began.count() == 1)
+    assert(hits.count() == 1)
+    assert(moves.count() == 1)
+    assert(hits[0].approach_speed() > 250.0)
+    assert(moves[0].transform().position.x < 2.0)
+    print(
+        "sensor begin/end: $(sensor_began.count())/$(sensor_ended.count()), " +
+        "contact begin/hit: $(contact_began.count())/$(hits.count()), " +
+        "moves: $(moves.count())"
+    )
+}
