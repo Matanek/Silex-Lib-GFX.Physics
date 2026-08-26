@@ -94,14 +94,14 @@ macOS 26.5.2 ARM64 development machine with Silex 0.41.0. Each Release run used
 1,000 bodies over 20 seconds, and retained ten seconds of settling. Across
 three isolated runs, local primitive-contact sleep changed these medians:
 
-| Metric | Atomic primitive island | Local primitive sleep |
+| Metric | Atomic primitive island | Local primitive sleep + demo damping |
 | --- | ---: | ---: |
-| Final awake bodies | 1,000 (999–1,000) | 16 (11–16) |
-| Physics capacity | 62.570 Hz (61.853–62.703) | 164.197 Hz (164.070–171.619) |
-| Worker time / step | 15.982 ms (15.948–16.167) | 6.090 ms (5.827–6.095) |
-| Completed physics cadence | 44.387 Hz (44.203–44.486) | 59.940 Hz (59.938–59.949) |
-| Final solve time | 28.478 ms (28.413–28.523) | 0.931 ms (0.663–1.007) |
-| Maximum circle overlap | 6.009 mm (5.739–14.515) | 5.105 mm (4.870–6.138) |
+| Final awake bodies | 1,000 (999–1,000) | 6 (4–11) |
+| Physics capacity | 62.570 Hz (61.853–62.703) | 171.175 Hz (170.431–178.775) |
+| Worker time / step | 15.982 ms (15.948–16.167) | 5.842 ms (5.594–5.867) |
+| Completed physics cadence | 44.387 Hz (44.203–44.486) | 59.987 Hz (59.987–59.995) |
+| Final solve time | 28.478 ms (28.413–28.523) | 0.466 ms (0.307–0.823) |
+| Maximum circle overlap | 6.009 mm (5.739–14.515) | 7.332 mm (6.443–8.505) |
 
 The timing values include the graphical application and its asynchronous
 physics scheduling but exclude the diagnostic panels. The final solve value is
@@ -213,6 +213,14 @@ silex compile Packages/GFX.Physics/Examples/World2D/FallingBody.sx --release -o 
 /tmp/gfx-falling-body --stress-5000 --smoke-30 --awake --batch-4 --immediate --no-panel
 /tmp/gfx-falling-body --stress-5000 --smoke-long --render-only --immediate --no-panel
 ```
+
+`silex run` and `silex compile` select Release by default; the explicit
+`--release` above records the benchmark intent. A separate 3,000-body mixed
+render-only control exposed quadratic indexed-list replacement in the native
+runtime: three isolated runs rose from a median 18.406 FPS (18.071–19.443) to
+334.882 FPS (319.649–347.806) after unique list storage became reusable. Both
+sets retained three draw calls and 3,001 submitted instances, so this result is
+CPU scene-preparation headroom rather than a batching or GPU change.
 
 The previous graphical figures used an older radius and solver and are retired.
 Every reported run must now include `RENDER FPS`, `VISUAL HZ`, and `PHYSICS HZ`,

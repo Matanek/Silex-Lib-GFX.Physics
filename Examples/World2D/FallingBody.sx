@@ -803,7 +803,8 @@ func create_dynamic_circle(
         ..angular_velocity = angular_velocity
         ..restitution = restitution
         ..friction = 0.75
-        ..angular_damping = 0.12
+        ..linear_damping = 0.2
+        ..angular_damping = 0.4
         ..allow_sleep = allow_sleep
     )
 }
@@ -827,7 +828,8 @@ func create_dynamic_box(
         ..angular_velocity = angular_velocity
         ..restitution = restitution
         ..friction = 0.75
-        ..angular_damping = 0.12
+        ..linear_damping = 0.2
+        ..angular_damping = 0.4
         ..allow_sleep = allow_sleep
     )
 }
