@@ -235,12 +235,12 @@ allows settled circles to sleep by default; pass `--awake` only for an
 all-active physics workload. Every smoke run still prints the complete final
 statistics to stdout.
 
-The interactive performance example uses immediate presentation by default so
-the reported render rate exposes application headroom instead of quantizing it
-at the display refresh boundary. Pass `--synchronized` for display-paced
-presentation or `--mailbox` for mailbox presentation; `--immediate` remains an
-accepted compatibility flag. Catch-up batches preserve fixed-step FIFO order
-and publish one transform snapshot per completed physics step. `--batch-4`
+The interactive performance example uses synchronized presentation by default
+for display-paced visual cadence. Pass `--immediate` when a measurement must
+expose application headroom instead of quantizing the render rate at the display
+refresh boundary, or `--mailbox` for mailbox presentation; `--synchronized`
+remains an accepted explicit flag. Catch-up batches preserve fixed-step FIFO
+order and publish one transform snapshot per completed physics step. `--batch-4`
 limits the number of already-due steps queued together; it no longer reduces
 visual publication to one snapshot for the whole batch.
 The rendering panel reports submitted application frames as `RENDER FPS`.

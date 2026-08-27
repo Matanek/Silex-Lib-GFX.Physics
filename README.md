@@ -186,8 +186,11 @@ container. Each new element follows the rotating local frame while
 `GFX.Animation` fades and scales it from zero, then becomes a dynamic physics
 body. The thick four-wall kinematic container keeps turning by successive
 45-degree steps in the same direction, driven by a second looping animation
-timeline. The focused Contacts, Events, Joints, SleepIslands, and SoftStepPile
-programs remain executable assertion examples for diagnostics and automation.
+timeline. Synchronized presentation and fixed-step transform interpolation keep
+the container, animated previews, and simulated bodies visually aligned between
+60 Hz physics updates. The focused Contacts, Events, Joints, SleepIslands, and
+SoftStepPile programs remain executable assertion examples for diagnostics and
+automation.
 
 ```text
 silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release
@@ -199,4 +202,6 @@ capped at 3,000 small circles and boxes, while explicit stress controls can
 still prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one
 persistent worker while rendering remains independent, and its reusable
 `BodyTransformBuffer2D` transfers all dynamic transforms without allocating a
-handle object per body and frame.
+handle object per body and frame. Interactive runs use synchronized presentation
+by default; performance measurements can opt into immediate presentation with
+`--immediate`.

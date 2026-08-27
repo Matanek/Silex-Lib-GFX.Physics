@@ -1327,11 +1327,12 @@ func synchronize_physics_visuals(
 func main() {
     var rendering_settings = Plugins.Rendering.Settings()
         ..clear = Color.slate_950()
-        ..present_mode = Rendering.PresentMode.immediate
-    if option_requested("--synchronized") {
-        rendering_settings.present_mode = Rendering.PresentMode.synchronized
+    if option_requested("--immediate") {
+        rendering_settings.present_mode = Rendering.PresentMode.immediate
     } elif option_requested("--mailbox") {
         rendering_settings.present_mode = Rendering.PresentMode.mailbox
+    } elif option_requested("--synchronized") {
+        rendering_settings.present_mode = Rendering.PresentMode.synchronized
     }
     var application = Application()
         ..add_resource(Simulation(

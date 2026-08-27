@@ -39,6 +39,10 @@ struct SimulatedBody {
     let is_box:bool
     let size:Math.Vec2
     let radius:float
+    var previous_position:Math.Vec2
+    var current_position:Math.Vec2
+    var previous_rotation:float
+    var current_rotation:float
 }
 
 struct PendingBody {
@@ -62,6 +66,7 @@ class Simulation {
     var container_bottom:Physics.RigidBody2D?
     var container_top:Physics.RigidBody2D?
     var container_center:Math.Vec2
+    var container_previous_angle:float
     var container_angle:float
     var container_visual_angle:float
     var container_cycle_offset:float
@@ -84,6 +89,7 @@ class Simulation {
         self.container_bottom = null
         self.container_top = null
         self.container_center = Math.Vec2()
+        self.container_previous_angle = 0.0
         self.container_angle = 0.0
         self.container_visual_angle = 0.0
         self.container_cycle_offset = 0.0
@@ -523,6 +529,8 @@ func activate_bodies(
             ..restitution = 0.28
             ..angular_damping = 0.16
         )
+        let body_position = body.position()
+        let body_rotation = body.rotation()
         commands.insert(
             entity,
             BodyVisual(index:simulation.bodies.count())
@@ -533,7 +541,11 @@ func activate_bodies(
             body:body,
             is_box:pending.is_box,
             size:pending.size,
-            radius:body_radius(pending.size, pending.is_box)
+            radius:body_radius(pending.size, pending.is_box),
+            previous_position:body_position,
+            current_position:body_position,
+            previous_rotation:body_rotation,
+            current_rotation:body_rotation
         ))
         simulation.pending_count--
         if pending.is_box { simulation.box_count++ }
@@ -591,8 +603,7 @@ func assert_bodies_contained(simulation:@Simulation) {
 func simulate(
     time:@Resources.FrameTime,
     simulation:&Simulation,
-    controller:&Application.Controller,
-    body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
+    controller:&Application.Controller
 ) {
     simulation.elapsed += time.delta
     simulation.rendered_frames++
@@ -605,6 +616,15 @@ func simulate(
     ) as int
     var step = 0
     while simulation.accumulator >= Showcase.fixed_delta {
+        simulation.container_previous_angle = simulation.container_angle
+        var body_index = 0
+        while body_index < simulation.bodies.count() {
+            simulation.bodies[body_index].previous_position =
+                simulation.bodies[body_index].current_position
+            simulation.bodies[body_index].previous_rotation =
+                simulation.bodies[body_index].current_rotation
+            body_index++
+        }
         simulation.container_angle = Math.lerp(
             simulation.container_angle,
             simulation.container_target_angle,
@@ -612,18 +632,26 @@ func simulate(
         )
         update_container_walls(simulation, simulation.container_angle)
         simulation.world.step(Showcase.fixed_delta)
+        body_index = 0
+        while body_index < simulation.bodies.count() {
+            simulation.bodies[body_index].current_position =
+                simulation.bodies[body_index].body.position()
+            simulation.bodies[body_index].current_rotation =
+                simulation.bodies[body_index].body.rotation()
+            body_index++
+        }
         if simulation.smoke_duration > 0.0 {
             assert_bodies_contained(simulation)
         }
         simulation.accumulator -= Showcase.fixed_delta
         step++
     }
-    for (visual, transform) in body_visuals {
-        let body = simulation.bodies[visual.index].body
-        transform.position = body.position().multiply(
-            Showcase.pixels_per_meter
-        )
-        transform.rotation = body.rotation()
+    if simulation.smoke_duration > 0.0 &&
+        simulation.bodies.count() > 0
+    {
+        let alpha = simulation.accumulator / Showcase.fixed_delta
+        assert(alpha >= 0.0)
+        assert(alpha < 1.0)
     }
     if simulation.smoke_duration > 0.0 &&
         simulation.elapsed >= simulation.smoke_duration
@@ -653,6 +681,82 @@ func simulate(
     }
 }
 
+func interpolation_alpha(simulation:@Simulation) float {
+    return Math.clamp(
+        simulation.accumulator / Showcase.fixed_delta,
+        0.0,
+        1.0
+    )
+}
+
+func interpolate_position(
+    previous:Math.Vec2,
+    current:Math.Vec2,
+    alpha:float
+) Math.Vec2 {
+    return previous.add(current.subtract(previous).multiply(alpha))
+}
+
+func interpolate_container_visual(
+    simulation:@Simulation,
+    containers:ECS.Query<(@ContainerVisual, &Components.Transform2D)>
+) {
+    let alpha = interpolation_alpha(simulation)
+    let angle = Math.lerp(
+        simulation.container_previous_angle,
+        simulation.container_angle,
+        alpha
+    )
+    for (container, transform) in containers {
+        transform.position = container.center.multiply(
+            Showcase.pixels_per_meter
+        )
+        transform.rotation = angle
+    }
+}
+
+func interpolate_pending_visuals(
+    simulation:@Simulation,
+    pending_visuals:ECS.Query<(
+        @PendingBody,
+        &Components.Transform2D
+    )>
+) {
+    let alpha = interpolation_alpha(simulation)
+    let angle = Math.lerp(
+        simulation.container_previous_angle,
+        simulation.container_angle,
+        alpha
+    )
+    for (pending, transform) in pending_visuals {
+        transform.position = simulation.container_center.add(rotate_offset(
+            pending.local_position,
+            angle
+        )).multiply(Showcase.pixels_per_meter)
+        transform.rotation = angle + pending.local_rotation
+    }
+}
+
+func interpolate_body_visuals(
+    simulation:@Simulation,
+    body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
+) {
+    let alpha = interpolation_alpha(simulation)
+    for (visual, transform) in body_visuals {
+        let simulated = simulation.bodies[visual.index]
+        transform.position = interpolate_position(
+            simulated.previous_position,
+            simulated.current_position,
+            alpha
+        ).multiply(Showcase.pixels_per_meter)
+        transform.rotation = Math.lerp(
+            simulated.previous_rotation,
+            simulated.current_rotation,
+            alpha
+        )
+    }
+}
+
 func smoke_duration() float {
     match Process.arguments() {
         failure(error) => { panic(error.detail) }
@@ -677,7 +781,6 @@ func main() {
         ))
         ..add_plugin(Plugins.Rendering(Plugins.Rendering.Settings()
             ..clear = Color.slate_950()
-            ..present_mode = Rendering.PresentMode.immediate
         ))
         ..add_plugin(Plugins.Scene2D())
         ..add_plugin(Animation.Plugin())
@@ -687,5 +790,17 @@ func main() {
         ..add_after_system(Application.Schedule.update, activate_bodies)
         ..add_after_system(Application.Schedule.update, spawn_bodies)
         ..add_after_system(Application.Schedule.update, simulate)
+        ..add_after_system(
+            Application.Schedule.update,
+            interpolate_container_visual
+        )
+        ..add_after_system(
+            Application.Schedule.update,
+            interpolate_pending_visuals
+        )
+        ..add_after_system(
+            Application.Schedule.update,
+            interpolate_body_visuals
+        )
         ..run()
 }
