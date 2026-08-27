@@ -180,13 +180,13 @@ contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
 [`Examples/World2D/BoxRotation.sx`](Examples/World2D/BoxRotation.sx) is the
-recommended visual introduction: it progressively spawns 60 circles and boxes
-of varied sizes inside a four-wall kinematic container whose successive
-45-degree turns keep the same direction and are driven by a looping
-`GFX.Animation` timeline. The centered composition keeps the animated physics
-interaction as its only subject. The focused Contacts, Events, Joints,
-SleepIslands, and SoftStepPile programs remain executable assertion examples
-for diagnostics and automation.
+recommended visual introduction: it progressively reveals 120 circles and
+boxes of varied sizes at the container center. Each new element uses
+`GFX.Animation` to fade and scale from zero before becoming a dynamic physics
+body. The four-wall kinematic container keeps turning by successive 45-degree
+steps in the same direction, driven by a second looping animation timeline.
+The focused Contacts, Events, Joints, SleepIslands, and SoftStepPile programs
+remain executable assertion examples for diagnostics and automation.
 
 ```text
 silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release
