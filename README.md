@@ -159,8 +159,9 @@ worker ranges; smaller colors run directly to avoid scheduling overhead.
 `set_profiling_enabled(true)` and `step_profile()`
 provide opt-in timings for motion, broad phase, solve, and sleep without making
 profiling part of the normal step cost. See
-[`Benchmarks/Scale2D.sx`](Benchmarks/Scale2D.sx) and
-[`Benchmarks/CircleScale2D.sx`](Benchmarks/CircleScale2D.sx), plus
+the centralized
+[PhysicsWorldScale2D](https://github.com/Matanek/Silex-Benchmarks/blob/main/Sources/PhysicsWorldScale2D.sx)
+and the internal [`Benchmarks/CircleScale2D.sx`](Benchmarks/CircleScale2D.sx), plus
 [`Docs/Performance.md`](Docs/Performance.md) for the reproducible 1k/5k/10k
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](Docs/OracleAndBudgets.md).
@@ -176,8 +177,8 @@ dynamic pair, and application plugins remain outside the current world
 contract. The public shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
-[`Examples/World2D/BoxRotation.sx`](Examples/World2D/BoxRotation.sx) is the
-recommended visual introduction: it progressively reveals 120 circles and
+[Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/RotatingPhysicsContainer)
+is the recommended visual introduction: it progressively reveals 120 circles and
 boxes of varied sizes at deterministic randomized positions inside the
 container. Each new element follows the rotating local frame while
 `GFX.Animation` fades and scales it from zero, then becomes a dynamic physics
@@ -185,15 +186,14 @@ body. The thick four-wall kinematic container keeps turning by successive
 45-degree steps in the same direction, driven by a second looping animation
 timeline. Synchronized presentation and fixed-step transform interpolation keep
 the container, animated previews, and simulated bodies visually aligned between
-60 Hz physics updates. Its assertions and smoke controls are the reason this
-temporary hybrid has not yet been removed in favor of the central showcase.
+60 Hz physics updates.
 
 ```text
-silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release
+silex run Silex-Examples/Sources/RotatingPhysicsContainer/Main.sx --release
 ```
 
-[`Examples/World2D/FallingBody.sx`](Examples/World2D/FallingBody.sx) is the
-retained integrated graphical stress consumer. Its interactive emitter is
+[FallingBodies2D](https://github.com/Matanek/Silex-Benchmarks/tree/main/Sources/FallingBodies2D)
+is the integrated graphical stress consumer. Its interactive emitter is
 capped at 3,000 small circles and boxes, while explicit stress controls can
 still prepopulate as many as 5,000. The fixed 60 Hz simulation runs on one
 persistent worker while rendering remains independent, and its reusable

@@ -11,7 +11,7 @@ measurement.
 
 ```text
 silex run Packages/GFX.Physics/Benchmarks/World2D.sx --release
-silex run Packages/GFX.Physics/Benchmarks/Scale2D.sx --release
+silex run Silex-Benchmarks/Sources/PhysicsWorldScale2D.sx --release
 silex compile Packages/GFX.Physics/Benchmarks/CircleScale2D.sx --release -o /tmp/gfx-circle-scale
 /tmp/gfx-circle-scale --count-5000 --long --awake
 /tmp/gfx-circle-scale --count-1800 --falling-body --medium --awake
@@ -21,7 +21,7 @@ silex compile Packages/GFX.Physics/Benchmarks/JointScale2D.sx --release -o /tmp/
 /tmp/gfx-joint-scale --workers-4
 ```
 
-`Scale2D.sx` enables four persistent workers. Its sparse case keeps every body
+`PhysicsWorldScale2D.sx` enables four persistent workers. Its sparse case keeps every body
 awake and moving without generating contacts; it measures integration, proxy
 maintenance, and pair discovery independently of the solver. Its pile case adds
 oriented contacts, friction, warm starting, the common four-substep Soft Step
@@ -209,7 +209,7 @@ and presentation. Build it once, then run the sustained 30-second stress
 protocol and its shorter render-only control:
 
 ```text
-silex compile Packages/GFX.Physics/Examples/World2D/FallingBody.sx --release -o /tmp/gfx-falling-body
+silex compile Silex-Benchmarks/Sources/FallingBodies2D/Main.sx --release -o /tmp/gfx-falling-body
 /tmp/gfx-falling-body --stress-5000 --smoke-30 --awake --batch-4 --immediate --no-panel
 /tmp/gfx-falling-body --stress-5000 --smoke-long --render-only --immediate --no-panel
 ```

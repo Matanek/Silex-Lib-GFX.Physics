@@ -95,9 +95,8 @@ The following gates protect compiler and runtime work outside Physics:
 
 | Sentinel | Protocol | Gate |
 | --- | --- | --- |
-| `Packages/GFX.Scene2D/Benchmarks/Boids/Silex.sx` | Release, 4,000 boids, immediate presentation, fixed 960 × 640 logical window with high pixel density, one warm-up plus seven five-second runs | Same-machine median FPS must not regress by more than 5%; MAD must be at most 5% |
-| `Packages/GFX.Scene2D/Examples/Boids.sx` | Release with `--benchmark`, immediate presentation, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
-| `Packages/GFX.Scene3D/Examples/World.sx` | Release with `--benchmark-focused`, focused window, immediate presentation, default scene and window, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
+| `Silex-Benchmarks/Sources/Boids2D/Silex.sx` | Release, 4,000 boids, immediate presentation, fixed 960 × 640 logical window with high pixel density, one warm-up plus seven five-second runs | Same-machine median FPS must not regress by more than 5%; MAD must be at most 5% |
+| `Silex-Benchmarks/Sources/WorldRendering3D/Main.sx` | Release with `--benchmark-focused`, focused window, immediate presentation, default scene and window, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
 | `Silex-Examples/Sources/ShapeGallery2D/Main.sx` | Compile the centralized application in Release; inspect emitted assertions and renderer diagnostics | More than 50 retained commands, font/text path succeeds, no renderer or shader diagnostic; visual acceptance remains required at milestones named by the Spec sequence |
 
 Do not take automated screenshots for these gates. ShapeGallery's automated
@@ -105,9 +104,9 @@ smoke protects construction, text loading and the render path; the explicitly
 requested milestone review remains the authority for visual integrity.
 
 Replay the Boids benchmark locally after compiler Specs 02, 03 and 04 and after
-runtime Spec 05. Replay all four sentinels locally at the Spec 05 milestone,
+runtime Spec 05. Replay all three sentinels locally at the Spec 05 milestone,
 then run the shared remote portability gate on the exact checkpoint. Replay
-the four sentinels again before the Spec 13 switch.
+the three sentinels again before the Spec 13 switch.
 
 ## Baseline acceptance
 
