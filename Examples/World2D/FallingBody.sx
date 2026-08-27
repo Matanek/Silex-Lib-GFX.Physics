@@ -229,8 +229,8 @@ class PhysicsAsync {
         if step_count < 1 || step_count > self.buffers.count() {
             panic("FallingBody physics batch is outside its buffer capacity")
         }
-        self.fences = []
-        self.output_indices = []
+        self.fences.clear()
+        self.output_indices.clear()
         self.next_completion = 0
         self.batch_clock.reset()
         self.batch_clock.tick()
@@ -285,8 +285,8 @@ class PhysicsAsync {
         if self.next_completion == self.fences.count() &&
             self.fences.count() > 0
         {
-            self.fences = []
-            self.output_indices = []
+            self.fences.clear()
+            self.output_indices.clear()
             self.next_completion = 0
             self.next_output_index = (self.next_output_index +
                 self.pending_steps) %

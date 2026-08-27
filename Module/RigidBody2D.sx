@@ -136,15 +136,6 @@ package struct ShapeId2D {
     }
 }
 
-package class ColliderMaterialList2D {
-    var values:PhysicsMaterial2D[]
-
-    init(values:PhysicsMaterial2D[]) { self.values = values }
-    func count() int { return self.values.count() }
-    func copy() PhysicsMaterial2D[] { return self.values }
-    func replace(values:PhysicsMaterial2D[]) { self.values = values }
-}
-
 package class ShapeStore2D {
     var slot_generations:int[]
     var slot_dense_indices:int[]
@@ -155,7 +146,9 @@ package class ShapeStore2D {
     var next_body_shape_slots:int[]
     var densities:float[]
     var materials:PhysicsMaterial2D[]
-    var segment_materials:ColliderMaterialList2D[]
+    var segment_material_offsets:int[]
+    var segment_material_counts:int[]
+    var segment_material_values:PhysicsMaterial2D[]
     var collision_filters:CollisionFilter2D[]
     var behavior_flags:uint8[]
 
@@ -169,7 +162,9 @@ package class ShapeStore2D {
         self.next_body_shape_slots = []
         self.densities = []
         self.materials = []
-        self.segment_materials = []
+        self.segment_material_offsets = []
+        self.segment_material_counts = []
+        self.segment_material_values = []
         self.collision_filters = []
         self.behavior_flags = []
     }
@@ -196,9 +191,18 @@ package class ShapeStore2D {
         self.next_body_shape_slots.append(next_slot)
         self.densities.append(settings.density)
         self.materials.append(settings.material)
-        self.segment_materials.append(ColliderMaterialList2D(
-            settings.segment_materials
-        ))
+        let segment_material_count = settings.segment_materials.count()
+        if segment_material_count == 0 {
+            self.segment_material_offsets.append(-1)
+        } else {
+            self.segment_material_offsets.append(
+                self.segment_material_values.count()
+            )
+            for material in settings.segment_materials {
+                self.segment_material_values.append(material)
+            }
+        }
+        self.segment_material_counts.append(segment_material_count)
         self.collision_filters.append(settings.collision_filter)
         var flags:uint8 = 0
         if settings.is_sensor { flags += 1 }
@@ -224,6 +228,9 @@ package class ShapeStore2D {
 
     func destroy(id:ShapeId2D) {
         let dense_index = self.require(id)
+        if self.segment_material_counts[dense_index] > 0 {
+            self.replace_segment_materials(dense_index, [])
+        }
         let last = self.count() - 1
         if dense_index != last {
             self.dense_slots.swap(dense_index, last)
@@ -232,7 +239,8 @@ package class ShapeStore2D {
             self.next_body_shape_slots.swap(dense_index, last)
             self.densities.swap(dense_index, last)
             self.materials.swap(dense_index, last)
-            self.segment_materials.swap(dense_index, last)
+            self.segment_material_offsets.swap(dense_index, last)
+            self.segment_material_counts.swap(dense_index, last)
             self.collision_filters.swap(dense_index, last)
             self.behavior_flags.swap(dense_index, last)
             self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
@@ -243,12 +251,59 @@ package class ShapeStore2D {
         self.next_body_shape_slots.take_last()
         self.densities.take_last()
         self.materials.take_last()
-        self.segment_materials.take_last()
+        self.segment_material_offsets.take_last()
+        self.segment_material_counts.take_last()
         self.collision_filters.take_last()
         self.behavior_flags.take_last()
         self.slot_dense_indices[id.slot] = -1
         self.slot_generations[id.slot]++
         self.free_slots.append(id.slot)
+    }
+
+    func segment_material_count(dense:int) int {
+        return self.segment_material_counts[dense]
+    }
+
+    func copy_segment_materials(dense:int) PhysicsMaterial2D[] {
+        var result:PhysicsMaterial2D[] = []
+        let offset = self.segment_material_offsets[dense]
+        let count = self.segment_material_counts[dense]
+        var index = 0
+        while index < count {
+            result.append(self.segment_material_values[offset + index])
+            index++
+        }
+        return result
+    }
+
+    func replace_segment_materials(
+        dense:int,
+        materials:PhysicsMaterial2D[]
+    ) {
+        var rebuilt:PhysicsMaterial2D[] = []
+        var collider = 0
+        while collider < self.count() {
+            let previous_offset = self.segment_material_offsets[collider]
+            let previous_count = self.segment_material_counts[collider]
+            self.segment_material_offsets[collider] = rebuilt.count()
+            if collider == dense {
+                self.segment_material_counts[collider] = materials.count()
+                for material in materials { rebuilt.append(material) }
+            } else {
+                var material_index = 0
+                while material_index < previous_count {
+                    rebuilt.append(self.segment_material_values[
+                        previous_offset + material_index
+                    ])
+                    material_index++
+                }
+            }
+            if self.segment_material_counts[collider] == 0 {
+                self.segment_material_offsets[collider] = -1
+            }
+            collider++
+        }
+        self.segment_material_values = rebuilt
     }
 }
 
@@ -684,10 +739,10 @@ package class BodyStore2D {
         if self.body_types[body] != BodyType2D.fixed && metrics.kind == 3 {
             panic("GFX.Physics.World2D requires chain colliders to belong to fixed bodies")
         }
-        if self.shape_store.segment_materials[dense].count() > 0 {
+        if self.shape_store.segment_material_count(dense) > 0 {
             match shape {
                 chain(value) => {
-                    if self.shape_store.segment_materials[dense].count() !=
+                    if self.shape_store.segment_material_count(dense) !=
                         value.segment_count()
                     {
                         panic("GFX.Physics.Collider2D segment material count must match the chain segment count")
@@ -776,7 +831,7 @@ package class BodyStore2D {
         let dense = self.shape_store.require(id)
         validate_segment_materials(self.shape_store.shapes[dense], materials)
         for material in materials { validate_material(material) }
-        self.shape_store.segment_materials[dense].replace(materials)
+        self.shape_store.replace_segment_materials(dense, materials)
         self.topology_dirty = true
     }
 
@@ -1009,9 +1064,9 @@ public class Collider2D {
     }
 
     func segment_materials() PhysicsMaterial2D[] {
-        return self.store.shape_store.segment_materials[
+        return self.store.shape_store.copy_segment_materials(
             self.store.shape_store.require(self.id)
-        ].copy()
+        )
     }
 
     func collision_filter() CollisionFilter2D {

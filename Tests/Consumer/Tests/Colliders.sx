@@ -125,6 +125,35 @@ test "store one material per chain segment" {
     let materials = chain.segment_materials()
     assert(materials.count() == 3)
     assert(materials[1].application_id.value() == 11)
+
+    let fourth = Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(20)
+    var second_chain = world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-3.0, -1.0),
+                Math.Vec2(-2.0, -0.5),
+                Math.Vec2(-1.0, -0.5),
+                Math.Vec2(0.0, -1.0)
+            ]))
+            ..segment_materials = [fourth, fourth, fourth]
+    )
+    chain.set_segment_materials([third, second, first])
+    let replaced = chain.segment_materials()
+    let retained = second_chain.segment_materials()
+    assert(replaced[0].application_id.value() == 12)
+    assert(retained[0].application_id.value() == 20)
+
+    chain.set_segment_materials([])
+    let cleared = chain.segment_materials()
+    let retained_after_clear = second_chain.segment_materials()
+    assert(cleared.count() == 0)
+    assert(retained_after_clear[0].application_id.value() == 20)
+
+    world.destroy_collider(chain)
+    let retained_after_destroy = second_chain.segment_materials()
+    assert(retained_after_destroy[0].application_id.value() == 20)
 }
 
 test "apply collider filters and sensor events independently from the body" {
