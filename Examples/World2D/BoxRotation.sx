@@ -453,6 +453,7 @@ func main() {
         ))
         ..add_plugin(Plugins.Scene2D())
         ..add_plugin(Animation.Plugin())
+        ..add_plugin(Plugins.FPSPanel())
         ..add_system(Application.Schedule.startup, create_scene)
         ..add_after_system(Application.Schedule.update, sync_container)
         ..add_after_system(Application.Schedule.update, simulate)
