@@ -49,13 +49,12 @@ the common Soft Step solver consumes their retained manifolds without changing
 this public read surface. Response for the remaining geometric forms stays an
 explicit later capability rather than silently receiving partial response.
 
-The headless executable proof is
-[`../Examples/World2D/Contacts.sx`](../Examples/World2D/Contacts.sx):
+The headless executable proofs are grouped in
+[`../Tests/Consumer/Tests/Contacts.sx`](../Tests/Consumer/Tests/Contacts.sx):
 
 ```text
-silex run Packages/GFX.Physics/Examples/World2D/Contacts.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/Contacts.sx
 ```
 
-It prints one created contact, the same persisted contact on the next step,
-then zero contacts after separation. It requires no window, renderer, input,
-or visual inspection.
+They verify creation, persistence, separation and deterministic ordering
+without a window, renderer, input, or visual inspection.

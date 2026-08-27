@@ -88,9 +88,9 @@ the contract. `World2D` and its body and joint handles reject mutation while
 `step` is active; post-step buffers are the supported place for gameplay to
 react and then mutate the world.
 
-The headless executable proof is
-[`../Examples/World2D/Events.sx`](../Examples/World2D/Events.sx):
+The public executable proofs are grouped in
+[`../Tests/Consumer/Tests/Events.sx`](../Tests/Consumer/Tests/Events.sx):
 
 ```text
-silex run Packages/GFX.Physics/Examples/World2D/Events.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 ```

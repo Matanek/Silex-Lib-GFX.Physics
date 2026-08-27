@@ -56,8 +56,8 @@ let hit = Physics.Geometry2D.shape_cast(
 This stateless layer supports boxes, circles, capsules, convex and rounded
 polygons, segments, one-sided chains, filters, distances, overlaps, manifolds,
 ray casts, and shape casts. Independent read queries can run concurrently. See
-[`Docs/Geometry.md`](Docs/Geometry.md) and the executable
-[`Examples/Geometry2D/Queries.sx`](Examples/Geometry2D/Queries.sx).
+[`Docs/Geometry.md`](Docs/Geometry.md) and the public consumer proofs under
+[`Tests/Consumer/Tests/Geometry.sx`](Tests/Consumer/Tests/Geometry.sx).
 
 `World2D` also retains collision pairs and manifolds across steps. The current
 snapshots can be read without exposing their cache identity:
@@ -69,10 +69,10 @@ world.write_contacts(contacts)
 print(world.contact_count())
 ```
 
-The headless [`Examples/World2D/Contacts.sx`](Examples/World2D/Contacts.sx)
-is the primary executable proof for contact creation, persistence, and
-invalidation. See [`Docs/Contacts.md`](Docs/Contacts.md) for filters,
-deterministic ordering, and the current solver boundary.
+[`Tests/Consumer/Tests/Contacts.sx`](Tests/Consumer/Tests/Contacts.sx) proves
+contact creation, persistence, invalidation and ordering. See
+[`Docs/Contacts.md`](Docs/Contacts.md) for filters and the current solver
+boundary.
 
 Bodies can also own zero, one, or several stable `Collider2D` handles. Each
 collider carries its geometry, density, typed material, collision filter,
@@ -90,8 +90,8 @@ Bullets, sensors, and opt-in post-step movement, contact, hit, and sensor
 streams complete the gameplay feedback loop without worker callbacks. A bullet
 extends continuous collision to dynamic targets; sensors retain filtering but
 never produce physical response. See
-[`Docs/EventsAndCCD.md`](Docs/EventsAndCCD.md) and the headless
-[`Examples/World2D/Events.sx`](Examples/World2D/Events.sx).
+[`Docs/EventsAndCCD.md`](Docs/EventsAndCCD.md) and the public consumer proofs in
+[`Tests/Consumer/Tests/Events.sx`](Tests/Consumer/Tests/Events.sx).
 
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:
@@ -134,13 +134,10 @@ travels farther than its diameter in one step from entering the pile. Contact
 wake decisions use one state snapshot and newly awakened bodies cannot
 recursively wake the next support layer during their initial settling interval.
 Awake bodies and their deterministic islands are packed into reusable
-contiguous ranges, so sleeping bodies leave the integration hot path. The
-headless [`Examples/World2D/SleepIslands.sx`](Examples/World2D/SleepIslands.sx)
-demonstrates sleep, staged impact wake-up, and deletion; see
-[`Docs/Islands.md`](Docs/Islands.md) for the observable contract.
-[`Examples/World2D/SoftStepPile.sx`](Examples/World2D/SoftStepPile.sx) is a
-second headless proof that settles 128 circles, asserts containment and overlap,
-and prints the measured final envelope.
+contiguous ranges, so sleeping bodies leave the integration hot path. See
+[`Docs/Islands.md`](Docs/Islands.md),
+[`Tests/Consumer/Tests/Islands.sx`](Tests/Consumer/Tests/Islands.sx), and the
+dense-pile regressions in [`Tests/World2D.sx`](Tests/World2D.sx).
 
 `World2D` also owns typed distance, filter, motor, mouse, prismatic, revolute,
 weld, and wheel joints. World-space anchors and axes become private local
@@ -148,8 +145,8 @@ constraint data; limits, motors, springs, and completed-step reaction forces
 remain observable through the corresponding typed handle. Destroying either
 attached body invalidates its joints. Contacts and joints share one deterministic
 color graph, including the same parallel dispatch threshold for large
-conflict-free colors. See [`Docs/Joints.md`](Docs/Joints.md) and the headless
-[`Examples/World2D/Joints.sx`](Examples/World2D/Joints.sx).
+conflict-free colors. See [`Docs/Joints.md`](Docs/Joints.md) and
+[`Tests/Consumer/Tests/Joints.sx`](Tests/Consumer/Tests/Joints.sx).
 
 Large moving worlds can opt into the persistent STD worker pool:
 
@@ -188,9 +185,8 @@ body. The thick four-wall kinematic container keeps turning by successive
 45-degree steps in the same direction, driven by a second looping animation
 timeline. Synchronized presentation and fixed-step transform interpolation keep
 the container, animated previews, and simulated bodies visually aligned between
-60 Hz physics updates. The focused Contacts, Events, Joints, SleepIslands, and
-SoftStepPile programs remain executable assertion examples for diagnostics and
-automation.
+60 Hz physics updates. Its assertions and smoke controls are the reason this
+temporary hybrid has not yet been removed in favor of the central showcase.
 
 ```text
 silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release

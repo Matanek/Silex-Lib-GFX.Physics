@@ -120,7 +120,7 @@
       "status": "partial",
       "patterns": ["^b2Default(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)JointDef$"],
       "silex_contract": "Eight typed Silex settings already construct joints; their full runtime configuration remains scheduled.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"],
+      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
       "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
     },
     {
@@ -157,7 +157,7 @@
       "status": "divergent",
       "patterns": ["^b2(?:MakeProxy|MakeOffsetProxy)$"],
       "silex_contract": "ShapePlacement2D accepts domain shapes and transforms while convex proxies remain private.",
-      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Examples/Geometry2D/Queries.sx"],
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx"],
       "rationale": "The proxy is an algorithm input representation, not a gameplay concept that consumers need to own."
     },
     {
@@ -288,7 +288,7 @@
       "status": "partial",
       "patterns": ["^b2World_Get(?:Body|Sensor|Contact)Events$"],
       "silex_contract": "Reusable post-step buffers already avoid worker callbacks; complete events will identify colliders and resolved contact data.",
-      "evidence": ["Tests/Consumer/Tests/Events.sx", "Examples/World2D/Events.sx"],
+      "evidence": ["Tests/Consumer/Tests/Events.sx"],
       "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
     },
     {
@@ -548,7 +548,7 @@
       "status": "covered",
       "patterns": ["^b2Create(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)Joint$", "^b2DestroyJoint$", "^b2Joint_IsValid$"],
       "silex_contract": "World2D owns eight typed invalidable joint handles.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"]
+      "evidence": ["Tests/Consumer/Tests/Joints.sx"]
     },
     {
       "id": "joint-common-introspection",
@@ -567,7 +567,7 @@
       "status": "partial",
       "patterns": ["^b2(?:Distance|Motor|Mouse|Prismatic|Revolute|Weld|Wheel)Joint_.*$"],
       "silex_contract": "Each typed joint will expose its relevant limits, motors, springs, offsets, targets and measurements.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Examples/World2D/Joints.sx"],
+      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
       "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
     },
     {

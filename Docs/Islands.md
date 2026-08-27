@@ -37,12 +37,12 @@ Creating or destroying an unrelated body does not wake existing sleepers.
 Destroying a member invalidates and rebuilds private derived storage while
 preserving the awake state of surviving handles.
 
-The headless executable proof is
-[`../Examples/World2D/SleepIslands.sx`](../Examples/World2D/SleepIslands.sx):
+The headless executable proofs are grouped in
+[`../Tests/Consumer/Tests/Islands.sx`](../Tests/Consumer/Tests/Islands.sx):
 
 ```text
-silex run Packages/GFX.Physics/Examples/World2D/SleepIslands.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/Islands.sx
 ```
 
-It prints the active count at creation, after atomic sleep, after a staged
-impact, and after deletion. It needs no renderer or visual inspection.
+They cover atomic sleep, staged wake-up, creation and deletion without a
+renderer or visual inspection.

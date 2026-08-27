@@ -98,7 +98,7 @@ The following gates protect compiler and runtime work outside Physics:
 | `Packages/GFX.Scene2D/Benchmarks/Boids/Silex.sx` | Release, 4,000 boids, immediate presentation, fixed 960 × 640 logical window with high pixel density, one warm-up plus seven five-second runs | Same-machine median FPS must not regress by more than 5%; MAD must be at most 5% |
 | `Packages/GFX.Scene2D/Examples/Boids.sx` | Release with `--benchmark`, immediate presentation, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
 | `Packages/GFX.Scene3D/Examples/World.sx` | Release with `--benchmark-focused`, focused window, immediate presentation, default scene and window, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
-| `Packages/GFX.Canvas/Examples/ShapeGallery2D.sx` | Package test plus Release smoke; inspect emitted assertions and renderer diagnostics | More than 50 retained commands, font/text path succeeds, no renderer or shader diagnostic; visual acceptance remains required at milestones named by the Spec sequence |
+| `Silex-Examples/Sources/ShapeGallery2D/Main.sx` | Compile the centralized application in Release; inspect emitted assertions and renderer diagnostics | More than 50 retained commands, font/text path succeeds, no renderer or shader diagnostic; visual acceptance remains required at milestones named by the Spec sequence |
 
 Do not take automated screenshots for these gates. ShapeGallery's automated
 smoke protects construction, text loading and the render path; the explicitly

@@ -71,7 +71,7 @@ large conflict-free colors use the same 4,096-entry dispatch threshold and the
 same kernels for one or several workers. Joint-connected dynamic bodies also
 share sleep-island lifetime.
 
-[`../Examples/World2D/Joints.sx`](../Examples/World2D/Joints.sx) is the
-headless executable proof. Consumer tests cover every family, limits, motors,
-springs, reactions, collision suppression, handle invalidation, deterministic
-worker-count equivalence, and a 4,096-joint parallel color.
+[`../Tests/Consumer/Tests/Joints.sx`](../Tests/Consumer/Tests/Joints.sx) is the
+public executable proof. It covers every family, limits, motors, springs,
+reactions, collision suppression and handle invalidation; internal tests add
+deterministic worker-count equivalence and a 4,096-joint parallel color.
