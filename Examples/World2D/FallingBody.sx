@@ -579,8 +579,7 @@ func container_drawing() Canvas {
 }
 
 func physics_stats_drawing(
-    circle_count:int,
-    box_count:int,
+    body_count:int,
     candidate_pair_count:int,
     awake_count:int,
     physics_hz:float,
@@ -595,7 +594,7 @@ func physics_stats_drawing(
     profile:Physics.World2DStepProfile
 ) Canvas {
     var labels:str[] = []
-    labels.append("CIRCLES / BOXES")
+    labels.append("BODIES")
     labels.append("ACTIVE PAIRS")
     labels.append("AWAKE")
     labels.append("PHYSICS HZ")
@@ -613,7 +612,7 @@ func physics_stats_drawing(
     labels.append("SLEEP")
 
     var values:str[] = []
-    values.append("$(circle_count) / $(box_count)")
+    values.append("$(body_count)")
     values.append("$(candidate_pair_count)")
     values.append("$(awake_count)")
     values.append(physics_metric(physics_hz, " Hz"))
@@ -689,10 +688,6 @@ func refresh_physics_stats(
     spawn_step_ms:float,
     capacity_hz:float
 ) {
-    var circle_count = simulation.bodies.count() / 2
-    if simulation.circles_only { circle_count = simulation.bodies.count() }
-    else if simulation.bodies.count() % 2 != 0 { circle_count++ }
-    let box_count = simulation.bodies.count() - circle_count
     let candidate_pair_count = simulation.physics.candidate_pair_count()
     let awake_count = simulation.physics.awake_body_count()
     let position_solve_ms = simulation.physics.collision_position_ms()
@@ -701,8 +696,7 @@ func refresh_physics_stats(
         simulation.stats_display,
         func(display:&Components.Canvas) {
             var drawing = physics_stats_drawing(
-                circle_count,
-                box_count,
+                simulation.bodies.count(),
                 candidate_pair_count,
                 awake_count,
                 physics_hz,
@@ -977,7 +971,6 @@ func create_scene(
     create_container(scene, simulation)
     if simulation.show_panel {
         var stats = physics_stats_drawing(
-            0,
             0,
             0,
             0,
