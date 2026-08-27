@@ -181,12 +181,13 @@ ordinary bodies do not silently opt into its dynamic-target cost.
 
 [`Examples/World2D/BoxRotation.sx`](Examples/World2D/BoxRotation.sx) is the
 recommended visual introduction: it progressively reveals 120 circles and
-boxes of varied sizes at the container center. Each new element uses
-`GFX.Animation` to fade and scale from zero before becoming a dynamic physics
-body. The four-wall kinematic container keeps turning by successive 45-degree
-steps in the same direction, driven by a second looping animation timeline.
-The focused Contacts, Events, Joints, SleepIslands, and SoftStepPile programs
-remain executable assertion examples for diagnostics and automation.
+boxes of varied sizes at deterministic randomized positions inside the
+container. Each new element follows the rotating local frame while
+`GFX.Animation` fades and scales it from zero, then becomes a dynamic physics
+body. The thick four-wall kinematic container keeps turning by successive
+45-degree steps in the same direction, driven by a second looping animation
+timeline. The focused Contacts, Events, Joints, SleepIslands, and SoftStepPile
+programs remain executable assertion examples for diagnostics and automation.
 
 ```text
 silex run Packages/GFX.Physics/Examples/World2D/BoxRotation.sx --release

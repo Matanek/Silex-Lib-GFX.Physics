@@ -10,6 +10,7 @@ use GFX.Rendering
 use GFX.Resources
 use STD.Math
 use STD.Process
+use STD.Randomizer
 
 static struct Showcase {
     let pixels_per_meter:float = 90.0
@@ -19,10 +20,13 @@ static struct Showcase {
     let body_pixels:int = 32
     let spawn_interval:float = 0.2
     let reveal_duration:float = 0.16
+    let spawn_half_extent:float = 1.65
+    let spawn_candidate_count:int = 24
     let container_half_extent:float = 2.35
-    let container_wall_thickness:float = 0.2
+    let container_wall_thickness:float = 0.45
+    let containment_tolerance:float = 0.12
     let container_pixels:int = 468
-    let container_turn_duration:float = 0.25
+    let container_turn_duration:float = 0.4
     let container_turn_interval:float = 0.8
 }
 
@@ -30,9 +34,18 @@ struct BodyVisual {
     let index:int
 }
 
+struct SimulatedBody {
+    var body:Physics.RigidBody2D
+    let is_box:bool
+    let size:Math.Vec2
+    let radius:float
+}
+
 struct PendingBody {
     let is_box:bool
     let size:Math.Vec2
+    let local_position:Math.Vec2
+    let local_rotation:float
     var elapsed:float
 }
 
@@ -42,7 +55,8 @@ struct ContainerVisual {
 
 class Simulation {
     var world:Physics.World2D
-    var bodies:Physics.RigidBody2D[]
+    var bodies:SimulatedBody[]
+    var randomizer:Randomizer
     var container_left:Physics.RigidBody2D?
     var container_right:Physics.RigidBody2D?
     var container_bottom:Physics.RigidBody2D?
@@ -54,6 +68,7 @@ class Simulation {
     var container_target_angle:float
     var accumulator:float
     var elapsed:float
+    var rendered_frames:int
     var spawn_elapsed:float
     var spawned_count:int
     var pending_count:int
@@ -63,6 +78,7 @@ class Simulation {
     init(smoke_duration:float) {
         self.world = Physics.World2D()
         self.bodies = []
+        self.randomizer = Randomizer(0xB0_2D_12_0D)
         self.container_left = null
         self.container_right = null
         self.container_bottom = null
@@ -74,6 +90,7 @@ class Simulation {
         self.container_target_angle = 0.0
         self.accumulator = 0.0
         self.elapsed = 0.0
+        self.rendered_frames = 0
         self.spawn_elapsed = 0.0
         self.spawned_count = 0
         self.pending_count = 0
@@ -314,6 +331,60 @@ func body_size(index:int, is_box:bool) Math.Vec2 {
     return Math.Vec2(0.34)
 }
 
+func body_radius(size:Math.Vec2, is_box:bool) float {
+    if !is_box { return size.x * 0.5 }
+    return Math.sqrt(
+        size.x * size.x + size.y * size.y
+    ) * 0.5
+}
+
+func spawn_clearance(
+    simulation:@Simulation,
+    local_position:Math.Vec2,
+    radius:float
+) float {
+    let position = simulation.container_center.add(rotate_offset(
+        local_position,
+        simulation.container_angle
+    ))
+    var clearance = Showcase.container_half_extent -
+        Math.max(Math.abs(local_position.x), Math.abs(local_position.y)) -
+        radius
+    for simulated in simulation.bodies {
+        let distance = Math.sqrt(
+            position.subtract(simulated.body.position()).length_squared()
+        )
+        clearance = Math.min(
+            clearance,
+            distance - radius - simulated.radius
+        )
+    }
+    return clearance
+}
+
+func random_spawn_position(
+    simulation:&Simulation,
+    radius:float
+) Math.Vec2 {
+    let limit = Showcase.spawn_half_extent - radius
+    var best = Math.Vec2()
+    var best_clearance = -Showcase.container_half_extent * 2.0
+    var candidate = 0
+    while candidate < Showcase.spawn_candidate_count {
+        let position = Math.Vec2(
+            simulation.randomizer.get_float(-limit, limit),
+            simulation.randomizer.get_float(-limit, limit)
+        )
+        let clearance = spawn_clearance(simulation, position, radius)
+        if clearance > best_clearance {
+            best = position
+            best_clearance = clearance
+        }
+        candidate++
+    }
+    return best
+}
+
 func spawn_body_preview(
     scene:&Resources.World,
     simulation:&Simulation,
@@ -322,6 +393,13 @@ func spawn_body_preview(
 ) {
     let is_box = index % 2 == 1
     let size = body_size(index, is_box)
+    let radius = body_radius(size, is_box)
+    let local_position = random_spawn_position(simulation, radius)
+    let local_rotation = (index % 5 - 2) as float * 0.12
+    let position = simulation.container_center.add(rotate_offset(
+        local_position,
+        simulation.container_angle
+    ))
     let color = body_color(index)
     let scale = Math.Vec2(
         size.x / Showcase.base_body_size,
@@ -343,13 +421,16 @@ func spawn_body_preview(
     component.color = color.with_alpha(0.0)
     if is_box { component.layer = 1 }
     scene.spawn(ECS.EntityRecipe()
-        ..with(PendingBody(is_box:is_box, size:size, elapsed:0.0))
+        ..with(PendingBody(
+            is_box:is_box,
+            size:size,
+            local_position:local_position,
+            local_rotation:local_rotation,
+            elapsed:0.0
+        ))
         ..with(Components.Transform2D(
-            position:simulation.container_center.multiply(
-                Showcase.pixels_per_meter
-            ),
-            rotation:simulation.container_angle +
-                (index % 5 - 2) as float * 0.12,
+            position:position.multiply(Showcase.pixels_per_meter),
+            rotation:simulation.container_angle + local_rotation,
             scale:Math.Vec2()
         ))
         ..with(component)
@@ -404,12 +485,18 @@ func activate_bodies(
     pending_visuals:ECS.Query<(
         ECS.Entity,
         &PendingBody,
-        @Components.Transform2D,
+        &Components.Transform2D,
         @Components.Canvas
     )>
 ) {
     for (entity, pending, transform, canvas) in pending_visuals {
         pending.elapsed += time.delta
+        transform.position = simulation.container_center.add(rotate_offset(
+            pending.local_position,
+            simulation.container_angle
+        )).multiply(Showcase.pixels_per_meter)
+        transform.rotation = simulation.container_angle +
+            pending.local_rotation
         if pending.elapsed < Showcase.reveal_duration { continue }
         if simulation.smoke_duration > 0.0 {
             let expected_scale = Math.Vec2(
@@ -442,7 +529,12 @@ func activate_bodies(
         )
         commands.remove<PendingBody>(entity)
         commands.remove<Animation.Playback>(entity)
-        simulation.bodies.append(body)
+        simulation.bodies.append(SimulatedBody(
+            body:body,
+            is_box:pending.is_box,
+            size:pending.size,
+            radius:body_radius(pending.size, pending.is_box)
+        ))
         simulation.pending_count--
         if pending.is_box { simulation.box_count++ }
     }
@@ -466,18 +558,32 @@ func sync_container(
 }
 
 func assert_bodies_contained(simulation:@Simulation) {
-    let limit = Showcase.container_half_extent +
-        Showcase.container_wall_thickness * 0.75
     var index = 0
     while index < simulation.bodies.count() {
-        let offset = simulation.bodies[index].position()
+        let simulated = simulation.bodies[index]
+        let offset = simulated.body.position()
             .subtract(simulation.container_center)
         let local_position = rotate_offset(
             offset,
             -simulation.container_angle
         )
-        assert(Math.abs(local_position.x) < limit)
-        assert(Math.abs(local_position.y) < limit)
+        var extent = Math.Vec2(simulated.size.x * 0.5)
+        if simulated.is_box {
+            let relative_rotation = simulated.body.rotation() -
+                simulation.container_angle
+            let cosine = Math.abs(Math.cos(relative_rotation))
+            let sine = Math.abs(Math.sin(relative_rotation))
+            let half_width = simulated.size.x * 0.5
+            let half_height = simulated.size.y * 0.5
+            extent = Math.Vec2(
+                cosine * half_width + sine * half_height,
+                sine * half_width + cosine * half_height
+            )
+        }
+        let limit = Showcase.container_half_extent +
+            Showcase.containment_tolerance
+        assert(Math.abs(local_position.x) + extent.x < limit)
+        assert(Math.abs(local_position.y) + extent.y < limit)
         index++
     }
 }
@@ -489,6 +595,7 @@ func simulate(
     body_visuals:ECS.Query<(@BodyVisual, &Components.Transform2D)>
 ) {
     simulation.elapsed += time.delta
+    simulation.rendered_frames++
     simulation.accumulator = Math.min(
         simulation.accumulator + time.delta,
         Showcase.fixed_delta * 8.0
@@ -512,7 +619,7 @@ func simulate(
         step++
     }
     for (visual, transform) in body_visuals {
-        let body = simulation.bodies[visual.index]
+        let body = simulation.bodies[visual.index].body
         transform.position = body.position().multiply(
             Showcase.pixels_per_meter
         )
@@ -538,6 +645,7 @@ func simulate(
             "boxes=$(simulation.box_count), " +
             "container=$(simulation.container_angle), " +
             "elapsed=$(simulation.elapsed), " +
+            "fps=$(simulation.rendered_frames as float / simulation.elapsed), " +
             "awake=$(simulation.world.awake_body_count()), " +
             "contacts=$(simulation.world.contact_count())"
         )
@@ -550,7 +658,7 @@ func smoke_duration() float {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {
-                if argument == "--smoke" { return 32.25 }
+                if argument == "--smoke" { return 64.25 }
             }
         }
     }
