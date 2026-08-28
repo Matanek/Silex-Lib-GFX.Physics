@@ -3,7 +3,7 @@
 This contract fixes the evidence required before and during the native Silex
 physics reconstruction. It does not change the public API or the current
 solver. The immutable external revisions and build instructions are recorded
-in [`../Benchmarks/Oracle2D/README.md`](../Benchmarks/Oracle2D/README.md).
+in [`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
 
 ## Configurations
 

@@ -6,7 +6,7 @@ capabilities of Box2D 3.1.1 at commit
 handles, callbacks or storage model into the Silex API.
 
 The executable source of truth is
-[`../Benchmarks/Oracle2D/CompletenessMatrix.json`](../Benchmarks/Oracle2D/CompletenessMatrix.json).
+[`../Benchmarks/Oracle2D/CompletenessMatrix.json`](../../Benchmarks/Oracle2D/CompletenessMatrix.json).
 Its validator parses all `B2_API` declarations from `base.h`,
 `math_functions.h`, `types.h`, `collision.h` and `box2d.h` in the pinned
 checkout. The current inventory contains 422 symbols, each owned by exactly one

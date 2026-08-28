@@ -38,7 +38,7 @@ Destroying a member invalidates and rebuilds private derived storage while
 preserving the awake state of surviving handles.
 
 The headless executable proofs are grouped in
-[`../Tests/Consumer/Tests/Islands.sx`](../Tests/Consumer/Tests/Islands.sx):
+[`../Tests/Consumer/Tests/Islands.sx`](../../Tests/Consumer/Tests/Islands.sx):
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Islands.sx

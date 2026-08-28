@@ -50,7 +50,7 @@ this public read surface. Response for the remaining geometric forms stays an
 explicit later capability rather than silently receiving partial response.
 
 The headless executable proofs are grouped in
-[`../Tests/Consumer/Tests/Contacts.sx`](../Tests/Consumer/Tests/Contacts.sx):
+[`../Tests/Consumer/Tests/Contacts.sx`](../../Tests/Consumer/Tests/Contacts.sx):
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Contacts.sx

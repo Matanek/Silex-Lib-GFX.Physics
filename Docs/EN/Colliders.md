@@ -65,7 +65,7 @@ derivation remains a separate mass-properties milestone. Contact and sensor
 snapshots still identify bodies until collider-level event identity is added.
 
 The isolated consumer proof is
-[`../Tests/Consumer/Tests/Colliders.sx`](../Tests/Consumer/Tests/Colliders.sx).
+[`../Tests/Consumer/Tests/Colliders.sx`](../../Tests/Consumer/Tests/Colliders.sx).
 It covers empty and compound bodies, shortcut compatibility, mutations,
 filters, sensors, chain materials, collider destruction, and body-owned
 invalidation.

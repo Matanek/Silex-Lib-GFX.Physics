@@ -18,7 +18,7 @@ The 0.4 intention surface is retained:
   mutators;
 - the `GFX.Components.RigidBody2D` and `GFX.Resources.World2D` catalog aliases.
 
-[`../Tests/Consumer/Tests/Compatibility.sx`](../Tests/Consumer/Tests/Compatibility.sx)
+[`../Tests/Consumer/Tests/Compatibility.sx`](../../Tests/Consumer/Tests/Compatibility.sx)
 compiles and executes that complete 0.4 path from an isolated consumer. An
 ordinary application does not need a source migration merely to select the new
 core.

@@ -89,7 +89,7 @@ the contract. `World2D` and its body and joint handles reject mutation while
 react and then mutate the world.
 
 The public executable proofs are grouped in
-[`../Tests/Consumer/Tests/Events.sx`](../Tests/Consumer/Tests/Events.sx):
+[`../Tests/Consumer/Tests/Events.sx`](../../Tests/Consumer/Tests/Events.sx):
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
