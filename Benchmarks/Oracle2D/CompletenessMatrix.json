@@ -62,7 +62,7 @@
       "status": "divergent",
       "patterns": ["^b2(?:SetLengthUnitsPerMeter|GetLengthUnitsPerMeter)$"],
       "silex_contract": "GFX.Physics worlds use meters, seconds and kilograms without mutable process-global scaling.",
-      "evidence": ["Docs/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
+      "evidence": ["Docs/FR/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
       "rationale": "A fixed unit contract is safer and at least as expressive because applications convert at their boundary without shared global state."
     },
     {
@@ -89,11 +89,10 @@
       "id": "default-body-settings",
       "domain": "body",
       "capability": "default body configuration",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2DefaultBodyDef$"],
-      "silex_contract": "RigidBody2DSettings owns value defaults and will cover all body-control choices.",
-      "evidence": ["Tests/Consumer/Tests/Compatibility.sx"],
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2DSettings owns stable typed defaults for creation-time body control.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/Consumer/Tests/BodyControl.sx"]
     },
     {
       "id": "default-collider-settings",
@@ -164,10 +163,10 @@
       "id": "shape-mass-properties",
       "domain": "shape",
       "capability": "mass properties from collider geometry and density",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Compute(?:Circle|Capsule|Polygon)Mass$"],
-      "silex_contract": "Collider mass properties and composed body mass will be observable through typed world-owned colliders.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "RigidBody2D derives composed mass, local center and inertia from living collider geometry and density.",
+      "evidence": ["Tests/Consumer/Tests/BodyControl.sx", "Benchmarks/BodyControlOracle2D.sx"]
     },
     {
       "id": "shape-bounds",
@@ -354,7 +353,7 @@
       "status": "partial",
       "patterns": ["^b2World_Get(?:AwakeBodyCount|Profile|Counters)$"],
       "silex_contract": "World2D exposes awake bodies and opt-in timings; complete logical counters will avoid internal array capacities.",
-      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/Performance.md"],
+      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/FR/Performance.md"],
       "tracking": "Physique 2D complète 05 — Réglages complets du monde"
     },
     {
@@ -388,39 +387,37 @@
       "id": "body-basic-motion",
       "domain": "body",
       "capability": "body transform, velocity, type, wake and bullet state",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2Body_(?:GetPosition|GetRotation|GetTransform|GetLinearVelocity|GetAngularVelocity|GetType|IsAwake|IsBullet|SetTransform|SetLinearVelocity|SetAngularVelocity|SetAwake|SetBullet|SetType)$"],
-      "silex_contract": "RigidBody2D already exposes direct motion and state; all mutations will share explicit locking and wake semantics.",
-      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/World2D.sx"],
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2D exposes direct motion and state mutations with explicit locking and wake semantics.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/Consumer/Tests/BodyControl.sx", "Tests/World2D.sx"]
     },
     {
       "id": "body-forces-and-mass",
       "domain": "body",
       "capability": "forces, torques, impulses, mass and inertia",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_(?:ApplyForce|ApplyForceToCenter|ApplyTorque|ApplyLinearImpulse|ApplyLinearImpulseToCenter|ApplyAngularImpulse|GetMass|GetRotationalInertia|GetLocalCenterOfMass|GetWorldCenterOfMass|GetMassData|SetMassData|ApplyMassFromShapes)$"],
-      "silex_contract": "RigidBody2D will expose physical actions and composed or overridden mass without manual velocity integration.",
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2D exposes physical actions and composed or overridden mass without manual velocity integration.",
+      "evidence": ["Tests/Consumer/Tests/BodyControl.sx", "Tests/Consumer/check-body-control.sh", "Benchmarks/BodyControlOracle2D.sx"]
     },
     {
       "id": "body-coordinate-utilities",
       "domain": "body",
       "capability": "local/world point, vector and point-velocity conversion",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_Get(?:LocalPoint|LocalVector|WorldPoint|WorldVector|LocalPointVelocity|WorldPointVelocity)$"],
-      "silex_contract": "RigidBody2D will provide typed coordinate and point-velocity conversions.",
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2D provides typed coordinate and point-velocity conversions.",
+      "evidence": ["Tests/Consumer/Tests/BodyControl.sx"]
     },
     {
       "id": "body-runtime-control",
       "domain": "body",
       "capability": "damping, gravity, sleep, fixed rotation, activation and kinematic target",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2Body_(?:GetAngularDamping|GetGravityScale|GetLinearDamping|GetSleepThreshold|IsEnabled|IsFixedRotation|IsSleepEnabled|SetAngularDamping|SetFixedRotation|SetGravityScale|SetLinearDamping|SetSleepThreshold|SetTargetTransform|Enable|Disable|EnableSleep)$"],
-      "silex_contract": "Several creation settings already exist; complete runtime control will be validated and locked outside step.",
-      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/Consumer/Tests/Islands.sx"],
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2D exposes validated runtime damping, gravity, sleep, fixed rotation, activation and kinematic target control outside step.",
+      "evidence": ["Tests/Consumer/Tests/Compatibility.sx", "Tests/Consumer/Tests/BodyControl.sx", "Tests/Consumer/Tests/Islands.sx", "Benchmarks/BodyControlOracle2D.sx"]
     },
     {
       "id": "body-colliders",
@@ -464,10 +461,10 @@
       "id": "body-label",
       "domain": "body",
       "capability": "body debug label",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_(?:SetName|GetName)$"],
-      "silex_contract": "RigidBody2D.debug_label will provide typed diagnostics without C string lifetime rules.",
-      "tracking": "Physique 2D complète 03 — Masse, forces et contrôle des corps"
+      "silex_contract": "RigidBody2D.debug_label provides typed diagnostics without C string lifetime rules.",
+      "evidence": ["Tests/Consumer/Tests/BodyControl.sx"]
     },
     {
       "id": "body-user-data",

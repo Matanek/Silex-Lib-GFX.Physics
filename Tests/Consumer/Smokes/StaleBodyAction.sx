@@ -1,0 +1,9 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D()
+    var body = world.create_rigid_body()
+    world.destroy_rigid_body(body)
+    body.apply_linear_impulse_to_center(Math.Vec2(1.0, 0.0))
+}

@@ -477,6 +477,10 @@ package class JointStore2D {
                 }
                 let first = self.bodies.require(joint.first_body)
                 let second = self.bodies.require(joint.second_body)
+                if !self.bodies.enabled[first] || !self.bodies.enabled[second] {
+                    index++
+                    continue
+                }
                 if self.bodies.awake[first] &&
                     self.bodies.inverse_masses[second] > 0.0 &&
                     !self.bodies.awake[second]
@@ -518,6 +522,12 @@ package class JointStore2D {
             }
             let first = self.bodies.require(joint.first_body)
             let second = self.bodies.require(joint.second_body)
+            if !self.bodies.enabled[first] || !self.bodies.enabled[second] {
+                self.clear_impulses(index)
+                self.entry_colors.append(-1)
+                index++
+                continue
+            }
             var first_mask:uint32 = 0
             var second_mask:uint32 = 0
             if self.bodies.inverse_masses[first] > 0.0 &&
@@ -584,6 +594,21 @@ package class JointStore2D {
             }
             index++
         }
+    }
+
+    private func clear_impulses(index:int) {
+        var joint = self.joints[index]
+        joint.linear_impulse = Math.Vec2()
+        joint.axial_impulse = 0.0
+        joint.angular_impulse = 0.0
+        joint.motor_impulse = 0.0
+        joint.lower_impulse = 0.0
+        joint.upper_impulse = 0.0
+        joint.reaction_force = Math.Vec2()
+        joint.reaction_torque = 0.0
+        joint.current_motor_force = 0.0
+        joint.current_motor_torque = 0.0
+        self.joints[index] = joint
     }
 
     func color_count(color:int) int { return self.color_counts[color] }
@@ -733,8 +758,9 @@ func joint_velocity_at(
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
-    let radius_x = point.x - bodies.positions_x[index]
-    let radius_y = point.y - bodies.positions_y[index]
+    let center = bodies.world_center_at(index)
+    let radius_x = point.x - center.x
+    let radius_y = point.y - center.y
     return Math.Vec2(
         bodies.velocities_x[index] -
             bodies.angular_velocities[index] * radius_y,
@@ -754,10 +780,7 @@ func joint_inverse_mass_on_axis(
     axis:Math.Vec2
 ) float {
     if !bodies.awake[index] { return 0.0 }
-    let radius = point.subtract(Math.Vec2(
-        bodies.positions_x[index],
-        bodies.positions_y[index]
-    ))
+    let radius = point.subtract(bodies.world_center_at(index))
     let arm = joint_cross(radius, axis)
     return bodies.inverse_masses[index] +
         arm * arm * bodies.inverse_inertias[index]
@@ -772,8 +795,9 @@ func apply_joint_impulse(
     if !bodies.awake[index] { return }
     bodies.velocities_x[index] += impulse.x * bodies.inverse_masses[index]
     bodies.velocities_y[index] += impulse.y * bodies.inverse_masses[index]
-    let radius_x = point.x - bodies.positions_x[index]
-    let radius_y = point.y - bodies.positions_y[index]
+    let center = bodies.world_center_at(index)
+    let radius_x = point.x - center.x
+    let radius_y = point.y - center.y
     bodies.angular_velocities[index] +=
         (radius_x * impulse.y - radius_y * impulse.x) *
         bodies.inverse_inertias[index]

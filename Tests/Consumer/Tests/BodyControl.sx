@@ -1,0 +1,255 @@
+use GFX.Physics
+use STD.Math
+
+test "derive and override compound mass properties" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+    )
+    var first_collider = world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-2.0, -0.5),
+            Math.Vec2(0.0, -0.5),
+            Math.Vec2(0.0, 0.5),
+            Math.Vec2(-2.0, 0.5)
+        ]))
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(2.0, -0.5),
+            Math.Vec2(4.0, -0.5),
+            Math.Vec2(4.0, 0.5),
+            Math.Vec2(2.0, 0.5)
+        ]))
+    )
+
+    assert(Math.nearly_equal(body.mass(), 4.0, 0.000001))
+    assert(body.local_center_of_mass().nearly_equal(
+        Math.Vec2(1.0, 0.0),
+        0.000001
+    ))
+    assert(body.world_center_of_mass().nearly_equal(
+        Math.Vec2(1.0, 0.0),
+        0.000001
+    ))
+    assert(Math.nearly_equal(
+        body.rotational_inertia(),
+        17.666666,
+        0.00001
+    ))
+
+    body.set_mass_properties(Physics.MassProperties2D(
+        mass:10.0,
+        rotational_inertia:7.0,
+        local_center:Math.Vec2(0.5, 0.25)
+    ))
+    assert(body.mass() == 10.0)
+    assert(body.rotational_inertia() == 7.0)
+    assert(body.local_center_of_mass() == Math.Vec2(0.5, 0.25))
+
+    first_collider.set_density(2.0)
+    assert(body.mass() == 10.0)
+    assert(body.local_center_of_mass() == Math.Vec2(0.5, 0.25))
+
+    body.reset_mass_from_colliders()
+    assert(Math.nearly_equal(body.mass(), 6.0, 0.000001))
+    assert(body.local_center_of_mass().nearly_equal(
+        Math.Vec2(1.0 / 3.0, 0.0),
+        0.000001
+    ))
+}
+
+test "apply forces on the next step and impulses immediately" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body()
+
+    body.apply_force_to_center(Math.Vec2(4.0, 0.0))
+    assert(body.velocity() == Math.Vec2())
+    world.step(0.25)
+    assert(body.velocity().nearly_equal(Math.Vec2(1.0, 0.0), 0.000001))
+    world.step(0.25)
+    assert(body.velocity().nearly_equal(Math.Vec2(1.0, 0.0), 0.000001))
+
+    body.apply_linear_impulse_to_center(Math.Vec2(2.0, 0.0))
+    assert(body.velocity().nearly_equal(Math.Vec2(3.0, 0.0), 0.000001))
+
+    body.set_angular_velocity(0.0)
+    let point = body.world_center_of_mass().add(Math.Vec2(0.0, 1.0))
+    body.apply_linear_impulse(Math.Vec2(1.0, 0.0), point)
+    assert(Math.nearly_equal(body.angular_velocity(), -6.0, 0.00001))
+}
+
+test "convert body points vectors and point velocities" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 3.0)
+        ..rotation = Math.half_pi()
+        ..velocity = Math.Vec2(1.0, 2.0)
+        ..angular_velocity = 2.0
+    )
+
+    let world_point = body.world_point(Math.Vec2(1.0, 0.0))
+    assert(world_point.nearly_equal(Math.Vec2(2.0, 4.0), 0.000001))
+    assert(body.local_point(world_point).nearly_equal(
+        Math.Vec2(1.0, 0.0),
+        0.000001
+    ))
+    let world_vector = body.world_vector(Math.Vec2(1.0, 0.0))
+    assert(world_vector.nearly_equal(Math.Vec2(0.0, 1.0), 0.000001))
+    assert(body.local_vector(world_vector).nearly_equal(
+        Math.Vec2(1.0, 0.0),
+        0.000001
+    ))
+    assert(body.world_point_velocity(world_point).nearly_equal(
+        Math.Vec2(-1.0, 2.0),
+        0.000001
+    ))
+    assert(body.local_point_velocity(Math.Vec2(1.0, 0.0)).nearly_equal(
+        Math.Vec2(-1.0, 2.0),
+        0.000001
+    ))
+}
+
+test "mutate runtime body control and reach a kinematic target" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.kinematic
+        ..debug_label = "platform"
+    )
+
+    assert(body.debug_label() == "platform")
+    body.set_debug_label("moving-platform")
+    body.set_linear_damping(0.25)
+    body.set_angular_damping(0.5)
+    body.set_sleep_threshold(0.02)
+    body.set_sleep_enabled(false)
+    body.set_bullet(true)
+    assert(body.debug_label() == "moving-platform")
+    assert(body.linear_damping() == 0.25)
+    assert(body.angular_damping() == 0.5)
+    assert(body.sleep_threshold() == 0.02)
+    assert(!body.is_sleep_enabled())
+    assert(body.is_bullet())
+
+    body.set_target_transform(
+        Physics.Transform2D(position:Math.Vec2(4.0, -2.0), rotation:0.5),
+        2.0
+    )
+    var step = 0
+    while step < 8 {
+        world.step(0.25)
+        step++
+    }
+    assert(body.position().nearly_equal(Math.Vec2(4.0, -2.0), 0.00001))
+    assert(Math.nearly_equal(body.rotation(), 0.5, 0.00001))
+
+    body.set_body_type(Physics.BodyType2D.fixed)
+    assert(body.body_type() == Physics.BodyType2D.fixed)
+    assert(!body.is_awake())
+    body.set_body_type(Physics.BodyType2D.dynamic)
+    assert(body.body_type() == Physics.BodyType2D.dynamic)
+    assert(body.is_awake())
+}
+
+test "keep fixed rotation and remove disabled bodies from contacts" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.75)
+        ..fixed_rotation = true
+    )
+    body.apply_linear_impulse(
+        Math.Vec2(1.0, 0.0),
+        body.world_center_of_mass().add(Math.Vec2(0.0, 1.0))
+    )
+    assert(body.angular_velocity() == 0.0)
+    assert(body.has_fixed_rotation())
+
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    assert(world.candidate_pair_count() == 1)
+    body.set_enabled(false)
+    assert(body.is_valid())
+    assert(!body.is_enabled())
+    assert(world.contact_count() == 0)
+    assert(world.candidate_pair_count() == 0)
+    world.step(0.0)
+    assert(world.contact_count() == 0)
+
+    body.set_enabled(true)
+    world.step(0.0)
+    assert(body.is_enabled())
+    assert(world.contact_count() == 1)
+}
+
+test "remove disabled bodies from joint solving without losing identity" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+        ..allow_sleep = false
+    )
+    var joint = world.create_distance_joint(
+        fixed_body,
+        body,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2()
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+            ..length = 1.0
+            ..spring_hertz = 6.0
+            ..spring_damping_ratio = 1.0
+            ..spring_enabled = true
+    )
+
+    world.step(1.0 / 120.0)
+    assert(joint.constraint_force().length() > 0.0)
+    body.set_enabled(false)
+    let disabled_position = body.position()
+    world.step(0.5)
+    assert(body.is_valid())
+    assert(joint.is_valid())
+    assert(body.position() == disabled_position)
+    assert(joint.constraint_force() == Math.Vec2())
+
+    body.set_enabled(true)
+    world.step(1.0 / 120.0)
+    assert(joint.constraint_force().length() > 0.0)
+}
+
+test "keep force control deterministic across worker counts" {
+    var direct = Physics.World2D(gravity:Math.Vec2(0.0, -2.0))
+    var parallel = Physics.World2D(gravity:Math.Vec2(0.0, -2.0))
+    parallel.enable_parallelism(4)
+    var direct_bodies:Physics.RigidBody2D[] = []
+    var parallel_bodies:Physics.RigidBody2D[] = []
+    var index = 0
+    while index < 64 {
+        let settings = Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(index as float * 3.0, 10.0)
+            ..allow_sleep = false
+        direct_bodies.append(direct.create_rigid_body(settings))
+        parallel_bodies.append(parallel.create_rigid_body(settings))
+        let force = Math.Vec2(index as float * 0.01, 1.0)
+        direct_bodies[-1].apply_force_to_center(force)
+        parallel_bodies[-1].apply_force_to_center(force)
+        index++
+    }
+
+    var step = 0
+    while step < 10 {
+        direct.step(1.0 / 60.0)
+        parallel.step(1.0 / 60.0)
+        step++
+    }
+    index = 0
+    while index < direct_bodies.count() {
+        assert(direct_bodies[index].position() == parallel_bodies[index].position())
+        assert(direct_bodies[index].velocity() == parallel_bodies[index].velocity())
+        index++
+    }
+}

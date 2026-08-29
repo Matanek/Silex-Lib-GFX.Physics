@@ -53,7 +53,7 @@ test "reuse generation slots while keeping body and shape pools dense" {
     assert(store.shape_store.count() == 2)
 }
 
-test "retain explicit body mass while collider density awaits mass properties" {
+test "retain an explicit body mass override across collider changes" {
     var store = BodyStore2D()
     let body = store.append(RigidBody2DSettings()
         ..mass = 4.0

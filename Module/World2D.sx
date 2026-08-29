@@ -655,13 +655,28 @@ public class World2D {
             index++
         }
     }
-    func candidate_pair_count() int { return self.current_candidate_pair_count }
+    func candidate_pair_count() int {
+        var count = 0
+        for candidate in self.active_pairs {
+            if self.candidate_enabled[candidate] {
+                let pair = self.candidate_bodies[candidate]
+                if self.store.enabled[pair.first] &&
+                    self.store.enabled[pair.second]
+                {
+                    count++
+                }
+            }
+        }
+        return count
+    }
     func contact_count() int {
         var count = 0
         var index = 0
         while index < self.candidate_pairs.count() {
             if self.candidate_enabled[index] &&
                 self.candidate_pairs[index].contact_count > 0 &&
+                self.store.enabled[self.candidate_bodies[index].first] &&
+                self.store.enabled[self.candidate_bodies[index].second] &&
                 !pair_is_sensor(self.store, self.candidate_bodies[index])
             {
                 count++
@@ -676,6 +691,8 @@ public class World2D {
         while index < self.candidate_pairs.count() {
             if !self.candidate_enabled[index] ||
                 self.candidate_pairs[index].contact_count <= 0 ||
+                !self.store.enabled[self.candidate_bodies[index].first] ||
+                !self.store.enabled[self.candidate_bodies[index].second] ||
                 pair_is_sensor(self.store, self.candidate_bodies[index])
             {
                 index++
@@ -749,7 +766,7 @@ public class World2D {
         var count = 0
         var index = 0
         while index < self.store.count() {
-            if self.store.awake[index] { count++ }
+            if self.store.enabled[index] && self.store.awake[index] { count++ }
             index++
         }
         return count
@@ -944,6 +961,7 @@ public class World2D {
         var index = 0
         while index < self.store.count() {
             if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.enabled[index] &&
                 self.store.awake[index] && self.sleep_eligible[index]
             {
                 count++
@@ -958,6 +976,7 @@ public class World2D {
         var index = 0
         while index < self.store.count() {
             if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.enabled[index] &&
                 self.store.awake[index] && self.sleep_eligible[index] &&
                 self.store.sleep_times[index] >= 0.5
             {
@@ -976,20 +995,23 @@ public class World2D {
         let index = self.store.require(id)
         let bounds = body_bounds(self.store, index)
         self.tight_bounds.append(bounds)
-        self.proxies.append(self.broad_phase.create_proxy(
-            bounds,
-            index
-        ))
+        if settings.is_enabled {
+            self.proxies.append(self.broad_phase.create_proxy(bounds, index))
+        } else {
+            self.proxies.append(-1)
+        }
         self.circle_grid_next.append(-1)
         self.circle_grid_cell_x.append(0)
         self.circle_grid_cell_y.append(0)
         self.direct_wake_pending.append(false)
         self.contact_wake_cooldowns.append(0.0)
-        if settings.body_type != BodyType2D.dynamic {
+        if settings.is_enabled && settings.body_type != BodyType2D.dynamic {
             self.non_dynamic_bodies.append(index)
-        } else {
+        } else if settings.is_enabled {
             if self.store.shape_counts[index] != 1 ||
-                self.store.shape_kinds[index] != 1
+                self.store.shape_kinds[index] != 1 ||
+                Math.abs(self.store.local_centers_x[index]) > 0.000000001 ||
+                Math.abs(self.store.local_centers_y[index]) > 0.000000001
             {
                 self.dynamic_grid_eligible = false
             }
@@ -1018,14 +1040,24 @@ public class World2D {
         self.island_ready_counts.append(0)
         self.island_can_sleep.append(true)
         self.island_write_offsets.append(0)
-        if settings.body_type == BodyType2D.dynamic && settings.allow_sleep {
+        if settings.is_enabled && settings.body_type == BodyType2D.dynamic &&
+            settings.allow_sleep
+        {
             self.sleep_enabled_body_count++
         }
-        if settings.is_bullet { self.bullet_body_count++ }
-        if settings.enable_move_events { self.move_event_body_count++ }
-        if settings.enable_contact_events { self.contact_event_body_count++ }
-        if settings.enable_hit_events { self.hit_event_body_count++ }
-        if settings.is_sensor && settings.enable_sensor_events {
+        if settings.is_enabled && settings.is_bullet { self.bullet_body_count++ }
+        if settings.is_enabled && settings.enable_move_events {
+            self.move_event_body_count++
+        }
+        if settings.is_enabled && settings.enable_contact_events {
+            self.contact_event_body_count++
+        }
+        if settings.is_enabled && settings.enable_hit_events {
+            self.hit_event_body_count++
+        }
+        if settings.is_enabled && settings.is_sensor &&
+            settings.enable_sensor_events
+        {
             self.sensor_event_body_count++
         }
         self.store.dirty_transforms[index] = false
@@ -1455,8 +1487,10 @@ public class World2D {
         if self.store.contains(first_id) { first = self.store.require(first_id) }
         if self.store.contains(second_id) { second = self.store.require(second_id) }
         self.joints.destroy(id)
-        if first >= 0 { self.broad_phase.touch_proxy(self.proxies[first]) }
-        if second >= 0 && second != first {
+        if first >= 0 && self.store.enabled[first] {
+            self.broad_phase.touch_proxy(self.proxies[first])
+        }
+        if second >= 0 && second != first && self.store.enabled[second] {
             self.broad_phase.touch_proxy(self.proxies[second])
         }
     }
@@ -1512,6 +1546,10 @@ public class World2D {
         while index < self.store.count() {
             self.stable_for_sleep[index] = true
             self.severe_for_sleep[index] = false
+            if !self.store.enabled[index] {
+                index++
+                continue
+            }
             self.contact_wake_cooldowns[index] = Math.max(
                 0.0,
                 self.contact_wake_cooldowns[index] - delta
@@ -1600,6 +1638,7 @@ public class World2D {
                 self.current_step_profile.solve_ms +
                 self.current_step_profile.sleep_ms
         }
+        self.store.clear_forces()
         self.store.world_locked = false
     }
 
@@ -1677,7 +1716,8 @@ public class World2D {
         if self.bullet_body_count == 0 { return }
         var mover = 0
         while mover < self.store.count() {
-            if self.store.body_types[mover] != BodyType2D.dynamic ||
+            if !self.store.enabled[mover] ||
+                self.store.body_types[mover] != BodyType2D.dynamic ||
                 !self.store.awake[mover] ||
                 (self.store.behavior_flags[mover] & 1) == 0
             {
@@ -1704,7 +1744,7 @@ public class World2D {
             var earliest_target = -1
             var target = 0
             while target < self.store.count() {
-                if target == mover {
+                if target == mover || !self.store.enabled[target] {
                     target++
                     continue
                 }
@@ -1887,7 +1927,8 @@ public class World2D {
         }
         var sensor = 0
         while sensor < self.store.count() {
-            if (self.store.behavior_flags[sensor] & 2) == 0 ||
+            if !self.store.enabled[sensor] ||
+                (self.store.behavior_flags[sensor] & 2) == 0 ||
                 (self.store.behavior_flags[sensor] & 32) == 0
             {
                 sensor++
@@ -1895,7 +1936,7 @@ public class World2D {
             }
             var other = 0
             while other < self.store.count() {
-                if other == sensor {
+                if other == sensor || !self.store.enabled[other] {
                     other++
                     continue
                 }
@@ -1935,7 +1976,9 @@ public class World2D {
         if self.move_event_body_count == 0 { return }
         var body = 0
         while body < self.store.count() {
-            if self.store.body_types[body] == BodyType2D.fixed {
+            if !self.store.enabled[body] ||
+                self.store.body_types[body] == BodyType2D.fixed
+            {
                 body++
                 continue
             }
@@ -2119,13 +2162,18 @@ public class World2D {
         while index < self.store.count() {
             let bounds = body_bounds(self.store, index)
             self.tight_bounds[index] = bounds
-            self.proxies[index] = self.broad_phase.create_proxy(bounds, index)
+            self.proxies[index] = -1
             self.circle_grid_next[index] = -1
             self.circle_grid_cell_x[index] = 0
             self.circle_grid_cell_y[index] = 0
             self.direct_wake_pending[index] = false
             self.sleep_parents[index] = index
             self.store.dirty_transforms[index] = false
+            if !self.store.enabled[index] {
+                index++
+                continue
+            }
+            self.proxies[index] = self.broad_phase.create_proxy(bounds, index)
             if (self.store.behavior_flags[index] & 1) != 0 {
                 self.bullet_body_count++
             }
@@ -2147,7 +2195,9 @@ public class World2D {
                 self.non_dynamic_bodies.append(index)
             } else {
                 if self.store.shape_counts[index] != 1 ||
-                    self.store.shape_kinds[index] != 1
+                    self.store.shape_kinds[index] != 1 ||
+                    Math.abs(self.store.local_centers_x[index]) > 0.000000001 ||
+                    Math.abs(self.store.local_centers_y[index]) > 0.000000001
                 {
                     self.dynamic_grid_eligible = false
                 }
@@ -2205,8 +2255,6 @@ public class World2D {
 
     private func update_sleep(delta:float) {
         if self.sleep_enabled_body_count == 0 { return }
-        let rest_motion_threshold_squared = 0.0025
-        let significant_motion_threshold_squared = 0.01
         let sleep_delay = 0.5
         let sleep_quorum_numerator = 19
         let sleep_quorum_denominator = 20
@@ -2288,6 +2336,7 @@ public class World2D {
                 let second = self.store.require(joint.second_body)
                 if self.store.body_types[first] == BodyType2D.dynamic &&
                     self.store.body_types[second] == BodyType2D.dynamic &&
+                    self.store.enabled[first] && self.store.enabled[second] &&
                     self.store.awake[first] && self.store.awake[second] &&
                     self.store.allow_sleep[first] &&
                     self.store.allow_sleep[second]
@@ -2323,6 +2372,7 @@ public class World2D {
             }
             if self.store.body_types[first] == BodyType2D.dynamic &&
                 self.store.body_types[second] == BodyType2D.dynamic &&
+                self.store.enabled[first] && self.store.enabled[second] &&
                 self.store.awake[first] && self.store.awake[second] &&
                 self.store.allow_sleep[first] && self.store.allow_sleep[second]
             {
@@ -2332,7 +2382,9 @@ public class World2D {
         }
         index = 0
         while index < self.store.count() {
-            if self.store.body_types[index] == BodyType2D.dynamic {
+            if self.store.enabled[index] &&
+                self.store.body_types[index] == BodyType2D.dynamic
+            {
                 if !self.store.allow_sleep[index] {
                     self.store.sleep_times[index] = 0.0
                     self.store.awake[index] = true
@@ -2347,6 +2399,12 @@ public class World2D {
                     let angular_speed = self.store.angular_velocities[index]
                     let surface_motion_squared = linear_speed_squared +
                         angular_speed * angular_speed * sweep_radius_squared
+                    let rest_threshold = self.store.sleep_thresholds[index]
+                    let rest_motion_threshold_squared =
+                        rest_threshold * rest_threshold
+                    let significant_threshold = rest_threshold * 2.0
+                    let significant_motion_threshold_squared =
+                        significant_threshold * significant_threshold
                     self.sleep_motion_squared[index] = surface_motion_squared
                     if surface_motion_squared > significant_motion_threshold_squared {
                         self.store.sleep_times[index] = 0.0
@@ -2370,6 +2428,7 @@ public class World2D {
             index = 0
             while index < self.store.count() {
                 if self.store.body_types[index] == BodyType2D.dynamic &&
+                    self.store.enabled[index] &&
                     self.store.awake[index] &&
                     self.sleep_eligible[index] &&
                     self.store.sleep_times[index] >= sleep_delay
@@ -2386,8 +2445,13 @@ public class World2D {
         index = 0
         while index < self.store.count() {
             if self.store.body_types[index] == BodyType2D.dynamic &&
+                self.store.enabled[index] &&
                 self.store.awake[index]
             {
+                let significant_threshold =
+                    self.store.sleep_thresholds[index] * 2.0
+                let significant_motion_threshold_squared =
+                    significant_threshold * significant_threshold
                 let root = self.find_sleep_root(index)
                 self.island_body_counts[root]++
                 if self.sleep_eligible[index] &&
@@ -2434,6 +2498,7 @@ public class World2D {
         while slot < self.store.slot_dense_indices.count() {
             let body = self.store.slot_dense_indices[slot]
             if body >= 0 &&
+                self.store.enabled[body] &&
                 self.store.body_types[body] == BodyType2D.dynamic &&
                 self.store.awake[body]
             {
@@ -2452,6 +2517,7 @@ public class World2D {
         while slot < self.store.slot_dense_indices.count() {
             let body = self.store.slot_dense_indices[slot]
             if body >= 0 &&
+                self.store.enabled[body] &&
                 self.store.body_types[body] == BodyType2D.dynamic &&
                 self.store.awake[body]
             {
@@ -2484,6 +2550,7 @@ public class World2D {
         while slot < self.store.slot_dense_indices.count() {
             let body = self.store.slot_dense_indices[slot]
             if body >= 0 &&
+                self.store.enabled[body] &&
                 self.store.body_types[body] == BodyType2D.dynamic &&
                 self.store.awake[body]
             {
@@ -2633,7 +2700,9 @@ public class World2D {
         let inverse_cell_size = 1.0 / cell_size
         var body = 0
         while body < self.store.count() {
-            if self.store.body_types[body] != BodyType2D.dynamic {
+            if !self.store.enabled[body] ||
+                self.store.body_types[body] != BodyType2D.dynamic
+            {
                 body++
                 continue
             }
@@ -2661,7 +2730,9 @@ public class World2D {
 
         body = 0
         while body < self.store.count() {
-            if self.store.body_types[body] != BodyType2D.dynamic {
+            if !self.store.enabled[body] ||
+                self.store.body_types[body] != BodyType2D.dynamic
+            {
                 body++
                 continue
             }
@@ -2740,7 +2811,8 @@ public class World2D {
         let inverse_cell_size = 1.0 / cell_size
         var body = 0
         while body < self.store.count() {
-            if self.store.body_types[body] != BodyType2D.dynamic ||
+            if !self.store.enabled[body] ||
+                self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
                 self.store.awake[body] ||
                 (self.store.behavior_flags[body] & 2) != 0
@@ -2772,7 +2844,8 @@ public class World2D {
 
         body = 0
         while body < self.store.count() {
-            if self.store.body_types[body] != BodyType2D.dynamic ||
+            if !self.store.enabled[body] ||
+                self.store.body_types[body] != BodyType2D.dynamic ||
                 self.store.shape_kinds[body] != 1 ||
                 !self.store.awake[body] ||
                 (self.store.behavior_flags[body] & 2) != 0
@@ -3469,6 +3542,10 @@ public class World2D {
             var collision_found = false
             if store.shape_kinds[pair.first] == 1 &&
                 store.shape_kinds[pair.second] == 1 &&
+                Math.abs(store.local_centers_x[pair.first]) <= 0.000000001 &&
+                Math.abs(store.local_centers_y[pair.first]) <= 0.000000001 &&
+                Math.abs(store.local_centers_x[pair.second]) <= 0.000000001 &&
+                Math.abs(store.local_centers_y[pair.second]) <= 0.000000001 &&
                 store.awake[pair.first] && store.awake[pair.second] &&
                 store.inverse_masses[pair.first] > 0.0 &&
                 store.inverse_masses[pair.second] > 0.0
@@ -4126,9 +4203,13 @@ func integrate_body_velocity(
     delta:float
 ) {
     store.velocities_x[index] +=
-        gravity.x * store.gravity_scales[index] * delta
+        (gravity.x * store.gravity_scales[index] +
+            store.forces_x[index] * store.inverse_masses[index]) * delta
     store.velocities_y[index] +=
-        gravity.y * store.gravity_scales[index] * delta
+        (gravity.y * store.gravity_scales[index] +
+            store.forces_y[index] * store.inverse_masses[index]) * delta
+    store.angular_velocities[index] +=
+        store.torques[index] * store.inverse_inertias[index] * delta
     let linear_scale = 1.0 / (
         1.0 + store.linear_dampings[index] * delta
     )
@@ -4144,12 +4225,21 @@ func integrate_body_position(
     index:int,
     delta:float
 ) {
-    store.positions_x[index] += store.velocities_x[index] * delta
-    store.positions_y[index] += store.velocities_y[index] * delta
+    var center = store.world_center_at(index)
+    center.x += store.velocities_x[index] * delta
+    center.y += store.velocities_y[index] * delta
     if store.angular_velocities[index] != 0.0 {
         store.rotations[index] += store.angular_velocities[index] * delta
         store.cache_rotation(index)
     }
+    let cosine = store.rotation_cosines[index]
+    let sine = store.rotation_sines[index]
+    store.positions_x[index] = center.x -
+        cosine * store.local_centers_x[index] +
+        sine * store.local_centers_y[index]
+    store.positions_y[index] = center.y -
+        sine * store.local_centers_x[index] -
+        cosine * store.local_centers_y[index]
     store.dirty_transforms[index] = true
 }
 
@@ -5579,8 +5669,8 @@ func prepare_collision_constraints(
     let first_inverse_inertia = solver_inverse_inertia(store, first)
     let second_inverse_inertia = solver_inverse_inertia(store, second)
     let inverse_mass = first_inverse_mass + second_inverse_mass
-    let first_position = body_position(store, first)
-    let second_position = body_position(store, second)
+    let first_position = store.world_center_at(first)
+    let second_position = store.world_center_at(second)
     let first_contact = Math.Vec2(
         collision.contacts.first.x,
         collision.contacts.first.y
@@ -5663,13 +5753,19 @@ func prepare_circle_collision_constraints(
     let tangent_y = normal_x
     let contact_x:float = collision.contacts.first.x + 0.0
     let contact_y:float = collision.contacts.first.y + 0.0
-    let first_radius_x = contact_x - store.positions_x[first]
-    let first_radius_y = contact_y - store.positions_y[first]
-    let second_radius_x = contact_x - store.positions_x[second]
-    let second_radius_y = contact_y - store.positions_y[second]
+    let first_center = store.world_center_at(first)
+    let second_center = store.world_center_at(second)
+    let first_radius_x = contact_x - first_center.x
+    let first_radius_y = contact_y - first_center.y
+    let second_radius_x = contact_x - second_center.x
+    let second_radius_y = contact_y - second_center.y
     let first_inverse_mass = solver_inverse_mass(store, first)
     let second_inverse_mass = solver_inverse_mass(store, second)
     let inverse_mass = first_inverse_mass + second_inverse_mass
+    let first_normal_arm =
+        first_radius_x * normal_y - first_radius_y * normal_x
+    let second_normal_arm =
+        second_radius_x * normal_y - second_radius_y * normal_x
     let first_tangent_arm =
         first_radius_x * tangent_y - first_radius_y * tangent_x
     let second_tangent_arm =
@@ -5679,14 +5775,25 @@ func prepare_circle_collision_constraints(
             solver_inverse_inertia(store, first) +
         second_tangent_arm * second_tangent_arm *
             solver_inverse_inertia(store, second)
-    collision.normal_denominator_first = inverse_mass
-    collision.normal_mass_first = 1.0 / inverse_mass
+    let normal_denominator = inverse_mass +
+        first_normal_arm * first_normal_arm *
+            solver_inverse_inertia(store, first) +
+        second_normal_arm * second_normal_arm *
+            solver_inverse_inertia(store, second)
+    collision.normal_denominator_first = normal_denominator
+    collision.normal_mass_first = 1.0 / normal_denominator
     collision.tangent_mass_first = 1.0 / tangent_denominator
     collision.combined_friction = store.friction_roots[first] *
         store.friction_roots[second]
-    let relative_normal_velocity =
-        (store.velocities_x[second] - store.velocities_x[first]) * normal_x +
-        (store.velocities_y[second] - store.velocities_y[first]) * normal_y
+    let relative_normal_velocity = velocity_at(
+        store,
+        second,
+        Math.Vec2(contact_x, contact_y)
+    ).subtract(velocity_at(
+        store,
+        first,
+        Math.Vec2(contact_x, contact_y)
+    )).dot(Math.Vec2(normal_x, normal_y))
     collision.initial_normal_velocity_first = relative_normal_velocity
 }
 
@@ -5695,7 +5802,6 @@ func contact_anchor_vector(
     body:int,
     local_point:Math.Vec2
 ) Math.Vec2 {
-    if store.shape_kinds[body] == 1 { return local_point }
     let cosine = store.rotation_cosines[body]
     let sine = store.rotation_sines[body]
     return Math.Vec2(
@@ -5764,12 +5870,9 @@ func soft_contact_separation(
     second_anchor:Math.Vec2,
     base_separation:float
 ) float {
-    let center_offset = Math.Vec2(
-        store.positions_x[collision.second_body] -
-            store.positions_x[collision.first_body],
-        store.positions_y[collision.second_body] -
-            store.positions_y[collision.first_body]
-    )
+    let center_offset = store.world_center_at(
+        collision.second_body
+    ).subtract(store.world_center_at(collision.first_body))
     return base_separation + center_offset.add(
         second_anchor.subtract(first_anchor)
     ).dot(collision.normal)
@@ -7289,13 +7392,10 @@ func body_contact_cache_point(
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
-    if store.shape_kinds[index] == 1 {
-        return Math.Vec2(
-            point.x - store.positions_x[index],
-            point.y - store.positions_y[index]
-        )
-    }
-    return body_local_point(store, index, point)
+    return body_local_point(store, index, point).subtract(Math.Vec2(
+        store.local_centers_x[index],
+        store.local_centers_y[index]
+    ))
 }
 
 func body_axis_x(store:BodyStore2D, index:int) Math.Vec2 {
@@ -7358,8 +7458,9 @@ func velocity_at(
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
-    let radius_x = point.x - store.positions_x[index]
-    let radius_y = point.y - store.positions_y[index]
+    let center = store.world_center_at(index)
+    let radius_x = point.x - center.x
+    let radius_y = point.y - center.y
     let angular = store.angular_velocities[index]
     return Math.Vec2(
         store.velocities_x[index] - angular * radius_y,

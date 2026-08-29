@@ -2,6 +2,7 @@ use GFX.Physics.Box2D.Box2D
 use GFX.Physics.Circle2D.Circle2D
 use GFX.Physics.CollisionFilter2D.CollisionFilter2D
 use GFX.Physics.Shape2D.Shape2D
+use GFX.Physics.Transform2D.Transform2D
 use STD.Math
 
 public enum BodyType2D {
@@ -31,6 +32,28 @@ public struct PhysicsMaterial2D {
         self.rolling_resistance = 0.0
         self.tangent_speed = 0.0
         self.application_id = PhysicsMaterialId2D()
+    }
+}
+
+public struct MassProperties2D {
+    let mass:float
+    let local_center:Math.Vec2
+    let rotational_inertia:float
+
+    init(
+        mass:float,
+        rotational_inertia:float,
+        local_center:Math.Vec2 = Math.Vec2()
+    ) {
+        if !finite_body_value(mass) || mass < 0.0 ||
+            !finite_body_point(local_center) ||
+            !finite_body_value(rotational_inertia) || rotational_inertia < 0.0
+        {
+            panic("GFX.Physics.MassProperties2D requires a non-negative finite mass and inertia with a finite center")
+        }
+        self.mass = mass
+        self.local_center = local_center
+        self.rotational_inertia = rotational_inertia
     }
 }
 
@@ -71,8 +94,12 @@ public struct RigidBody2DSettings {
     var friction:float
     var linear_damping:float
     var angular_damping:float
+    var sleep_threshold:float
     var allow_sleep:bool
+    var fixed_rotation:bool
     var is_bullet:bool
+    var is_enabled:bool
+    var debug_label:str
     var is_sensor:bool
     var enable_move_events:bool
     var enable_contact_events:bool
@@ -89,13 +116,17 @@ public struct RigidBody2DSettings {
         self.rotation = 0.0
         self.angular_velocity = 0.0
         self.gravity_scale = 1.0
-        self.mass = 1.0
+        self.mass = 0.0
         self.restitution = 0.0
         self.friction = 0.6
         self.linear_damping = 0.0
         self.angular_damping = 0.0
+        self.sleep_threshold = 0.05
         self.allow_sleep = true
+        self.fixed_rotation = false
         self.is_bullet = false
+        self.is_enabled = true
+        self.debug_label = ""
         self.is_sensor = false
         self.enable_move_events = false
         self.enable_contact_events = false
@@ -427,6 +458,139 @@ func shape_metrics(shape:Shape2D) ShapeMetrics2D {
     )
 }
 
+struct ShapeMass2D {
+    let mass:float
+    let center:Math.Vec2
+    let inertia_about_origin:float
+
+    init(
+        mass:float = 0.0,
+        center:Math.Vec2 = Math.Vec2(),
+        inertia_about_origin:float = 0.0
+    ) {
+        self.mass = mass
+        self.center = center
+        self.inertia_about_origin = inertia_about_origin
+    }
+}
+
+func shape_mass_properties(shape:Shape2D, density:float) ShapeMass2D {
+    if density <= 0.0 { return ShapeMass2D() }
+    match shape {
+        box(value) => {
+            let half = value.size.multiply(0.5)
+            return polygon_mass_properties([
+                Math.Vec2(-half.x, -half.y),
+                Math.Vec2(half.x, -half.y),
+                Math.Vec2(half.x, half.y),
+                Math.Vec2(-half.x, half.y)
+            ], value.radius, density)
+        }
+        capsule(value) => {
+            let radius_squared = value.radius * value.radius
+            let length = value.second.subtract(value.first).length()
+            let length_squared = length * length
+            let circle_mass = density * Math.pi() * radius_squared
+            let box_mass = density * 2.0 * value.radius * length
+            let mass = circle_mass + box_mass
+            let center = value.first.add(value.second).multiply(0.5)
+            let half_length = length * 0.5
+            let half_circle_center = 4.0 * value.radius / (3.0 * Math.pi())
+            let circle_inertia = circle_mass * (
+                0.5 * radius_squared +
+                half_length * half_length +
+                2.0 * half_length * half_circle_center
+            )
+            let box_inertia = box_mass * (
+                4.0 * radius_squared + length_squared
+            ) / 12.0
+            return ShapeMass2D(
+                mass,
+                center,
+                circle_inertia + box_inertia + mass * center.length_squared()
+            )
+        }
+        circle(value) => {
+            let radius_squared = value.radius * value.radius
+            let mass = density * Math.pi() * radius_squared
+            return ShapeMass2D(mass, Math.Vec2(), mass * radius_squared * 0.5)
+        }
+        polygon(value) => {
+            return polygon_mass_properties(
+                value.vertices,
+                value.radius,
+                density
+            )
+        }
+        chain(_) => { return ShapeMass2D() }
+        segment(_) => { return ShapeMass2D() }
+    }
+}
+
+// Rounded-polygon mass follows Box2D 3.1.1 src/geometry.c at 8c661469: its
+// public radius is approximated by pushing each convex vertex along the
+// averaged adjacent normals before integrating triangles.
+func polygon_mass_properties(
+    source:Math.Vec2[],
+    radius:float,
+    density:float
+) ShapeMass2D {
+    var vertices = source
+    if radius > 0.0 {
+        vertices = []
+        var index = 0
+        while index < source.count() {
+            var previous = index - 1
+            if index == 0 { previous = source.count() - 1 }
+            let next = (index + 1) % source.count()
+            let previous_edge = source[index].subtract(source[previous])
+            let next_edge = source[next].subtract(source[index])
+            let previous_normal = Math.Vec2(
+                previous_edge.y,
+                -previous_edge.x
+            ).normalized()
+            let next_normal = Math.Vec2(
+                next_edge.y,
+                -next_edge.x
+            ).normalized()
+            let middle = previous_normal.add(next_normal).normalized()
+            vertices.append(source[index].add(
+                middle.multiply(1.412 * radius)
+            ))
+            index++
+        }
+    }
+    let reference = vertices[0]
+    var area = 0.0
+    var relative_center = Math.Vec2()
+    var relative_inertia = 0.0
+    var index = 1
+    while index < vertices.count() - 1 {
+        let first = vertices[index].subtract(reference)
+        let second = vertices[index + 1].subtract(reference)
+        let determinant = first.x * second.y - first.y * second.x
+        let triangle_area = determinant * 0.5
+        area += triangle_area
+        relative_center = relative_center.add(
+            first.add(second).multiply(triangle_area / 3.0)
+        )
+        relative_inertia += determinant / 12.0 * (
+            first.x * first.x + second.x * first.x +
+            second.x * second.x + first.y * first.y +
+            second.y * first.y + second.y * second.y
+        )
+        index++
+    }
+    if area <= 0.0 { return ShapeMass2D() }
+    relative_center = relative_center.divide(area)
+    let center = reference.add(relative_center)
+    let mass = density * area
+    let inertia = density * relative_inertia + mass * (
+        center.length_squared() - relative_center.length_squared()
+    )
+    return ShapeMass2D(mass, center, inertia)
+}
+
 package class BodyStore2D {
     var slot_generations:int[]
     var slot_dense_indices:int[]
@@ -460,13 +624,25 @@ package class BodyStore2D {
     var rotation_sines:float[]
     var angular_velocities:float[]
     var gravity_scales:float[]
+    var masses:float[]
+    var inertias:float[]
     var inverse_masses:float[]
     var inverse_inertias:float[]
+    var local_centers_x:float[]
+    var local_centers_y:float[]
+    var forces_x:float[]
+    var forces_y:float[]
+    var torques:float[]
     var restitutions:float[]
     var friction_roots:float[]
     var linear_dampings:float[]
     var angular_dampings:float[]
+    var sleep_thresholds:float[]
     var allow_sleep:bool[]
+    var fixed_rotations:bool[]
+    var enabled:bool[]
+    var debug_labels:str[]
+    var mass_overridden:bool[]
     var behavior_flags:uint8[]
     var awake:bool[]
     var sleep_times:float[]
@@ -507,13 +683,25 @@ package class BodyStore2D {
         self.rotation_sines = []
         self.angular_velocities = []
         self.gravity_scales = []
+        self.masses = []
+        self.inertias = []
         self.inverse_masses = []
         self.inverse_inertias = []
+        self.local_centers_x = []
+        self.local_centers_y = []
+        self.forces_x = []
+        self.forces_y = []
+        self.torques = []
         self.restitutions = []
         self.friction_roots = []
         self.linear_dampings = []
         self.angular_dampings = []
+        self.sleep_thresholds = []
         self.allow_sleep = []
+        self.fixed_rotations = []
+        self.enabled = []
+        self.debug_labels = []
+        self.mass_overridden = []
         self.behavior_flags = []
         self.awake = []
         self.sleep_times = []
@@ -546,12 +734,6 @@ package class BodyStore2D {
         let sweep_radius_squared = metrics.sweep_radius_squared
         if settings.body_type != BodyType2D.fixed && shape_kind == 3 {
             panic("GFX.Physics.World2D requires chain body shapes to be fixed")
-        }
-        var inverse_mass = 0.0
-        var inverse_inertia = 0.0
-        if settings.body_type == BodyType2D.dynamic {
-            inverse_mass = 1.0 / settings.mass
-            inverse_inertia = metrics.inverse_inertia_factor / settings.mass
         }
         var first_shape_slot = -1
         var primary_shape_slot = -1
@@ -603,15 +785,31 @@ package class BodyStore2D {
         self.rotations.append(settings.rotation)
         self.rotation_cosines.append(Math.cos(settings.rotation))
         self.rotation_sines.append(Math.sin(settings.rotation))
-        self.angular_velocities.append(settings.angular_velocity)
+        if settings.fixed_rotation {
+            self.angular_velocities.append(0.0)
+        } else {
+            self.angular_velocities.append(settings.angular_velocity)
+        }
         self.gravity_scales.append(settings.gravity_scale)
-        self.inverse_masses.append(inverse_mass)
-        self.inverse_inertias.append(inverse_inertia)
+        self.masses.append(0.0)
+        self.inertias.append(0.0)
+        self.inverse_masses.append(0.0)
+        self.inverse_inertias.append(0.0)
+        self.local_centers_x.append(0.0)
+        self.local_centers_y.append(0.0)
+        self.forces_x.append(0.0)
+        self.forces_y.append(0.0)
+        self.torques.append(0.0)
         self.restitutions.append(settings.restitution)
         self.friction_roots.append(Math.sqrt(settings.friction))
         self.linear_dampings.append(settings.linear_damping)
         self.angular_dampings.append(settings.angular_damping)
+        self.sleep_thresholds.append(settings.sleep_threshold)
         self.allow_sleep.append(settings.allow_sleep)
+        self.fixed_rotations.append(settings.fixed_rotation)
+        self.enabled.append(settings.is_enabled)
+        self.debug_labels.append(settings.debug_label)
+        self.mass_overridden.append(false)
         var behavior_flags:uint8 = 0
         if settings.is_bullet { behavior_flags += 1 }
         if settings.create_implicit_collider && settings.is_sensor {
@@ -630,9 +828,15 @@ package class BodyStore2D {
             behavior_flags += 32
         }
         self.behavior_flags.append(behavior_flags)
-        self.awake.append(settings.body_type != BodyType2D.fixed)
+        self.awake.append(
+            settings.is_enabled && settings.body_type != BodyType2D.fixed
+        )
         self.sleep_times.append(0.0)
         self.dirty_transforms.append(true)
+        self.recompute_mass_from_colliders(index, false)
+        if settings.mass > 0.0 {
+            self.override_scalar_mass(index, settings.mass)
+        }
         return BodyId2D(slot, self.slot_generations[slot])
     }
 
@@ -656,6 +860,122 @@ package class BodyStore2D {
     func body_id_at(index:int) BodyId2D {
         let slot = self.dense_slots[index]
         return BodyId2D(slot, self.slot_generations[slot])
+    }
+
+    func world_center_at(index:int) Math.Vec2 {
+        let cosine = self.rotation_cosines[index]
+        let sine = self.rotation_sines[index]
+        return Math.Vec2(
+            self.positions_x[index] +
+                cosine * self.local_centers_x[index] -
+                sine * self.local_centers_y[index],
+            self.positions_y[index] +
+                sine * self.local_centers_x[index] +
+                cosine * self.local_centers_y[index]
+        )
+    }
+
+    func recompute_mass_from_colliders(
+        body:int,
+        adjust_velocity:bool = true
+    ) {
+        if self.mass_overridden[body] { return }
+        var total_mass = 0.0
+        var weighted_center = Math.Vec2()
+        var inertia_about_origin = 0.0
+        var slot = self.first_shape_slots[body]
+        while slot >= 0 {
+            let dense = self.shape_store.slot_dense_indices[slot]
+            let properties = shape_mass_properties(
+                self.shape_store.shapes[dense],
+                self.shape_store.densities[dense]
+            )
+            total_mass += properties.mass
+            weighted_center = weighted_center.add(
+                properties.center.multiply(properties.mass)
+            )
+            inertia_about_origin += properties.inertia_about_origin
+            slot = self.shape_store.next_body_shape_slots[dense]
+        }
+        var center = Math.Vec2()
+        if total_mass > 0.0 {
+            center = weighted_center.divide(total_mass)
+        }
+        let inertia = Math.max(
+            0.0,
+            inertia_about_origin - total_mass * center.length_squared()
+        )
+        self.apply_mass_properties(
+            body,
+            MassProperties2D(total_mass, inertia, center),
+            adjust_velocity
+        )
+    }
+
+    func set_mass_properties(body:int, properties:MassProperties2D) {
+        self.apply_mass_properties(body, properties, true)
+        self.mass_overridden[body] = true
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    func reset_mass_from_colliders(body:int) {
+        self.mass_overridden[body] = false
+        self.recompute_mass_from_colliders(body)
+        self.topology_dirty = true
+        self.wake(body)
+    }
+
+    private func override_scalar_mass(body:int, mass:float) {
+        var inertia = 0.0
+        if self.masses[body] > 0.0 {
+            inertia = self.inertias[body] * mass / self.masses[body]
+        }
+        self.apply_mass_properties(
+            body,
+            MassProperties2D(
+                mass,
+                inertia,
+                Math.Vec2(
+                    self.local_centers_x[body],
+                    self.local_centers_y[body]
+                )
+            ),
+            false
+        )
+        self.mass_overridden[body] = true
+    }
+
+    private func apply_mass_properties(
+        body:int,
+        properties:MassProperties2D,
+        adjust_velocity:bool
+    ) {
+        let old_center = self.world_center_at(body)
+        self.masses[body] = properties.mass
+        self.inertias[body] = properties.rotational_inertia
+        self.local_centers_x[body] = properties.local_center.x
+        self.local_centers_y[body] = properties.local_center.y
+        self.refresh_inverse_mass(body)
+        if adjust_velocity {
+            let new_center = self.world_center_at(body)
+            let delta = new_center.subtract(old_center)
+            let angular_velocity = self.angular_velocities[body]
+            self.velocities_x[body] -= angular_velocity * delta.y
+            self.velocities_y[body] += angular_velocity * delta.x
+        }
+    }
+
+    func refresh_inverse_mass(body:int) {
+        self.inverse_masses[body] = 0.0
+        self.inverse_inertias[body] = 0.0
+        if self.body_types[body] != BodyType2D.dynamic { return }
+        if self.masses[body] > 0.0 {
+            self.inverse_masses[body] = 1.0 / self.masses[body]
+        }
+        if !self.fixed_rotations[body] && self.inertias[body] > 0.0 {
+            self.inverse_inertias[body] = 1.0 / self.inertias[body]
+        }
     }
 
     func attach_shape(id:BodyId2D, shape:Shape2D) ShapeId2D {
@@ -689,6 +1009,7 @@ package class BodyStore2D {
         } else {
             self.refresh_collider_flags(index)
         }
+        self.recompute_mass_from_colliders(index)
         self.dirty_transforms[index] = true
         self.topology_dirty = true
         self.wake(index)
@@ -727,6 +1048,7 @@ package class BodyStore2D {
         }
         self.shape_store.destroy(id)
         self.apply_primary_collider(body)
+        self.recompute_mass_from_colliders(body)
         self.dirty_transforms[body] = true
         self.topology_dirty = true
         self.wake(body)
@@ -757,6 +1079,7 @@ package class BodyStore2D {
         if self.primary_shape_slots[body] == id.slot {
             self.apply_primary_collider(body)
         }
+        self.recompute_mass_from_colliders(body)
         self.dirty_transforms[body] = true
         self.topology_dirty = true
         self.wake(body)
@@ -780,6 +1103,8 @@ package class BodyStore2D {
         let dense = self.shape_store.require(id)
         self.shape_store.densities[dense] = density
         let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
+        self.recompute_mass_from_colliders(body)
+        self.topology_dirty = true
         self.wake(body)
     }
 
@@ -842,7 +1167,6 @@ package class BodyStore2D {
             let metrics = shape_metrics(fallback)
             self.shapes[body] = fallback
             self.apply_primary_metrics(body, metrics)
-            self.inverse_inertias[body] = 0.0
             self.collision_filters[body] = CollisionFilter2D()
             self.restitutions[body] = 0.0
             self.friction_roots[body] = Math.sqrt(0.6)
@@ -869,12 +1193,6 @@ package class BodyStore2D {
         self.local_lower_y[body] = metrics.lower.y
         self.local_upper_x[body] = metrics.upper.x
         self.local_upper_y[body] = metrics.upper.y
-        if self.body_types[body] == BodyType2D.dynamic {
-            self.inverse_inertias[body] =
-                metrics.inverse_inertia_factor * self.inverse_masses[body]
-        } else {
-            self.inverse_inertias[body] = 0.0
-        }
     }
 
     private func refresh_collider_flags(body:int) {
@@ -918,7 +1236,9 @@ package class BodyStore2D {
     }
 
     func wake(index:int) {
-        if self.body_types[index] == BodyType2D.fixed { return }
+        if self.body_types[index] == BodyType2D.fixed || !self.enabled[index] {
+            return
+        }
         self.awake[index] = true
         self.sleep_times[index] = 0.0
     }
@@ -932,6 +1252,16 @@ package class BodyStore2D {
     func cache_rotation(index:int) {
         self.rotation_cosines[index] = Math.cos(self.rotations[index])
         self.rotation_sines[index] = Math.sin(self.rotations[index])
+    }
+
+    func clear_forces() {
+        var index = 0
+        while index < self.count() {
+            self.forces_x[index] = 0.0
+            self.forces_y[index] = 0.0
+            self.torques[index] = 0.0
+            index++
+        }
     }
 
     private func swap_dense(first:int, second:int) {
@@ -963,13 +1293,25 @@ package class BodyStore2D {
         self.rotation_sines.swap(first, second)
         self.angular_velocities.swap(first, second)
         self.gravity_scales.swap(first, second)
+        self.masses.swap(first, second)
+        self.inertias.swap(first, second)
         self.inverse_masses.swap(first, second)
         self.inverse_inertias.swap(first, second)
+        self.local_centers_x.swap(first, second)
+        self.local_centers_y.swap(first, second)
+        self.forces_x.swap(first, second)
+        self.forces_y.swap(first, second)
+        self.torques.swap(first, second)
         self.restitutions.swap(first, second)
         self.friction_roots.swap(first, second)
         self.linear_dampings.swap(first, second)
         self.angular_dampings.swap(first, second)
+        self.sleep_thresholds.swap(first, second)
         self.allow_sleep.swap(first, second)
+        self.fixed_rotations.swap(first, second)
+        self.enabled.swap(first, second)
+        self.debug_labels.swap(first, second)
+        self.mass_overridden.swap(first, second)
         self.behavior_flags.swap(first, second)
         self.awake.swap(first, second)
         self.sleep_times.swap(first, second)
@@ -1005,13 +1347,25 @@ package class BodyStore2D {
         self.rotation_sines.take_last()
         self.angular_velocities.take_last()
         self.gravity_scales.take_last()
+        self.masses.take_last()
+        self.inertias.take_last()
         self.inverse_masses.take_last()
         self.inverse_inertias.take_last()
+        self.local_centers_x.take_last()
+        self.local_centers_y.take_last()
+        self.forces_x.take_last()
+        self.forces_y.take_last()
+        self.torques.take_last()
         self.restitutions.take_last()
         self.friction_roots.take_last()
         self.linear_dampings.take_last()
         self.angular_dampings.take_last()
+        self.sleep_thresholds.take_last()
         self.allow_sleep.take_last()
+        self.fixed_rotations.take_last()
+        self.enabled.take_last()
+        self.debug_labels.take_last()
+        self.mass_overridden.take_last()
         self.behavior_flags.take_last()
         self.awake.take_last()
         self.sleep_times.take_last()
@@ -1166,6 +1520,36 @@ public class RigidBody2D {
         return self.store.body_types[index]
     }
 
+    func mass() float { return self.store.masses[self.store.require(self.id)] }
+
+    func rotational_inertia() float {
+        return self.store.inertias[self.store.require(self.id)]
+    }
+
+    func mass_properties() MassProperties2D {
+        let index = self.store.require(self.id)
+        return MassProperties2D(
+            self.store.masses[index],
+            self.store.inertias[index],
+            Math.Vec2(
+                self.store.local_centers_x[index],
+                self.store.local_centers_y[index]
+            )
+        )
+    }
+
+    func local_center_of_mass() Math.Vec2 {
+        let index = self.store.require(self.id)
+        return Math.Vec2(
+            self.store.local_centers_x[index],
+            self.store.local_centers_y[index]
+        )
+    }
+
+    func world_center_of_mass() Math.Vec2 {
+        return self.store.world_center_at(self.store.require(self.id))
+    }
+
     func shape() Shape2D {
         let index = self.store.require(self.id)
         if self.store.primary_shape_slots[index] < 0 {
@@ -1218,6 +1602,34 @@ public class RigidBody2D {
         return self.store.gravity_scales[self.store.require(self.id)]
     }
 
+    func linear_damping() float {
+        return self.store.linear_dampings[self.store.require(self.id)]
+    }
+
+    func angular_damping() float {
+        return self.store.angular_dampings[self.store.require(self.id)]
+    }
+
+    func sleep_threshold() float {
+        return self.store.sleep_thresholds[self.store.require(self.id)]
+    }
+
+    func is_sleep_enabled() bool {
+        return self.store.allow_sleep[self.store.require(self.id)]
+    }
+
+    func has_fixed_rotation() bool {
+        return self.store.fixed_rotations[self.store.require(self.id)]
+    }
+
+    func is_enabled() bool {
+        return self.store.enabled[self.store.require(self.id)]
+    }
+
+    func debug_label() str {
+        return self.store.debug_labels[self.store.require(self.id)]
+    }
+
     func is_bullet() bool {
         return (self.store.behavior_flags[self.store.require(self.id)] & 1) != 0
     }
@@ -1230,8 +1642,116 @@ public class RigidBody2D {
         return self.store.awake[self.store.require(self.id)]
     }
 
+    func world_point(local_point:Math.Vec2) Math.Vec2 {
+        let index = self.store.require(self.id)
+        let cosine = self.store.rotation_cosines[index]
+        let sine = self.store.rotation_sines[index]
+        return Math.Vec2(
+            self.store.positions_x[index] +
+                cosine * local_point.x - sine * local_point.y,
+            self.store.positions_y[index] +
+                sine * local_point.x + cosine * local_point.y
+        )
+    }
+
+    func local_point(world_point:Math.Vec2) Math.Vec2 {
+        let index = self.store.require(self.id)
+        let translated = world_point.subtract(Math.Vec2(
+            self.store.positions_x[index],
+            self.store.positions_y[index]
+        ))
+        let cosine = self.store.rotation_cosines[index]
+        let sine = self.store.rotation_sines[index]
+        return Math.Vec2(
+            translated.x * cosine + translated.y * sine,
+            translated.y * cosine - translated.x * sine
+        )
+    }
+
+    func world_vector(local_vector:Math.Vec2) Math.Vec2 {
+        let index = self.store.require(self.id)
+        let cosine = self.store.rotation_cosines[index]
+        let sine = self.store.rotation_sines[index]
+        return Math.Vec2(
+            local_vector.x * cosine - local_vector.y * sine,
+            local_vector.x * sine + local_vector.y * cosine
+        )
+    }
+
+    func local_vector(world_vector:Math.Vec2) Math.Vec2 {
+        let index = self.store.require(self.id)
+        let cosine = self.store.rotation_cosines[index]
+        let sine = self.store.rotation_sines[index]
+        return Math.Vec2(
+            world_vector.x * cosine + world_vector.y * sine,
+            world_vector.y * cosine - world_vector.x * sine
+        )
+    }
+
+    func world_point_velocity(world_point:Math.Vec2) Math.Vec2 {
+        let index = self.store.require(self.id)
+        let radius = world_point.subtract(self.store.world_center_at(index))
+        let angular = self.store.angular_velocities[index]
+        return Math.Vec2(
+            self.store.velocities_x[index] - angular * radius.y,
+            self.store.velocities_y[index] + angular * radius.x
+        )
+    }
+
+    func local_point_velocity(local_point:Math.Vec2) Math.Vec2 {
+        return self.world_point_velocity(self.world_point(local_point))
+    }
+
+    func set_mass_properties(properties:MassProperties2D) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        if self.store.body_types[index] != BodyType2D.dynamic {
+            panic("GFX.Physics.RigidBody2D mass overrides require a dynamic body")
+        }
+        self.store.set_mass_properties(index, properties)
+    }
+
+    func reset_mass_from_colliders() {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        if self.store.body_types[index] != BodyType2D.dynamic {
+            panic("GFX.Physics.RigidBody2D mass recalculation requires a dynamic body")
+        }
+        self.store.reset_mass_from_colliders(index)
+    }
+
+    func set_body_type(body_type:BodyType2D) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        if self.store.body_types[index] == body_type { return }
+        if body_type != BodyType2D.fixed {
+            var slot = self.store.first_shape_slots[index]
+            while slot >= 0 {
+                let dense = self.store.shape_store.slot_dense_indices[slot]
+                if shape_metrics(self.store.shape_store.shapes[dense]).kind == 3 {
+                    panic("GFX.Physics.RigidBody2D chain colliders require a fixed body")
+                }
+                slot = self.store.shape_store.next_body_shape_slots[dense]
+            }
+        }
+        self.store.body_types[index] = body_type
+        self.store.refresh_inverse_mass(index)
+        self.store.forces_x[index] = 0.0
+        self.store.forces_y[index] = 0.0
+        self.store.torques[index] = 0.0
+        if body_type == BodyType2D.fixed {
+            self.store.awake[index] = false
+        } else {
+            self.store.wake(index)
+        }
+        self.store.topology_dirty = true
+    }
+
     func set_position(position:Math.Vec2) {
         self.store.require_mutable()
+        if !finite_body_point(position) {
+            panic("GFX.Physics.RigidBody2D position must be finite")
+        }
         let index = self.store.require(self.id)
         self.store.positions_x[index] = position.x
         self.store.positions_y[index] = position.y
@@ -1241,7 +1761,13 @@ public class RigidBody2D {
 
     func set_velocity(velocity:Math.Vec2) {
         self.store.require_mutable()
+        if !finite_body_point(velocity) {
+            panic("GFX.Physics.RigidBody2D velocity must be finite")
+        }
         let index = self.store.require(self.id)
+        if self.store.body_types[index] == BodyType2D.fixed {
+            panic("GFX.Physics.RigidBody2D cannot set velocity on a fixed body")
+        }
         self.store.velocities_x[index] = velocity.x
         self.store.velocities_y[index] = velocity.y
         self.store.wake(index)
@@ -1249,6 +1775,9 @@ public class RigidBody2D {
 
     func set_rotation(rotation:float) {
         self.store.require_mutable()
+        if !finite_body_value(rotation) {
+            panic("GFX.Physics.RigidBody2D rotation must be finite")
+        }
         let index = self.store.require(self.id)
         self.store.rotations[index] = rotation
         self.store.cache_rotation(index)
@@ -1258,16 +1787,240 @@ public class RigidBody2D {
 
     func set_angular_velocity(velocity:float) {
         self.store.require_mutable()
+        if !finite_body_value(velocity) {
+            panic("GFX.Physics.RigidBody2D angular velocity must be finite")
+        }
         let index = self.store.require(self.id)
+        if self.store.body_types[index] == BodyType2D.fixed ||
+            self.store.fixed_rotations[index]
+        {
+            panic("GFX.Physics.RigidBody2D cannot rotate this body")
+        }
         self.store.angular_velocities[index] = velocity
         self.store.wake(index)
     }
 
     func set_gravity_scale(scale:float) {
         self.store.require_mutable()
+        if !finite_body_value(scale) {
+            panic("GFX.Physics.RigidBody2D gravity scale must be finite")
+        }
         let index = self.store.require(self.id)
         self.store.gravity_scales[index] = scale
         self.store.wake(index)
+    }
+
+    func set_linear_damping(damping:float) {
+        self.store.require_mutable()
+        if !finite_body_value(damping) || damping < 0.0 {
+            panic("GFX.Physics.RigidBody2D linear damping must be finite and non-negative")
+        }
+        let index = self.store.require(self.id)
+        self.store.linear_dampings[index] = damping
+        self.store.wake(index)
+    }
+
+    func set_angular_damping(damping:float) {
+        self.store.require_mutable()
+        if !finite_body_value(damping) || damping < 0.0 {
+            panic("GFX.Physics.RigidBody2D angular damping must be finite and non-negative")
+        }
+        let index = self.store.require(self.id)
+        self.store.angular_dampings[index] = damping
+        self.store.wake(index)
+    }
+
+    func set_sleep_threshold(threshold:float) {
+        self.store.require_mutable()
+        if !finite_body_value(threshold) || threshold < 0.0 {
+            panic("GFX.Physics.RigidBody2D sleep threshold must be finite and non-negative")
+        }
+        let index = self.store.require(self.id)
+        self.store.sleep_thresholds[index] = threshold
+        self.store.wake(index)
+    }
+
+    func set_sleep_enabled(enabled:bool) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        self.store.allow_sleep[index] = enabled
+        if !enabled { self.store.wake(index) }
+        self.store.topology_dirty = true
+    }
+
+    func set_fixed_rotation(fixed:bool) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        self.store.fixed_rotations[index] = fixed
+        if fixed { self.store.angular_velocities[index] = 0.0 }
+        self.store.refresh_inverse_mass(index)
+        self.store.wake(index)
+    }
+
+    func set_bullet(bullet:bool) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        let current = (self.store.behavior_flags[index] & 1) != 0
+        if current == bullet { return }
+        if bullet { self.store.behavior_flags[index] += 1 }
+        else { self.store.behavior_flags[index] -= 1 }
+        self.store.wake(index)
+        self.store.topology_dirty = true
+    }
+
+    func set_enabled(enabled:bool) {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        if self.store.enabled[index] == enabled { return }
+        self.store.enabled[index] = enabled
+        self.store.forces_x[index] = 0.0
+        self.store.forces_y[index] = 0.0
+        self.store.torques[index] = 0.0
+        if enabled { self.store.wake(index) }
+        else {
+            self.store.awake[index] = false
+            self.store.sleep_times[index] = 0.0
+        }
+        self.store.topology_dirty = true
+    }
+
+    func set_debug_label(label:str) {
+        self.store.require_mutable()
+        self.store.debug_labels[self.store.require(self.id)] = label
+    }
+
+    func set_target_transform(target:Transform2D, duration:float) {
+        self.store.require_mutable()
+        if !finite_body_value(duration) || duration <= 0.0 {
+            panic("GFX.Physics.RigidBody2D kinematic target duration must be finite and positive")
+        }
+        let index = self.store.require(self.id)
+        if self.store.body_types[index] != BodyType2D.kinematic ||
+            !self.store.enabled[index]
+        {
+            panic("GFX.Physics.RigidBody2D target transforms require an enabled kinematic body")
+        }
+        let local_center = Math.Vec2(
+            self.store.local_centers_x[index],
+            self.store.local_centers_y[index]
+        )
+        let target_center = target.point(local_center)
+        let center = self.store.world_center_at(index)
+        self.store.velocities_x[index] =
+            (target_center.x - center.x) / duration
+        self.store.velocities_y[index] =
+            (target_center.y - center.y) / duration
+        var angle = target.rotation - self.store.rotations[index]
+        while angle > Math.pi() { angle -= Math.two_pi() }
+        while angle < -Math.pi() { angle += Math.two_pi() }
+        if self.store.fixed_rotations[index] {
+            self.store.angular_velocities[index] = 0.0
+        } else {
+            self.store.angular_velocities[index] = angle / duration
+        }
+        self.store.wake(index)
+    }
+
+    func apply_force(
+        force:Math.Vec2,
+        point:Math.Vec2,
+        wake:bool = true
+    ) {
+        if !finite_body_point(force) || !finite_body_point(point) {
+            panic("GFX.Physics.RigidBody2D force and point must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if !self.store.awake[index] { return }
+        self.store.forces_x[index] += force.x
+        self.store.forces_y[index] += force.y
+        let radius = point.subtract(self.store.world_center_at(index))
+        self.store.torques[index] += radius.x * force.y - radius.y * force.x
+    }
+
+    func apply_force_to_center(force:Math.Vec2, wake:bool = true) {
+        if !finite_body_point(force) {
+            panic("GFX.Physics.RigidBody2D force must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if !self.store.awake[index] { return }
+        self.store.forces_x[index] += force.x
+        self.store.forces_y[index] += force.y
+    }
+
+    func apply_torque(torque:float, wake:bool = true) {
+        if !finite_body_value(torque) {
+            panic("GFX.Physics.RigidBody2D torque must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if self.store.fixed_rotations[index] {
+            panic("GFX.Physics.RigidBody2D torque requires free rotation")
+        }
+        if self.store.awake[index] { self.store.torques[index] += torque }
+    }
+
+    func apply_linear_impulse(
+        impulse:Math.Vec2,
+        point:Math.Vec2,
+        wake:bool = true
+    ) {
+        if !finite_body_point(impulse) || !finite_body_point(point) {
+            panic("GFX.Physics.RigidBody2D impulse and point must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if !self.store.awake[index] { return }
+        self.store.velocities_x[index] +=
+            impulse.x * self.store.inverse_masses[index]
+        self.store.velocities_y[index] +=
+            impulse.y * self.store.inverse_masses[index]
+        let radius = point.subtract(self.store.world_center_at(index))
+        self.store.angular_velocities[index] +=
+            (radius.x * impulse.y - radius.y * impulse.x) *
+            self.store.inverse_inertias[index]
+    }
+
+    func apply_linear_impulse_to_center(
+        impulse:Math.Vec2,
+        wake:bool = true
+    ) {
+        if !finite_body_point(impulse) {
+            panic("GFX.Physics.RigidBody2D impulse must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if !self.store.awake[index] { return }
+        self.store.velocities_x[index] +=
+            impulse.x * self.store.inverse_masses[index]
+        self.store.velocities_y[index] +=
+            impulse.y * self.store.inverse_masses[index]
+    }
+
+    func apply_angular_impulse(impulse:float, wake:bool = true) {
+        if !finite_body_value(impulse) {
+            panic("GFX.Physics.RigidBody2D angular impulse must be finite")
+        }
+        let index = self.prepare_dynamic_action(wake)
+        if self.store.fixed_rotations[index] {
+            panic("GFX.Physics.RigidBody2D angular impulse requires free rotation")
+        }
+        if self.store.awake[index] {
+            self.store.angular_velocities[index] +=
+                impulse * self.store.inverse_inertias[index]
+        }
+    }
+
+    private func prepare_dynamic_action(wake:bool) int {
+        self.store.require_mutable()
+        let index = self.store.require(self.id)
+        if self.store.body_types[index] != BodyType2D.dynamic {
+            panic("GFX.Physics.RigidBody2D physical actions require a dynamic body")
+        }
+        if !self.store.enabled[index] {
+            panic("GFX.Physics.RigidBody2D physical actions require an enabled body")
+        }
+        if self.store.inverse_masses[index] <= 0.0 {
+            panic("GFX.Physics.RigidBody2D physical actions require positive mass")
+        }
+        if wake { self.store.wake(index) }
+        return index
     }
 
     func wake_up() {
@@ -1277,17 +2030,35 @@ public class RigidBody2D {
 }
 
 func validate_settings(settings:RigidBody2DSettings) {
-    if settings.mass <= 0.0 {
-        panic("GFX.Physics.RigidBody2D requires a positive mass")
+    if !finite_body_value(settings.mass) || settings.mass < 0.0 {
+        panic("GFX.Physics.RigidBody2D mass override must be finite and non-negative")
     }
-    if settings.restitution < 0.0 || settings.restitution > 1.0 {
+    if !finite_body_point(settings.position) ||
+        !finite_body_point(settings.velocity) ||
+        !finite_body_value(settings.rotation) ||
+        !finite_body_value(settings.angular_velocity) ||
+        !finite_body_value(settings.gravity_scale)
+    {
+        panic("GFX.Physics.RigidBody2D motion values must be finite")
+    }
+    if !finite_body_value(settings.restitution) ||
+        settings.restitution < 0.0 || settings.restitution > 1.0
+    {
         panic("GFX.Physics.RigidBody2D restitution must be between zero and one")
     }
-    if settings.friction < 0.0 {
+    if !finite_body_value(settings.friction) || settings.friction < 0.0 {
         panic("GFX.Physics.RigidBody2D friction must be non-negative")
     }
-    if settings.linear_damping < 0.0 || settings.angular_damping < 0.0 {
+    if !finite_body_value(settings.linear_damping) ||
+        !finite_body_value(settings.angular_damping) ||
+        settings.linear_damping < 0.0 || settings.angular_damping < 0.0
+    {
         panic("GFX.Physics.RigidBody2D damping must be non-negative")
+    }
+    if !finite_body_value(settings.sleep_threshold) ||
+        settings.sleep_threshold < 0.0
+    {
+        panic("GFX.Physics.RigidBody2D sleep threshold must be finite and non-negative")
     }
 }
 
@@ -1346,4 +2117,8 @@ func validate_segment_materials(
 
 func finite_body_value(value:float) bool {
     return value == value && (value == 0.0 || value + value != value)
+}
+
+func finite_body_point(value:Math.Vec2) bool {
+    return finite_body_value(value.x) && finite_body_value(value.y)
 }

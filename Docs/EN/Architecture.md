@@ -231,8 +231,8 @@ reports the four stable phases `motion_ms`, `broad_phase_ms`, `solve_ms`, and
 remain package-private.
 
 Every following capability must first appear in a focused executable example
-and a consumer-facing test. External forces, dynamic response for the new
-geometry, solver-level continuous collision detection, application
+and a consumer-facing test. Dynamic response for the new geometry,
+solver-level continuous collision detection, application
 integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
 current contract. Dense contact and joint solving already share the
 conflict-free constraint graph and worker pool. Additional SIMD kernels likewise

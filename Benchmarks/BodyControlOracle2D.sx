@@ -1,0 +1,114 @@
+use GFX.Physics
+use STD.Math
+
+func mass_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-2.0, -0.5),
+            Math.Vec2(0.0, -0.5),
+            Math.Vec2(0.0, 0.5),
+            Math.Vec2(-2.0, 0.5)
+        ]))
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(2.0, -0.5),
+            Math.Vec2(4.0, -0.5),
+            Math.Vec2(4.0, 0.5),
+            Math.Vec2(2.0, 0.5)
+        ]))
+    )
+    let center = body.local_center_of_mass()
+    print("mass $(body.mass()) $(center.x) $(center.y) $(body.rotational_inertia())")
+}
+
+func force_and_torque_cases() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body()
+    body.apply_force_to_center(Math.Vec2(4.0, 0.0))
+    body.apply_torque(1.0)
+    world.step(0.25)
+    print("force_torque $(body.velocity().x) $(body.angular_velocity())")
+}
+
+func rounded_mass_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(
+            Math.Vec2(2.0, 1.0),
+            0.2
+        ))
+        ..density = 2.0
+    )
+    print("rounded_mass $(body.mass()) $(body.rotational_inertia())")
+}
+
+func impulse_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body()
+    body.apply_linear_impulse(Math.Vec2(1.0, 0.0), Math.Vec2(0.0, 1.0))
+    print("impulse $(body.velocity().x) $(body.angular_velocity())")
+}
+
+func fixed_rotation_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..fixed_rotation = true
+    )
+    body.apply_linear_impulse(Math.Vec2(1.0, 0.0), Math.Vec2(0.0, 1.0))
+    print("fixed_rotation $(body.angular_velocity())")
+}
+
+func target_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.kinematic
+    )
+    body.set_target_transform(
+        Physics.Transform2D(position:Math.Vec2(4.0, -2.0), rotation:0.5),
+        2.0
+    )
+    var step = 0
+    while step < 8 {
+        world.step(0.25)
+        step++
+    }
+    print("target $(body.position().x) $(body.position().y) $(body.rotation())")
+}
+
+func activation_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 1.0)))
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.75)
+    )
+    world.step(0.0001)
+    let initial_contacts = world.contact_count()
+    body.set_enabled(false)
+    let disabled_contacts = world.contact_count()
+    let disabled = body.is_enabled()
+    world.step(0.0001)
+    body.set_enabled(true)
+    world.step(0.0001)
+    print("activation $(initial_contacts) $(disabled_contacts) $(disabled) $(world.contact_count()) $(body.is_enabled())")
+}
+
+func main() {
+    mass_case()
+    rounded_mass_case()
+    force_and_torque_cases()
+    impulse_case()
+    fixed_rotation_case()
+    target_case()
+    activation_case()
+}

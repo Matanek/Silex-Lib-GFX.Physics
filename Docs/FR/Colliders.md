@@ -40,5 +40,7 @@ par segment et reste limitée aux corps fixes.
 
 La réponse friction/restitution complète concerne actuellement le collider
 principal boîte/cercle. Les autres colliders participent au broad phase, aux
-filtres, contacts géométriques et capteurs. Densité, résistance au roulement et
-vitesse tangentielle sont conservées pour les jalons de réponse ultérieurs.
+filtres, contacts géométriques et capteurs. La densité de chaque collider
+contribue déjà à la masse, au centre de masse et à l’inertie composés du corps.
+Résistance au roulement et vitesse tangentielle restent conservées pour les
+jalons de réponse ultérieurs.

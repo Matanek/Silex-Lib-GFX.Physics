@@ -59,7 +59,7 @@ Les algorithmes sont des adaptations Silex natives de Box2D 3.1.1 au commit
 `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, utilisé seulement comme oracle MIT.
 Le package ne lie ni ne distribue Box2D.
 
-La réponse dynamique de toutes les nouvelles géométries, les forces externes,
-les tissus, corps mous, fluides et la 3D restent hors du contrat courant. Le
+La réponse dynamique de toutes les nouvelles géométries, les tissus, corps
+mous, fluides et la 3D restent hors du contrat courant. Le
 profil optionnel n’expose que `motion_ms`, `broad_phase_ms`, `solve_ms`,
 `sleep_ms` et leur total.

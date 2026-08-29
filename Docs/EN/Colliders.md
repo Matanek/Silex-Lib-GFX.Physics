@@ -60,9 +60,9 @@ keeps the established friction and restitution response. Compound and general
 colliders participate in broad-phase, filtering, persistent geometric contact,
 and sensor discovery, while complete response for every collider pair,
 rolling resistance, and tangent speed belongs to the later response milestone.
-Density is retained per collider; automatic mass, center-of-mass, and inertia
-derivation remains a separate mass-properties milestone. Contact and sensor
-snapshots still identify bodies until collider-level event identity is added.
+Each collider's density now contributes to the body's composed mass, center of
+mass, and inertia. Contact and sensor snapshots still identify bodies until
+collider-level event identity is added.
 
 The isolated consumer proof is
 [`../Tests/Consumer/Tests/Colliders.sx`](../../Tests/Consumer/Tests/Colliders.sx).

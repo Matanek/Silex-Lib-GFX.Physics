@@ -86,6 +86,13 @@ Existing 0.4 world and body usage remains source-compatible across the switch.
 The intentional solver and lifetime changes are listed in
 [`Docs/Migration.md`](Migration.md).
 
+Bodies derive composed mass, center of mass, and rotational inertia from their
+colliders. They expose forces, torques, impulses, coordinate conversions,
+fixed rotation, activation, runtime damping and sleep controls, and kinematic
+transform targets. See [`Docs/BodyControl.md`](BodyControl.md) and the public
+proofs in
+[`Tests/Consumer/Tests/BodyControl.sx`](../../Tests/Consumer/Tests/BodyControl.sx).
+
 Bullets, sensors, and opt-in post-step movement, contact, hit, and sensor
 streams complete the gameplay feedback loop without worker callbacks. A bullet
 extends continuous collision to dynamic targets; sensors retain filtering but
@@ -172,9 +179,9 @@ divergent or excluded Box2D capability are documented in
 The existing `World2D` regression contact solver still resolves only unrounded boxes
 and circles. Additional forms can be attached to the world and produce
 persistent geometric contacts, but do not receive impulses or positional
-correction yet. External forces, continuous response for every ordinary
-dynamic pair, and application plugins remain outside the current world
-contract. The public shape cast is also the geometry foundation of bullet CCD;
+correction yet. Continuous response for every ordinary dynamic pair and
+application plugins remain outside the current world contract. The public
+shape cast is also the geometry foundation of bullet CCD;
 ordinary bodies do not silently opt into its dynamic-target cost.
 
 [Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/RotatingPhysicsContainer)

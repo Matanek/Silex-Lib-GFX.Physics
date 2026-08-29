@@ -50,6 +50,7 @@ cmake -S Packages/GFX.Physics/Benchmarks/Oracle2D -B /tmp/gfx-physics-box2d -DCM
 cmake --build /tmp/gfx-physics-box2d --config Release
 silex compile Packages/GFX.Physics/Benchmarks/Corpus2D.sx --release -o /tmp/gfx-physics-silex-corpus
 silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /tmp/gfx-physics-silex-geometry
+silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -82,6 +83,19 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckGeometry.py /tmp/box2d-geo
 The checker requires identical case and field sets, finite candidate values,
 and a 0.003 absolute cast tolerance; hull records use 0.0001. The oracle target
 is benchmark-only and is not a package or runtime dependency.
+
+The body-control witness covers composed and rounded-shape mass and inertia,
+center force and torque integration, off-center impulses, fixed rotation,
+kinematic targeting, and disable/re-enable contact lifecycle:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_body_control_oracle > /tmp/box2d-body-control.txt
+/tmp/gfx-physics-silex-body-control > /tmp/silex-body-control.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckBodyControl.py /tmp/box2d-body-control.txt /tmp/silex-body-control.txt
+```
+
+As with geometry, this differential target is benchmark-only and introduces no
+runtime dependency on Box2D.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass
