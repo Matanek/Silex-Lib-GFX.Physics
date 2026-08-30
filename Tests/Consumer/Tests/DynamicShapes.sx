@@ -52,6 +52,52 @@ test "resolve capsule rounded polygon and segment contacts through Soft Step" {
     assert(Math.abs(segment[3]) < 0.05)
 }
 
+test "derive finite thin-rod inertia for a segment with scalar mass" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-0.25, 0.0),
+            Math.Vec2(0.75, 0.0)
+        ))
+        ..mass = 1.0
+        ..allow_sleep = false
+    )
+
+    assert(body.local_center_of_mass() == Math.Vec2(0.25, 0.0))
+    body.apply_angular_impulse(1.0)
+    assert(Math.nearly_equal(body.angular_velocity(), 12.0, 0.00001))
+    world.step(1.0 / 60.0)
+    assert(body.rotation() > 0.0)
+}
+
+test "sweep a fast ordinary capsule before it penetrates a fixed floor" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(40.0, 0.5)))
+        ..position = Math.Vec2(0.0, -0.25)
+    )
+    var capsule = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.45, 0.0),
+            Math.Vec2(0.45, 0.0),
+            0.25
+        ))
+        ..position = Math.Vec2(0.0, 4.9)
+        ..allow_sleep = false
+    )
+    var minimum_y = capsule.position().y
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        minimum_y = Math.min(minimum_y, capsule.position().y)
+        step++
+    }
+
+    assert(minimum_y >= 0.24)
+    assert(capsule.position().y >= 0.24 && capsule.position().y <= 0.27)
+}
+
 func head_on_signature(
     first_shape:Physics.Shape2D,
     second_shape:Physics.Shape2D,

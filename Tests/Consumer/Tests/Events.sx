@@ -190,9 +190,9 @@ test "report contact begin hit and end transitions" {
     assert(hits.count() == 0)
 }
 
-test "stop bullets at dynamic targets and publish the CCD impact" {
+test "exchange bullet momentum at dynamic targets and publish the CCD impact" {
     var world = Physics.World2D(gravity:Math.Vec2())
-    world.create_rigid_body(Physics.RigidBody2DSettings()
+    var target = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
         ..allow_sleep = false
     )
@@ -213,7 +213,12 @@ test "stop bullets at dynamic targets and publish the CCD impact" {
     world.write_contact_hit_events(hits)
     assert(bullet.is_bullet())
     assert(bullet.position().x < 0.0)
-    assert(bullet.velocity().x < 0.001)
+    assert(bullet.velocity().x > 0.0 && bullet.velocity().x < 50.0)
+    assert(Math.nearly_equal(
+        bullet.velocity().x,
+        target.velocity().x,
+        0.001
+    ))
     assert(began.count() == 1)
     assert(hits.count() == 1)
     assert(hits[0].approach_speed() > 250.0)
@@ -238,7 +243,8 @@ test "detect fast rotation between non-overlapping endpoint poses" {
     world.step(1.0 / 60.0)
     world.write_contact_hit_events(hits)
     assert(rotor.rotation() < 3.0)
-    assert(Math.abs(rotor.angular_velocity()) < 0.001)
+    assert(rotor.angular_velocity() > 0.0)
+    assert(rotor.angular_velocity() < 50.0)
     assert(hits.count() == 1)
 }
 

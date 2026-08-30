@@ -1746,17 +1746,16 @@ public class World2D {
     }
 
     private func solve_continuous_motion() {
-        if self.bullet_body_count == 0 { return }
         var mover = 0
         while mover < self.store.count() {
             if !self.store.enabled[mover] ||
                 self.store.body_types[mover] != BodyType2D.dynamic ||
-                !self.store.awake[mover] ||
-                (self.store.behavior_flags[mover] & 1) == 0
+                !self.store.awake[mover]
             {
                 mover++
                 continue
             }
+            let is_bullet = (self.store.behavior_flags[mover] & 1) != 0
             let motion = body_position(self.store, mover).subtract(Math.Vec2(
                 self.store.previous_positions_x[mover],
                 self.store.previous_positions_y[mover]
@@ -1768,7 +1767,14 @@ public class World2D {
             )
             let surface_motion = motion.length() +
                 Math.abs(angular_motion) * sweep_radius
-            if surface_motion <= 0.000001 {
+            let minimum_extent = body_minimum_continuous_extent(
+                self.store,
+                mover
+            )
+            // Box2D can rely on speculative contacts up to half the minimum
+            // extent. This solver has no speculative contact row yet, so start
+            // the sweep at the quarter-extent allowance used for chain CCD.
+            if surface_motion <= 0.25 * minimum_extent {
                 mover++
                 continue
             }
@@ -1781,12 +1787,17 @@ public class World2D {
                     target++
                     continue
                 }
-                if self.store.body_types[target] == BodyType2D.dynamic &&
-                    (self.store.behavior_flags[target] & 1) != 0 &&
-                    target < mover
-                {
-                    target++
-                    continue
+                if self.store.body_types[target] == BodyType2D.dynamic {
+                    if !is_bullet {
+                        target++
+                        continue
+                    }
+                    if (self.store.behavior_flags[target] & 1) != 0 &&
+                        target < mover
+                    {
+                        target++
+                        continue
+                    }
                 }
                 let pair = ordered_body_pair(mover, target)
                 if !self.store.collision_filters[pair.first].allows(
@@ -1849,15 +1860,51 @@ public class World2D {
         let approach = -velocity_at(self.store, mover, hit.point)
             .subtract(velocity_at(self.store, target, hit.point))
             .dot(hit.normal)
-        let inward_velocity = Math.min(
-            0.0,
-            self.store.velocities_x[mover] * hit.normal.x +
-                self.store.velocities_y[mover] * hit.normal.y
+        let mover_radius = hit.point.subtract(
+            self.store.world_center_at(mover)
         )
-        self.store.velocities_x[mover] -= inward_velocity * hit.normal.x
-        self.store.velocities_y[mover] -= inward_velocity * hit.normal.y
-        if Math.abs(rotation_motion) > 0.000001 {
-            self.store.angular_velocities[mover] = 0.0
+        if self.store.body_types[target] == BodyType2D.dynamic &&
+            !self.store.awake[target]
+        {
+            self.store.wake(target)
+        }
+        let target_radius = hit.point.subtract(
+            self.store.world_center_at(target)
+        )
+        let mover_arm = cross(mover_radius, hit.normal)
+        let target_arm = cross(target_radius, hit.normal)
+        let denominator = self.store.inverse_masses[mover] +
+            self.store.inverse_masses[target] +
+            mover_arm * mover_arm * self.store.inverse_inertias[mover] +
+            target_arm * target_arm * self.store.inverse_inertias[target]
+        let normal_velocity = velocity_at(self.store, mover, hit.point)
+            .subtract(velocity_at(self.store, target, hit.point))
+            .dot(hit.normal)
+        if normal_velocity < 0.0 && denominator > 0.0 {
+            var restitution = 0.0
+            if normal_velocity < -1.0 {
+                restitution = Math.max(
+                    self.store.restitutions[mover],
+                    self.store.restitutions[target]
+                )
+            }
+            let magnitude = -(1.0 + restitution) * normal_velocity /
+                denominator
+            let impulse = hit.normal.multiply(magnitude)
+            self.store.velocities_x[mover] +=
+                impulse.x * self.store.inverse_masses[mover]
+            self.store.velocities_y[mover] +=
+                impulse.y * self.store.inverse_masses[mover]
+            self.store.angular_velocities[mover] +=
+                cross(mover_radius, impulse) *
+                self.store.inverse_inertias[mover]
+            self.store.velocities_x[target] -=
+                impulse.x * self.store.inverse_masses[target]
+            self.store.velocities_y[target] -=
+                impulse.y * self.store.inverse_masses[target]
+            self.store.angular_velocities[target] -=
+                cross(target_radius, impulse) *
+                self.store.inverse_inertias[target]
         }
         self.store.dirty_transforms[mover] = true
         self.tight_bounds[mover] = body_bounds(self.store, mover)
@@ -3726,7 +3773,6 @@ public class World2D {
                 color++
             }
             self.current_soft_step_stages.append(8)
-            self.clip_body_motion_against_non_dynamic_boxes()
             self.current_soft_step_stages.append(9)
             self.joints.finish_step(1.0 / delta)
         } else {
@@ -3823,120 +3869,6 @@ public class World2D {
                 self.enforce_circle_outside_fixed_box(circle, fixed_body)
             }
             circle++
-        }
-    }
-
-    private func clip_body_motion_against_non_dynamic_boxes() {
-        if self.non_dynamic_bodies.is_empty() { return }
-        for body in self.active_bodies.indices {
-            let start = Math.Vec2(
-                self.store.previous_positions_x[body],
-                self.store.previous_positions_y[body]
-            )
-            let finish = body_position(self.store, body)
-            let motion = finish.subtract(start)
-            if motion.dot(motion) <= 0.000000000001 { continue }
-            let sweep_radius = Math.sqrt(
-                self.store.sweep_radii_squared[body]
-            )
-            if (self.store.behavior_flags[body] & 1) == 0 &&
-                motion.length() <= Math.max(0.05, sweep_radius * 0.5)
-            {
-                continue
-            }
-            for fixed_body in self.non_dynamic_bodies {
-                if (self.store.behavior_flags[body] & 2) != 0 ||
-                    (self.store.behavior_flags[fixed_body] & 2) != 0
-                {
-                    continue
-                }
-                if self.store.shape_kinds[fixed_body] != 0 { continue }
-                if !self.store.collision_filters[body].allows(
-                    self.store.collision_filters[fixed_body]
-                ) || !self.joints.collision_allowed(
-                    self.store.body_id_at(body),
-                    self.store.body_id_at(fixed_body)
-                ) {
-                    continue
-                }
-                let fixed_position = body_position(self.store, fixed_body)
-                let axis_x = body_axis_x(self.store, fixed_body)
-                let axis_y = body_axis_y(self.store, fixed_body)
-                let start_offset = start.subtract(fixed_position)
-                let finish_offset = finish.subtract(fixed_position)
-                let start_x = start_offset.dot(axis_x)
-                let start_y = start_offset.dot(axis_y)
-                let finish_x = finish_offset.dot(axis_x)
-                let finish_y = finish_offset.dot(axis_y)
-                let extent_x = self.store.half_widths[fixed_body] +
-                    projection_radius(self.store, body, axis_x)
-                let extent_y = self.store.half_heights[fixed_body] +
-                    projection_radius(self.store, body, axis_y)
-                let starts_inside = Math.abs(start_x) < extent_x &&
-                    Math.abs(start_y) < extent_y
-                let finishes_inside = Math.abs(finish_x) < extent_x &&
-                    Math.abs(finish_y) < extent_y
-                if starts_inside { continue }
-
-                var entry = 0.0
-                var exit = 1.0
-                var normal = Math.Vec2()
-                let delta_x = finish_x - start_x
-                if Math.abs(delta_x) <= 0.000000001 {
-                    if Math.abs(start_x) > extent_x { continue }
-                } else {
-                    var first_x = (-extent_x - start_x) / delta_x
-                    var second_x = (extent_x - start_x) / delta_x
-                    var x_normal = axis_x.negated()
-                    if first_x > second_x {
-                        let swapped = first_x
-                        first_x = second_x
-                        second_x = swapped
-                        x_normal = axis_x
-                    }
-                    if first_x >= entry {
-                        entry = first_x
-                        normal = x_normal
-                    }
-                    exit = Math.min(exit, second_x)
-                }
-                let delta_y = finish_y - start_y
-                if Math.abs(delta_y) <= 0.000000001 {
-                    if Math.abs(start_y) > extent_y { continue }
-                } else {
-                    var first_y = (-extent_y - start_y) / delta_y
-                    var second_y = (extent_y - start_y) / delta_y
-                    var y_normal = axis_y.negated()
-                    if first_y > second_y {
-                        let swapped = first_y
-                        first_y = second_y
-                        second_y = swapped
-                        y_normal = axis_y
-                    }
-                    if first_y >= entry {
-                        entry = first_y
-                        normal = y_normal
-                    }
-                    exit = Math.min(exit, second_y)
-                }
-                if entry < 0.0 || entry > exit || entry > 1.0 { continue }
-                if entry <= 0.00000001 && !finishes_inside { continue }
-                let remaining_scale = 1.0 - entry
-                let remaining = motion.multiply(remaining_scale)
-                let inward_motion = Math.min(0.0, remaining.dot(normal))
-                self.store.positions_x[body] = start.x + motion.x * entry +
-                    remaining.x - inward_motion * normal.x
-                self.store.positions_y[body] = start.y + motion.y * entry +
-                    remaining.y - inward_motion * normal.y
-                let inward_velocity = Math.min(
-                    0.0,
-                    self.store.velocities_x[body] * normal.x +
-                        self.store.velocities_y[body] * normal.y
-                )
-                self.store.velocities_x[body] -= inward_velocity * normal.x
-                self.store.velocities_y[body] -= inward_velocity * normal.y
-                self.store.dirty_transforms[body] = true
-            }
         }
     }
 
@@ -4399,6 +4331,29 @@ func body_maximum_sweep_radius(store:BodyStore2D, body:int) float {
         slot = store.shape_store.next_body_shape_slots[dense]
     }
     return maximum
+}
+
+func body_minimum_continuous_extent(
+    store:BodyStore2D,
+    body:int
+) float {
+    var minimum = 3.4028235e38
+    var slot = store.first_shape_slots[body]
+    while slot >= 0 {
+        let dense = store.shape_store.slot_dense_indices[slot]
+        let metrics = shape_metrics(store.shape_store.shapes[dense])
+        var extent = Math.min(
+            (metrics.upper.x - metrics.lower.x) * 0.5,
+            (metrics.upper.y - metrics.lower.y) * 0.5
+        )
+        if metrics.radius > 0.0 {
+            extent = Math.min(extent, metrics.radius)
+        }
+        minimum = Math.min(minimum, extent)
+        slot = store.shape_store.next_body_shape_slots[dense]
+    }
+    if minimum == 3.4028235e38 { return 0.0 }
+    return minimum
 }
 
 func collider_bounds(

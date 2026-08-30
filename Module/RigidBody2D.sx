@@ -450,6 +450,14 @@ func shape_metrics(shape:Shape2D) ShapeMetrics2D {
                 Math.max(value.first.y, value.second.y)
             )
             sweep_radius = Math.max(value.first.length(), value.second.length())
+            let length_squared = value.second.subtract(
+                value.first
+            ).length_squared()
+            if length_squared > 0.0 {
+                // A segment with a scalar fallback mass behaves as a thin rod:
+                // I = m * L^2 / 12.
+                inverse_inertia_factor = 12.0 / length_squared
+            }
         }
     }
     let half = upper.subtract(lower).multiply(0.5)
@@ -938,18 +946,34 @@ package class BodyStore2D {
 
     private func override_scalar_mass(body:int, mass:float) {
         var inertia = 0.0
+        var center = Math.Vec2(
+            self.local_centers_x[body],
+            self.local_centers_y[body]
+        )
         if self.masses[body] > 0.0 {
             inertia = self.inertias[body] * mass / self.masses[body]
+        } else if self.shape_counts[body] > 0 {
+            let factor = shape_metrics(
+                self.shapes[body]
+            ).inverse_inertia_factor
+            if factor > 0.0 { inertia = mass / factor }
+            match self.shapes[body] {
+                segment(value) => {
+                    center = value.first.add(value.second).multiply(0.5)
+                }
+                box(_) => {}
+                capsule(_) => {}
+                chain(_) => {}
+                circle(_) => {}
+                polygon(_) => {}
+            }
         }
         self.apply_mass_properties(
             body,
             MassProperties2D(
                 mass,
                 inertia,
-                Math.Vec2(
-                    self.local_centers_x[body],
-                    self.local_centers_y[body]
-                )
+                center
             ),
             false
         )

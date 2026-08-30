@@ -401,7 +401,7 @@ test "return a fast circle through its entry face" {
     world.step(0.0)
     world.step(0.0)
 
-    assert(circle.position().x <= 0.801)
+    assert(circle.position().x <= 0.806)
     assert(circle.velocity().x <= 0.0)
 }
 

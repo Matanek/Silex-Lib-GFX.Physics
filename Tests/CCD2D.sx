@@ -30,7 +30,7 @@ test "restrict dynamic target sweeps to bullets" {
         ..allow_sleep = false
     )
     ordinary_world.step(1.0 / 60.0)
-    assert(ordinary_world.ccd_body_count() == 0)
+    assert(ordinary_world.ccd_body_count() == 1)
     assert(ordinary_world.ccd_pair_test_count() == 0)
 
     var bullet_world = Physics.World2D(gravity:Math.Vec2())
@@ -48,4 +48,25 @@ test "restrict dynamic target sweeps to bullets" {
     bullet_world.step(1.0 / 60.0)
     assert(bullet_world.ccd_body_count() == 1)
     assert(bullet_world.ccd_pair_test_count() == 1)
+}
+
+test "reserve bullet CCD for motion large enough to tunnel" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..position = Math.Vec2(4.0, 0.0)
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+    )
+
+    world.step(1.0 / 60.0)
+
+    assert(world.ccd_body_count() == 0)
+    assert(world.ccd_pair_test_count() == 0)
 }

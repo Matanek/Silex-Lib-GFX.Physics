@@ -126,6 +126,97 @@ func chain_conveyor(
     ]
 }
 
+func example_floor(world:&Physics.World2D) {
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(40.0, 0.5)))
+        ..position = Math.Vec2(0.0, -0.25)
+    )
+}
+
+func example_capsule_impact() float[] {
+    var world = Physics.World2D()
+    example_floor(world)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.45, 0.0), Math.Vec2(0.45, 0.0), 0.25
+        ))
+        ..position = Math.Vec2(-3.0, 4.9)
+        ..friction = 1.0
+        ..allow_sleep = false
+    )
+    var minimum_y = body.position().y
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        minimum_y = Math.min(minimum_y, body.position().y)
+        step++
+    }
+    return [
+        minimum_y,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y,
+        body.rotation(),
+        body.angular_velocity()
+    ]
+}
+
+func example_polygon_settle() float[] {
+    var world = Physics.World2D()
+    example_floor(world)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.5, -0.4), Math.Vec2(0.5, -0.4),
+            Math.Vec2(0.42, 0.45), Math.Vec2(-0.42, 0.45)
+        ], 0.1))
+        ..position = Math.Vec2(2.0, 4.35)
+        ..rotation = 0.22
+        ..restitution = 0.45
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return [
+        body.position().x,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y,
+        body.rotation(),
+        body.angular_velocity()
+    ]
+}
+
+func example_segment_settle() float[] {
+    var world = Physics.World2D()
+    example_floor(world)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-0.55, 0.0), Math.Vec2(0.55, 0.0)
+        ))
+        ..position = Math.Vec2(3.4, 5.2)
+        ..rotation = -0.35
+        ..mass = 1.0
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return [
+        body.position().x,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y,
+        body.rotation(),
+        body.angular_velocity()
+    ]
+}
+
 func main() {
     let circle = Physics.Shape2D.circle(Physics.Circle2D(0.5))
     let capsule = Physics.Shape2D.capsule(Physics.Capsule2D(
@@ -154,6 +245,9 @@ func main() {
     let transition = chain_transition()
     let conveyor_from_rest = chain_conveyor(0.0, 0.0)
     let conveyor_rolls_fast_circle = chain_conveyor(1.7, 0.0)
+    let capsule_impact = example_capsule_impact()
+    let polygon_settle = example_polygon_settle()
+    let segment_settle = example_segment_settle()
     print("floor_circle $(floor_circle[0]) $(floor_circle[1]) $(floor_circle[2]) $(floor_circle[3]) $(floor_circle[4]) $(floor_circle[5])")
     print("floor_capsule $(floor_capsule[0]) $(floor_capsule[1]) $(floor_capsule[2]) $(floor_capsule[3]) $(floor_capsule[4]) $(floor_capsule[5])")
     print("floor_segment $(floor_segment[0]) $(floor_segment[1]) $(floor_segment[2]) $(floor_segment[3]) $(floor_segment[4]) $(floor_segment[5])")
@@ -164,4 +258,7 @@ func main() {
     print("chain_transition $(transition[0]) $(transition[1]) $(transition[2]) $(transition[3]) $(transition[4]) $(transition[5])")
     print("conveyor_from_rest $(conveyor_from_rest[0]) $(conveyor_from_rest[1]) $(conveyor_from_rest[2]) $(conveyor_from_rest[3]) $(conveyor_from_rest[4]) $(conveyor_from_rest[5])")
     print("conveyor_rolls_fast_circle $(conveyor_rolls_fast_circle[0]) $(conveyor_rolls_fast_circle[1]) $(conveyor_rolls_fast_circle[2]) $(conveyor_rolls_fast_circle[3]) $(conveyor_rolls_fast_circle[4]) $(conveyor_rolls_fast_circle[5])")
+    print("example_capsule_impact $(capsule_impact[0]) $(capsule_impact[1]) $(capsule_impact[2]) $(capsule_impact[3]) $(capsule_impact[4]) $(capsule_impact[5])")
+    print("example_polygon_settle $(polygon_settle[0]) $(polygon_settle[1]) $(polygon_settle[2]) $(polygon_settle[3]) $(polygon_settle[4]) $(polygon_settle[5])")
+    print("example_segment_settle $(segment_settle[0]) $(segment_settle[1]) $(segment_settle[2]) $(segment_settle[3]) $(segment_settle[4]) $(segment_settle[5])")
 }

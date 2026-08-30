@@ -213,6 +213,125 @@ static void print_chain_conveyor(
     b2DestroyWorld(world);
 }
 
+static b2BodyId create_floor(b2WorldId world)
+{
+    b2BodyDef body_definition = b2DefaultBodyDef();
+    b2BodyId body = b2CreateBody(world, &body_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    b2Polygon floor = b2MakeOffsetBox(
+        20.0f, 0.25f, (b2Vec2){0.0f, -0.25f}, b2Rot_identity);
+    b2CreatePolygonShape(body, &shape_definition, &floor);
+    return body;
+}
+
+static void print_example_capsule_impact(void)
+{
+    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldId world = b2CreateWorld(&world_definition);
+    create_floor(world);
+    b2BodyDef body_definition = b2DefaultBodyDef();
+    body_definition.type = b2_dynamicBody;
+    body_definition.position = (b2Vec2){-3.0f, 4.9f};
+    body_definition.enableSleep = false;
+    b2BodyId body = b2CreateBody(world, &body_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    shape_definition.density = 1.0f;
+    shape_definition.material.friction = 1.0f;
+    b2Capsule capsule = {{-0.45f, 0.0f}, {0.45f, 0.0f}, 0.25f};
+    b2CreateCapsuleShape(body, &shape_definition, &capsule);
+    float minimum_y = body_definition.position.y;
+    for (int step = 0; step < 240; ++step)
+    {
+        b2World_Step(world, 1.0f / 60.0f, 4);
+        minimum_y = b2MinFloat(minimum_y, b2Body_GetPosition(body).y);
+    }
+    b2Vec2 position = b2Body_GetPosition(body);
+    b2Vec2 velocity = b2Body_GetLinearVelocity(body);
+    printf(
+        "example_capsule_impact %.9g %.9g %.9g %.9g %.9g %.9g\n",
+        minimum_y,
+        position.y,
+        velocity.x,
+        velocity.y,
+        b2Rot_GetAngle(b2Body_GetRotation(body)),
+        b2Body_GetAngularVelocity(body));
+    b2DestroyWorld(world);
+}
+
+static void print_example_polygon_settle(void)
+{
+    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldId world = b2CreateWorld(&world_definition);
+    create_floor(world);
+    b2BodyDef body_definition = b2DefaultBodyDef();
+    body_definition.type = b2_dynamicBody;
+    body_definition.position = (b2Vec2){2.0f, 4.35f};
+    body_definition.rotation = b2MakeRot(0.22f);
+    body_definition.enableSleep = false;
+    b2BodyId body = b2CreateBody(world, &body_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    shape_definition.density = 1.0f;
+    shape_definition.material.restitution = 0.45f;
+    b2Vec2 points[] = {
+        {-0.5f, -0.4f}, {0.5f, -0.4f}, {0.42f, 0.45f}, {-0.42f, 0.45f},
+    };
+    b2Hull hull = b2ComputeHull(points, 4);
+    b2Polygon polygon = b2MakePolygon(&hull, 0.1f);
+    b2CreatePolygonShape(body, &shape_definition, &polygon);
+    for (int step = 0; step < 240; ++step)
+    {
+        b2World_Step(world, 1.0f / 60.0f, 4);
+    }
+    b2Vec2 position = b2Body_GetPosition(body);
+    b2Vec2 velocity = b2Body_GetLinearVelocity(body);
+    printf(
+        "example_polygon_settle %.9g %.9g %.9g %.9g %.9g %.9g\n",
+        position.x,
+        position.y,
+        velocity.x,
+        velocity.y,
+        b2Rot_GetAngle(b2Body_GetRotation(body)),
+        b2Body_GetAngularVelocity(body));
+    b2DestroyWorld(world);
+}
+
+static void print_example_segment_settle(void)
+{
+    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldId world = b2CreateWorld(&world_definition);
+    create_floor(world);
+    b2BodyDef body_definition = b2DefaultBodyDef();
+    body_definition.type = b2_dynamicBody;
+    body_definition.position = (b2Vec2){3.4f, 5.2f};
+    body_definition.rotation = b2MakeRot(-0.35f);
+    body_definition.enableSleep = false;
+    b2BodyId body = b2CreateBody(world, &body_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    b2Segment segment = {{-0.55f, 0.0f}, {0.55f, 0.0f}};
+    b2CreateSegmentShape(body, &shape_definition, &segment);
+    b2MassData mass = {
+        .mass = 1.0f,
+        .center = {0.0f, 0.0f},
+        .rotationalInertia = 1.1f * 1.1f / 12.0f,
+    };
+    b2Body_SetMassData(body, mass);
+    for (int step = 0; step < 240; ++step)
+    {
+        b2World_Step(world, 1.0f / 60.0f, 4);
+    }
+    b2Vec2 position = b2Body_GetPosition(body);
+    b2Vec2 velocity = b2Body_GetLinearVelocity(body);
+    printf(
+        "example_segment_settle %.9g %.9g %.9g %.9g %.9g %.9g\n",
+        position.x,
+        position.y,
+        velocity.x,
+        velocity.y,
+        b2Rot_GetAngle(b2Body_GetRotation(body)),
+        b2Body_GetAngularVelocity(body));
+    b2DestroyWorld(world);
+}
+
 int main(void)
 {
     print_case("floor_circle", shape_circle, false);
@@ -225,5 +344,8 @@ int main(void)
     print_chain_transition();
     print_chain_conveyor("conveyor_from_rest", 0.0f, 0.0f);
     print_chain_conveyor("conveyor_rolls_fast_circle", 1.7f, 0.0f);
+    print_example_capsule_impact();
+    print_example_polygon_settle();
+    print_example_segment_settle();
     return 0;
 }
