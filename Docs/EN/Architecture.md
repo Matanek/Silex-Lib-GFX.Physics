@@ -135,12 +135,15 @@ surface speed, and rolling resistance.
 
 The solver prepares general contacts and a compact dynamic-circle form, then
 places every constraint into deterministic conflict-free colors. Four true
-substeps each integrate velocities, warm-start, run two alternating biased
-color sweeps, integrate positions, and perform one normal-only relaxation
+substeps run by default; callers can choose another positive count per step.
+Each substep integrates velocities, warm-starts, runs two alternating biased
+color sweeps, integrates positions, and performs one normal-only relaxation
 sweep. Friction runs on the second biased sweep; restitution and impulse-cache
-storage follow the substeps. One worker calls the same jobs directly, while a
-large color partitions the same kernel across the persistent executor. The
-twelfth overflow color remains explicitly ordered and scalar.
+storage follow the substeps. World settings control the physical contact
+tuning and speed limits without exposing this schedule. One worker calls the
+same jobs directly, while a large color partitions the same kernel across the
+persistent executor. The twelfth overflow color remains explicitly ordered
+and scalar.
 
 The former discrete impulse backend and its warm-start path are not retained
 as a fallback. The colored Soft Step graph above is the only contact solver;

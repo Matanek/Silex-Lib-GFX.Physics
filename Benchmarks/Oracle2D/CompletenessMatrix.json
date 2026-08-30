@@ -79,11 +79,10 @@
       "id": "default-world-settings",
       "domain": "world",
       "capability": "default world configuration",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2DefaultWorldDef$"],
-      "silex_contract": "World2D has stable defaults; World2DSettings will make every developer-owned creation choice explicit.",
-      "evidence": ["Tests/Consumer/Tests/Compatibility.sx"],
-      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+      "silex_contract": "World2DSettings makes every developer-owned creation choice explicit with stable meter-second defaults.",
+      "evidence": ["Tests/Consumer/Tests/WorldSettings.sx", "Tests/Consumer/check-invalid-world-settings.sh"]
     },
     {
       "id": "default-body-settings",
@@ -264,11 +263,10 @@
       "id": "world-step",
       "domain": "world",
       "capability": "deterministic world stepping",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2World_Step$"],
-      "silex_contract": "World2D.step runs the native Soft Step graph; explicit substep count will complement the four-substep default.",
-      "evidence": ["Benchmarks/Corpus2D.sx", "Tests/World2D.sx"],
-      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+      "silex_contract": "World2D.step runs the native Soft Step graph with four default substeps or an explicit positive count.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Tests/World2D.sx", "Tests/Consumer/Tests/WorldSettings.sx"]
     },
     {
       "id": "world-debug-draw",
@@ -311,21 +309,19 @@
       "id": "world-settings",
       "domain": "world",
       "capability": "sleep, warm start, restitution and speed tuning",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2World_(?:EnableSleeping|IsSleepingEnabled|EnableContinuous|IsContinuousEnabled|SetRestitutionThreshold|GetRestitutionThreshold|SetHitEventThreshold|GetHitEventThreshold|SetContactTuning|SetMaximumLinearSpeed|GetMaximumLinearSpeed|EnableWarmStarting|IsWarmStartingEnabled)$"],
-      "silex_contract": "Existing gravity, sleep and hit behavior will be completed by typed, validated World2D settings and explicit wake policies.",
-      "evidence": ["Tests/Consumer/Tests/Islands.sx", "Tests/Consumer/Tests/Events.sx"],
-      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+      "silex_contract": "Typed, validated World2D settings expose sleep, continuous collision, restitution, contact tuning, speed limits and warm start with explicit wake policies.",
+      "evidence": ["Tests/Consumer/Tests/WorldSettings.sx", "Tests/Consumer/check-invalid-world-settings.sh", "Docs/FR/WorldSettings.md"]
     },
     {
       "id": "world-gravity",
       "domain": "world",
       "capability": "read and change world gravity",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2World_(?:SetGravity|GetGravity)$"],
-      "silex_contract": "World2D accepts gravity at creation; runtime mutation and wake policy join the complete settings contract.",
-      "evidence": ["Tests/World2D.sx"],
-      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+      "silex_contract": "World2D accepts finite gravity at creation and exposes runtime reading and mutation with deterministic dynamic-body wakeup.",
+      "evidence": ["Tests/World2D.sx", "Tests/Consumer/Tests/WorldSettings.sx", "Tests/Consumer/check-invalid-world-settings.sh"]
     },
     {
       "id": "contact-policies",
@@ -349,11 +345,10 @@
       "id": "world-observation",
       "domain": "world",
       "capability": "awake counts, profiling and logical counters",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2World_Get(?:AwakeBodyCount|Profile|Counters)$"],
-      "silex_contract": "World2D exposes awake bodies and opt-in timings; complete logical counters will avoid internal array capacities.",
-      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/FR/Performance.md", "Docs/EN/Performance.md"],
-      "tracking": "Physique 2D complète 05 — Réglages complets du monde"
+      "silex_contract": "World2D exposes awake bodies, opt-in timings and live logical counters without internal array capacities.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/FR/Performance.md", "Docs/EN/Performance.md", "Tests/Consumer/Tests/WorldSettings.sx", "Docs/FR/WorldSettings.md", "Docs/EN/WorldSettings.md"]
     },
     {
       "id": "world-user-data",

@@ -1,0 +1,11 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var maximum = 3.4028235e38
+    var infinite = maximum * 2.0
+    var world = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2(infinite, 0.0)
+    )
+    print(world.gravity())
+}

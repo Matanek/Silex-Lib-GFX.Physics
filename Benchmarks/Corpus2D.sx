@@ -26,6 +26,23 @@ func requested_worker_count() int {
     return 1
 }
 
+func requested_substep_count() int {
+    let substeps_1 = option_requested("--substeps-1")
+    let substeps_2 = option_requested("--substeps-2")
+    let substeps_8 = option_requested("--substeps-8")
+    var selected = 0
+    if substeps_1 { selected++ }
+    if substeps_2 { selected++ }
+    if substeps_8 { selected++ }
+    if selected > 1 {
+        panic("physics corpus accepts only one substep-count option")
+    }
+    if substeps_1 { return 1 }
+    if substeps_2 { return 2 }
+    if substeps_8 { return 8 }
+    return 4
+}
+
 func create_fixed_box(
     world:&Physics.World2D,
     position:Math.Vec2,
@@ -48,13 +65,14 @@ func measure(
     step_count:int,
     delta:float,
     workers:int,
+    substeps:int,
     circle_radius:float = 0.0
 ) {
     var clock = Clock()
     clock.tick()
     var step = 0
     while step < step_count {
-        world.step(delta)
+        world.step(delta, substeps:substeps)
         step++
     }
     let elapsed_ms = clock.tick() * 1000.0
@@ -112,7 +130,7 @@ func measure(
         "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current " +
         "engine_version=gfx-physics-0.5.0 oracle_version=3.1.1 " +
         "oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 " +
-        "solver=soft-step substeps=4 scenario=$(scenario) " +
+        "solver=soft-step substeps=$(substeps) scenario=$(scenario) " +
         "mode=$(mode) workers=$(workers) bodies=$(body_count) steps=$(step_count) dt=$(delta) " +
         "elapsed_ms=$(elapsed_ms) step_ms=$(elapsed_ms / step_count as float) " +
         "centroid_x=$(centroid_x) centroid_y=$(centroid_y) max_speed=$(maximum_speed) min_y=$(minimum_y) " +
@@ -131,7 +149,7 @@ func enable_workers(world:&Physics.World2D, workers:int) {
     if workers > 1 { world.enable_parallelism(workers) }
 }
 
-func run_release_parity(workers:int) {
+func run_release_parity(workers:int, substeps:int) {
     var world = Physics.World2D()
     enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(8.0, 1.0))
@@ -140,10 +158,19 @@ func run_release_parity(workers:int) {
         ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
     )
-    measure("release-parity", world, first_body, 1, 120, 1.0 / 120.0, workers)
+    measure(
+        "release-parity",
+        world,
+        first_body,
+        1,
+        120,
+        1.0 / 120.0,
+        workers,
+        substeps
+    )
 }
 
-func run_sparse(body_count:int, workers:int) {
+func run_sparse(body_count:int, workers:int, substeps:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
     enable_workers(world, workers)
     let first_body = world.body_count()
@@ -159,10 +186,19 @@ func run_sparse(body_count:int, workers:int) {
         )
         index++
     }
-    measure("sparse-$(body_count)", world, first_body, body_count, 120, 1.0 / 60.0, workers)
+    measure(
+        "sparse-$(body_count)",
+        world,
+        first_body,
+        body_count,
+        120,
+        1.0 / 60.0,
+        workers,
+        substeps
+    )
 }
 
-func run_pile(workers:int) {
+func run_pile(workers:int, substeps:int) {
     let body_count = 1_000
     let columns = 50
     var world = Physics.World2D()
@@ -185,7 +221,16 @@ func run_pile(workers:int) {
         )
         index++
     }
-    measure("pile-1000", world, first_body, body_count, 240, 1.0 / 60.0, workers)
+    measure(
+        "pile-1000",
+        world,
+        first_body,
+        body_count,
+        240,
+        1.0 / 60.0,
+        workers,
+        substeps
+    )
 }
 
 func create_container(world:&Physics.World2D, width:float, height:float) {
@@ -199,7 +244,7 @@ func create_container(world:&Physics.World2D, width:float, height:float) {
     create_fixed_box(world, Math.Vec2(0.0, half_height + half_depth), Math.Vec2(width + depth * 2.0, depth), 0.9)
 }
 
-func run_circle(body_count:int, workers:int) {
+func run_circle(body_count:int, workers:int, substeps:int) {
     var radius = 0.05
     var columns = 87
     if body_count > 2_000 {
@@ -238,21 +283,44 @@ func run_circle(body_count:int, workers:int) {
         300,
         1.0 / 60.0,
         workers,
+        substeps,
         radius
     )
 }
 
 func main() {
     let workers = requested_worker_count()
-    if option_requested("--release-parity") { run_release_parity(workers); return }
-    if option_requested("--sparse-1000") { run_sparse(1_000, workers); return }
-    if option_requested("--sparse-5000") { run_sparse(5_000, workers); return }
-    if option_requested("--sparse-10000") { run_sparse(10_000, workers); return }
-    if option_requested("--pile-1000") { run_pile(workers); return }
-    if option_requested("--circle-1800") { run_circle(1_800, workers); return }
-    if option_requested("--circle-5000") { run_circle(5_000, workers); return }
+    let substeps = requested_substep_count()
+    if option_requested("--release-parity") {
+        run_release_parity(workers, substeps)
+        return
+    }
+    if option_requested("--sparse-1000") {
+        run_sparse(1_000, workers, substeps)
+        return
+    }
+    if option_requested("--sparse-5000") {
+        run_sparse(5_000, workers, substeps)
+        return
+    }
+    if option_requested("--sparse-10000") {
+        run_sparse(10_000, workers, substeps)
+        return
+    }
+    if option_requested("--pile-1000") {
+        run_pile(workers, substeps)
+        return
+    }
+    if option_requested("--circle-1800") {
+        run_circle(1_800, workers, substeps)
+        return
+    }
+    if option_requested("--circle-5000") {
+        run_circle(5_000, workers, substeps)
+        return
+    }
 
     // Keep the no-argument smoke useful while CI selects each worker count in
     // a distinct process, so every world owns one executor lifetime.
-    run_sparse(10_000, 1)
+    run_sparse(10_000, 1, substeps)
 }

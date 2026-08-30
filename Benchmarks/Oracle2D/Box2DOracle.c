@@ -10,6 +10,7 @@
 #include <time.h>
 
 static const float pi = 3.14159265358979323846f;
+static int configured_substeps = 4;
 
 #if defined(NDEBUG)
 static const char* build_mode = "release";
@@ -163,9 +164,10 @@ static void print_metrics(
     printf(
         "SILEX_PHYSICS_CORPUS schema=2 engine=box2d-3.1.1 engine_version=3.1.1 "
         "oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 "
-        "solver=box2d-soft-step substeps=4 scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
+        "solver=box2d-soft-step substeps=%d scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
         "elapsed_ms=%.6f step_ms=%.6f centroid_x=%.9f centroid_y=%.9f max_speed=%.9f min_y=%.9f "
         "max_overlap_mm=%.9f awake=%d contacts=%d state_signature=%.9f memory_bytes=%d\n",
+        configured_substeps,
         scenario,
         build_mode,
         body_count,
@@ -188,7 +190,7 @@ static void step_world(b2WorldId world, int step_count, float time_step)
 {
     for (int step = 0; step < step_count; ++step)
     {
-        b2World_Step(world, time_step, 4);
+        b2World_Step(world, time_step, configured_substeps);
     }
 }
 
@@ -356,18 +358,43 @@ static void print_usage(const char* executable)
 {
     fprintf(
         stderr,
-        "usage: %s --release-parity|--sparse-1000|--sparse-5000|--sparse-10000|--pile-1000|--circle-1800|--circle-5000|--all\n",
+        "usage: %s --release-parity|--sparse-1000|--sparse-5000|--sparse-10000|--pile-1000|--circle-1800|--circle-5000|--all [--substeps-1|--substeps-2|--substeps-4|--substeps-8]\n",
         executable);
 }
 
 int main(int argument_count, char** arguments)
 {
-    if (argument_count != 2)
+    if (argument_count < 2 || argument_count > 3)
     {
         print_usage(arguments[0]);
         return 2;
     }
     const char* scenario = arguments[1];
+    if (argument_count == 3)
+    {
+        const char* substeps = arguments[2];
+        if (strcmp(substeps, "--substeps-1") == 0)
+        {
+            configured_substeps = 1;
+        }
+        else if (strcmp(substeps, "--substeps-2") == 0)
+        {
+            configured_substeps = 2;
+        }
+        else if (strcmp(substeps, "--substeps-4") == 0)
+        {
+            configured_substeps = 4;
+        }
+        else if (strcmp(substeps, "--substeps-8") == 0)
+        {
+            configured_substeps = 8;
+        }
+        else
+        {
+            print_usage(arguments[0]);
+            return 2;
+        }
+    }
     if (strcmp(scenario, "--release-parity") == 0 || strcmp(scenario, "--all") == 0)
     {
         run_release_parity();

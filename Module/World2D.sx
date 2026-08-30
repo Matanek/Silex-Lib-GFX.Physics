@@ -50,6 +50,57 @@ use STD.Math
 use STD.Threading
 use STD.Time.Clock
 
+public struct World2DSettings {
+    var gravity:Math.Vec2
+    var sleep_enabled:bool
+    var continuous_collision_enabled:bool
+    var restitution_threshold:float
+    var hit_event_threshold:float
+    var contact_stiffness_hertz:float
+    var contact_damping_ratio:float
+    var maximum_correction_speed:float
+    var maximum_linear_speed:float
+    var warm_start_enabled:bool
+
+    init() {
+        self.gravity = Math.Vec2(0.0, -9.81)
+        self.sleep_enabled = true
+        self.continuous_collision_enabled = true
+        self.restitution_threshold = 1.0
+        self.hit_event_threshold = 1.0
+        self.contact_stiffness_hertz = 40.0
+        self.contact_damping_ratio = 10.0
+        self.maximum_correction_speed = 3.0
+        self.maximum_linear_speed = 400.0
+        self.warm_start_enabled = true
+    }
+}
+
+public struct World2DCounters {
+    let body_count:int
+    let collider_count:int
+    let contact_count:int
+    let joint_count:int
+    let active_island_count:int
+    let logical_memory_bytes:int
+
+    package init(
+        body_count:int,
+        collider_count:int,
+        contact_count:int,
+        joint_count:int,
+        active_island_count:int,
+        logical_memory_bytes:int
+    ) {
+        self.body_count = body_count
+        self.collider_count = collider_count
+        self.contact_count = contact_count
+        self.joint_count = joint_count
+        self.active_island_count = active_island_count
+        self.logical_memory_bytes = logical_memory_bytes
+    }
+}
+
 public struct World2DStepProfile {
     var motion_ms:float
     var broad_phase_ms:float
@@ -420,6 +471,14 @@ class SoftStepConstraintState2D {
 
 public class World2D {
     private var current_gravity:Math.Vec2
+    private var current_sleep_enabled:bool
+    private var current_continuous_collision_enabled:bool
+    private var current_restitution_threshold:float
+    private var current_contact_stiffness_hertz:float
+    private var current_contact_damping_ratio:float
+    private var current_maximum_correction_speed:float
+    private var current_maximum_linear_speed:float
+    private var current_warm_start_enabled:bool
     private var store:BodyStore2D
     private var joints:JointStore2D
     private var proxies:int[]
@@ -516,15 +575,30 @@ public class World2D {
     private var current_ccd_pair_test_count:int
 
     init(
-        gravity:Math.Vec2 = Math.Vec2(0.0, -9.81),
-        hit_event_threshold:float = 1.0
+        settings:World2DSettings = World2DSettings(),
+        gravity:Math.Vec2? = null,
+        hit_event_threshold:float? = null
     ) {
-        if !finite_world_value(hit_event_threshold) ||
-            hit_event_threshold < 0.0
-        {
-            panic("GFX.Physics.World2D hit event threshold must be finite and non-negative")
+        var selected = settings
+        if let compatibility_gravity = gravity {
+            selected.gravity = compatibility_gravity
         }
-        self.current_gravity = gravity
+        if let compatibility_threshold = hit_event_threshold {
+            selected.hit_event_threshold = compatibility_threshold
+        }
+        validate_world_settings(selected)
+        self.current_gravity = selected.gravity
+        self.current_sleep_enabled = selected.sleep_enabled
+        self.current_continuous_collision_enabled =
+            selected.continuous_collision_enabled
+        self.current_restitution_threshold = selected.restitution_threshold
+        self.current_contact_stiffness_hertz =
+            selected.contact_stiffness_hertz
+        self.current_contact_damping_ratio = selected.contact_damping_ratio
+        self.current_maximum_correction_speed =
+            selected.maximum_correction_speed
+        self.current_maximum_linear_speed = selected.maximum_linear_speed
+        self.current_warm_start_enabled = selected.warm_start_enabled
         self.store = BodyStore2D()
         self.joints = JointStore2D(self.store)
         self.proxies = []
@@ -616,7 +690,7 @@ public class World2D {
         self.contact_hit_events = []
         self.sensor_begin_events = []
         self.sensor_end_events = []
-        self.current_hit_event_threshold = hit_event_threshold
+        self.current_hit_event_threshold = selected.hit_event_threshold
         self.current_ccd_body_count = 0
         self.current_ccd_pair_test_count = 0
     }
@@ -624,6 +698,9 @@ public class World2D {
     func gravity() Math.Vec2 { return self.current_gravity }
     func set_gravity(gravity:Math.Vec2) {
         self.store.require_mutable()
+        if !finite_world_value(gravity.x) || !finite_world_value(gravity.y) {
+            panic("GFX.Physics.World2D gravity must be finite")
+        }
         self.current_gravity = gravity
         var index = 0
         while index < self.store.count() {
@@ -631,7 +708,122 @@ public class World2D {
             index++
         }
     }
+    func settings() World2DSettings {
+        return World2DSettings()
+            ..gravity = self.current_gravity
+            ..sleep_enabled = self.current_sleep_enabled
+            ..continuous_collision_enabled =
+                self.current_continuous_collision_enabled
+            ..restitution_threshold = self.current_restitution_threshold
+            ..hit_event_threshold = self.current_hit_event_threshold
+            ..contact_stiffness_hertz =
+                self.current_contact_stiffness_hertz
+            ..contact_damping_ratio = self.current_contact_damping_ratio
+            ..maximum_correction_speed =
+                self.current_maximum_correction_speed
+            ..maximum_linear_speed = self.current_maximum_linear_speed
+            ..warm_start_enabled = self.current_warm_start_enabled
+    }
+    func sleep_enabled() bool { return self.current_sleep_enabled }
+    func set_sleep_enabled(enabled:bool) {
+        self.store.require_mutable()
+        if self.current_sleep_enabled == enabled { return }
+        self.current_sleep_enabled = enabled
+        if !enabled { self.wake_dynamic_bodies() }
+    }
+    func continuous_collision_enabled() bool {
+        return self.current_continuous_collision_enabled
+    }
+    func set_continuous_collision_enabled(enabled:bool) {
+        self.store.require_mutable()
+        self.current_continuous_collision_enabled = enabled
+    }
+    func restitution_threshold() float {
+        return self.current_restitution_threshold
+    }
+    func set_restitution_threshold(threshold:float) {
+        self.store.require_mutable()
+        require_non_negative_world_value(
+            threshold,
+            "GFX.Physics.World2D restitution threshold must be finite and non-negative"
+        )
+        if self.current_restitution_threshold == threshold { return }
+        self.current_restitution_threshold = threshold
+        self.wake_dynamic_bodies()
+    }
+    func contact_stiffness_hertz() float {
+        return self.current_contact_stiffness_hertz
+    }
+    func contact_damping_ratio() float {
+        return self.current_contact_damping_ratio
+    }
+    func set_contact_tuning(stiffness_hertz:float, damping_ratio:float) {
+        self.store.require_mutable()
+        require_non_negative_world_value(
+            stiffness_hertz,
+            "GFX.Physics.World2D contact stiffness must be finite and non-negative"
+        )
+        require_non_negative_world_value(
+            damping_ratio,
+            "GFX.Physics.World2D contact damping ratio must be finite and non-negative"
+        )
+        if self.current_contact_stiffness_hertz == stiffness_hertz &&
+            self.current_contact_damping_ratio == damping_ratio
+        {
+            return
+        }
+        self.current_contact_stiffness_hertz = stiffness_hertz
+        self.current_contact_damping_ratio = damping_ratio
+        self.wake_dynamic_bodies()
+    }
+    func maximum_correction_speed() float {
+        return self.current_maximum_correction_speed
+    }
+    func set_maximum_correction_speed(speed:float) {
+        self.store.require_mutable()
+        require_non_negative_world_value(
+            speed,
+            "GFX.Physics.World2D maximum correction speed must be finite and non-negative"
+        )
+        if self.current_maximum_correction_speed == speed { return }
+        self.current_maximum_correction_speed = speed
+        self.wake_dynamic_bodies()
+    }
+    func maximum_linear_speed() float {
+        return self.current_maximum_linear_speed
+    }
+    func set_maximum_linear_speed(speed:float) {
+        self.store.require_mutable()
+        require_positive_world_value(
+            speed,
+            "GFX.Physics.World2D maximum linear speed must be finite and positive"
+        )
+        self.current_maximum_linear_speed = speed
+    }
+    func warm_start_enabled() bool { return self.current_warm_start_enabled }
+    func set_warm_start_enabled(enabled:bool) {
+        self.store.require_mutable()
+        if self.current_warm_start_enabled == enabled { return }
+        self.current_warm_start_enabled = enabled
+        self.wake_dynamic_bodies()
+    }
     func body_count() int { return self.store.count() }
+    func counters() World2DCounters {
+        let bodies = self.store.count()
+        let colliders = self.store.shape_store.count()
+        let contacts = self.contact_count()
+        let joints = self.joints.count()
+        let islands = self.active_island_roots.count()
+        return World2DCounters(
+            bodies,
+            colliders,
+            contacts,
+            joints,
+            islands,
+            bodies * 192 + colliders * 160 + contacts * 128 +
+                joints * 256 + islands * 24
+        )
+    }
     func write_dynamic_body_transforms(output:&BodyTransform2D[]) {
         var dynamic_count = 0
         var index = 0
@@ -777,9 +969,10 @@ public class World2D {
     func hit_event_threshold() float { return self.current_hit_event_threshold }
     func set_hit_event_threshold(threshold:float) {
         self.store.require_mutable()
-        if !finite_world_value(threshold) || threshold < 0.0 {
-            panic("GFX.Physics.World2D hit event threshold must be finite and non-negative")
-        }
+        require_non_negative_world_value(
+            threshold,
+            "GFX.Physics.World2D hit event threshold must be finite and non-negative"
+        )
         self.current_hit_event_threshold = threshold
     }
     func set_profiling_enabled(enabled:bool) {
@@ -803,6 +996,16 @@ public class World2D {
             index++
         }
         return count
+    }
+
+    private func wake_dynamic_bodies() {
+        var index = 0
+        while index < self.store.count() {
+            if self.store.body_types[index] == BodyType2D.dynamic {
+                self.store.wake(index)
+            }
+            index++
+        }
     }
 
     package func persistent_pair_count() int {
@@ -1554,9 +1757,12 @@ public class World2D {
         }
     }
 
-    func step(delta:float) {
-        if delta < 0.0 {
-            panic("GFX.Physics.World2D.step requires a non-negative delta")
+    func step(delta:float, substeps:int = 4) {
+        if !finite_world_value(delta) || delta < 0.0 {
+            panic("GFX.Physics.World2D.step requires a finite non-negative delta")
+        }
+        if substeps < 1 {
+            panic("GFX.Physics.World2D.step requires a positive substep count")
         }
         self.store.require_mutable()
         if self.store.topology_dirty {
@@ -1613,7 +1819,10 @@ public class World2D {
             self.store.dirty_transforms[index] = false
             index++
         }
-        if self.dynamic_grid_active && self.maximum_dynamic_circle_radius > 0.0 {
+        if self.current_continuous_collision_enabled &&
+            self.dynamic_grid_active &&
+            self.maximum_dynamic_circle_radius > 0.0
+        {
             self.clip_fast_circles_against_sleeping_pile()
         }
         if self.profiling_enabled {
@@ -1654,8 +1863,10 @@ public class World2D {
                 self.current_pair_maintenance_ms +
                 self.current_pair_filter_ms
         }
-        self.solve_collisions(self.active_pairs, delta)
-        self.solve_continuous_motion()
+        self.solve_collisions(self.active_pairs, delta, substeps)
+        if self.current_continuous_collision_enabled {
+            self.solve_continuous_motion()
+        }
         if self.profiling_enabled {
             self.current_step_profile.solve_ms = profile_clock.tick() * 1000.0
         }
@@ -2334,6 +2545,7 @@ public class World2D {
     }
 
     private func update_sleep(delta:float) {
+        if !self.current_sleep_enabled { return }
         if self.sleep_enabled_body_count == 0 { return }
         let sleep_delay = 0.5
         let sleep_quorum_numerator = 19
@@ -3423,7 +3635,8 @@ public class World2D {
             store:self.store,
             active_bodies:self.active_bodies,
             gravity:self.current_gravity,
-            delta:delta
+            delta:delta,
+            maximum_linear_speed:self.current_maximum_linear_speed
         )
         if self.parallel_enabled &&
             count >= soft_step_body_parallel_threshold()
@@ -3579,7 +3792,8 @@ public class World2D {
         var job = RestitutionSoftConstraints2D(
             store:self.store,
             state:self.soft_constraints,
-            offset:offset
+            offset:offset,
+            threshold:self.current_restitution_threshold
         )
         if self.parallel_enabled && color < 11 &&
             count >= soft_step_constraint_parallel_threshold()
@@ -3594,7 +3808,11 @@ public class World2D {
         job.execute(0, count)
     }
 
-    private func solve_collisions(pairs:@int[], delta:float) {
+    private func solve_collisions(
+        pairs:@int[],
+        delta:float,
+        substep_count:int
+    ) {
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
         self.current_soft_step_stages.clear()
@@ -3605,10 +3823,14 @@ public class World2D {
         constraints.compact_collisions.clear()
         constraints.compact_impulses.clear()
         constraints.entries.clear()
+        if !self.current_warm_start_enabled {
+            self.joints.clear_solver_impulses()
+        }
         for candidate_index in pairs {
             let pair = self.candidate_bodies[candidate_index]
             var contact_cache = self.candidate_pairs[candidate_index]
-            if (store.body_types[pair.first] == BodyType2D.dynamic &&
+            if !self.current_warm_start_enabled ||
+                (store.body_types[pair.first] == BodyType2D.dynamic &&
                     !store.awake[pair.first]) ||
                 (store.body_types[pair.second] == BodyType2D.dynamic &&
                     !store.awake[pair.second]) ||
@@ -3684,34 +3906,33 @@ public class World2D {
         self.current_soft_step_stages.append(2)
         var collision_index = 0
         if delta > 0.0 {
-            let substep_count = 4
             let substep_delta = delta / substep_count as float
             let inverse_substep_delta = 1.0 / substep_delta
-            let contact_hertz = Math.min(
-                40.0,
-                (1.0 / 6.0) * inverse_substep_delta
-            )
             let contact_softness = make_contact_softness(
-                contact_hertz,
-                10.0,
+                self.current_contact_stiffness_hertz,
+                self.current_contact_damping_ratio,
                 substep_delta,
-                inverse_substep_delta
+                inverse_substep_delta,
+                self.current_maximum_correction_speed
             )
             let static_softness = make_contact_softness(
-                2.0 * contact_hertz,
-                10.0,
+                2.0 * self.current_contact_stiffness_hertz,
+                self.current_contact_damping_ratio,
                 substep_delta,
-                inverse_substep_delta
+                inverse_substep_delta,
+                self.current_maximum_correction_speed
             )
             var substep = 0
             while substep < substep_count {
                 self.execute_integrate_soft_step_velocities(substep_delta)
                 self.current_soft_step_stages.append(3)
                 var color = 0
-                while color < 12 {
-                    self.execute_warm_start_color(color)
-                    self.execute_warm_start_joint_color(color)
-                    color++
+                if self.current_warm_start_enabled {
+                    while color < 12 {
+                        self.execute_warm_start_color(color)
+                        self.execute_warm_start_joint_color(color)
+                        color++
+                    }
                 }
                 self.current_soft_step_stages.append(4)
                 var solve_iteration = 0
@@ -3773,6 +3994,9 @@ public class World2D {
                 color++
             }
             self.current_soft_step_stages.append(8)
+            if self.current_continuous_collision_enabled {
+                self.clip_body_motion_against_non_dynamic_boxes()
+            }
             self.current_soft_step_stages.append(9)
             self.joints.finish_step(1.0 / delta)
         } else {
@@ -3843,6 +4067,120 @@ public class World2D {
         }
         if self.profiling_enabled {
             self.current_collision_cache_ms = profile_clock.tick() * 1000.0
+        }
+    }
+
+    private func clip_body_motion_against_non_dynamic_boxes() {
+        if self.non_dynamic_bodies.is_empty() { return }
+        for body in self.active_bodies.indices {
+            let start = Math.Vec2(
+                self.store.previous_positions_x[body],
+                self.store.previous_positions_y[body]
+            )
+            let finish = body_position(self.store, body)
+            let motion = finish.subtract(start)
+            if motion.dot(motion) <= 0.000000000001 { continue }
+            let sweep_radius = Math.sqrt(
+                self.store.sweep_radii_squared[body]
+            )
+            if (self.store.behavior_flags[body] & 1) == 0 &&
+                motion.length() <= Math.max(0.05, sweep_radius * 0.5)
+            {
+                continue
+            }
+            for fixed_body in self.non_dynamic_bodies {
+                if (self.store.behavior_flags[body] & 2) != 0 ||
+                    (self.store.behavior_flags[fixed_body] & 2) != 0
+                {
+                    continue
+                }
+                if self.store.shape_kinds[fixed_body] != 0 { continue }
+                if !self.store.collision_filters[body].allows(
+                    self.store.collision_filters[fixed_body]
+                ) || !self.joints.collision_allowed(
+                    self.store.body_id_at(body),
+                    self.store.body_id_at(fixed_body)
+                ) {
+                    continue
+                }
+                let fixed_position = body_position(self.store, fixed_body)
+                let axis_x = body_axis_x(self.store, fixed_body)
+                let axis_y = body_axis_y(self.store, fixed_body)
+                let start_offset = start.subtract(fixed_position)
+                let finish_offset = finish.subtract(fixed_position)
+                let start_x = start_offset.dot(axis_x)
+                let start_y = start_offset.dot(axis_y)
+                let finish_x = finish_offset.dot(axis_x)
+                let finish_y = finish_offset.dot(axis_y)
+                let extent_x = self.store.half_widths[fixed_body] +
+                    projection_radius(self.store, body, axis_x)
+                let extent_y = self.store.half_heights[fixed_body] +
+                    projection_radius(self.store, body, axis_y)
+                let starts_inside = Math.abs(start_x) < extent_x &&
+                    Math.abs(start_y) < extent_y
+                let finishes_inside = Math.abs(finish_x) < extent_x &&
+                    Math.abs(finish_y) < extent_y
+                if starts_inside { continue }
+
+                var entry = 0.0
+                var exit = 1.0
+                var normal = Math.Vec2()
+                let delta_x = finish_x - start_x
+                if Math.abs(delta_x) <= 0.000000001 {
+                    if Math.abs(start_x) > extent_x { continue }
+                } else {
+                    var first_x = (-extent_x - start_x) / delta_x
+                    var second_x = (extent_x - start_x) / delta_x
+                    var x_normal = axis_x.negated()
+                    if first_x > second_x {
+                        let swapped = first_x
+                        first_x = second_x
+                        second_x = swapped
+                        x_normal = axis_x
+                    }
+                    if first_x >= entry {
+                        entry = first_x
+                        normal = x_normal
+                    }
+                    exit = Math.min(exit, second_x)
+                }
+                let delta_y = finish_y - start_y
+                if Math.abs(delta_y) <= 0.000000001 {
+                    if Math.abs(start_y) > extent_y { continue }
+                } else {
+                    var first_y = (-extent_y - start_y) / delta_y
+                    var second_y = (extent_y - start_y) / delta_y
+                    var y_normal = axis_y.negated()
+                    if first_y > second_y {
+                        let swapped = first_y
+                        first_y = second_y
+                        second_y = swapped
+                        y_normal = axis_y
+                    }
+                    if first_y >= entry {
+                        entry = first_y
+                        normal = y_normal
+                    }
+                    exit = Math.min(exit, second_y)
+                }
+                if entry < 0.0 || entry > exit || entry > 1.0 { continue }
+                if entry <= 0.00000001 && !finishes_inside { continue }
+                let remaining_scale = 1.0 - entry
+                let remaining = motion.multiply(remaining_scale)
+                let inward_motion = Math.min(0.0, remaining.dot(normal))
+                self.store.positions_x[body] = start.x + motion.x * entry +
+                    remaining.x - inward_motion * normal.x
+                self.store.positions_y[body] = start.y + motion.y * entry +
+                    remaining.y - inward_motion * normal.y
+                let inward_velocity = Math.min(
+                    0.0,
+                    self.store.velocities_x[body] * normal.x +
+                        self.store.velocities_y[body] * normal.y
+                )
+                self.store.velocities_x[body] -= inward_velocity * normal.x
+                self.store.velocities_y[body] -= inward_velocity * normal.y
+                self.store.dirty_transforms[body] = true
+            }
         }
     }
 
@@ -3949,6 +4287,46 @@ func ordered_body_pair(first:int, second:int) BodyPair2D {
 
 func finite_world_value(value:float) bool {
     return value == value && (value == 0.0 || value + value != value)
+}
+
+func require_non_negative_world_value(value:float, message:str) {
+    if !finite_world_value(value) || value < 0.0 { panic(message) }
+}
+
+func require_positive_world_value(value:float, message:str) {
+    if !finite_world_value(value) || value <= 0.0 { panic(message) }
+}
+
+func validate_world_settings(settings:World2DSettings) {
+    if !finite_world_value(settings.gravity.x) ||
+        !finite_world_value(settings.gravity.y)
+    {
+        panic("GFX.Physics.World2DSettings gravity must be finite")
+    }
+    require_non_negative_world_value(
+        settings.restitution_threshold,
+        "GFX.Physics.World2DSettings restitution threshold must be finite and non-negative"
+    )
+    require_non_negative_world_value(
+        settings.hit_event_threshold,
+        "GFX.Physics.World2DSettings hit event threshold must be finite and non-negative"
+    )
+    require_non_negative_world_value(
+        settings.contact_stiffness_hertz,
+        "GFX.Physics.World2DSettings contact stiffness must be finite and non-negative"
+    )
+    require_non_negative_world_value(
+        settings.contact_damping_ratio,
+        "GFX.Physics.World2DSettings contact damping ratio must be finite and non-negative"
+    )
+    require_non_negative_world_value(
+        settings.maximum_correction_speed,
+        "GFX.Physics.World2DSettings maximum correction speed must be finite and non-negative"
+    )
+    require_positive_world_value(
+        settings.maximum_linear_speed,
+        "GFX.Physics.World2DSettings maximum linear speed must be finite and positive"
+    )
 }
 
 func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {
@@ -4222,7 +4600,8 @@ func integrate_body_velocity(
     store:BodyStore2D,
     gravity:Math.Vec2,
     index:int,
-    delta:float
+    delta:float,
+    maximum_linear_speed:float
 ) {
     store.velocities_x[index] +=
         (gravity.x * store.gravity_scales[index] +
@@ -4237,6 +4616,15 @@ func integrate_body_velocity(
     )
     store.velocities_x[index] *= linear_scale
     store.velocities_y[index] *= linear_scale
+    let speed_squared =
+        store.velocities_x[index] * store.velocities_x[index] +
+        store.velocities_y[index] * store.velocities_y[index]
+    let maximum_squared = maximum_linear_speed * maximum_linear_speed
+    if speed_squared > maximum_squared {
+        let scale = maximum_linear_speed / Math.sqrt(speed_squared)
+        store.velocities_x[index] *= scale
+        store.velocities_y[index] *= scale
+    }
     store.angular_velocities[index] *= 1.0 / (
         1.0 + store.angular_dampings[index] * delta
     )
@@ -5473,11 +5861,18 @@ struct ContactSoftness2D {
     let bias_rate:float
     let mass_scale:float
     let impulse_scale:float
+    let maximum_correction_speed:float
 
-    init(bias_rate:float, mass_scale:float, impulse_scale:float) {
+    init(
+        bias_rate:float,
+        mass_scale:float,
+        impulse_scale:float,
+        maximum_correction_speed:float
+    ) {
         self.bias_rate = bias_rate
         self.mass_scale = mass_scale
         self.impulse_scale = impulse_scale
+        self.maximum_correction_speed = maximum_correction_speed
     }
 }
 
@@ -5504,6 +5899,7 @@ struct IntegrateSoftStepVelocities2D:Threading.ParallelJob {
     var active_bodies:ActiveBodySet2D
     var gravity:Math.Vec2
     var delta:float
+    var maximum_linear_speed:float
 
     func execute(start:int, end:int) {
         var store = self.store
@@ -5516,7 +5912,8 @@ struct IntegrateSoftStepVelocities2D:Threading.ParallelJob {
                 store,
                 gravity,
                 active_bodies.body_at(item),
-                delta
+                delta,
+                self.maximum_linear_speed
             )
             item++
         }
@@ -5793,6 +6190,7 @@ struct RestitutionSoftConstraints2D:Threading.ParallelJob {
     var store:BodyStore2D
     var state:SoftStepConstraintState2D
     var offset:int
+    var threshold:float
 
     func execute(start:int, end:int) {
         var store = self.store
@@ -5807,12 +6205,17 @@ struct RestitutionSoftConstraints2D:Threading.ParallelJob {
                 apply_soft_compact_restitution(
                     store,
                     collision,
-                    impulses
+                    impulses,
+                    self.threshold
                 )
                 state.compact_impulses[entry] = impulses
             } else {
                 var collision = state.collisions[-entry - 1]
-                apply_soft_collision_restitution(store, collision)
+                apply_soft_collision_restitution(
+                    store,
+                    collision,
+                    self.threshold
+                )
                 state.collisions[-entry - 1] = collision
             }
             item++
@@ -5824,11 +6227,17 @@ func make_contact_softness(
     requested_hertz:float,
     damping_ratio:float,
     delta:float,
-    inverse_delta:float
+    inverse_delta:float,
+    maximum_correction_speed:float
 ) ContactSoftness2D {
     let hertz = requested_hertz
     if hertz <= 0.0 {
-        return ContactSoftness2D(0.0, 0.0, 0.0)
+        return ContactSoftness2D(
+            0.0,
+            0.0,
+            0.0,
+            maximum_correction_speed
+        )
     }
     let omega = 2.0 * Math.pi() * hertz
     let a1 = 2.0 * damping_ratio + delta * omega
@@ -5837,7 +6246,8 @@ func make_contact_softness(
     return ContactSoftness2D(
         omega / a1,
         a2 * a3,
-        a3
+        a3,
+        maximum_correction_speed
     )
 }
 
@@ -6442,7 +6852,10 @@ func solve_soft_single_collision(
     if separation > 0.0 {
         velocity_bias = separation * inverse_delta
     } else if use_bias {
-        velocity_bias = Math.max(softness.bias_rate * separation, -3.0)
+        velocity_bias = Math.max(
+            softness.bias_rate * separation,
+            -softness.maximum_correction_speed
+        )
         mass_scale = softness.mass_scale
         impulse_scale = softness.impulse_scale
     }
@@ -6582,14 +6995,20 @@ func solve_soft_collision_block_normals(
     if first_separation > 0.0 {
         first_bias = first_separation * inverse_delta
     } else if use_bias {
-        first_bias = Math.max(softness.bias_rate * first_separation, -3.0)
+        first_bias = Math.max(
+            softness.bias_rate * first_separation,
+            -softness.maximum_correction_speed
+        )
         first_mass_scale = softness.mass_scale
         first_impulse_scale = softness.impulse_scale
     }
     if second_separation > 0.0 {
         second_bias = second_separation * inverse_delta
     } else if use_bias {
-        second_bias = Math.max(softness.bias_rate * second_separation, -3.0)
+        second_bias = Math.max(
+            softness.bias_rate * second_separation,
+            -softness.maximum_correction_speed
+        )
         second_mass_scale = softness.mass_scale
         second_impulse_scale = softness.impulse_scale
     }
@@ -6700,7 +7119,10 @@ func solve_soft_collision_point(
     if separation > 0.0 {
         velocity_bias = separation * inverse_delta
     } else if use_bias {
-        velocity_bias = Math.max(softness.bias_rate * separation, -3.0)
+        velocity_bias = Math.max(
+            softness.bias_rate * separation,
+            -softness.maximum_correction_speed
+        )
         mass_scale = softness.mass_scale
         impulse_scale = softness.impulse_scale
     }
@@ -6841,21 +7263,23 @@ func solve_soft_rolling_friction(
 
 func apply_soft_collision_restitution(
     store:BodyStore2D,
-    collision:&Collision2D
+    collision:&Collision2D,
+    threshold:float
 ) {
     if collision.contacts.count == 1 {
-        apply_soft_single_collision_restitution(store, collision)
+        apply_soft_single_collision_restitution(store, collision, threshold)
         return
     }
-    apply_soft_collision_restitution_point(store, collision, false)
+    apply_soft_collision_restitution_point(store, collision, false, threshold)
     if collision.contacts.count > 1 {
-        apply_soft_collision_restitution_point(store, collision, true)
+        apply_soft_collision_restitution_point(store, collision, true, threshold)
     }
 }
 
 func apply_soft_single_collision_restitution(
     store:BodyStore2D,
-    collision:&Collision2D
+    collision:&Collision2D,
+    threshold:float
 ) {
     let restitution:float = collision.restitution + 0.0
     let initial_velocity:float =
@@ -6865,7 +7289,7 @@ func apply_soft_single_collision_restitution(
     let previous:float = collision.normal_impulse_first + 0.0
     let normal_x:float = collision.normal.x + 0.0
     let normal_y:float = collision.normal.y + 0.0
-    if restitution <= 0.0 || initial_velocity > -1.0 ||
+    if restitution <= 0.0 || initial_velocity > -threshold ||
         total_impulse <= 0.0
     {
         return
@@ -6936,7 +7360,8 @@ func apply_soft_single_collision_restitution(
 func apply_soft_collision_restitution_point(
     store:BodyStore2D,
     collision:&Collision2D,
-    second_contact:bool
+    second_contact:bool,
+    threshold:float
 ) {
     if collision.restitution <= 0.0 { return }
     var first_local = Math.Vec2(
@@ -6965,7 +7390,7 @@ func apply_soft_collision_restitution_point(
         normal_mass = collision.normal_mass_second + 0.0
         previous = collision.normal_impulse_second + 0.0
     }
-    if initial_velocity > -1.0 || total_impulse <= 0.0 { return }
+    if initial_velocity > -threshold || total_impulse <= 0.0 { return }
     let first_anchor = contact_anchor_vector(
         store,
         collision.first_body,
@@ -7053,7 +7478,10 @@ func solve_soft_compact_circle(
     if separation > 0.0 {
         velocity_bias = separation * inverse_delta
     } else if use_bias {
-        velocity_bias = Math.max(softness.bias_rate * separation, -3.0)
+        velocity_bias = Math.max(
+            softness.bias_rate * separation,
+            -softness.maximum_correction_speed
+        )
         mass_scale = softness.mass_scale
         impulse_scale = softness.impulse_scale
     }
@@ -7224,28 +7652,40 @@ func solve_soft_compact_circle_four_normals(
     if separation.x > 0.0 {
         first_bias = separation.x * inverse_delta
     } else if use_bias {
-        first_bias = Math.max(softness.bias_rate * separation.x, -3.0)
+        first_bias = Math.max(
+            softness.bias_rate * separation.x,
+            -softness.maximum_correction_speed
+        )
         first_mass_scale = softness.mass_scale
         first_impulse_scale = softness.impulse_scale
     }
     if separation.y > 0.0 {
         second_bias = separation.y * inverse_delta
     } else if use_bias {
-        second_bias = Math.max(softness.bias_rate * separation.y, -3.0)
+        second_bias = Math.max(
+            softness.bias_rate * separation.y,
+            -softness.maximum_correction_speed
+        )
         second_mass_scale = softness.mass_scale
         second_impulse_scale = softness.impulse_scale
     }
     if separation.z > 0.0 {
         third_bias = separation.z * inverse_delta
     } else if use_bias {
-        third_bias = Math.max(softness.bias_rate * separation.z, -3.0)
+        third_bias = Math.max(
+            softness.bias_rate * separation.z,
+            -softness.maximum_correction_speed
+        )
         third_mass_scale = softness.mass_scale
         third_impulse_scale = softness.impulse_scale
     }
     if separation.w > 0.0 {
         fourth_bias = separation.w * inverse_delta
     } else if use_bias {
-        fourth_bias = Math.max(softness.bias_rate * separation.w, -3.0)
+        fourth_bias = Math.max(
+            softness.bias_rate * separation.w,
+            -softness.maximum_correction_speed
+        )
         fourth_mass_scale = softness.mass_scale
         fourth_impulse_scale = softness.impulse_scale
     }
@@ -7416,10 +7856,11 @@ func solve_soft_compact_circle_four_normals(
 func apply_soft_compact_restitution(
     store:BodyStore2D,
     collision:@CompactCircleCollision2D,
-    impulses:&CompactCircleImpulses2D
+    impulses:&CompactCircleImpulses2D,
+    threshold:float
 ) {
     if collision.restitution <= 0.0 ||
-        collision.initial_normal_velocity > -1.0 ||
+        collision.initial_normal_velocity > -threshold ||
         impulses.total_normal <= 0.0
     {
         return

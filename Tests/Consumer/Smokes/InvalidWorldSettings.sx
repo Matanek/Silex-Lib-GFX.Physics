@@ -1,0 +1,8 @@
+use GFX.Physics
+
+func main() {
+    var world = Physics.World2D(Physics.World2DSettings()
+        ..maximum_linear_speed = 0.0
+    )
+    print(world.body_count())
+}

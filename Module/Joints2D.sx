@@ -325,6 +325,19 @@ package class JointStore2D {
 
     func count() int { return self.joints.count() }
 
+    func clear_solver_impulses() {
+        var index = 0
+        while index < self.joints.count() {
+            self.joints[index].linear_impulse = Math.Vec2()
+            self.joints[index].axial_impulse = 0.0
+            self.joints[index].angular_impulse = 0.0
+            self.joints[index].motor_impulse = 0.0
+            self.joints[index].lower_impulse = 0.0
+            self.joints[index].upper_impulse = 0.0
+            index++
+        }
+    }
+
     func append(joint:JointConstraint2D) JointId2D {
         var slot = self.slot_generations.count()
         if !self.free_slots.is_empty() {
