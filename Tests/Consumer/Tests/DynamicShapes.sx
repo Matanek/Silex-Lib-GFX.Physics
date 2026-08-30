@@ -328,13 +328,16 @@ test "select the material of the contacted chain segment" {
 }
 
 test "keep a circle on the front side of a chain conveyor" {
+    let circle_radius = 0.35
+    let conveyor_speed = 0.85
+    let rolling_resistance = 0.01
     let still = Physics.PhysicsMaterial2D()
         ..friction = 1.0
-        ..rolling_resistance = 0.08
+        ..rolling_resistance = rolling_resistance
     let conveyor = Physics.PhysicsMaterial2D()
         ..friction = 1.0
-        ..rolling_resistance = 0.08
-        ..tangent_speed = 0.85
+        ..rolling_resistance = rolling_resistance
+        ..tangent_speed = conveyor_speed
     var world = Physics.World2D()
     var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
@@ -369,10 +372,9 @@ test "keep a circle on the front side of a chain conveyor" {
         ..segment_materials = [still, conveyor, still]
     )
     var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.35))
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(circle_radius))
         ..position = Math.Vec2(0.8, 2.0)
         ..friction = 1.0
-        ..angular_velocity = 4.0
         ..allow_sleep = false
         ..is_bullet = true
     )
@@ -396,6 +398,20 @@ test "keep a circle on the front side of a chain conveyor" {
         "circle penetrated chain at step $(minimum_step): x=$(minimum_x) y=$(minimum_y)"
     )
     assert(circle.position().x < 0.3)
+    let contact_speed = circle.velocity().x +
+        circle.angular_velocity() * circle_radius
+    assert(
+        Math.abs(contact_speed + conveyor_speed) < 0.03,
+        "circle slides on conveyor: contact=$(contact_speed) belt=$(-conveyor_speed)"
+    )
+    assert(
+        Math.abs(circle.angular_velocity()) > 0.5,
+        "circle did not acquire visible rolling motion"
+    )
+    assert(
+        Math.abs(circle.rotation()) > 1.0,
+        "circle rotation stayed visually insignificant"
+    )
 }
 
 test "reserve open chain endpoint edges as ghost geometry" {
