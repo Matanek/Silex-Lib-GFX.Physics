@@ -1,0 +1,79 @@
+use GFX.Physics
+use STD.Math
+
+func fixed_target_case(shape:Physics.Shape2D, mass:float = 0.0) float[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+    )
+    var mover = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = shape
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..mass = mass
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+    return [mover.position().x, mover.velocity().x]
+}
+
+func kinematic_target_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var target = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.kinematic
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+    )
+    var mover = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+    print("kinematic_target $(mover.position().x) $(mover.velocity().x) $(target.position().x) $(target.velocity().x)")
+}
+
+func dynamic_bullet_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var bullet = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..is_bullet = true
+        ..allow_sleep = false
+    )
+    var target = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+    print("dynamic_bullet $(bullet.position().x) $(bullet.velocity().x) $(target.position().x) $(target.velocity().x)")
+}
+
+func main() {
+    let circle = fixed_target_case(
+        Physics.Shape2D.circle(Physics.Circle2D(0.1)))
+    let capsule = fixed_target_case(
+        Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.2, 0.0), Math.Vec2(0.2, 0.0), 0.1
+        )))
+    let segment = fixed_target_case(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(0.0, -0.2), Math.Vec2(0.0, 0.2)
+        )), mass:1.0)
+    let polygon = fixed_target_case(
+        Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.15, -0.15), Math.Vec2(0.15, -0.15),
+            Math.Vec2(0.15, 0.15), Math.Vec2(-0.15, 0.15)
+        ], 0.03)))
+    print("fixed_circle $(circle[0]) $(circle[1]) 0 0")
+    print("fixed_capsule $(capsule[0]) $(capsule[1]) 0 0")
+    print("fixed_segment $(segment[0]) $(segment[1]) 0 0")
+    print("fixed_polygon $(polygon[0]) $(polygon[1]) 0 0")
+    kinematic_target_case()
+    dynamic_bullet_case()
+}

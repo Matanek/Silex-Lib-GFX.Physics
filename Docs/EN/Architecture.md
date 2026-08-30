@@ -98,19 +98,19 @@ reusable value arrays and creates opaque body handles only when consumer code
 reads an event. Movement, solid contact, hit, and sensor streams are opt-in so
 an ordinary world does not construct unused payloads.
 
-Continuous motion keeps two costs distinct. Fast ordinary bodies retain the
-non-dynamic-box boundary guard already used by the solver. Bodies created with
-`is_bullet` additionally sweep against dynamic targets and public convex
-geometry; rotational motion refines the first swept overlap. Sensor hits emit
-transitions without response. A world with no bullet returns before entering
-this dynamic-target path.
+Continuous motion keeps two costs distinct. Fast ordinary dynamic bodies sweep
+every public convex collider against fixed and kinematic geometry; rotational
+motion refines the first swept overlap and kinematic targets contribute their
+relative sweep. Bodies created with `is_bullet` additionally test dynamic
+targets. Sensor hits emit transitions without response. Slow bodies return
+before pair traversal.
 
 Kinematic bodies retain zero inverse mass and inertia, so contacts never alter
 their prescribed motion. `World2D.step` advances their linear and angular
 velocities before contact generation, excludes them from gravity and sleep,
 and exposes their surface velocity to dynamic contact response. They share the
 non-dynamic broad-phase set with fixed bodies but keep their previous transform
-for bullet sweeps and opt-in movement events.
+for continuous sweeps and opt-in movement events.
 
 Worker count never selects a different broad phase or solver. Worlds with
 dynamic shapes use the same reusable deterministic grid for one or several
@@ -187,9 +187,9 @@ second grid containing only sleeping circles. A segment-circle intersection
 clips the moving centre to its earliest contact whenever one fixed step would
 carry it through a sleeping support. This targeted continuous test prevents the
 slow-emission case from tunnelling into an already settled pile without
-substepping the whole world. Bullets additionally use the general swept path
-described above for awake targets, boxes, mixed convex shapes, and rotation;
-ordinary bodies do not pay that broader CCD cost.
+substepping the whole world. The general swept path described above covers
+fixed and kinematic targets, mixed convex shapes, chains, and rotation;
+bullets alone extend it to dynamic targets.
 
 Parallelism is explicit at the world boundary. `enable_parallelism` creates a
 persistent STD executor. The common stage graph dispatches body ranges only at
@@ -237,10 +237,9 @@ reports the four stable phases `motion_ms`, `broad_phase_ms`, `solve_ms`, and
 remain package-private.
 
 Every following capability must first appear in a focused executable example
-and a consumer-facing test. Dynamic response for the new geometry,
-solver-level continuous collision detection, application
-integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
-current contract. Dense contact and joint solving already share the
+and a consumer-facing test. Application integration, cloth, soft bodies,
+fluids, and 3D are intentionally outside the current contract. Dense contact
+and joint solving already share the
 conflict-free constraint graph and worker pool. Additional SIMD kernels likewise
 depend on a
 portable vector surface in the Silex backend; the current SoA and contiguous

@@ -52,6 +52,7 @@ silex compile Packages/GFX.Physics/Benchmarks/Corpus2D.sx --release -o /tmp/gfx-
 silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /tmp/gfx-physics-silex-geometry
 silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
 silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
+silex compile Packages/GFX.Physics/Benchmarks/ContinuousCollisionOracle2D.sx --release -o /tmp/gfx-physics-silex-continuous-collision
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -97,6 +98,26 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckBodyControl.py /tmp/box2d-
 
 As with geometry, this differential target is benchmark-only and introduces no
 runtime dependency on Box2D.
+
+The continuous-collision witness drives circle, capsule, segment and rounded
+polygon bodies through a thin fixed wall in one step. It also covers relative
+motion from a kinematic target and the explicit bullet path to a dynamic
+target:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_continuous_collision_oracle > /tmp/box2d-continuous-collision.txt
+/tmp/gfx-physics-silex-continuous-collision > /tmp/silex-continuous-collision.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckContinuousCollision.py /tmp/box2d-continuous-collision.txt /tmp/silex-continuous-collision.txt
+```
+
+The four fixed-target cases require both solvers to stop at matching TOI
+positions within 2 mm. The checker also records three deliberate one-step
+response divergences in the pinned oracle: Box2D retains the incoming velocity
+after that TOI placement, does not transfer the traversing kinematic target's
+motion, and does not transfer the bullet impulse during the same step. Silex
+must apply all three responses because they are part of its public completed-
+step contract. These classifications are checked explicitly rather than hidden
+behind a broad floating-point tolerance.
 
 The dynamic-shape witness settles circle, capsule, segment and rounded-polygon
 bodies on a polygon floor, then the massive shapes on the solid middle edge of

@@ -226,11 +226,10 @@
       "id": "continuous-collision-kernel",
       "domain": "collision",
       "capability": "sweep transform and time of impact",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2(?:GetSweepTransform|TimeOfImpact)$"],
-      "silex_contract": "Bullets already use shape casts; the complete solver will sweep every relevant translation and rotation to a resolved TOI.",
-      "evidence": ["Tests/CCD2D.sx", "Tests/Consumer/Tests/Events.sx"],
-      "tracking": "Physique 2D complète 06 — Collision continue générale"
+      "silex_contract": "World2D sweeps every fast dynamic convex collider against fixed and kinematic geometry; bullets extend the same resolved TOI path to dynamic targets.",
+      "evidence": ["Tests/CCD2D.sx", "Tests/Consumer/Tests/ContinuousCollision.sx", "Tests/Consumer/Tests/Events.sx", "Benchmarks/ContinuousCollisionOracle2D.sx", "Benchmarks/Oracle2D/ContinuousCollisionOracle.c", "Benchmarks/Oracle2D/CheckContinuousCollision.py", "Docs/FR/EventsAndCCD.md", "Docs/EN/EventsAndCCD.md"]
     },
     {
       "id": "character-plane-solver",

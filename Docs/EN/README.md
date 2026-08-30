@@ -179,13 +179,12 @@ The executable parity boundary and every currently covered, partial, planned,
 divergent or excluded Box2D capability are documented in
 [`Docs/Completeness.md`](Completeness.md).
 
-The existing `World2D` regression contact solver still resolves only unrounded boxes
-and circles. Additional forms can be attached to the world and produce
-persistent geometric contacts, but do not receive impulses or positional
-correction yet. Continuous response for every ordinary dynamic pair and
-application plugins remain outside the current world contract. The public
-shape cast is also the geometry foundation of bullet CCD;
-ordinary bodies do not silently opt into its dynamic-target cost.
+`World2D` resolves circle, capsule, segment, rounded-polygon and compound
+contacts through the same persistent Soft Step path. Every sufficiently fast
+dynamic convex collider also sweeps against fixed and kinematic geometry;
+ordinary bodies do not silently opt into the additional dynamic-target cost,
+which remains reserved for bullets. Application plugins remain outside the
+current world contract.
 
 [Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/RotatingPhysicsContainer)
 is the recommended visual introduction: it progressively reveals 120 circles and

@@ -31,9 +31,10 @@ contacts. Les capteurs partagent géométrie et filtres sans entrer dans les
 de capteur sont des buffers déterministes postérieurs au pas et restent
 optionnels.
 
-Les bullets balayent les cibles dynamiques et la géométrie convexe. Les corps
-ordinaires rapides conservent la garde continue plus étroite. Un monde sans
-bullet quitte ce chemin immédiatement.
+Les corps dynamiques rapides balaient toute la géométrie fixe et cinématique
+convexe, translation et rotation comprises. Les bullets étendent ce même
+chemin aux cibles dynamiques. Les corps lents et les paires dynamiques sans
+bullet évitent ce coût.
 
 ## Solver, parallélisme et sommeil
 
