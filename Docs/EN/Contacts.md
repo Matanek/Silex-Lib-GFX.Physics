@@ -48,6 +48,13 @@ event/contact milestone. Retained manifolds warm-start up to two points, while
 the touched collider or chain segment supplies friction, restitution, tangent
 surface speed, and rolling resistance without changing the public read surface.
 
+When several colliders of the same two bodies meet at a corner, the world
+selects the deepest manifold instead of depending on collider creation order.
+Solver anchors remain relative to each center of mass: oriented-shape anchors
+follow body rotation, while circle anchors remain rotation-invariant. A
+compound body with an offset center of mass can therefore rotate or reverse a
+kinematic target without losing its floor contact.
+
 The headless executable proofs are grouped in
 [`../Tests/Consumer/Tests/Contacts.sx`](../../Tests/Consumer/Tests/Contacts.sx):
 

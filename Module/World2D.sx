@@ -34,6 +34,7 @@ use GFX.Physics.Joints2D.WheelJoint2D
 use GFX.Physics.Joints2D.WheelJoint2DSettings
 use GFX.Physics.BodyTransform2D.BodyTransform2D
 use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
 use GFX.Physics.Events2D.BodyMoveEvent2D
 use GFX.Physics.Events2D.ContactBeginEvent2D
 use GFX.Physics.Events2D.ContactEndEvent2D
@@ -43,6 +44,7 @@ use GFX.Physics.Events2D.SensorEndEvent2D
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.Geometry2D.ShapePlacement2D
+use GFX.Physics.Shape2D.Shape2D
 use GFX.Physics.Transform2D.Transform2D
 use STD.Math
 use STD.Threading
@@ -138,19 +140,25 @@ struct SolidContact2D {
     let second_material:PhysicsMaterial2D
     let first_radius:float
     let second_radius:float
+    let first_anchor_rotates:bool
+    let second_anchor_rotates:bool
 
     init(
         manifold:Manifold2D,
         first_material:PhysicsMaterial2D,
         second_material:PhysicsMaterial2D,
         first_radius:float,
-        second_radius:float
+        second_radius:float,
+        first_anchor_rotates:bool,
+        second_anchor_rotates:bool
     ) {
         self.manifold = manifold
         self.first_material = first_material
         self.second_material = second_material
         self.first_radius = first_radius
         self.second_radius = second_radius
+        self.first_anchor_rotates = first_anchor_rotates
+        self.second_anchor_rotates = second_anchor_rotates
     }
 }
 
@@ -3156,6 +3164,7 @@ public class World2D {
     }
 
     private func insert_candidate_pair(pair:BodyPair2D) {
+        if self.candidate_pair_keys.contains(pair) { return }
         if self.store.inverse_masses[pair.first] +
             self.store.inverse_masses[pair.second] <= 0.0
         {
@@ -4045,6 +4054,55 @@ func continuous_pair_hit(
     mover:int,
     target:int
 ) ContinuousHit2D {
+    let pair = ordered_body_pair(mover, target)
+    let sensor_pair = pair_is_sensor(store, pair)
+    var earliest = ContinuousHit2D()
+    var mover_slot = store.first_shape_slots[mover]
+    while mover_slot >= 0 {
+        let mover_dense = store.shape_store.slot_dense_indices[mover_slot]
+        let mover_sensor =
+            (store.shape_store.behavior_flags[mover_dense] & 1) != 0
+        var target_slot = store.first_shape_slots[target]
+        while target_slot >= 0 {
+            let target_dense = store.shape_store.slot_dense_indices[
+                target_slot
+            ]
+            let target_sensor =
+                (store.shape_store.behavior_flags[target_dense] & 1) != 0
+            if (sensor_pair || (!mover_sensor && !target_sensor)) &&
+                store.shape_store.collision_filters[mover_dense].allows(
+                    store.shape_store.collision_filters[target_dense]
+                )
+            {
+                let hit = continuous_pair_hit_for_shapes(
+                    store,
+                    mover,
+                    target,
+                    store.shape_store.shapes[mover_dense],
+                    store.shape_store.collision_filters[mover_dense],
+                    store.shape_store.shapes[target_dense],
+                    store.shape_store.collision_filters[target_dense]
+                )
+                if hit.hit && (!earliest.hit || hit.fraction < earliest.fraction) {
+                    earliest = hit
+                }
+            }
+            target_slot = store.shape_store.next_body_shape_slots[target_dense]
+        }
+        mover_slot = store.shape_store.next_body_shape_slots[mover_dense]
+    }
+    return earliest
+}
+
+func continuous_pair_hit_for_shapes(
+    store:BodyStore2D,
+    mover:int,
+    target:int,
+    mover_shape:Shape2D,
+    mover_filter:CollisionFilter2D,
+    target_shape:Shape2D,
+    target_filter:CollisionFilter2D
+) ContinuousHit2D {
     let mover_start = Transform2D(
         position:Math.Vec2(
             store.previous_positions_x[mover],
@@ -4074,14 +4132,14 @@ func continuous_pair_hit(
     let mover_rotation_motion = store.rotations[mover] - mover_start.rotation
     let target_rotation_motion = store.rotations[target] - target_start.rotation
     let mover_placement = ShapePlacement2D(
-        store.shapes[mover],
+        mover_shape,
         mover_start,
-        store.collision_filters[mover]
+        mover_filter
     )
     let target_placement = ShapePlacement2D(
-        store.shapes[target],
+        target_shape,
         target_start,
-        store.collision_filters[target]
+        target_filter
     )
     if Geometry2D.overlaps(mover_placement, target_placement) {
         return ContinuousHit2D()
@@ -4113,16 +4171,16 @@ func continuous_pair_hit(
     while sample <= sample_count {
         let fraction = sample as float / sample_count as float
         let moving = continuous_placement_at(
-            store,
-            mover,
+            mover_shape,
+            mover_filter,
             mover_start,
             mover_motion,
             mover_rotation_motion,
             fraction
         )
         let other = continuous_placement_at(
-            store,
-            target,
+            target_shape,
+            target_filter,
             target_start,
             target_motion,
             target_rotation_motion,
@@ -4136,16 +4194,16 @@ func continuous_pair_hit(
                 let middle = (lower + upper) * 0.5
                 if Geometry2D.overlaps(
                     continuous_placement_at(
-                        store,
-                        mover,
+                        mover_shape,
+                        mover_filter,
                         mover_start,
                         mover_motion,
                         mover_rotation_motion,
                         middle
                     ),
                     continuous_placement_at(
-                        store,
-                        target,
+                        target_shape,
+                        target_filter,
                         target_start,
                         target_motion,
                         target_rotation_motion,
@@ -4159,16 +4217,16 @@ func continuous_pair_hit(
                 iteration++
             }
             let hit_mover = continuous_placement_at(
-                store,
-                mover,
+                mover_shape,
+                mover_filter,
                 mover_start,
                 mover_motion,
                 mover_rotation_motion,
                 upper
             )
             let hit_target = continuous_placement_at(
-                store,
-                target,
+                target_shape,
+                target_filter,
                 target_start,
                 target_motion,
                 target_rotation_motion,
@@ -4205,20 +4263,20 @@ func continuous_pair_hit(
 }
 
 func continuous_placement_at(
-    store:BodyStore2D,
-    body:int,
+    shape:Shape2D,
+    filter:CollisionFilter2D,
     start:Transform2D,
     motion:Math.Vec2,
     rotation_motion:float,
     fraction:float
 ) ShapePlacement2D {
     return ShapePlacement2D(
-        store.shapes[body],
+        shape,
         Transform2D(
             position:start.position.add(motion.multiply(fraction)),
             rotation:start.rotation + rotation_motion * fraction
         ),
-        store.collision_filters[body]
+        filter
     )
 }
 
@@ -4436,39 +4494,8 @@ func contact_manifold(
             body_placement(store, second_body)
         )
     }
-    var first_slot = store.first_shape_slots[first_body]
-    while first_slot >= 0 {
-        let first_dense = store.shape_store.slot_dense_indices[first_slot]
-        if (store.shape_store.behavior_flags[first_dense] & 1) == 0 {
-            var second_slot = store.first_shape_slots[second_body]
-            while second_slot >= 0 {
-                let second_dense = store.shape_store.slot_dense_indices[second_slot]
-                if (store.shape_store.behavior_flags[second_dense] & 1) == 0 &&
-                    store.shape_store.collision_filters[first_dense].allows(
-                        store.shape_store.collision_filters[second_dense]
-                    )
-                {
-                    let manifold = Geometry2D.manifold(
-                        collider_placement(store, first_body, first_dense),
-                        collider_placement(store, second_body, second_dense)
-                    )
-                    if manifold.point_count() > 0 { return manifold }
-                }
-                second_slot = store.shape_store.next_body_shape_slots[
-                    second_dense
-                ]
-            }
-        }
-        first_slot = store.shape_store.next_body_shape_slots[first_dense]
-    }
-    return Manifold2D()
-}
-
-func solid_contact(
-    store:BodyStore2D,
-    first_body:int,
-    second_body:int
-) SolidContact2D? {
+    var selected = Manifold2D()
+    var selected_separation = 3.4028235e38
     var first_slot = store.first_shape_slots[first_body]
     while first_slot >= 0 {
         let first_dense = store.shape_store.slot_dense_indices[first_slot]
@@ -4486,23 +4513,11 @@ func solid_contact(
                         collider_placement(store, second_body, second_dense)
                     )
                     if manifold.point_count() > 0 {
-                        return SolidContact2D(
-                            manifold,
-                            store.shape_store.contact_material(
-                                first_dense,
-                                manifold.first_feature
-                            ),
-                            store.shape_store.contact_material(
-                                second_dense,
-                                manifold.second_feature
-                            ),
-                            shape_metrics(
-                                store.shape_store.shapes[first_dense]
-                            ).radius,
-                            shape_metrics(
-                                store.shape_store.shapes[second_dense]
-                            ).radius
-                        )
+                        let separation = manifold_minimum_separation(manifold)
+                        if separation < selected_separation {
+                            selected = manifold
+                            selected_separation = separation
+                        }
                     }
                 }
                 second_slot = store.shape_store.next_body_shape_slots[
@@ -4512,7 +4527,76 @@ func solid_contact(
         }
         first_slot = store.shape_store.next_body_shape_slots[first_dense]
     }
-    return null
+    return selected
+}
+
+func manifold_minimum_separation(manifold:Manifold2D) float {
+    var separation = manifold.points[0].separation
+    if manifold.point_count() > 1 {
+        separation = Math.min(separation, manifold.points[1].separation)
+    }
+    return separation
+}
+
+func solid_contact(
+    store:BodyStore2D,
+    first_body:int,
+    second_body:int
+) SolidContact2D? {
+    var selected:SolidContact2D? = null
+    var selected_separation = 3.4028235e38
+    var first_slot = store.first_shape_slots[first_body]
+    while first_slot >= 0 {
+        let first_dense = store.shape_store.slot_dense_indices[first_slot]
+        if (store.shape_store.behavior_flags[first_dense] & 1) == 0 {
+            var second_slot = store.first_shape_slots[second_body]
+            while second_slot >= 0 {
+                let second_dense = store.shape_store.slot_dense_indices[second_slot]
+                if (store.shape_store.behavior_flags[second_dense] & 1) == 0 &&
+                    store.shape_store.collision_filters[first_dense].allows(
+                        store.shape_store.collision_filters[second_dense]
+                    )
+                {
+                    let manifold = Geometry2D.manifold(
+                        collider_placement(store, first_body, first_dense),
+                        collider_placement(store, second_body, second_dense)
+                    )
+                    if manifold.point_count() > 0 {
+                        let separation = manifold_minimum_separation(manifold)
+                        if separation < selected_separation {
+                            let first_metrics = shape_metrics(
+                                store.shape_store.shapes[first_dense]
+                            )
+                            let second_metrics = shape_metrics(
+                                store.shape_store.shapes[second_dense]
+                            )
+                            selected = SolidContact2D(
+                                manifold,
+                                store.shape_store.contact_material(
+                                    first_dense,
+                                    manifold.first_feature
+                                ),
+                                store.shape_store.contact_material(
+                                    second_dense,
+                                    manifold.second_feature
+                                ),
+                                first_metrics.radius,
+                                second_metrics.radius,
+                                first_metrics.kind != 1,
+                                second_metrics.kind != 1
+                            )
+                            selected_separation = separation
+                        }
+                    }
+                }
+                second_slot = store.shape_store.next_body_shape_slots[
+                    second_dense
+                ]
+            }
+        }
+        first_slot = store.shape_store.next_body_shape_slots[first_dense]
+    }
+    return selected
 }
 
 func build_solver_collision(
@@ -4568,6 +4652,32 @@ func build_solver_collision(
             manifold.points[0].separation,
             cache_index,
             cache
+        )
+        collision.first_anchor_rotates = contact.first_anchor_rotates
+        collision.second_anchor_rotates = contact.second_anchor_rotates
+        collision.first_anchor_a = soft_step_contact_anchor(
+            store,
+            pair.first,
+            points.first,
+            contact.first_anchor_rotates
+        )
+        collision.first_anchor_b = soft_step_contact_anchor(
+            store,
+            pair.second,
+            points.first,
+            contact.second_anchor_rotates
+        )
+        collision.second_anchor_a = soft_step_contact_anchor(
+            store,
+            pair.first,
+            points.second,
+            contact.first_anchor_rotates
+        )
+        collision.second_anchor_b = soft_step_contact_anchor(
+            store,
+            pair.second,
+            points.second,
+            contact.second_anchor_rotates
         )
         collision.base_separation_first = points.first_separation
         collision.base_separation_second = points.second_separation
@@ -5155,6 +5265,8 @@ struct Collision2D {
     let normal:Math.Vec2
     let contacts:ContactPoints2D
     let cache_index:int
+    var first_anchor_rotates:bool
+    var second_anchor_rotates:bool
     var normal_impulse_first:float
     var normal_impulse_second:float
     var tangent_impulse_first:float
@@ -5190,6 +5302,8 @@ struct Collision2D {
         self.normal = Math.Vec2()
         self.contacts = ContactPoints2D()
         self.cache_index = 0
+        self.first_anchor_rotates = false
+        self.second_anchor_rotates = false
         self.normal_impulse_first = 0.0
         self.normal_impulse_second = 0.0
         self.tangent_impulse_first = 0.0
@@ -5235,6 +5349,8 @@ struct Collision2D {
         self.normal = normal
         self.contacts = contacts
         self.cache_index = cache_index
+        self.first_anchor_rotates = store.shape_kinds[first_body] != 1
+        self.second_anchor_rotates = store.shape_kinds[second_body] != 1
         let first_local_contact = body_contact_cache_point(
             store,
             first_body,
@@ -5279,25 +5395,29 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
-        self.first_anchor_a = body_contact_cache_point(
+        self.first_anchor_a = soft_step_contact_anchor(
             store,
             first_body,
-            contacts.first
+            contacts.first,
+            self.first_anchor_rotates
         )
-        self.first_anchor_b = body_contact_cache_point(
+        self.first_anchor_b = soft_step_contact_anchor(
             store,
             second_body,
-            contacts.first
+            contacts.first,
+            self.second_anchor_rotates
         )
-        self.second_anchor_a = body_contact_cache_point(
+        self.second_anchor_a = soft_step_contact_anchor(
             store,
             first_body,
-            contacts.second
+            contacts.second,
+            self.first_anchor_rotates
         )
-        self.second_anchor_b = body_contact_cache_point(
+        self.second_anchor_b = soft_step_contact_anchor(
             store,
             second_body,
-            contacts.second
+            contacts.second,
+            self.second_anchor_rotates
         )
         self.base_separation_first = separation
         self.base_separation_second = separation
@@ -5333,6 +5453,8 @@ struct Collision2D {
         self.normal = normal
         self.contacts = contacts
         self.cache_index = cache_index
+        self.first_anchor_rotates = store.shape_kinds[first_body] != 1
+        self.second_anchor_rotates = store.shape_kinds[second_body] != 1
         let local_x = contacts.first.x - store.positions_x[first_body]
         let local_y = contacts.first.y - store.positions_y[first_body]
         let delta_x = cache.first_contact.x - local_x
@@ -5359,15 +5481,17 @@ struct Collision2D {
         self.tangent_mass_second = 0.0
         self.normal_denominator_first = 0.0
         self.normal_denominator_second = 0.0
-        self.first_anchor_a = body_contact_cache_point(
+        self.first_anchor_a = soft_step_contact_anchor(
             store,
             first_body,
-            contacts.first
+            contacts.first,
+            self.first_anchor_rotates
         )
-        self.first_anchor_b = body_contact_cache_point(
+        self.first_anchor_b = soft_step_contact_anchor(
             store,
             second_body,
-            contacts.first
+            contacts.first,
+            self.second_anchor_rotates
         )
         self.second_anchor_a = self.first_anchor_a
         self.second_anchor_b = self.first_anchor_b
@@ -6004,14 +6128,28 @@ func prepare_circle_collision_constraints(
 func contact_anchor_vector(
     store:BodyStore2D,
     body:int,
-    local_point:Math.Vec2
+    local_point:Math.Vec2,
+    rotates:bool
 ) Math.Vec2 {
+    if !rotates { return local_point }
     let cosine = store.rotation_cosines[body]
     let sine = store.rotation_sines[body]
     return Math.Vec2(
         local_point.x * cosine - local_point.y * sine,
         local_point.x * sine + local_point.y * cosine
     )
+}
+
+func soft_step_contact_anchor(
+    store:BodyStore2D,
+    body:int,
+    point:Math.Vec2,
+    rotates:bool
+) Math.Vec2 {
+    if !rotates {
+        return point.subtract(store.world_center_at(body))
+    }
+    return body_contact_cache_point(store, body, point)
 }
 
 func apply_soft_contact_impulse(
@@ -6126,7 +6264,7 @@ func warm_start_soft_single_collision(
     let second = collision.second_body
     var first_anchor_x:float = collision.first_anchor_a.x + 0.0
     var first_anchor_y:float = collision.first_anchor_a.y + 0.0
-    if store.shape_kinds[first] != 1 {
+    if collision.first_anchor_rotates {
         let cosine = store.rotation_cosines[first]
         let sine = store.rotation_sines[first]
         let local_x = first_anchor_x
@@ -6136,7 +6274,7 @@ func warm_start_soft_single_collision(
     }
     var second_anchor_x:float = collision.first_anchor_b.x + 0.0
     var second_anchor_y:float = collision.first_anchor_b.y + 0.0
-    if store.shape_kinds[second] != 1 {
+    if collision.second_anchor_rotates {
         let cosine = store.rotation_cosines[second]
         let sine = store.rotation_sines[second]
         let local_x = second_anchor_x
@@ -6203,12 +6341,14 @@ func warm_start_soft_collision_point(
     let first_anchor = contact_anchor_vector(
         store,
         collision.first_body,
-        first_local
+        first_local,
+        collision.first_anchor_rotates
     )
     let second_anchor = contact_anchor_vector(
         store,
         collision.second_body,
-        second_local
+        second_local,
+        collision.second_anchor_rotates
     )
     let tangent = Math.Vec2(-collision.normal.y, collision.normal.x)
     let impulse = collision.normal.multiply(normal_impulse).add(
@@ -6316,7 +6456,7 @@ func solve_soft_single_collision(
     let previous_tangent:float = collision.tangent_impulse_first + 0.0
     var first_anchor_x:float = collision.first_anchor_a.x + 0.0
     var first_anchor_y:float = collision.first_anchor_a.y + 0.0
-    if store.shape_kinds[first] != 1 {
+    if collision.first_anchor_rotates {
         let cosine = store.rotation_cosines[first]
         let sine = store.rotation_sines[first]
         let local_x = first_anchor_x
@@ -6326,7 +6466,7 @@ func solve_soft_single_collision(
     }
     var second_anchor_x:float = collision.first_anchor_b.x + 0.0
     var second_anchor_y:float = collision.first_anchor_b.y + 0.0
-    if store.shape_kinds[second] != 1 {
+    if collision.second_anchor_rotates {
         let cosine = store.rotation_cosines[second]
         let sine = store.rotation_sines[second]
         let local_x = second_anchor_x
@@ -6334,10 +6474,12 @@ func solve_soft_single_collision(
         second_anchor_x = local_x * cosine - local_y * sine
         second_anchor_y = local_x * sine + local_y * cosine
     }
+    let first_center = store.world_center_at(first)
+    let second_center = store.world_center_at(second)
     let separation = base_separation +
-        (store.positions_x[second] - store.positions_x[first] +
+        (second_center.x - first_center.x +
             second_anchor_x - first_anchor_x) * normal_x +
-        (store.positions_y[second] - store.positions_y[first] +
+        (second_center.y - first_center.y +
             second_anchor_y - first_anchor_y) * normal_y
     var velocity_bias = 0.0
     var mass_scale = 1.0
@@ -6441,22 +6583,26 @@ func solve_soft_collision_block_normals(
     let first_anchor_a = contact_anchor_vector(
         store,
         collision.first_body,
-        collision.first_anchor_a
+        collision.first_anchor_a,
+        collision.first_anchor_rotates
     )
     let first_anchor_b = contact_anchor_vector(
         store,
         collision.second_body,
-        collision.first_anchor_b
+        collision.first_anchor_b,
+        collision.second_anchor_rotates
     )
     let second_anchor_a = contact_anchor_vector(
         store,
         collision.first_body,
-        collision.second_anchor_a
+        collision.second_anchor_a,
+        collision.first_anchor_rotates
     )
     let second_anchor_b = contact_anchor_vector(
         store,
         collision.second_body,
-        collision.second_anchor_b
+        collision.second_anchor_b,
+        collision.second_anchor_rotates
     )
     let first_separation = soft_contact_separation(
         store,
@@ -6577,12 +6723,14 @@ func solve_soft_collision_point(
     let first_anchor = contact_anchor_vector(
         store,
         collision.first_body,
-        first_local
+        first_local,
+        collision.first_anchor_rotates
     )
     let second_anchor = contact_anchor_vector(
         store,
         collision.second_body,
-        second_local
+        second_local,
+        collision.second_anchor_rotates
     )
     let separation = soft_contact_separation(
         store,
@@ -6663,12 +6811,14 @@ func solve_soft_collision_friction_point(
     let first_anchor = contact_anchor_vector(
         store,
         collision.first_body,
-        first_local
+        first_local,
+        collision.first_anchor_rotates
     )
     let second_anchor = contact_anchor_vector(
         store,
         collision.second_body,
-        second_local
+        second_local,
+        collision.second_anchor_rotates
     )
 
     let tangent = Math.Vec2(-collision.normal.y, collision.normal.x)
@@ -6769,7 +6919,7 @@ func apply_soft_single_collision_restitution(
     let second:int = collision.second_body + 0
     var first_anchor_x:float = collision.first_anchor_a.x + 0.0
     var first_anchor_y:float = collision.first_anchor_a.y + 0.0
-    if store.shape_kinds[first] != 1 {
+    if collision.first_anchor_rotates {
         let cosine = store.rotation_cosines[first]
         let sine = store.rotation_sines[first]
         let local_x = first_anchor_x
@@ -6779,7 +6929,7 @@ func apply_soft_single_collision_restitution(
     }
     var second_anchor_x:float = collision.first_anchor_b.x + 0.0
     var second_anchor_y:float = collision.first_anchor_b.y + 0.0
-    if store.shape_kinds[second] != 1 {
+    if collision.second_anchor_rotates {
         let cosine = store.rotation_cosines[second]
         let sine = store.rotation_sines[second]
         let local_x = second_anchor_x
@@ -6864,12 +7014,14 @@ func apply_soft_collision_restitution_point(
     let first_anchor = contact_anchor_vector(
         store,
         collision.first_body,
-        first_local
+        first_local,
+        collision.first_anchor_rotates
     )
     let second_anchor = contact_anchor_vector(
         store,
         collision.second_body,
-        second_local
+        second_local,
+        collision.second_anchor_rotates
     )
     let normal_velocity = soft_relative_velocity(
         store,

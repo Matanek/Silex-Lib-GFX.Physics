@@ -253,3 +253,105 @@ test "keep force control deterministic across worker counts" {
         index++
     }
 }
+
+test "retain bullet cargo inside a moving compound container" {
+    let platform_left = -2.3
+    let platform_right = 2.3
+    let platform_y = -2.15
+    let target_frames = 180
+    let target_duration = 3.0
+    var world = Physics.World2D()
+    var platform = world.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.kinematic
+            ..position = Math.Vec2(platform_left, platform_y)
+            ..create_implicit_collider = false
+    )
+    let material = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..restitution = 0.05
+    world.create_collider(platform, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-1.5, -0.15),
+            Math.Vec2(1.5, -0.15),
+            Math.Vec2(1.5, 0.15),
+            Math.Vec2(-1.5, 0.15)
+        ]))
+        ..material = material
+    )
+    world.create_collider(platform, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-1.55, 0.85),
+            Math.Vec2(1.55, 0.85),
+            Math.Vec2(1.55, 1.05),
+            Math.Vec2(-1.55, 1.05)
+        ]))
+        ..material = material
+    )
+    world.create_collider(platform, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-1.55, -0.15),
+            Math.Vec2(-1.35, -0.15),
+            Math.Vec2(-1.35, 0.85),
+            Math.Vec2(-1.55, 0.85)
+        ]))
+        ..material = material
+    )
+    world.create_collider(platform, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(1.35, -0.15),
+            Math.Vec2(1.55, -0.15),
+            Math.Vec2(1.55, 0.85),
+            Math.Vec2(1.35, 0.85)
+        ]))
+        ..material = material
+    )
+    platform.set_target_transform(
+        Physics.Transform2D(
+            position:Math.Vec2(platform_right, platform_y),
+            rotation:Math.pi() * 0.06
+        ),
+        target_duration
+    )
+    var cargo = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.32))
+        ..position = Math.Vec2(platform_left, platform_y + 0.5)
+        ..friction = 1.0
+        ..restitution = 0.12
+        ..is_bullet = true
+        ..allow_sleep = false
+    )
+
+    var target_right = true
+    var step = 0
+    while step < 540 {
+        world.step(1.0 / 60.0)
+        step++
+        if step % target_frames == 0 {
+            var target_x = platform_left
+            var target_rotation = 0.0
+            if !target_right {
+                target_x = platform_right
+                target_rotation = Math.pi() * 0.06
+            }
+            platform.set_target_transform(
+                Physics.Transform2D(
+                    position:Math.Vec2(target_x, platform_y),
+                    rotation:target_rotation
+                ),
+                target_duration
+            )
+            target_right = !target_right
+        }
+        let local_position = platform.local_point(cargo.position())
+        assert(
+            world.candidate_pair_count() <= 1,
+            "duplicate cargo contacts at step $(step): $(world.candidate_pair_count())"
+        )
+        assert(
+            Math.abs(local_position.x) < 1.2 &&
+                local_position.y > 0.1 && local_position.y < 0.75,
+            "cargo escaped at step $(step): x=$(local_position.x) y=$(local_position.y)"
+        )
+    }
+}

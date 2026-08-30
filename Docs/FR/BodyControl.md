@@ -114,6 +114,11 @@ Cette opération choisit les vitesses linéaire et angulaire qui atteignent la
 cible, en prenant le chemin de rotation le plus court. L’application continue
 d’appeler `step` pendant la durée indiquée.
 
+Un conteneur cinématique peut être construit avec plusieurs colliders. Les
+contacts et le CCD utilisent toutes ses parois, même lorsque son centre de
+masse dérivé est décalé. Une inversion de cible ne crée pas de seconde
+contrainte pour la même paire de corps.
+
 Les preuves consommateur sont dans
 [`Tests/Consumer/Tests/BodyControl.sx`](../../Tests/Consumer/Tests/BodyControl.sx)
 et les cas d’échec dans

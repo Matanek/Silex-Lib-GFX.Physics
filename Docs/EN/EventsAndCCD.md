@@ -81,6 +81,12 @@ shape-cast geometry; angular motion searches the swept poses and refines the
 first overlap. The earliest solid hit clips the bullet and removes inward
 motion. Sensors report the crossing without clipping or applying an impulse.
 
+CCD evaluates every filter-compatible collider pair, not only each body's
+primary shape. Secondary walls of a compound or kinematic container therefore
+participate in the sweep, and the earliest admissible collider hit wins. A
+continuous hit reuses the owning body pair when it is already cached; it never
+adds duplicate constraints for the same two bodies.
+
 The CCD path preserves collision filters and filter-joint exclusions. It does
 not turn every dynamic pair into a continuous pair: that cost is paid only by
 bullets. Solver callbacks and general concurrent world mutation remain outside

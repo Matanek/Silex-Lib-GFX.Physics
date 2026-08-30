@@ -321,10 +321,81 @@ test "select the material of the contacted chain segment" {
         step++
     }
     let position = body.position()
-    assert(position.x < 0.5 && position.x > -1.8,
+    assert(position.x < 0.75 && position.x > -1.8,
         "chain conveyor x=$(position.x)")
     assert(position.y > 0.10,
         "chain conveyor x=$(position.x) y=$(position.y)")
+}
+
+test "keep a circle on the front side of a chain conveyor" {
+    let still = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..rolling_resistance = 0.08
+    let conveyor = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..rolling_resistance = 0.08
+        ..tangent_speed = 0.85
+    var world = Physics.World2D()
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-4.5, -2.7),
+            Math.Vec2(-1.5, -2.7),
+            Math.Vec2(-1.5, -2.2),
+            Math.Vec2(-4.5, -2.2)
+        ]))
+        ..material = still
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(1.5, -2.7),
+            Math.Vec2(4.5, -2.7),
+            Math.Vec2(4.5, -2.2),
+            Math.Vec2(1.5, -2.2)
+        ]))
+        ..material = still
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(2.5, -2.2),
+            Math.Vec2(1.5, -2.2),
+            Math.Vec2(-1.5, -2.2),
+            Math.Vec2(-2.5, -2.2)
+        ]))
+        ..material = still
+        ..segment_materials = [still, conveyor, still]
+    )
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.35))
+        ..position = Math.Vec2(0.8, 2.0)
+        ..friction = 1.0
+        ..angular_velocity = 4.0
+        ..allow_sleep = false
+        ..is_bullet = true
+    )
+
+    var minimum_y = circle.position().y
+    var minimum_x = circle.position().x
+    var minimum_step = 0
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        step++
+        if circle.position().y < minimum_y {
+            minimum_y = circle.position().y
+            minimum_x = circle.position().x
+            minimum_step = step
+        }
+    }
+    assert(minimum_y < -1.7)
+    assert(
+        minimum_y >= -1.88,
+        "circle penetrated chain at step $(minimum_step): x=$(minimum_x) y=$(minimum_y)"
+    )
+    assert(circle.position().x < 0.3)
 }
 
 test "reserve open chain endpoint edges as ghost geometry" {

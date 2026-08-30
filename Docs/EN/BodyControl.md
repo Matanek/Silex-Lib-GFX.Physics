@@ -112,6 +112,10 @@ This selects the linear and angular velocities that reach the target, using
 the shortest rotational path. The application keeps calling `step` over the
 specified duration.
 
+A kinematic container can be composed from several colliders. Contacts and CCD
+use every wall even when the derived center of mass is offset, and reversing a
+target does not create a second constraint for the same body pair.
+
 The consumer proofs live in
 [`Tests/Consumer/Tests/BodyControl.sx`](../../Tests/Consumer/Tests/BodyControl.sx),
 with failure cases in

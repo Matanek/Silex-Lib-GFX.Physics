@@ -29,6 +29,13 @@ chaîne reste fixe et unilatérale, avec son matériau propre à chaque segment.
 Les capteurs utilisent des flux d’événements séparés et n’apparaissent pas
 comme contacts solides.
 
+Quand plusieurs colliders des deux mêmes corps se touchent à un coin, le monde
+retient le manifold le plus pénétrant au lieu de dépendre de leur ordre de
+création. Les ancres du solveur restent relatives au centre de masse : celles
+des formes orientées suivent la rotation, tandis que l’ancre d’un cercle reste
+invariante. Un corps composé à centre de masse décalé peut ainsi tourner ou
+changer de cible cinématique sans perdre le contact du plancher.
+
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/DynamicShapes.sx
 ```
