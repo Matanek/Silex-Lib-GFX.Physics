@@ -52,6 +52,73 @@ test "resolve capsule rounded polygon and segment contacts through Soft Step" {
     assert(Math.abs(segment[3]) < 0.05)
 }
 
+test "settle the ShapeResponse polygon and segment on supported faces" {
+    var polygon_world = Physics.World2D()
+    polygon_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(3.0, 0.5)))
+        ..position = Math.Vec2(3.0, -2.45)
+    )
+    var polygon = polygon_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.5, -0.4), Math.Vec2(0.5, -0.4),
+            Math.Vec2(0.42, 0.45), Math.Vec2(-0.42, 0.45)
+        ], 0.1))
+        ..position = Math.Vec2(2.0, 2.15)
+        ..rotation = 0.22
+        ..friction = 1.0
+        ..restitution = 0.45
+    )
+    var step = 0
+    while step < 360 {
+        polygon_world.step(1.0 / 60.0)
+        step++
+    }
+    let polygon_angle = polygon.rotation()
+    let polygon_sine = Math.sin(polygon_angle)
+    let polygon_cosine = Math.cos(polygon_angle)
+    let edge_verticals:float[] = [
+        polygon_sine,
+        polygon_sine * -0.08 + polygon_cosine * 0.85,
+        polygon_sine * -0.84,
+        polygon_sine * -0.08 + polygon_cosine * -0.85
+    ]
+    var minimum_vertical = Math.abs(edge_verticals[0])
+    for vertical in edge_verticals {
+        minimum_vertical = Math.min(minimum_vertical, Math.abs(vertical))
+    }
+    assert(
+        minimum_vertical < 0.005,
+        "rounded polygon stopped on an unsupported corner: angle=$(polygon_angle)"
+    )
+
+    var segment_world = Physics.World2D()
+    segment_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(3.0, 0.5)))
+        ..position = Math.Vec2(3.0, -2.45)
+    )
+    var segment = segment_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-0.55, 0.0), Math.Vec2(0.55, 0.0)
+        ))
+        ..position = Math.Vec2(2.4, 3.0)
+        ..rotation = -0.35
+        ..mass = 1.0
+        ..friction = 1.0
+        ..restitution = 0.75
+    )
+    step = 0
+    while step < 360 {
+        segment_world.step(1.0 / 60.0)
+        step++
+    }
+    assert(
+        Math.abs(Math.sin(segment.rotation())) < 0.005,
+        "segment stopped before reaching a supported face: angle=$(segment.rotation())"
+    )
+}
+
 test "derive finite thin-rod inertia for a segment with scalar mass" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var body = world.create_rigid_body(Physics.RigidBody2DSettings()

@@ -123,7 +123,9 @@ its instantaneous velocity and every rotation are recorded for diagnosis
 without requiring identical solver phase between the two engines. The
 example-derived cases compare impact depth where trajectories are stable and
 otherwise enforce the physical invariant: the body is motionless and supported
-by a face rather than balanced on an unsupported corner.
+by a face rather than balanced on an unsupported corner. A supported face must
+be level within 5 mm per metre; this rejects a two-point manifold synthesized
+across a tilted edge whose upper endpoint has not reached the support.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

@@ -26,7 +26,7 @@ def polygon_has_supported_face(angle: float) -> bool:
         edge_x = second[0] - first[0]
         edge_y = second[1] - first[1]
         world_y = sine * edge_x + cosine * edge_y
-        if abs(world_y) <= 0.08:
+        if abs(world_y) <= 0.005:
             return True
     return False
 
@@ -84,7 +84,7 @@ def main() -> int:
                 print(f"{name}: polygon did not settle", file=sys.stderr)
                 return 1
         elif name == "example_segment_settle":
-            if abs(actual[1]) > 0.02 or abs(math.sin(actual[4])) > 0.05:
+            if abs(actual[1]) > 0.02 or abs(math.sin(actual[4])) > 0.005:
                 print(f"{name}: segment did not settle flat", file=sys.stderr)
                 return 1
             if abs(actual[2]) > 0.05 or abs(actual[3]) > 0.05 or abs(actual[5]) > 0.05:

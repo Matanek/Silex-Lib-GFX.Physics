@@ -113,6 +113,53 @@ test "compute transformed distances overlaps and manifolds" {
     assert(face_manifold.normal.nearly_equal(Math.Vec2.right(), 0.0001))
 }
 
+test "keep a tilted support on one contact until its face is level" {
+    let floor = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.5))),
+        Physics.Transform2D(position:Math.Vec2(0.0, -0.25))
+    )
+    let tilted_segment = Physics.ShapePlacement2D(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-0.55, 0.0),
+            Math.Vec2(0.55, 0.0)
+        )),
+        Physics.Transform2D(rotation:0.03)
+    )
+    let flat_segment = Physics.ShapePlacement2D(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-0.55, 0.0),
+            Math.Vec2(0.55, 0.0)
+        ))
+    )
+    let polygon = Physics.Shape2D.polygon(Physics.Polygon2D([
+        Math.Vec2(-0.5, -0.4), Math.Vec2(0.5, -0.4),
+        Math.Vec2(0.42, 0.45), Math.Vec2(-0.42, 0.45)
+    ], 0.1))
+    let tilted_polygon = Physics.ShapePlacement2D(
+        polygon,
+        Physics.Transform2D(position:Math.Vec2(0.0, 0.5), rotation:0.05)
+    )
+    let flat_polygon = Physics.ShapePlacement2D(
+        polygon,
+        Physics.Transform2D(position:Math.Vec2(0.0, 0.5))
+    )
+
+    assert(Physics.Geometry2D.manifold(floor, tilted_segment).point_count() == 1)
+    assert(Physics.Geometry2D.manifold(floor, flat_segment).point_count() == 2)
+    assert(Physics.Geometry2D.manifold(floor, tilted_polygon).point_count() == 1)
+    assert(Physics.Geometry2D.manifold(floor, flat_polygon).point_count() == 2)
+
+    let narrow_floor = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0, 0.5))),
+        Physics.Transform2D(position:Math.Vec2(0.0, -0.25))
+    )
+    let wide_box = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0, 0.5))),
+        Physics.Transform2D(position:Math.Vec2(0.0, 0.25))
+    )
+    assert(Physics.Geometry2D.manifold(narrow_floor, wide_box).point_count() == 2)
+}
+
 test "ray cast and shape cast across polygons capsules segments and chains" {
     let target = Physics.ShapePlacement2D(
         Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
