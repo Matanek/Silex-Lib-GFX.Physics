@@ -160,6 +160,59 @@ static void print_chain_transition(void)
     b2DestroyWorld(world);
 }
 
+static void print_chain_conveyor(
+    const char* name, float linear_velocity, float angular_velocity)
+{
+    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldId world = b2CreateWorld(&world_definition);
+
+    b2BodyDef support_definition = b2DefaultBodyDef();
+    b2BodyId support = b2CreateBody(world, &support_definition);
+    b2Vec2 points[] = {
+        {5.0f, 0.0f}, {2.0f, 0.0f}, {-2.0f, 0.0f}, {-5.0f, 0.0f},
+    };
+    b2SurfaceMaterial material = b2DefaultSurfaceMaterial();
+    material.friction = 1.0f;
+    material.tangentSpeed = 0.85f;
+    b2ChainDef chain_definition = b2DefaultChainDef();
+    chain_definition.points = points;
+    chain_definition.count = 4;
+    chain_definition.materials = &material;
+    chain_definition.materialCount = 1;
+    b2CreateChain(support, &chain_definition);
+
+    b2BodyDef body_definition = b2DefaultBodyDef();
+    body_definition.type = b2_dynamicBody;
+    body_definition.position = (b2Vec2){0.0f, 0.35f};
+    body_definition.linearVelocity = (b2Vec2){linear_velocity, 0.0f};
+    body_definition.angularVelocity = angular_velocity;
+    body_definition.enableSleep = false;
+    b2BodyId body = b2CreateBody(world, &body_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    shape_definition.density = 1.0f;
+    shape_definition.material.friction = 1.0f;
+    b2Circle circle = {{0.0f, 0.0f}, 0.35f};
+    b2CreateCircleShape(body, &shape_definition, &circle);
+
+    for (int step = 0; step < 60; ++step)
+    {
+        b2World_Step(world, 1.0f / 60.0f, 4);
+    }
+
+    b2Vec2 position = b2Body_GetPosition(body);
+    b2Vec2 velocity = b2Body_GetLinearVelocity(body);
+    printf(
+        "%s %.9g %.9g %.9g %.9g %.9g %.9g\n",
+        name,
+        position.x,
+        position.y,
+        velocity.x,
+        velocity.y,
+        b2Rot_GetAngle(b2Body_GetRotation(body)),
+        b2Body_GetAngularVelocity(body));
+    b2DestroyWorld(world);
+}
+
 int main(void)
 {
     print_case("floor_circle", shape_circle, false);
@@ -170,5 +223,7 @@ int main(void)
     print_case("chain_capsule", shape_capsule, true);
     print_case("chain_polygon", shape_polygon, true);
     print_chain_transition();
+    print_chain_conveyor("conveyor_from_rest", 0.0f, 0.0f);
+    print_chain_conveyor("conveyor_rolls_fast_circle", 1.7f, 0.0f);
     return 0;
 }

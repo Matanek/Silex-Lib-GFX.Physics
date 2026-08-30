@@ -6541,7 +6541,7 @@ func solve_soft_single_collision(
         store.angular_velocities[second] * second_anchor_x -
         store.velocities_y[first] -
         store.angular_velocities[first] * first_anchor_x
-    let tangent_velocity = relative_y * normal_x - relative_x * normal_y -
+    let tangent_velocity = relative_y * normal_x - relative_x * normal_y +
         collision.tangent_speed
     let tangent_increment = -tangent_mass * tangent_velocity
     let friction_limit = combined_friction * accumulated_normal
@@ -6828,7 +6828,7 @@ func solve_soft_collision_friction_point(
         collision.second_body,
         first_anchor,
         second_anchor
-    ).dot(tangent) - collision.tangent_speed
+    ).dot(tangent) + collision.tangent_speed
     let tangent_increment = -tangent_mass * tangent_velocity
     let friction_limit = collision.combined_friction * normal_impulse
     let accumulated_tangent = Math.max(

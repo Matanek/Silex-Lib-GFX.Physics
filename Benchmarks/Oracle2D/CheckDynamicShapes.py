@@ -38,6 +38,8 @@ def main() -> int:
             print(f"{name}: Silex emitted a non-finite state", file=sys.stderr)
             return 1
         compared_fields = 2 if name == "chain_transition" else 4
+        if name.startswith("conveyor_"):
+            compared_fields = 6
         for index in range(compared_fields):
             if abs(expected[index] - actual[index]) > 0.08:
                 print(
@@ -50,11 +52,26 @@ def main() -> int:
             if actual[0] >= 0.0 or actual[1] <= 0.7:
                 print(f"{name}: circle did not cross the internal vertices", file=sys.stderr)
                 return 1
+        elif name == "conveyor_from_rest":
+            if actual[2] <= 0.0 or actual[5] <= 0.0:
+                print(f"{name}: conveyor did not induce its expected motion", file=sys.stderr)
+                return 1
+        elif name == "conveyor_rolls_fast_circle":
+            if actual[2] <= 0.0 or actual[5] >= 0.0:
+                print(f"{name}: rightward rolling has the wrong sign", file=sys.stderr)
+                return 1
+            contact_speed = actual[2] + actual[5] * 0.35
+            if abs(contact_speed - 0.85) > 0.03:
+                print(
+                    f"{name}: contact={contact_speed:.9g} belt=0.85",
+                    file=sys.stderr,
+                )
+                return 1
         elif abs(actual[3]) > 0.05:
             print(f"{name}: vertical speed did not settle", file=sys.stderr)
             return 1
-    if len(reference) != 8:
-        print(f"expected eight dynamic-shape cases, got {len(reference)}", file=sys.stderr)
+    if len(reference) != 10:
+        print(f"expected ten dynamic-shape cases, got {len(reference)}", file=sys.stderr)
         return 1
     print(f"dynamic-shape oracle matched {len(reference)} cases")
     return 0

@@ -168,7 +168,7 @@ test "drive a general contact with collider tangent speed" {
     let stationary = conveyor_displacement(0.0)
     let conveyed = conveyor_displacement(1.5)
     assert(Math.abs(stationary) < 0.05)
-    assert(Math.abs(conveyed) > 0.5)
+    assert(conveyed > 0.5)
 }
 
 func rolling_speed(resistance:float) float {
@@ -310,7 +310,7 @@ test "select the material of the contacted chain segment" {
     )
     var body = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
-        ..position = Math.Vec2(1.5, 0.3)
+        ..position = Math.Vec2(-1.5, 0.3)
         ..mass = 1.0
         ..friction = 1.0
         ..allow_sleep = false
@@ -321,7 +321,7 @@ test "select the material of the contacted chain segment" {
         step++
     }
     let position = body.position()
-    assert(position.x < 0.75 && position.x > -1.8,
+    assert(position.x > -0.75 && position.x < 1.8,
         "chain conveyor x=$(position.x)")
     assert(position.y > 0.10,
         "chain conveyor x=$(position.x) y=$(position.y)")
@@ -373,7 +373,7 @@ test "keep a circle on the front side of a chain conveyor" {
     )
     var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.circle(Physics.Circle2D(circle_radius))
-        ..position = Math.Vec2(0.8, 2.0)
+        ..position = Math.Vec2(-0.8, 2.0)
         ..friction = 1.0
         ..allow_sleep = false
         ..is_bullet = true
@@ -397,16 +397,16 @@ test "keep a circle on the front side of a chain conveyor" {
         minimum_y >= -1.88,
         "circle penetrated chain at step $(minimum_step): x=$(minimum_x) y=$(minimum_y)"
     )
-    assert(circle.position().x < 0.3)
+    assert(circle.position().x > -0.3)
     let contact_speed = circle.velocity().x +
         circle.angular_velocity() * circle_radius
     assert(
-        Math.abs(contact_speed + conveyor_speed) < 0.03,
-        "circle slides on conveyor: contact=$(contact_speed) belt=$(-conveyor_speed)"
+        Math.abs(contact_speed - conveyor_speed) < 0.03,
+        "circle slides on conveyor: contact=$(contact_speed) belt=$(conveyor_speed)"
     )
     assert(
-        Math.abs(circle.angular_velocity()) > 0.5,
-        "circle did not acquire visible rolling motion"
+        circle.angular_velocity() > 0.5,
+        "circle did not acquire the Box2D conveyor rotation"
     )
     assert(
         Math.abs(circle.rotation()) > 1.0,

@@ -65,6 +65,9 @@ polygons, and one-sided chains. Each collider's density contributes to the
 body's composed mass, center of mass, and inertia. Contact and sensor snapshots
 still identify bodies until collider-level event identity is added.
 
+The sign of `tangent_speed` follows Box2D 3.1.1. On an upward-facing horizontal
+floor, a positive value drives the touching dynamic body toward positive X.
+
 The isolated consumer proof is
 [`../Tests/Consumer/Tests/Colliders.sx`](../../Tests/Consumer/Tests/Colliders.sx).
 It covers empty and compound bodies, shortcut compatibility, mutations,

@@ -82,6 +82,50 @@ func chain_transition() float[] {
     ]
 }
 
+func chain_conveyor(
+    linear_velocity:float,
+    angular_velocity:float
+) float[] {
+    var world = Physics.World2D()
+    let conveyor = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..tangent_speed = 0.85
+    var support = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(support, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(5.0, 0.0),
+            Math.Vec2(2.0, 0.0),
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-5.0, 0.0)
+        ]))
+        ..material = conveyor
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.35))
+        ..position = Math.Vec2(0.0, 0.35)
+        ..velocity = Math.Vec2(linear_velocity, 0.0)
+        ..angular_velocity = angular_velocity
+        ..friction = 1.0
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return [
+        body.position().x,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y,
+        body.rotation(),
+        body.angular_velocity()
+    ]
+}
+
 func main() {
     let circle = Physics.Shape2D.circle(Physics.Circle2D(0.5))
     let capsule = Physics.Shape2D.capsule(Physics.Capsule2D(
@@ -108,6 +152,8 @@ func main() {
     let chain_capsule = settle(capsule, true)
     let chain_polygon = settle(polygon, true)
     let transition = chain_transition()
+    let conveyor_from_rest = chain_conveyor(0.0, 0.0)
+    let conveyor_rolls_fast_circle = chain_conveyor(1.7, 0.0)
     print("floor_circle $(floor_circle[0]) $(floor_circle[1]) $(floor_circle[2]) $(floor_circle[3]) $(floor_circle[4]) $(floor_circle[5])")
     print("floor_capsule $(floor_capsule[0]) $(floor_capsule[1]) $(floor_capsule[2]) $(floor_capsule[3]) $(floor_capsule[4]) $(floor_capsule[5])")
     print("floor_segment $(floor_segment[0]) $(floor_segment[1]) $(floor_segment[2]) $(floor_segment[3]) $(floor_segment[4]) $(floor_segment[5])")
@@ -116,4 +162,6 @@ func main() {
     print("chain_capsule $(chain_capsule[0]) $(chain_capsule[1]) $(chain_capsule[2]) $(chain_capsule[3]) $(chain_capsule[4]) $(chain_capsule[5])")
     print("chain_polygon $(chain_polygon[0]) $(chain_polygon[1]) $(chain_polygon[2]) $(chain_polygon[3]) $(chain_polygon[4]) $(chain_polygon[5])")
     print("chain_transition $(transition[0]) $(transition[1]) $(transition[2]) $(transition[3]) $(transition[4]) $(transition[5])")
+    print("conveyor_from_rest $(conveyor_from_rest[0]) $(conveyor_from_rest[1]) $(conveyor_from_rest[2]) $(conveyor_from_rest[3]) $(conveyor_from_rest[4]) $(conveyor_from_rest[5])")
+    print("conveyor_rolls_fast_circle $(conveyor_rolls_fast_circle[0]) $(conveyor_rolls_fast_circle[1]) $(conveyor_rolls_fast_circle[2]) $(conveyor_rolls_fast_circle[3]) $(conveyor_rolls_fast_circle[4]) $(conveyor_rolls_fast_circle[5])")
 }

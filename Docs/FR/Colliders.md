@@ -47,3 +47,7 @@ limite la rotation relative. Ces règles s’appliquent aux cercles, capsules,
 segments, polygones convexes ou arrondis et chaînes unilatérales dans le même
 graphe Soft Step. La densité de chaque collider contribue à la masse, au centre
 de masse et à l’inertie composés du corps.
+
+Le signe de `tangent_speed` suit Box2D 3.1.1. Sur un sol horizontal dont la face
+active pointe vers le haut, une valeur positive entraîne le corps dynamique
+touché vers les X positifs.
