@@ -51,6 +51,7 @@ cmake --build /tmp/gfx-physics-box2d --config Release
 silex compile Packages/GFX.Physics/Benchmarks/Corpus2D.sx --release -o /tmp/gfx-physics-silex-corpus
 silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /tmp/gfx-physics-silex-geometry
 silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
+silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -96,6 +97,26 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckBodyControl.py /tmp/box2d-
 
 As with geometry, this differential target is benchmark-only and introduces no
 runtime dependency on Box2D.
+
+The dynamic-shape witness settles circle, capsule, segment and rounded-polygon
+bodies on a polygon floor, then the massive shapes on the solid middle edge of
+an open chain. An eighth scenario drives a circle across three internal chain
+transitions. The Silex and Box2D segment cases receive the same explicit finite
+mass because a segment has no area-derived mass;
+segment-versus-chain-segment is not a supported Box2D pair and is deliberately
+absent.
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_dynamic_shapes_oracle > /tmp/box2d-dynamic-shapes.txt
+/tmp/gfx-physics-silex-dynamic-shapes > /tmp/silex-dynamic-shapes.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckDynamicShapes.py /tmp/box2d-dynamic-shapes.txt /tmp/silex-dynamic-shapes.txt
+```
+
+The checker requires the same eight cases and finite states. Settled position
+and linear velocity use an 0.08 absolute tolerance. The transition case
+compares position and verifies that the circle crossed the internal vertices;
+its instantaneous velocity and every rotation are recorded for diagnosis
+without requiring identical solver phase between the two engines.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

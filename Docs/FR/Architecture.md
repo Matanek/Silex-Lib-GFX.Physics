@@ -38,9 +38,11 @@ bullet quitte ce chemin immédiatement.
 ## Solver, parallélisme et sommeil
 
 Le solver Soft Step unique exécute quatre sous-pas, warm start, contraintes
-colorées, friction, restitution et relaxation. Les contacts parallèles de
-faces résolvent leurs deux impulsions normales ensemble. Contacts et joints
-partagent douze couleurs déterministes ; la dernière reste scalaire et
+colorées, friction, restitution et relaxation pour toutes les formes. Les
+contacts parallèles de faces résolvent leurs deux impulsions normales ensemble.
+La vitesse tangentielle des matériaux entraîne les convoyeurs et leur
+résistance au roulement amortit la rotation relative. Contacts et joints
+partagent douze couleurs déterministes ; la dernière reste scalaire et
 ordonnée.
 
 Le nombre de workers ne sélectionne jamais un autre broad phase ni un autre
@@ -59,7 +61,6 @@ Les algorithmes sont des adaptations Silex natives de Box2D 3.1.1 au commit
 `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, utilisé seulement comme oracle MIT.
 Le package ne lie ni ne distribue Box2D.
 
-La réponse dynamique de toutes les nouvelles géométries, les tissus, corps
-mous, fluides et la 3D restent hors du contrat courant. Le
+Les tissus, corps mous, fluides et la 3D restent hors du contrat courant. Le
 profil optionnel n’expose que `motion_ms`, `broad_phase_ms`, `solve_ms`,
 `sleep_ms` et leur total.

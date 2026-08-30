@@ -62,7 +62,7 @@
       "status": "divergent",
       "patterns": ["^b2(?:SetLengthUnitsPerMeter|GetLengthUnitsPerMeter)$"],
       "silex_contract": "GFX.Physics worlds use meters, seconds and kilograms without mutable process-global scaling.",
-      "evidence": ["Docs/FR/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
+      "evidence": ["Docs/FR/OracleAndBudgets.md", "Docs/EN/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
       "rationale": "A fixed unit contract is safer and at least as expressive because applications convert at their boundary without shared global state."
     },
     {
@@ -218,11 +218,10 @@
       "id": "collision-manifolds",
       "domain": "collision",
       "capability": "manifolds for all Box2D rigid-shape families",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2Collide(?:Circles|CapsuleAndCircle|SegmentAndCircle|PolygonAndCircle|Capsules|SegmentAndCapsule|PolygonAndCapsule|Polygons|SegmentAndPolygon|ChainSegmentAndCircle|ChainSegmentAndCapsule|ChainSegmentAndPolygon)$"],
       "silex_contract": "Geometry2D exposes all geometric manifolds; every valid world pair will join one complete Soft Step response path.",
-      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/Contacts.sx"],
-      "tracking": "Physique 2D complète 04 — Réponse dynamique de toutes les formes"
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/Contacts.sx", "Tests/Consumer/Tests/DynamicShapes.sx", "Benchmarks/DynamicShapesOracle2D.sx", "Benchmarks/Oracle2D/DynamicShapesOracle.c"]
     },
     {
       "id": "continuous-collision-kernel",
@@ -353,7 +352,7 @@
       "status": "partial",
       "patterns": ["^b2World_Get(?:AwakeBodyCount|Profile|Counters)$"],
       "silex_contract": "World2D exposes awake bodies and opt-in timings; complete logical counters will avoid internal array capacities.",
-      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/FR/Performance.md"],
+      "evidence": ["Benchmarks/Corpus2D.sx", "Docs/FR/Performance.md", "Docs/EN/Performance.md"],
       "tracking": "Physique 2D complète 05 — Réglages complets du monde"
     },
     {

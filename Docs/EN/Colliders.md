@@ -55,14 +55,15 @@ accepts exactly one `segment_materials` entry per segment. Per-segment
 materials on another shape, and mismatched chain cardinality, are rejected.
 Chains remain restricted to fixed bodies.
 
-The current solver boundary remains explicit. The primary box/circle collider
-keeps the established friction and restitution response. Compound and general
-colliders participate in broad-phase, filtering, persistent geometric contact,
-and sensor discovery, while complete response for every collider pair,
-rolling resistance, and tangent speed belongs to the later response milestone.
-Each collider's density now contributes to the body's composed mass, center of
-mass, and inertia. Contact and sensor snapshots still identify bodies until
-collider-level event identity is added.
+The solver selects the material of the collider that actually touches. For a
+chain it selects the material of the manifold's segment. Friction uses the
+geometric combination, restitution keeps the higher value, and tangent speeds
+are added. Rolling resistance uses the higher coefficient scaled by the larger
+contact radius, then limits relative rotation. These rules use
+the same Soft Step graph for circles, capsules, segments, convex or rounded
+polygons, and one-sided chains. Each collider's density contributes to the
+body's composed mass, center of mass, and inertia. Contact and sensor snapshots
+still identify bodies until collider-level event identity is added.
 
 The isolated consumer proof is
 [`../Tests/Consumer/Tests/Colliders.sx`](../../Tests/Consumer/Tests/Colliders.sx).

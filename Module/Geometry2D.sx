@@ -109,15 +109,26 @@ public struct ManifoldPoint2D {
 public struct Manifold2D {
     let normal:Math.Vec2
     let points:ManifoldPoint2D[]
+    package let first_feature:int
+    package let second_feature:int
 
     init() {
         self.normal = Math.Vec2()
         self.points = []
+        self.first_feature = -1
+        self.second_feature = -1
     }
 
-    init(normal:Math.Vec2, points:ManifoldPoint2D[]) {
+    init(
+        normal:Math.Vec2,
+        points:ManifoldPoint2D[],
+        first_feature:int = -1,
+        second_feature:int = -1
+    ) {
         self.normal = normal
         self.points = points
+        self.first_feature = first_feature
+        self.second_feature = second_feature
     }
 
     func point_count() int { return self.points.count() }
@@ -231,17 +242,20 @@ class ConvexProxy2D {
     let radius:float
     let one_sided:bool
     let front_normal:Math.Vec2
+    let feature:int
 
     init(
         points:Math.Vec2[],
         radius:float,
         one_sided:bool = false,
-        front_normal:Math.Vec2 = Math.Vec2()
+        front_normal:Math.Vec2 = Math.Vec2(),
+        feature:int = 0
     ) {
         self.points = points
         self.radius = radius
         self.one_sided = one_sided
         self.front_normal = front_normal
+        self.feature = feature
     }
 }
 
@@ -308,8 +322,15 @@ func shape_proxies(shape:Shape2D, transform:Transform2D) ConvexProxy2D[] {
             ], transform), value.radius))
         }
         chain(value) => {
+            // Box2D-compatible open chains reserve the first and final edges
+            // as ghost geometry. Only the edges between them collide.
             var index = 0
-            while index < value.segment_count() {
+            var end = value.segment_count()
+            if !value.loop {
+                index = 1
+                end--
+            }
+            while index < end {
                 let next = (index + 1) % value.points.count()
                 let transformed = transform_points([
                     value.points[index],
@@ -320,7 +341,8 @@ func shape_proxies(shape:Shape2D, transform:Transform2D) ConvexProxy2D[] {
                     transformed,
                     0.0,
                     true,
-                    Math.Vec2(edge.y, -edge.x).normalized()
+                    Math.Vec2(edge.y, -edge.x).normalized(),
+                    index
                 ))
                 index++
             }
@@ -669,7 +691,8 @@ func translated_proxy(
         points,
         proxy.radius,
         proxy.one_sided,
-        proxy.front_normal
+        proxy.front_normal,
+        proxy.feature
     )
 }
 
@@ -679,11 +702,18 @@ func shape_manifold(
 ) Manifold2D {
     var best = Manifold2D()
     var best_separation = -3.4028235e38
-    for first_proxy in shape_proxies(first.shape(), first.transform()) {
-        for second_proxy in shape_proxies(second.shape(), second.transform()) {
+    var first_proxies = shape_proxies(first.shape(), first.transform())
+    var second_proxies = shape_proxies(second.shape(), second.transform())
+    var first_feature = 0
+    while first_feature < first_proxies.count() {
+        var first_proxy = first_proxies[first_feature]
+        var second_feature = 0
+        while second_feature < second_proxies.count() {
+            var second_proxy = second_proxies[second_feature]
             if !proxy_front_allows(first_proxy, second_proxy) ||
                 !proxy_front_allows(second_proxy, first_proxy)
             {
+                second_feature++
                 continue
             }
             let candidate = proxy_manifold(first_proxy, second_proxy)
@@ -691,9 +721,16 @@ func shape_manifold(
                 candidate.points[0].separation > best_separation
             {
                 best_separation = candidate.points[0].separation
-                best = candidate
+                best = Manifold2D(
+                    candidate.normal,
+                    candidate.points,
+                    first_proxy.feature,
+                    second_proxy.feature
+                )
             }
+            second_feature++
         }
+        first_feature++
     }
     return best
 }
@@ -741,6 +778,7 @@ func proxy_manifold(
     let surface_second = minimum_projection(second, best_normal) - second.radius
     let surface = (surface_first + surface_second) * 0.5
     if tangent_max - tangent_min > 0.005 &&
+        first.points.count() > 1 && second.points.count() > 1 &&
         (first.points.count() > 2 || second.points.count() > 2)
     {
         var clipped:ManifoldPoint2D[] = []

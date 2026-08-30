@@ -307,6 +307,16 @@ package class ShapeStore2D {
         return result
     }
 
+    func contact_material(dense:int, feature:int) PhysicsMaterial2D {
+        let count = self.segment_material_counts[dense]
+        if count > 0 && feature >= 0 && feature < count {
+            return self.segment_material_values[
+                self.segment_material_offsets[dense] + feature
+            ]
+        }
+        return self.materials[dense]
+    }
+
     func replace_segment_materials(
         dense:int,
         materials:PhysicsMaterial2D[]
