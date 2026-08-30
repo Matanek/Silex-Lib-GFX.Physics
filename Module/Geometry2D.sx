@@ -414,13 +414,23 @@ func proxy_distance(
     var last_direction = Math.Vec2()
     var iteration = 0
     while iteration < 20 {
-        var saved_a:int[] = []
-        var saved_b:int[] = []
-        var index = 0
-        while index < simplex.count {
-            saved_a.append(simplex.vertex(index).index_a)
-            saved_b.append(simplex.vertex(index).index_b)
-            index++
+        // A 2D simplex contains at most three vertices. Keep the duplicate
+        // support keys in scalars: allocating two arrays on every GJK
+        // iteration makes sustained contact and CCD queries allocator-bound.
+        let saved_count = simplex.count
+        let saved_a0 = simplex.first.index_a
+        let saved_b0 = simplex.first.index_b
+        var saved_a1 = -1
+        var saved_b1 = -1
+        var saved_a2 = -1
+        var saved_b2 = -1
+        if saved_count > 1 {
+            saved_a1 = simplex.second.index_a
+            saved_b1 = simplex.second.index_b
+        }
+        if saved_count > 2 {
+            saved_a2 = simplex.third.index_a
+            saved_b2 = simplex.third.index_b
         }
 
         var direction = Math.Vec2()
@@ -458,16 +468,12 @@ func proxy_distance(
         vertex.point_b = second.points[vertex.index_b]
         vertex.difference = vertex.point_a.subtract(vertex.point_b)
 
-        var duplicate = false
-        index = 0
-        while index < saved_a.count() {
-            if vertex.index_a == saved_a[index] &&
-                vertex.index_b == saved_b[index]
-            {
-                duplicate = true
-            }
-            index++
-        }
+        let duplicate =
+            (vertex.index_a == saved_a0 && vertex.index_b == saved_b0) ||
+            (saved_count > 1 && vertex.index_a == saved_a1 &&
+                vertex.index_b == saved_b1) ||
+            (saved_count > 2 && vertex.index_a == saved_a2 &&
+                vertex.index_b == saved_b2)
         if duplicate { break }
         simplex.set_vertex(simplex.count, vertex)
         simplex.count++
