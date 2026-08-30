@@ -10,16 +10,18 @@ func capsule_settings(x:float) Physics.RigidBody2DSettings {
         ))
         ..position = Math.Vec2(x, 0.0)
         ..gravity_scale = 0.0
+        ..linear_damping = 8.0
+        ..angular_damping = 8.0
 }
 
 func island_transition_signature(worker_count:int) int {
     var world = Physics.World2D(gravity:Math.Vec2())
     world.enable_parallelism(worker_count)
     var first = world.create_rigid_body(capsule_settings(0.0))
-    var second = world.create_rigid_body(capsule_settings(1.3))
-    var third = world.create_rigid_body(capsule_settings(2.6))
+    var second = world.create_rigid_body(capsule_settings(1.5))
+    var third = world.create_rigid_body(capsule_settings(3.0))
     var step = 0
-    while step < 32 {
+    while step < 120 {
         world.step(1.0 / 60.0)
         step++
     }
@@ -50,10 +52,10 @@ test "preserve island transitions across worker counts" {
 test "preserve sleeping neighbours across creation and deletion" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var first = world.create_rigid_body(capsule_settings(0.0))
-    var middle = world.create_rigid_body(capsule_settings(1.3))
-    var last = world.create_rigid_body(capsule_settings(2.6))
+    var middle = world.create_rigid_body(capsule_settings(1.5))
+    var last = world.create_rigid_body(capsule_settings(3.0))
     var step = 0
-    while step < 32 {
+    while step < 120 {
         world.step(1.0 / 60.0)
         step++
     }

@@ -41,13 +41,12 @@ therefore remain deterministic across worker counts; fixed-shape queries keep
 their dynamic-tree representation.
 
 Capsules, convex and rounded polygons, segments, one-sided chains, and secondary
-colliders of compound bodies participate in broad-phase and persistent contact
-generation. Chains must be fixed bodies. Contact snapshots still identify the
-two owning bodies; collider identity is a later event/contact milestone.
-Contact response currently covers the primary rigid box and circle forms;
-the common Soft Step solver consumes their retained manifolds without changing
-this public read surface. Response for the remaining geometric forms stays an
-explicit later capability rather than silently receiving partial response.
+colliders of compound bodies participate in broad-phase, persistent contact,
+and the common Soft Step response. Chains must be fixed bodies. Contact
+snapshots still identify the two owning bodies; collider identity is a later
+event/contact milestone. Retained manifolds warm-start up to two points, while
+the touched collider or chain segment supplies friction, restitution, tangent
+surface speed, and rolling resistance without changing the public read surface.
 
 The headless executable proofs are grouped in
 [`../Tests/Consumer/Tests/Contacts.sx`](../../Tests/Consumer/Tests/Contacts.sx):
@@ -57,4 +56,6 @@ silex test Packages/GFX.Physics/Tests/Consumer/Tests/Contacts.sx
 ```
 
 They verify creation, persistence, separation and deterministic ordering
-without a window, renderer, input, or visual inspection.
+without a window, renderer, input, or visual inspection. Dynamic response and
+material behavior are covered by
+[`../Tests/Consumer/Tests/DynamicShapes.sx`](../../Tests/Consumer/Tests/DynamicShapes.sx).

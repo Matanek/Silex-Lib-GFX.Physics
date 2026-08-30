@@ -55,8 +55,8 @@ candidate cache, sensor pairs, and event counters are rebuilt before the next
 step. The retained public `shape()` accessor still reports the primary box or
 circle used by the regression solver and fails explicitly for an empty body.
 The broader `Shape2D` vocabulary is accepted by `ShapePlacement2D` for pure
-geometry queries and by `World2D` for persistent geometric contacts. The
-dynamic-response solver currently resolves only the box and circle subset.
+geometry queries and by `World2D` for persistent contacts. Every valid rigid
+shape family now enters the same dynamic-response solver.
 
 The stateless geometry layer expands each form into one or more private convex
 proxies. Polygon construction computes a welded convex hull. GJK produces
@@ -81,8 +81,8 @@ After a public body destruction, their derived indices and reusable buffers are
 rebuilt from the surviving dense body state; ordinary stepping then continues
 without preserving a pair or contact that referenced the removed body.
 
-General-shape and compound-body world contacts reuse that lifecycle without
-entering the dynamic-response path. Compound broad-phase bounds union every
+General-shape and compound-body world contacts reuse that lifecycle and enter
+the dynamic-response path. Compound broad-phase bounds union every
 collider, while narrow-phase filtering and sensor discovery use each collider's
 own filter and flags. The
 broad phase retains stable candidate slots; a general pair refreshes its
@@ -118,9 +118,10 @@ workers; the tree remains the fixed-shape query structure. This keeps
 candidate sets, insertion order, and contact-cache evolution identical across
 worker counts.
 
-The general solver separates oriented boxes on their four face axes and handles
-circle-box contacts in the box's local frame. Circle-circle contacts use their
-center axis and combined radius. Corner-to-face
+The general solver separates every circle, capsule, segment, convex or rounded
+polygon, and one-sided chain-segment pairing. Oriented boxes retain their four
+specialized face axes, circle-box contacts use the box's local frame, and
+circle-circle contacts use their center axis and combined radius. Corner-to-face
 impacts use one estimated contact point. Parallel faces use two endpoints of
 their shared interval and solve both normal impulses as a coupled 2×2 system;
 friction is then applied at each endpoint. Effective normal and tangent masses,
@@ -129,6 +130,8 @@ constraint array and reused through all velocity iterations. Candidate pairs
 retain contact anchors plus normal and tangent impulses across steps;
 geometrically compatible contacts warm-start the next solve while moved or
 separated contacts invalidate their cache instead of injecting stale torque.
+The touched collider or chain segment supplies friction, restitution, tangent
+surface speed, and rolling resistance.
 
 The solver prepares general contacts and a compact dynamic-circle form, then
 places every constraint into deterministic conflict-free colors. Four true

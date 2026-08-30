@@ -21,10 +21,14 @@ manifold. Les handles des corps restent valides tant que leurs corps existent ;
 les snapshots ne donnent jamais accès au cache d’impulsions ni aux structures
 du broad phase.
 
-Les formes générales produisent des contacts géométriques et les boîtes/cercle
-non arrondis reçoivent la réponse dynamique complète. Les capteurs utilisent
-des flux d’événements séparés et n’apparaissent pas comme contacts solides.
+Cercles, capsules, segments, polygones convexes ou arrondis et segments de
+chaîne rejoignent le même graphe Soft Step. Le manifold conserve jusqu’à deux
+points compatibles avec le warm start ; friction, restitution, convoyeur et
+résistance au roulement proviennent des colliders effectivement touchés. Une
+chaîne reste fixe et unilatérale, avec son matériau propre à chaque segment.
+Les capteurs utilisent des flux d’événements séparés et n’apparaissent pas
+comme contacts solides.
 
 ```text
-silex test Packages/GFX.Physics/Tests/Consumer/Tests/Contacts.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/DynamicShapes.sx
 ```

@@ -38,7 +38,11 @@ Détruire un collider invalide son handle. Détruire un corps invalide tous ses
 colliders. Une chaîne peut définir un matériau commun ou exactement un matériau
 par segment et reste limitée aux corps fixes.
 
-La réponse friction/restitution complète concerne actuellement le collider
-principal boîte/cercle. Les autres colliders participent au broad phase, aux
-filtres, contacts géométriques et capteurs. Densité, résistance au roulement et
-vitesse tangentielle sont conservées pour les jalons de réponse ultérieurs.
+Le solver sélectionne le matériau du collider effectivement touché. Pour une
+chaîne, il sélectionne celui du segment retenu par le manifold. La friction se
+combine géométriquement, la restitution conserve la valeur la plus élevée et
+les vitesses tangentielles s’additionnent. La résistance au roulement retient
+le plus grand coefficient, pondéré par le plus grand rayon de contact, puis
+limite la rotation relative. Ces règles s’appliquent aux cercles, capsules, segments,
+polygones convexes ou arrondis et chaînes unilatérales dans le même graphe Soft
+Step.

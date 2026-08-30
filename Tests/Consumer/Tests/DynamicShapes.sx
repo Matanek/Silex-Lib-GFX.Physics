@@ -1,0 +1,381 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func settle(shape:Physics.Shape2D) float[] {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(12.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = shape
+        ..position = Math.Vec2(0.0, 3.0)
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return [
+        body.position().x,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y
+    ]
+}
+
+test "resolve capsule rounded polygon and segment contacts through Soft Step" {
+    let capsule = settle(Physics.Shape2D.capsule(Physics.Capsule2D(
+        Math.Vec2(-0.5, 0.0),
+        Math.Vec2(0.5, 0.0),
+        0.25
+    )))
+    let polygon = settle(Physics.Shape2D.polygon(Physics.Polygon2D([
+        Math.Vec2(-0.5, -0.5),
+        Math.Vec2(0.5, -0.5),
+        Math.Vec2(0.5, 0.5),
+        Math.Vec2(-0.5, 0.5)
+    ], 0.1)))
+    let segment = settle(Physics.Shape2D.segment(Physics.Segment2D(
+        Math.Vec2(-0.5, 0.0),
+        Math.Vec2(0.5, 0.0)
+    )))
+
+    assert(capsule[1] > 0.20 && capsule[1] < 0.35)
+    assert(Math.abs(capsule[3]) < 0.05)
+    assert(polygon[1] > 0.45 && polygon[1] < 0.65)
+    assert(Math.abs(polygon[3]) < 0.05)
+    assert(segment[1] > -0.02 && segment[1] < 0.10)
+    assert(Math.abs(segment[3]) < 0.05)
+}
+
+func head_on_signature(
+    first_shape:Physics.Shape2D,
+    second_shape:Physics.Shape2D,
+    workers:int
+) float[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = first_shape
+        ..position = Math.Vec2(-0.45, 0.0)
+        ..velocity = Math.Vec2(1.0, 0.0)
+        ..allow_sleep = false
+    )
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = second_shape
+        ..position = Math.Vec2(0.45, 0.0)
+        ..velocity = Math.Vec2(-1.0, 0.0)
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    return [
+        first.position().x,
+        second.position().x,
+        first.velocity().x,
+        second.velocity().x
+    ]
+}
+
+test "resolve dynamic capsule polygon circle and segment pairs deterministically" {
+    let capsule = Physics.Shape2D.capsule(Physics.Capsule2D(
+        Math.Vec2(-0.35, 0.0),
+        Math.Vec2(0.35, 0.0),
+        0.2
+    ))
+    let polygon = Physics.Shape2D.polygon(Physics.Polygon2D([
+        Math.Vec2(-0.45, -0.35),
+        Math.Vec2(0.45, -0.35),
+        Math.Vec2(0.45, 0.35),
+        Math.Vec2(-0.45, 0.35)
+    ], 0.05))
+    let circle = Physics.Shape2D.circle(Physics.Circle2D(0.45))
+    let segment = Physics.Shape2D.segment(Physics.Segment2D(
+        Math.Vec2(0.0, -0.5),
+        Math.Vec2(0.0, 0.5)
+    ))
+
+    let capsule_polygon = head_on_signature(capsule, polygon, 1)
+    let capsule_circle = head_on_signature(capsule, circle, 1)
+    let polygon_segment = head_on_signature(polygon, segment, 1)
+    let parallel = head_on_signature(capsule, polygon, 4)
+
+    assert(capsule_polygon[0] < capsule_polygon[1])
+    assert(capsule_polygon[2] <= capsule_polygon[3])
+    assert(capsule_circle[0] < capsule_circle[1])
+    assert(capsule_circle[2] <= capsule_circle[3])
+    assert(polygon_segment[0] < polygon_segment[1])
+    assert(polygon_segment[2] <= polygon_segment[3])
+    var index = 0
+    while index < capsule_polygon.count() {
+        assert(Math.nearly_equal(capsule_polygon[index], parallel[index], 0.000001))
+        index++
+    }
+}
+
+func conveyor_displacement(speed:float) float {
+    let surface = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..tangent_speed = speed
+    let body_material = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+    var world = Physics.World2D()
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.6)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-5.0, -0.5),
+            Math.Vec2(5.0, -0.5),
+            Math.Vec2(5.0, 0.5),
+            Math.Vec2(-5.0, 0.5)
+        ], 0.1))
+        ..material = surface
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.25)
+        ..allow_sleep = false
+        ..create_implicit_collider = false
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.4, 0.0),
+            Math.Vec2(0.4, 0.0),
+            0.2
+        ))
+        ..material = body_material
+    )
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return body.position().x
+}
+
+test "drive a general contact with collider tangent speed" {
+    let stationary = conveyor_displacement(0.0)
+    let conveyed = conveyor_displacement(1.5)
+    assert(Math.abs(stationary) < 0.05)
+    assert(Math.abs(conveyed) > 0.5)
+}
+
+func rolling_speed(resistance:float) float {
+    let material = Physics.PhysicsMaterial2D()
+        ..friction = 0.0
+        ..rolling_resistance = resistance
+    var world = Physics.World2D()
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.5)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-5.0, -0.5),
+            Math.Vec2(5.0, -0.5),
+            Math.Vec2(5.0, 0.5),
+            Math.Vec2(-5.0, 0.5)
+        ]))
+        ..material = material
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.3)
+        ..angular_velocity = 8.0
+        ..allow_sleep = false
+        ..create_implicit_collider = false
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..material = material
+    )
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    return Math.abs(body.angular_velocity())
+}
+
+test "apply rolling resistance to a general contact" {
+    let free = rolling_speed(0.0)
+    let resisted = rolling_speed(0.5)
+    assert(free > 1.0, "unresisted angular speed: $(free)")
+    assert(resisted < free * 0.25,
+        "rolling speeds free=$(free) resisted=$(resisted)")
+}
+
+func rebound_velocity(restitution:float) float {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-5.0, -0.5),
+            Math.Vec2(5.0, -0.5),
+            Math.Vec2(5.0, 0.5),
+            Math.Vec2(-5.0, 0.5)
+        ]))
+        ..position = Math.Vec2(0.0, -0.5)
+        ..restitution = restitution
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.35, 0.0),
+            Math.Vec2(0.35, 0.0),
+            0.25
+        ))
+        ..position = Math.Vec2(0.0, 3.0)
+        ..restitution = restitution
+        ..allow_sleep = false
+    )
+    var maximum_upward = 0.0
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0)
+        maximum_upward = Math.max(maximum_upward, body.velocity().y)
+        step++
+    }
+    return maximum_upward
+}
+
+test "apply restitution to a general contact" {
+    let inelastic = rebound_velocity(0.0)
+    let elastic = rebound_velocity(1.0)
+    assert(inelastic < 0.5)
+    assert(elastic > 4.0)
+}
+
+test "resolve a secondary collider through the shared solver" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
+        ..position = Math.Vec2(0.0, -0.5)
+    )
+    var compound = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 2.0)
+        ..allow_sleep = false
+        ..create_implicit_collider = false
+    )
+    world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+    )
+    world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.5, 0.0),
+            Math.Vec2(0.5, 0.0),
+            0.25
+        ))
+    )
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(compound.position().y > 0.20)
+    assert(Math.abs(compound.velocity().y) < 0.05)
+}
+
+test "select the material of the contacted chain segment" {
+    let still = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+    let conveyor = Physics.PhysicsMaterial2D()
+        ..friction = 1.0
+        ..tangent_speed = 5.0
+    var world = Physics.World2D()
+    var chain_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(chain_body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(5.0, 0.0),
+            Math.Vec2(2.0, 0.0),
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-5.0, 0.0)
+        ]))
+        ..material = still
+        ..segment_materials = [still, conveyor, still]
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(1.5, 0.3)
+        ..friction = 1.0
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 70 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    let position = body.position()
+    assert(position.x < 0.0, "chain conveyor x=$(position.x)")
+    assert(position.y > 0.20, "chain conveyor y=$(position.y)")
+}
+
+test "reserve open chain endpoint edges as ghost geometry" {
+    let chain = Physics.ShapePlacement2D(
+        Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0),
+            Math.Vec2(2.0, 0.0)
+        ]))
+    )
+    let first_ghost = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.2)),
+        Physics.Transform2D(position:Math.Vec2(-1.5, -0.1))
+    )
+    let solid_middle = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.2)),
+        Physics.Transform2D(position:Math.Vec2(0.0, -0.1))
+    )
+    let final_ghost = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.2)),
+        Physics.Transform2D(position:Math.Vec2(1.5, -0.1))
+    )
+
+    assert(!Physics.Geometry2D.overlaps(chain, first_ghost))
+    assert(Physics.Geometry2D.overlaps(chain, solid_middle))
+    assert(!Physics.Geometry2D.overlaps(chain, final_ghost))
+}
+
+test "cross internal chain vertices without a ghost collision" {
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(5.0, 0.0),
+            Math.Vec2(4.0, 0.0),
+            Math.Vec2(2.0, 0.0),
+            Math.Vec2(0.0, 0.5),
+            Math.Vec2(-2.0, 0.5),
+            Math.Vec2(-4.0, 0.0),
+            Math.Vec2(-5.0, 0.0)
+        ]))
+        ..friction = 0.0
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(3.5, 0.3)
+        ..velocity = Math.Vec2(-5.0, 0.0)
+        ..friction = 0.0
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    let position = body.position()
+    assert(position.x < -0.5, "chain traversal x=$(position.x)")
+    assert(position.y > 0.70, "chain traversal y=$(position.y)")
+}
