@@ -37,8 +37,11 @@ bullet quitte ce chemin immédiatement.
 
 ## Solver, parallélisme et sommeil
 
-Le solver Soft Step unique exécute quatre sous-pas, warm start, contraintes
-colorées, friction, restitution et relaxation. Les contacts parallèles de
+Le solver Soft Step unique exécute quatre sous-pas par défaut, warm start,
+contraintes colorées, friction, restitution et relaxation. Les réglages du
+monde permettent de choisir les sous-pas, la raideur, l’amortissement et les
+limites de vitesse sans exposer l’ordonnancement interne. Les contacts
+parallèles de
 faces résolvent leurs deux impulsions normales ensemble. Contacts et joints
 partagent douze couleurs déterministes ; la dernière reste scalaire et
 ordonnée.

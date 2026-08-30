@@ -56,8 +56,8 @@ The CMake configuration fetches only the immutable Box2D commit above. Run a
 matching scenario in each executable:
 
 ```text
-/tmp/gfx-physics-box2d/gfx_physics_box2d_oracle --release-parity
-/tmp/gfx-physics-silex-corpus --release-parity
+/tmp/gfx-physics-box2d/gfx_physics_box2d_oracle --release-parity --substeps-8
+/tmp/gfx-physics-silex-corpus --release-parity --substeps-8
 /tmp/gfx-physics-box2d/gfx_physics_box2d_oracle --circle-1800
 /tmp/gfx-physics-silex-corpus --circle-1800
 ```
@@ -94,11 +94,14 @@ solver configuration and substep count using the same fields. Archive the comple
 the executable commit, OS, architecture, CPU, compiler version, build mode,
 worker count and process peak RSS. Compilation and the initial world/body
 construction stay outside `elapsed_ms`; the reported timing contains only the
-fixed simulation steps. Box2D uses four substeps per 60 Hz step as recommended
-by its public API. The Silex reference uses its public `World2D.step` contract.
+fixed simulation steps. Both executables use four substeps by default and
+accept `--substeps-1`, `--substeps-2` or `--substeps-8`; the Box2D executable
+also accepts the explicit `--substeps-4`. The Silex witness exercises the
+public `World2D.step` contract rather than a benchmark-only path.
 
-`CheckCorpus.py` reads records from files or standard input, checks finite
-values, scene invariants and same-configuration signatures, then reports
+`CheckCorpus.py` reads records from files or standard input, separates each
+substep configuration, checks finite values, scene invariants and
+same-configuration signatures, then reports
 median, range and median absolute deviation. With seven or more Silex Release
 records it also evaluates the cadence gates. Add `--enforce` when a missed gate
 must return a non-zero status. The explicitly labelled `circle-5000` cadence

@@ -194,15 +194,26 @@ def correction_failures(record: dict[str, str]) -> list[str]:
 def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
     reports: list[str] = []
     failures: list[str] = []
-    grouped: dict[tuple[str, str, str, str], list[dict[str, str]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, str]]] = defaultdict(list)
     for record in records:
-        key = (record["engine"], record["scenario"], record["mode"], record["workers"])
+        key = (
+            record["engine"],
+            record["scenario"],
+            record["mode"],
+            record["workers"],
+            record.get("substeps", "legacy"),
+        )
         grouped[key].append(record)
 
-    signatures_by_configuration: dict[tuple[str, str, str], set[str]] = defaultdict(set)
-    workers_by_configuration: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    signatures_by_configuration: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
+    workers_by_configuration: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
     for record in records:
-        key = (record["engine"], record["scenario"], record["mode"])
+        key = (
+            record["engine"],
+            record["scenario"],
+            record["mode"],
+            record.get("substeps", "legacy"),
+        )
         signatures_by_configuration[key].add(record["state_signature"])
         workers_by_configuration[key].add(record["workers"])
 
@@ -210,25 +221,28 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
         worker_counts = workers_by_configuration[key]
         signatures = signatures_by_configuration[key]
         if len(worker_counts) > 1 and len(signatures) != 1:
-            engine, scenario, mode = key
+            engine, scenario, mode, substeps = key
             reports.append(
-                f"FAIL {engine}/{scenario}/{mode}/worker-matrix: "
+                f"FAIL {engine}/{scenario}/{mode}/substeps-{substeps}/worker-matrix: "
                 "state_signature changed across worker counts"
             )
             failures.append(
-                f"{engine}/{scenario}/{mode}: state_signature changed across worker counts"
+                f"{engine}/{scenario}/{mode}/substeps-{substeps}: "
+                "state_signature changed across worker counts"
             )
 
-    rss_baselines: dict[tuple[str, str, str], float] = {}
-    for (engine, scenario, mode, workers), group in grouped.items():
+    rss_baselines: dict[tuple[str, str, str, str], float] = {}
+    for (engine, scenario, mode, workers, substeps), group in grouped.items():
         rss_values = [int(record["_rss_bytes"]) for record in group if "_rss_bytes" in record]
         if scenario == "release-parity" and len(rss_values) >= 7:
-            rss_baselines[(engine, mode, workers)] = statistics.median(rss_values)
+            rss_baselines[(engine, mode, workers, substeps)] = statistics.median(rss_values)
 
     for key in sorted(grouped):
-        engine, scenario, mode, workers = key
+        engine, scenario, mode, workers, substeps = key
         group = grouped[key]
-        label = f"{engine}/{scenario}/{mode}/workers-{workers}"
+        label = (
+            f"{engine}/{scenario}/{mode}/workers-{workers}/substeps-{substeps}"
+        )
         group_failures: list[str] = []
         group_notes: list[str] = []
         for record in group:
@@ -264,7 +278,9 @@ def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
                     f"cadence target missed: median {median:.6f} ms exceeds {target:.2f} ms"
                 )
             if scenario in {"sparse-10000", "circle-5000"} and len(rss_values) >= 7:
-                baseline = rss_baselines.get((engine, mode, workers))
+                baseline = rss_baselines.get(
+                    (engine, mode, workers, substeps)
+                )
                 if baseline is not None:
                     rss_median = statistics.median(rss_values)
                     body_count = int(group[0]["bodies"])
