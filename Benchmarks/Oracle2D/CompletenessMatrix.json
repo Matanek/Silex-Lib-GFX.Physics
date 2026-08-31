@@ -237,7 +237,7 @@
       "status": "covered",
       "patterns": ["^b2(?:SolvePlanes|ClipVector)$"],
       "silex_contract": "CharacterMover2D exposes separate plane collection, bounded resolution and vector clipping with value results instead of raw callbacks.",
-      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c", "Examples/CharacterMover2D.sx"]
+      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c"]
     },
     {
       "id": "dynamic-tree",
@@ -301,7 +301,7 @@
       "status": "covered",
       "patterns": ["^b2World_(?:CastMover|CollideMover)$"],
       "silex_contract": "CharacterMover2D collects, solves and reports a safe displaced capsule path without mutating the world.",
-      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c", "Examples/CharacterMover2D.sx"]
+      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c"]
     },
     {
       "id": "world-settings",

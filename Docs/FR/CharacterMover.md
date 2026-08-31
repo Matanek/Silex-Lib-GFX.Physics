@@ -47,9 +47,10 @@ positive. Les chaînes unilatérales conservent leur convention de winding.
 ## Exemple visuel
 
 ```text
-silex run Examples/CharacterMover2D.sx --release
+silex run Silex-Examples/Sources/CharacterMover2D.sx --release
 ```
 
 La démo montre une capsule sur un sol, une pente, une marche, un angle concave
-et une plateforme cinématique mobile. Utiliser `A`/`D` ou les flèches pour se
-déplacer, `Espace` pour sauter et `R` pour recommencer.
+et une plateforme cinématique mobile. Elle appartient au catalogue public
+`Silex-Examples`. Utiliser `A`/`D` ou les flèches pour se déplacer, `Espace`
+pour sauter et `R` pour recommencer.
