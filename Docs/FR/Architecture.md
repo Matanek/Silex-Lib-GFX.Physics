@@ -46,12 +46,15 @@ bullet quitte ce chemin immédiatement.
 
 ## Solver, parallélisme et sommeil
 
-Le solver Soft Step unique exécute quatre sous-pas, warm start, contraintes
-colorées, friction, restitution et relaxation pour toutes les formes. Les
-contacts parallèles de faces résolvent leurs deux impulsions normales ensemble.
-La vitesse tangentielle des matériaux entraîne les convoyeurs et leur
-résistance au roulement amortit la rotation relative. Contacts et joints
-partagent douze couleurs déterministes ; la dernière reste scalaire et
+Le solver Soft Step unique exécute quatre sous-pas par défaut, warm start,
+contraintes colorées, friction, restitution et relaxation. Les réglages du
+monde permettent de choisir les sous-pas, la raideur, l’amortissement et les
+limites de vitesse sans exposer l’ordonnancement interne. Toutes les formes
+partagent ce chemin ; les contacts parallèles de faces résolvent leurs deux
+impulsions normales ensemble. La vitesse tangentielle des matériaux entraîne
+les convoyeurs et leur résistance au roulement amortit la rotation relative.
+Contacts et joints
+partagent douze couleurs déterministes ; la dernière reste scalaire et
 ordonnée.
 
 Le nombre de workers ne sélectionne jamais un autre broad phase ni un autre

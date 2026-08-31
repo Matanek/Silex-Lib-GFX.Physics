@@ -27,6 +27,9 @@ world.destroy_rigid_body(body)
 assert(!body.is_valid())
 ```
 
+[`World settings and counters`](WorldSettings.md) documents creation choices,
+runtime tuning, explicit substeps, wake policies, and logical scene counters.
+
 `World2D` owns every body. Destroying a body invalidates every copy of its
 opaque `RigidBody2D` handle; subsequent access fails explicitly. `is_valid()`
 allows code that retains handles across world updates to discard an invalid

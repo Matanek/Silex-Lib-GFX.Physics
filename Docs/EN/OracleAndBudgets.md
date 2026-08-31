@@ -49,10 +49,11 @@ for every timing or FPS series.
 | `circle-5000` | Same container with 5,000 non-sleeping circles of radius 0.025 m and 170 columns; 300 steps at 60 Hz | No center below `-2.978` m; maximum circle overlap at most `20` mm | `16.67` ms/step target |
 
 The scene dimensions, initial order, materials, gravity and time step are the
-same in `Benchmarks/Corpus2D.sx` and the Box2D witness. Box2D's recommended
-four substeps and Silex's current public step are deliberately recorded rather
-than disguised as identical solvers. Any future Silex kernel joins this corpus
-by emitting the same record and using the same scene definitions.
+same in `Benchmarks/Corpus2D.sx` and the Box2D witness. Both witnesses record
+and exercise one, two, four, or eight substeps through their public step API.
+Their solver identities remain explicit rather than being disguised as the
+same implementation. Any future Silex kernel joins this corpus by emitting the
+same record and using the same scene definitions.
 
 Correctness is a hard gate. A faster result that violates containment,
 overlap, finite-state or same-configuration determinism is rejected. The

@@ -1,0 +1,292 @@
+use GFX.Physics
+use STD.Math
+
+func settle(world:&Physics.World2D, body:Physics.RigidBody2D) {
+    var step = 0
+    while step < 40 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(!body.is_awake())
+}
+
+test "configure and observe every world setting" {
+    let configured = Physics.World2DSettings()
+        ..gravity = Math.Vec2(0.0, -12.0)
+        ..sleep_enabled = false
+        ..continuous_collision_enabled = false
+        ..restitution_threshold = 2.0
+        ..hit_event_threshold = 3.0
+        ..contact_stiffness_hertz = 24.0
+        ..contact_damping_ratio = 4.0
+        ..maximum_correction_speed = 1.5
+        ..maximum_linear_speed = 20.0
+        ..warm_start_enabled = false
+    var world = Physics.World2D(configured)
+
+    let initial = world.settings()
+    assert(initial.gravity == Math.Vec2(0.0, -12.0))
+    assert(!initial.sleep_enabled)
+    assert(!initial.continuous_collision_enabled)
+    assert(initial.restitution_threshold == 2.0)
+    assert(initial.hit_event_threshold == 3.0)
+    assert(initial.contact_stiffness_hertz == 24.0)
+    assert(initial.contact_damping_ratio == 4.0)
+    assert(initial.maximum_correction_speed == 1.5)
+    assert(initial.maximum_linear_speed == 20.0)
+    assert(!initial.warm_start_enabled)
+
+    world.set_gravity(Math.Vec2(0.0, -9.0))
+    world.set_sleep_enabled(true)
+    world.set_continuous_collision_enabled(true)
+    world.set_restitution_threshold(0.5)
+    world.set_hit_event_threshold(0.75)
+    world.set_contact_tuning(30.0, 8.0)
+    world.set_maximum_correction_speed(2.5)
+    world.set_maximum_linear_speed(10.0)
+    world.set_warm_start_enabled(true)
+
+    let updated = world.settings()
+    assert(updated.gravity == Math.Vec2(0.0, -9.0))
+    assert(world.sleep_enabled())
+    assert(world.continuous_collision_enabled())
+    assert(world.restitution_threshold() == 0.5)
+    assert(world.hit_event_threshold() == 0.75)
+    assert(world.contact_stiffness_hertz() == 30.0)
+    assert(world.contact_damping_ratio() == 8.0)
+    assert(world.maximum_correction_speed() == 2.5)
+    assert(world.maximum_linear_speed() == 10.0)
+    assert(world.warm_start_enabled())
+}
+
+test "preserve four default substeps and accept an explicit count" {
+    var implicit = Physics.World2D()
+    var explicit = Physics.World2D()
+    var coarse = Physics.World2D()
+    var implicit_body = implicit.create_rigid_body()
+    var explicit_body = explicit.create_rigid_body()
+    var coarse_body = coarse.create_rigid_body()
+
+    implicit.step(0.5)
+    explicit.step(0.5, substeps:4)
+    coarse.step(0.5, substeps:1)
+
+    assert(implicit_body.position().nearly_equal(
+        explicit_body.position(),
+        0.000001
+    ))
+    assert(implicit_body.velocity().nearly_equal(
+        explicit_body.velocity(),
+        0.000001
+    ))
+    assert(coarse_body.velocity().nearly_equal(
+        implicit_body.velocity(),
+        0.000001
+    ))
+    assert(coarse_body.position().y < implicit_body.position().y)
+}
+
+test "limit linear speed before integrating motion" {
+    var world = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..maximum_linear_speed = 2.0
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..velocity = Math.Vec2(30.0, 40.0)
+        ..allow_sleep = false
+    )
+
+    world.step(0.25)
+
+    assert(Math.nearly_equal(body.velocity().length(), 2.0, 0.000001))
+    assert(body.position().nearly_equal(Math.Vec2(0.3, 0.4), 0.000001))
+}
+
+test "apply the restitution threshold to low-speed impacts" {
+    var bouncing = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..restitution_threshold = 0.0
+    )
+    bouncing.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..position = Math.Vec2(-0.2, 0.0)
+        ..velocity = Math.Vec2(0.5, 0.0)
+        ..restitution = 1.0
+        ..allow_sleep = false
+    )
+    var bouncing_second = bouncing.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+            ..position = Math.Vec2(0.2, 0.0)
+            ..velocity = Math.Vec2(-0.5, 0.0)
+            ..restitution = 1.0
+            ..allow_sleep = false
+    )
+
+    var resting = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..restitution_threshold = 2.0
+    )
+    resting.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..position = Math.Vec2(-0.2, 0.0)
+        ..velocity = Math.Vec2(0.5, 0.0)
+        ..restitution = 1.0
+        ..allow_sleep = false
+    )
+    var resting_second = resting.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+            ..position = Math.Vec2(0.2, 0.0)
+            ..velocity = Math.Vec2(-0.5, 0.0)
+            ..restitution = 1.0
+            ..allow_sleep = false
+    )
+
+    bouncing.step(1.0 / 60.0)
+    resting.step(1.0 / 60.0)
+
+    assert(bouncing_second.velocity().x > 0.25)
+    assert(Math.abs(resting_second.velocity().x) < 0.25)
+}
+
+test "apply contact tuning and correction speed to overlap recovery" {
+    var corrected = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..contact_stiffness_hertz = 40.0
+        ..maximum_correction_speed = 3.0
+    )
+    corrected.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var corrected_body = corrected.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(0.0, 0.5)
+            ..allow_sleep = false
+    )
+
+    var uncorrected = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..contact_stiffness_hertz = 0.0
+        ..maximum_correction_speed = 0.0
+    )
+    uncorrected.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+    var uncorrected_body = uncorrected.create_rigid_body(
+        Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(0.0, 0.5)
+            ..allow_sleep = false
+    )
+
+    corrected.step(1.0 / 60.0)
+    uncorrected.step(1.0 / 60.0)
+
+    assert(corrected_body.position().y > uncorrected_body.position().y)
+}
+
+test "disable continuous collision without changing discrete motion" {
+    var enabled = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+    )
+    enabled.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+    )
+    var protected_body = enabled.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+    )
+
+    var disabled = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2()
+        ..continuous_collision_enabled = false
+    )
+    disabled.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+    )
+    var unprotected = disabled.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+        ..is_bullet = true
+    )
+
+    enabled.step(1.0 / 60.0)
+    disabled.step(1.0 / 60.0)
+
+    assert(protected_body.position().x < 0.0)
+    assert(unprotected.position().x > 2.0)
+}
+
+test "apply deterministic wake policies to dynamic settings" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body()
+    settle(world, body)
+
+    world.set_hit_event_threshold(2.0)
+    world.set_maximum_linear_speed(200.0)
+    world.set_continuous_collision_enabled(false)
+    assert(!body.is_awake())
+
+    world.set_gravity(Math.Vec2(0.0, -1.0))
+    assert(body.is_awake())
+    world.set_gravity(Math.Vec2())
+    settle(world, body)
+
+    world.set_restitution_threshold(0.5)
+    assert(body.is_awake())
+    settle(world, body)
+
+    world.set_contact_tuning(30.0, 10.0)
+    assert(body.is_awake())
+    settle(world, body)
+
+    world.set_maximum_correction_speed(2.0)
+    assert(body.is_awake())
+    settle(world, body)
+
+    world.set_warm_start_enabled(false)
+    assert(body.is_awake())
+    settle(world, body)
+
+    world.set_sleep_enabled(false)
+    assert(body.is_awake())
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(body.is_awake())
+}
+
+test "report logical live-world counters" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.4)
+    )
+    var dynamic_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.4)
+    )
+    world.create_distance_joint(
+        fixed_body,
+        dynamic_body,
+        Physics.DistanceJoint2DSettings()
+    )
+
+    world.step(0.0)
+    let counters = world.counters()
+
+    assert(counters.body_count == 2)
+    assert(counters.collider_count == 2)
+    assert(counters.contact_count == world.contact_count())
+    assert(counters.joint_count == 1)
+    assert(counters.active_island_count >= 1)
+    assert(counters.logical_memory_bytes > 0)
+}

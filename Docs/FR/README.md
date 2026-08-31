@@ -104,6 +104,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Requêtes géométriques](Geometry.md)
 - [Îlots actifs et sommeil](Islands.md)
 - [Joints, moteurs et ressorts](Joints.md)
+- [Réglages et compteurs du monde](WorldSettings.md)
 - [Migration de 0.4 vers 0.5](Migration.md)
 - [Corpus oracle et budgets](OracleAndBudgets.md)
 - [Contrat de performance](Performance.md)

@@ -1,0 +1,6 @@
+use GFX.Physics
+
+func main() {
+    var world = Physics.World2D()
+    world.set_contact_tuning(-1.0, 1.0)
+}
