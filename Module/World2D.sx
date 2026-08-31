@@ -17,6 +17,7 @@ use GFX.Physics.Joints2D.JointConstraint2D
 use GFX.Physics.Joints2D.JointId2D
 use GFX.Physics.Joints2D.JointKind2D
 use GFX.Physics.Joints2D.JointStore2D
+use GFX.Physics.Joints2D.Joint2D
 use GFX.Physics.Joints2D.MotorJoint2D
 use GFX.Physics.Joints2D.MotorJoint2DSettings
 use GFX.Physics.Joints2D.MouseJoint2D
@@ -1054,6 +1055,17 @@ public class World2D {
 
     func joint_count() int { return self.joints.count() }
 
+    func write_joints(output:&Joint2D[]) {
+        self.joints.write_all(output)
+    }
+
+    func write_joints(body:RigidBody2D, output:&Joint2D[]) {
+        if !body.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot enumerate joints for a body owned by another world")
+        }
+        self.joints.write_attached(body.body_id(), output)
+    }
+
     func create_distance_joint(
         first:RigidBody2D,
         second:RigidBody2D,
@@ -1062,7 +1074,16 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
-        if settings.length < -1.0 || settings.minimum_length < 0.0 ||
+        if !finite_world_vector(settings.first_anchor) ||
+            !finite_world_vector(settings.second_anchor) ||
+            !finite_world_value(settings.length) ||
+            !finite_world_value(settings.minimum_length) ||
+            !finite_world_value(settings.maximum_length) ||
+            !finite_world_value(settings.spring_hertz) ||
+            !finite_world_value(settings.spring_damping_ratio) ||
+            !finite_world_value(settings.motor_speed) ||
+            !finite_world_value(settings.maximum_motor_force) ||
+            settings.length < -1.0 || settings.minimum_length < 0.0 ||
             settings.maximum_length < settings.minimum_length ||
             settings.spring_hertz < 0.0 ||
             settings.spring_damping_ratio < 0.0 ||
@@ -1134,7 +1155,12 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
-        if settings.maximum_force < 0.0 || settings.maximum_torque < 0.0 ||
+        if !finite_world_vector(settings.linear_offset) ||
+            !finite_world_value(settings.angular_offset) ||
+            !finite_world_value(settings.maximum_force) ||
+            !finite_world_value(settings.maximum_torque) ||
+            !finite_world_value(settings.correction_factor) ||
+            settings.maximum_force < 0.0 || settings.maximum_torque < 0.0 ||
             settings.correction_factor < 0.0 ||
             settings.correction_factor > 1.0
         {
@@ -1161,7 +1187,11 @@ public class World2D {
         settings:MouseJoint2DSettings = MouseJoint2DSettings()
     ) MouseJoint2D {
         let body_index = self.require_joint_body(body)
-        if settings.spring_hertz < 0.0 ||
+        if !finite_world_vector(settings.target) ||
+            !finite_world_value(settings.spring_hertz) ||
+            !finite_world_value(settings.spring_damping_ratio) ||
+            !finite_world_value(settings.maximum_force) ||
+            settings.spring_hertz < 0.0 ||
             settings.spring_damping_ratio < 0.0 ||
             settings.maximum_force < 0.0
         {
@@ -1195,6 +1225,18 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
+        if !finite_world_vector(settings.anchor) ||
+            !finite_world_vector(settings.axis) ||
+            !finite_world_value(settings.target_translation) ||
+            !finite_world_value(settings.spring_hertz) ||
+            !finite_world_value(settings.spring_damping_ratio) ||
+            !finite_world_value(settings.lower_translation) ||
+            !finite_world_value(settings.upper_translation) ||
+            !finite_world_value(settings.motor_speed) ||
+            !finite_world_value(settings.maximum_motor_force)
+        {
+            panic("GFX.Physics prismatic joint settings are invalid")
+        }
         let axis = normalized_joint_axis(settings.axis)
         if settings.lower_translation > settings.upper_translation ||
             settings.spring_hertz < 0.0 ||
@@ -1245,7 +1287,15 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
-        if settings.lower_angle > settings.upper_angle ||
+        if !finite_world_vector(settings.anchor) ||
+            !finite_world_value(settings.target_angle) ||
+            !finite_world_value(settings.spring_hertz) ||
+            !finite_world_value(settings.spring_damping_ratio) ||
+            !finite_world_value(settings.lower_angle) ||
+            !finite_world_value(settings.upper_angle) ||
+            !finite_world_value(settings.motor_speed) ||
+            !finite_world_value(settings.maximum_motor_torque) ||
+            settings.lower_angle > settings.upper_angle ||
             settings.spring_hertz < 0.0 ||
             settings.spring_damping_ratio < 0.0 ||
             settings.maximum_motor_torque < 0.0
@@ -1293,7 +1343,12 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
-        if settings.linear_hertz < 0.0 ||
+        if !finite_world_vector(settings.anchor) ||
+            !finite_world_value(settings.linear_hertz) ||
+            !finite_world_value(settings.linear_damping_ratio) ||
+            !finite_world_value(settings.angular_hertz) ||
+            !finite_world_value(settings.angular_damping_ratio) ||
+            settings.linear_hertz < 0.0 ||
             settings.linear_damping_ratio < 0.0 ||
             settings.angular_hertz < 0.0 ||
             settings.angular_damping_ratio < 0.0
@@ -1337,6 +1392,17 @@ public class World2D {
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
+        if !finite_world_vector(settings.anchor) ||
+            !finite_world_vector(settings.axis) ||
+            !finite_world_value(settings.spring_hertz) ||
+            !finite_world_value(settings.spring_damping_ratio) ||
+            !finite_world_value(settings.lower_translation) ||
+            !finite_world_value(settings.upper_translation) ||
+            !finite_world_value(settings.motor_speed) ||
+            !finite_world_value(settings.maximum_motor_torque)
+        {
+            panic("GFX.Physics wheel joint settings are invalid")
+        }
         let axis = normalized_joint_axis(settings.axis)
         if settings.lower_translation > settings.upper_translation ||
             settings.spring_hertz < 0.0 ||
@@ -3899,6 +3965,10 @@ func ordered_body_pair(first:int, second:int) BodyPair2D {
 
 func finite_world_value(value:float) bool {
     return value == value && (value == 0.0 || value + value != value)
+}
+
+func finite_world_vector(value:Math.Vec2) bool {
+    return finite_world_value(value.x) && finite_world_value(value.y)
 }
 
 func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {

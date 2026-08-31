@@ -141,8 +141,10 @@ dense-pile regressions in [`Tests/World2D.sx`](../../Tests/World2D.sx).
 
 `World2D` also owns typed distance, filter, motor, mouse, prismatic, revolute,
 weld, and wheel joints. World-space anchors and axes become private local
-constraint data; limits, motors, springs, and completed-step reaction forces
-remain observable through the corresponding typed handle. Destroying either
+constraint data; limits, motors, springs, targets and offsets remain readable
+and mutable through the corresponding typed handle. Completed-step reactions
+and tagged enumeration by world or body preserve introspection without exposing
+solver state. Destroying either
 attached body invalidates its joints. Contacts and joints share one deterministic
 color graph, including the same parallel dispatch threshold for large
 conflict-free colors. See [`Docs/Joints.md`](Joints.md) and

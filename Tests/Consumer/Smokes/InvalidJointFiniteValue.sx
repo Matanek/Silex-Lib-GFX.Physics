@@ -1,0 +1,11 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var maximum = 3.4028235e38
+    var infinite = maximum * 2.0
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body()
+    world.create_mouse_joint(body,
+        Physics.MouseJoint2DSettings()..target = Math.Vec2(infinite, 0.0))
+}
