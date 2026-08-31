@@ -234,10 +234,10 @@
       "id": "character-plane-solver",
       "domain": "character",
       "capability": "collision-plane collection and clipped movement",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2(?:SolvePlanes|ClipVector)$"],
-      "silex_contract": "CharacterMover2D will expose intentional capsule movement and value results instead of raw plane callbacks.",
-      "tracking": "Physique 2D complète 11 — Mouvement cinématique de personnage"
+      "silex_contract": "CharacterMover2D exposes separate plane collection, bounded resolution and vector clipping with value results instead of raw callbacks.",
+      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c", "Examples/CharacterMover2D.sx"]
     },
     {
       "id": "dynamic-tree",
@@ -298,10 +298,10 @@
       "id": "world-character-queries",
       "domain": "character",
       "capability": "capsule mover cast and collision planes",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_(?:CastMover|CollideMover)$"],
-      "silex_contract": "CharacterMover2D will collect, solve and report a safe displaced capsule path.",
-      "tracking": "Physique 2D complète 11 — Mouvement cinématique de personnage"
+      "silex_contract": "CharacterMover2D collects, solves and reports a safe displaced capsule path without mutating the world.",
+      "evidence": ["Tests/Consumer/Tests/CharacterMover.sx", "Benchmarks/CharacterMoverOracle2D.sx", "Benchmarks/Oracle2D/CharacterMoverOracle.c", "Examples/CharacterMover2D.sx"]
     },
     {
       "id": "world-settings",

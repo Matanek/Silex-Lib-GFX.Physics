@@ -163,6 +163,11 @@ color graph, including the same parallel dispatch threshold for large
 conflict-free colors. See [`Docs/Joints.md`](Joints.md) and
 [`Tests/Consumer/Tests/Joints.sx`](../../Tests/Consumer/Tests/Joints.sx).
 
+`CharacterMover2D` calculates bounded capsule motion against living colliders,
+including initial depenetration, slopes, corners, and kinematic platforms,
+without mutating the world. See [`Docs/CharacterMover.md`](CharacterMover.md)
+and the interactive [`Examples/CharacterMover2D.sx`](../../Examples/CharacterMover2D.sx).
+
 Large moving worlds can opt into the persistent STD worker pool:
 
 ```silex

@@ -104,6 +104,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Requêtes spatiales du monde](WorldQueries.md)
 - [Îlots actifs et sommeil](Islands.md)
 - [Joints, moteurs et ressorts](Joints.md)
+- [Mouvement cinématique de personnage](CharacterMover.md)
 - [Réglages et compteurs du monde](WorldSettings.md)
 - [Migration de 0.4 vers 0.5](Migration.md)
 - [Corpus oracle et budgets](OracleAndBudgets.md)

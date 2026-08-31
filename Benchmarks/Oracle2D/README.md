@@ -54,6 +54,7 @@ silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -
 silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
 silex compile Packages/GFX.Physics/Benchmarks/ContinuousCollisionOracle2D.sx --release -o /tmp/gfx-physics-silex-continuous-collision
 silex compile Packages/GFX.Physics/Benchmarks/WorldQueriesOracle2D.sx --release -o /tmp/gfx-physics-silex-world-queries
+silex compile Packages/GFX.Physics/Benchmarks/CharacterMoverOracle2D.sx --release -o /tmp/gfx-physics-silex-character-mover
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -161,6 +162,20 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckWorldQueries.py /tmp/box2d
 Fractions and geometry values use a 0.002 absolute tolerance. The collider
 record permits 0.021 because Box2D's `b2Shape_GetAABB` includes its 2 cm broad-
 phase margin while Silex reports exact geometry bounds.
+
+The character-mover witness compares collision-plane collection, initial
+depenetration, and iterative floor-to-wall movement with Box2D's pinned mover
+queries and plane solver:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_character_mover_oracle > /tmp/box2d-character-mover.txt
+/tmp/gfx-physics-silex-character-mover > /tmp/silex-character-mover.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCharacterMover.py /tmp/box2d-character-mover.txt /tmp/silex-character-mover.txt
+```
+
+The checker requires the same three cases, finite values, and a 0.03 absolute
+tolerance for geometry. Counts remain diagnostic within one iteration because
+Silex exposes stable colliders rather than Box2D's callback records.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

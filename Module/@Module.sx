@@ -33,6 +33,11 @@ public use GFX.Physics.RigidBody2D.RigidBody2D
 public use GFX.Physics.RigidBody2D.RigidBody2DSettings
 public use GFX.Physics.SpatialQuery2D.QueryFilter2D
 public use GFX.Physics.SpatialQuery2D.WorldQueryStatistics2D
+public use GFX.Physics.CharacterMover2D.CharacterMover2D
+public use GFX.Physics.CharacterMover2D.CharacterMover2DSettings
+public use GFX.Physics.CharacterMover2D.CharacterCollisionPlane2D
+public use GFX.Physics.CharacterMover2D.CharacterPlaneSolveResult2D
+public use GFX.Physics.CharacterMover2D.CharacterMoveResult2D
 public use GFX.Physics.Joints2D.DistanceJoint2D
 public use GFX.Physics.Joints2D.DistanceJoint2DSettings
 public use GFX.Physics.Joints2D.FilterJoint2D
