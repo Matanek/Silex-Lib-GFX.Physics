@@ -74,6 +74,11 @@ contact creation, persistence, invalidation and ordering. See
 [`Docs/Contacts.md`](Contacts.md) for filters and the current solver
 boundary.
 
+Custom filtering and pre-solve are opt-in per collider. They run on the thread
+that owns `step`, before solver workers, and return explicit value decisions.
+See [`Docs/ContactPolicies.md`](ContactPolicies.md) and
+[`Tests/Consumer/Tests/ContactPolicies.sx`](../../Tests/Consumer/Tests/ContactPolicies.sx).
+
 Bodies can also own zero, one, or several stable `Collider2D` handles. Each
 collider carries its geometry, density, typed material, collision filter,
 sensor state, and event options; fixed chains may select one common material or

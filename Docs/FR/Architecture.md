@@ -31,6 +31,13 @@ contacts. Les capteurs partagent géométrie et filtres sans entrer dans les
 de capteur sont des buffers déterministes postérieurs au pas et restent
 optionnels.
 
+Le filtrage custom et le pré-solve sont strictement opt-in par collider. Le
+monde les évalue dans l’ordre stable des paires, sur le thread propriétaire de
+`step`, avant tout dispatch parallèle. Ils reçoivent des snapshots publics et
+retournent une `ContactDecision2D` autonome ; le verrou du monde interdit toute
+mutation réentrante. Les modes de combinaison appartiennent aux matériaux et
+ne demandent aucun callback exécuté par un worker.
+
 Les bullets balayent les cibles dynamiques et la géométrie convexe. Les corps
 ordinaires rapides conservent la garde continue plus étroite. Un monde sans
 bullet quitte ce chemin immédiatement.

@@ -1,0 +1,85 @@
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+use GFX.Physics.Geometry2D.Manifold2D
+use GFX.Physics.RigidBody2D.Collider2D
+use GFX.Physics.RigidBody2D.PhysicsMaterial2D
+use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.Shape2D.Shape2D
+
+public struct ColliderSnapshot2D {
+    private var current_collider:Collider2D
+    private var current_body:RigidBody2D
+    let shape:Shape2D
+    let material:PhysicsMaterial2D
+    let collision_filter:CollisionFilter2D
+    let is_sensor:bool
+
+    package init(
+        collider:Collider2D,
+        body:RigidBody2D,
+        shape:Shape2D,
+        material:PhysicsMaterial2D,
+        collision_filter:CollisionFilter2D,
+        is_sensor:bool
+    ) {
+        self.current_collider = collider
+        self.current_body = body
+        self.shape = shape
+        self.material = material
+        self.collision_filter = collision_filter
+        self.is_sensor = is_sensor
+    }
+
+    func collider() Collider2D { return self.current_collider }
+    func body() RigidBody2D { return self.current_body }
+}
+
+public struct ContactPairSnapshot2D {
+    private var current_first:ColliderSnapshot2D
+    private var current_second:ColliderSnapshot2D
+
+    package init(
+        first:ColliderSnapshot2D,
+        second:ColliderSnapshot2D
+    ) {
+        self.current_first = first
+        self.current_second = second
+    }
+
+    func first() ColliderSnapshot2D { return self.current_first }
+    func second() ColliderSnapshot2D { return self.current_second }
+}
+
+public struct ContactPreSolve2D {
+    private var current_pair:ContactPairSnapshot2D
+    let manifold:Manifold2D
+    let friction:float
+    let restitution:float
+
+    package init(
+        pair:ContactPairSnapshot2D,
+        manifold:Manifold2D,
+        friction:float,
+        restitution:float
+    ) {
+        self.current_pair = pair
+        self.manifold = manifold
+        self.friction = friction
+        self.restitution = restitution
+    }
+
+    func pair() ContactPairSnapshot2D { return self.current_pair }
+}
+
+public struct ContactDecision2D {
+    var enabled:bool
+    var manifold:Manifold2D?
+    var friction:float?
+    var restitution:float?
+
+    init() {
+        self.enabled = true
+        self.manifold = null
+        self.friction = null
+        self.restitution = null
+    }
+}

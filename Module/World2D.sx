@@ -6,9 +6,11 @@ use GFX.Physics.RigidBody2D.BodyStore2D
 use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.RigidBody2D.Collider2D
 use GFX.Physics.RigidBody2D.Collider2DSettings
+use GFX.Physics.RigidBody2D.MaterialCombineMode2D
 use GFX.Physics.RigidBody2D.PhysicsMaterial2D
 use GFX.Physics.RigidBody2D.RigidBody2D
 use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.RigidBody2D.ShapeId2D
 use GFX.Physics.RigidBody2D.shape_metrics
 use GFX.Physics.Joints2D.DistanceJoint2D
 use GFX.Physics.Joints2D.DistanceJoint2DSettings
@@ -35,6 +37,10 @@ use GFX.Physics.Joints2D.WheelJoint2DSettings
 use GFX.Physics.BodyTransform2D.BodyTransform2D
 use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+use GFX.Physics.ContactPolicy2D.ColliderSnapshot2D
+use GFX.Physics.ContactPolicy2D.ContactDecision2D
+use GFX.Physics.ContactPolicy2D.ContactPairSnapshot2D
+use GFX.Physics.ContactPolicy2D.ContactPreSolve2D
 use GFX.Physics.Events2D.BodyMoveEvent2D
 use GFX.Physics.Events2D.ContactBeginEvent2D
 use GFX.Physics.Events2D.ContactEndEvent2D
@@ -43,6 +49,7 @@ use GFX.Physics.Events2D.SensorBeginEvent2D
 use GFX.Physics.Events2D.SensorEndEvent2D
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.Manifold2D
+use GFX.Physics.Geometry2D.ManifoldPoint2D
 use GFX.Physics.Geometry2D.ShapePlacement2D
 use GFX.Physics.Shape2D.Shape2D
 use GFX.Physics.Transform2D.Transform2D
@@ -136,6 +143,8 @@ struct ContactPair2D {
 
 struct SolidContact2D {
     let manifold:Manifold2D
+    let first_collider:int
+    let second_collider:int
     let first_material:PhysicsMaterial2D
     let second_material:PhysicsMaterial2D
     let first_radius:float
@@ -145,6 +154,8 @@ struct SolidContact2D {
 
     init(
         manifold:Manifold2D,
+        first_collider:int,
+        second_collider:int,
         first_material:PhysicsMaterial2D,
         second_material:PhysicsMaterial2D,
         first_radius:float,
@@ -153,12 +164,32 @@ struct SolidContact2D {
         second_anchor_rotates:bool
     ) {
         self.manifold = manifold
+        self.first_collider = first_collider
+        self.second_collider = second_collider
         self.first_material = first_material
         self.second_material = second_material
         self.first_radius = first_radius
         self.second_radius = second_radius
         self.first_anchor_rotates = first_anchor_rotates
         self.second_anchor_rotates = second_anchor_rotates
+    }
+}
+
+struct ContactColliderPair2D {
+    let first:int
+    let second:int
+    let valid:bool
+
+    init() {
+        self.first = -1
+        self.second = -1
+        self.valid = false
+    }
+
+    init(first:int, second:int) {
+        self.first = first
+        self.second = second
+        self.valid = true
     }
 }
 
@@ -440,6 +471,8 @@ public class World2D {
     private var new_candidate_pairs:BodyPair2D[]
     private var candidate_bodies:BodyPair2D[]
     private var candidate_enabled:bool[]
+    private var candidate_custom_allowed:bool[]
+    private var candidate_pre_solve_allowed:bool[]
     private var candidate_pairs:ContactPair2D[]
     private var candidate_pair_keys:PairSet2D
     private var free_candidate_slots:int[]
@@ -514,6 +547,10 @@ public class World2D {
     private var current_hit_event_threshold:float
     private var current_ccd_body_count:int
     private var current_ccd_pair_test_count:int
+    private var custom_filter_enabled:bool
+    private var custom_filter:func(ContactPairSnapshot2D) bool
+    private var pre_solve_enabled:bool
+    private var pre_solve:func(ContactPreSolve2D) ContactDecision2D
 
     init(
         gravity:Math.Vec2 = Math.Vec2(0.0, -9.81),
@@ -545,6 +582,8 @@ public class World2D {
         self.new_candidate_pairs = []
         self.candidate_bodies = []
         self.candidate_enabled = []
+        self.candidate_custom_allowed = []
+        self.candidate_pre_solve_allowed = []
         self.candidate_pairs = []
         self.candidate_pair_keys = PairSet2D()
         self.free_candidate_slots = []
@@ -619,6 +658,10 @@ public class World2D {
         self.current_hit_event_threshold = hit_event_threshold
         self.current_ccd_body_count = 0
         self.current_ccd_pair_test_count = 0
+        self.custom_filter_enabled = false
+        self.custom_filter = accept_contact_pair
+        self.pre_solve_enabled = false
+        self.pre_solve = retain_contact
     }
 
     func gravity() Math.Vec2 { return self.current_gravity }
@@ -775,6 +818,26 @@ public class World2D {
         for event in self.sensor_end_events { output.append(event) }
     }
     func hit_event_threshold() float { return self.current_hit_event_threshold }
+    func set_custom_filter(filter:func(ContactPairSnapshot2D) bool) {
+        self.store.require_mutable()
+        self.custom_filter = filter
+        self.custom_filter_enabled = true
+    }
+    func clear_custom_filter() {
+        self.store.require_mutable()
+        self.custom_filter = accept_contact_pair
+        self.custom_filter_enabled = false
+    }
+    func set_pre_solve(policy:func(ContactPreSolve2D) ContactDecision2D) {
+        self.store.require_mutable()
+        self.pre_solve = policy
+        self.pre_solve_enabled = true
+    }
+    func clear_pre_solve() {
+        self.store.require_mutable()
+        self.pre_solve = retain_contact
+        self.pre_solve_enabled = false
+    }
     func set_hit_event_threshold(threshold:float) {
         self.store.require_mutable()
         if !finite_world_value(threshold) || threshold < 0.0 {
@@ -1643,9 +1706,9 @@ public class World2D {
             self.current_pair_maintenance_ms = profile_clock.tick() * 1000.0
         }
         self.refresh_general_contacts()
+        self.apply_custom_filters()
         self.wake_direct_impacts()
         self.update_active_pairs()
-        self.collect_discrete_hit_events()
         self.current_candidate_pair_count = self.active_pairs.count()
         if self.profiling_enabled {
             self.current_pair_filter_ms = profile_clock.tick() * 1000.0
@@ -1719,7 +1782,8 @@ public class World2D {
         if self.hit_event_body_count == 0 { return }
         for candidate in self.active_pairs {
             let pair = self.candidate_bodies[candidate]
-            if pair_is_sensor(self.store, pair) ||
+            if !self.candidate_pre_solve_allowed[candidate] ||
+                pair_is_sensor(self.store, pair) ||
                 !pair_hit_events_enabled(self.store, pair)
             {
                 continue
@@ -2308,6 +2372,8 @@ public class World2D {
         self.new_candidate_pairs.clear()
         self.candidate_bodies.clear()
         self.candidate_enabled.clear()
+        self.candidate_custom_allowed.clear()
+        self.candidate_pre_solve_allowed.clear()
         self.candidate_pairs.clear()
         self.candidate_pair_keys = PairSet2D()
         self.free_candidate_slots.clear()
@@ -3059,7 +3125,9 @@ public class World2D {
 
         var candidate_index = 0
         while candidate_index < self.candidate_pairs.count() {
-            if !self.candidate_enabled[candidate_index] {
+            if !self.candidate_enabled[candidate_index] ||
+                !self.candidate_custom_allowed[candidate_index]
+            {
                 candidate_index++
                 continue
             }
@@ -3191,6 +3259,10 @@ public class World2D {
                 index++
                 continue
             }
+            if !self.candidate_custom_allowed[index] {
+                index++
+                continue
+            }
             let pair = self.candidate_bodies[index]
             if !self.store.awake[pair.first] && !self.store.awake[pair.second]
             {
@@ -3232,11 +3304,40 @@ public class World2D {
             let slot = self.free_candidate_slots[self.free_candidate_count]
             self.candidate_bodies[slot] = pair
             self.candidate_enabled[slot] = true
+            self.candidate_custom_allowed[slot] = true
+            self.candidate_pre_solve_allowed[slot] = true
             self.candidate_pairs[slot] = ContactPair2D()
         } else {
             self.candidate_bodies.append(pair)
             self.candidate_enabled.append(true)
+            self.candidate_custom_allowed.append(true)
+            self.candidate_pre_solve_allowed.append(true)
             self.candidate_pairs.append(ContactPair2D())
+        }
+    }
+
+    private func apply_custom_filters() {
+        var index = 0
+        while index < self.candidate_bodies.count() {
+            self.candidate_custom_allowed[index] = true
+            if !self.candidate_enabled[index] || !self.custom_filter_enabled {
+                index++
+                continue
+            }
+            let pair = self.candidate_bodies[index]
+            let colliders = contact_collider_pair(self.store, pair)
+            if colliders.valid && contact_policy_enabled(
+                self.store,
+                colliders,
+                16
+            ) && !self.custom_filter(contact_pair_snapshot(
+                self.store,
+                colliders
+            )) {
+                self.candidate_custom_allowed[index] = false
+                self.candidate_pairs[index] = ContactPair2D()
+            }
+            index++
         }
     }
 
@@ -3607,6 +3708,15 @@ public class World2D {
         constraints.entries.clear()
         for candidate_index in pairs {
             let pair = self.candidate_bodies[candidate_index]
+            self.candidate_pre_solve_allowed[candidate_index] = true
+            let policy_colliders = contact_collider_pair(store, pair)
+            let pair_allowed = self.candidate_custom_allowed[candidate_index]
+            let apply_pre_solve = self.pre_solve_enabled &&
+                policy_colliders.valid && contact_policy_enabled(
+                    store,
+                    policy_colliders,
+                    32
+                )
             var contact_cache = self.candidate_pairs[candidate_index]
             if (store.body_types[pair.first] == BodyType2D.dynamic &&
                     !store.awake[pair.first]) ||
@@ -3621,7 +3731,8 @@ public class World2D {
                 contact_cache = ContactPair2D()
             }
             var collision_found = false
-            if store.shape_counts[pair.first] == 1 &&
+            if pair_allowed && !apply_pre_solve &&
+                store.shape_counts[pair.first] == 1 &&
                 store.shape_counts[pair.second] == 1 &&
                 store.shape_kinds[pair.first] == 1 &&
                 store.shape_kinds[pair.second] == 1 &&
@@ -3633,6 +3744,11 @@ public class World2D {
                 primary_material(store, pair.second).rolling_resistance == 0.0 &&
                 primary_material(store, pair.first).tangent_speed == 0.0 &&
                 primary_material(store, pair.second).tangent_speed == 0.0 &&
+                material_uses_default_combine(
+                    primary_material(store, pair.first)
+                ) && material_uses_default_combine(
+                    primary_material(store, pair.second)
+                ) &&
                 store.awake[pair.first] && store.awake[pair.second] &&
                 store.inverse_masses[pair.first] > 0.0 &&
                 store.inverse_masses[pair.second] > 0.0
@@ -3655,16 +3771,30 @@ public class World2D {
                     constraints.entries.append(index)
                     collision_found = true
                 }
-            } else if let collision = build_solver_collision(
-                store,
-                pair,
-                candidate_index,
-                contact_cache
-            ) {
-                let index = constraints.collisions.count()
-                constraints.collisions.append(collision)
-                constraints.entries.append(-index - 1)
-                collision_found = true
+            } else if pair_allowed {
+                if let collision = build_solver_collision(
+                    store,
+                    pair,
+                    candidate_index,
+                    contact_cache
+                ) {
+                    var selected:Collision2D? = collision
+                    if apply_pre_solve {
+                        selected = self.apply_pre_solve_policy(
+                            store,
+                            policy_colliders,
+                            collision
+                        )
+                    }
+                    if let prepared = selected {
+                        let index = constraints.collisions.count()
+                        constraints.collisions.append(prepared)
+                        constraints.entries.append(-index - 1)
+                        collision_found = true
+                    } else {
+                        self.candidate_pre_solve_allowed[candidate_index] = false
+                    }
+                }
             }
             if !collision_found {
                 self.candidate_pairs[candidate_index].contact_count = 0
@@ -3678,6 +3808,7 @@ public class World2D {
         if self.profiling_enabled {
             self.current_collision_build_ms = profile_clock.tick() * 1000.0
         }
+        self.collect_discrete_hit_events()
         self.build_constraint_colors()
         self.current_soft_step_stages.append(1)
         self.execute_begin_soft_step_bodies()
@@ -3846,6 +3977,88 @@ public class World2D {
         }
     }
 
+    private func apply_pre_solve_policy(
+        store:BodyStore2D,
+        colliders:ContactColliderPair2D,
+        collision:Collision2D
+    ) Collision2D? {
+        let decision = self.pre_solve(ContactPreSolve2D(
+            pair:contact_pair_snapshot(store, colliders),
+            manifold:collision_manifold(collision),
+            friction:collision.combined_friction,
+            restitution:collision.restitution
+        ))
+        validate_contact_decision(decision)
+        if !decision.enabled { return null }
+
+        var result = collision
+        if let manifold = decision.manifold {
+            var points = ContactPoints2D(
+                manifold.points[0].point,
+                manifold.points[0].separation
+            )
+            if manifold.point_count() > 1 {
+                points = ContactPoints2D(
+                    manifold.points[0].point,
+                    manifold.points[0].separation,
+                    manifold.points[1].point,
+                    manifold.points[1].separation
+                )
+            }
+            var rebuilt = Collision2D(
+                store,
+                collision.first_body,
+                collision.second_body,
+                manifold.normal,
+                points,
+                points.first_separation,
+                collision.cache_index,
+                ContactPair2D()
+            )
+            rebuilt.first_anchor_rotates = collision.first_anchor_rotates
+            rebuilt.second_anchor_rotates = collision.second_anchor_rotates
+            rebuilt.first_anchor_a = soft_step_contact_anchor(
+                store,
+                collision.first_body,
+                points.first,
+                rebuilt.first_anchor_rotates
+            )
+            rebuilt.first_anchor_b = soft_step_contact_anchor(
+                store,
+                collision.second_body,
+                points.first,
+                rebuilt.second_anchor_rotates
+            )
+            rebuilt.second_anchor_a = soft_step_contact_anchor(
+                store,
+                collision.first_body,
+                points.second,
+                rebuilt.first_anchor_rotates
+            )
+            rebuilt.second_anchor_b = soft_step_contact_anchor(
+                store,
+                collision.second_body,
+                points.second,
+                rebuilt.second_anchor_rotates
+            )
+            rebuilt.base_separation_first = points.first_separation
+            rebuilt.base_separation_second = points.second_separation
+            rebuilt.combined_friction = collision.combined_friction
+            rebuilt.restitution = collision.restitution
+            rebuilt.rolling_resistance = collision.rolling_resistance
+            rebuilt.tangent_speed = collision.tangent_speed
+            prepare_collision_constraints(store, rebuilt)
+            result = rebuilt
+        }
+        if let friction = decision.friction {
+            result.combined_friction = friction
+        }
+        if let restitution = decision.restitution {
+            result.restitution = restitution
+        }
+        return result
+    }
+
     private func enforce_non_dynamic_box_boundaries() {
         var circle = 0
         while circle < self.store.count() {
@@ -3949,6 +4162,10 @@ func ordered_body_pair(first:int, second:int) BodyPair2D {
 
 func finite_world_value(value:float) bool {
     return value == value && (value == 0.0 || value + value != value)
+}
+
+func finite_world_point(value:Math.Vec2) bool {
+    return finite_world_value(value.x) && finite_world_value(value.y)
 }
 
 func stable_body_pair(store:BodyStore2D, pair:BodyPair2D) BodyPair2D {
@@ -4527,6 +4744,8 @@ func solid_contact(
                             )
                             selected = SolidContact2D(
                                 manifold,
+                                first_dense,
+                                second_dense,
                                 store.shape_store.contact_material(
                                     first_dense,
                                     manifold.first_feature
@@ -4656,15 +4875,181 @@ func apply_collision_materials(
     first_radius:float,
     second_radius:float
 ) {
-    collision.restitution = Math.max(first.restitution, second.restitution)
-    collision.combined_friction = Math.sqrt(
-        first.friction * second.friction
+    collision.restitution = combine_material_value(
+        first.restitution,
+        first.restitution_combine,
+        second.restitution,
+        second.restitution_combine
+    )
+    collision.combined_friction = combine_material_value(
+        first.friction,
+        first.friction_combine,
+        second.friction,
+        second.friction_combine
     )
     collision.rolling_resistance = Math.max(
         first.rolling_resistance,
         second.rolling_resistance
     ) * Math.max(first_radius, second_radius)
     collision.tangent_speed = first.tangent_speed + second.tangent_speed
+}
+
+func accept_contact_pair(pair:ContactPairSnapshot2D) bool {
+    return true
+}
+
+func retain_contact(input:ContactPreSolve2D) ContactDecision2D {
+    return ContactDecision2D()
+}
+
+func material_uses_default_combine(material:PhysicsMaterial2D) bool {
+    return material.friction_combine == MaterialCombineMode2D.geometric_mean &&
+        material.restitution_combine == MaterialCombineMode2D.maximum
+}
+
+func contact_collider_pair(
+    store:BodyStore2D,
+    pair:BodyPair2D
+) ContactColliderPair2D {
+    if primitive_contact_pair(store, pair) {
+        let first_slot = store.primary_shape_slots[pair.first]
+        let second_slot = store.primary_shape_slots[pair.second]
+        if first_slot < 0 || second_slot < 0 {
+            return ContactColliderPair2D()
+        }
+        return ContactColliderPair2D(
+            store.shape_store.slot_dense_indices[first_slot],
+            store.shape_store.slot_dense_indices[second_slot]
+        )
+    }
+    if let contact = solid_contact(store, pair.first, pair.second) {
+        return ContactColliderPair2D(
+            contact.first_collider,
+            contact.second_collider
+        )
+    }
+    return ContactColliderPair2D()
+}
+
+func contact_policy_enabled(
+    store:BodyStore2D,
+    colliders:ContactColliderPair2D,
+    flag:uint8
+) bool {
+    return (store.shape_store.behavior_flags[colliders.first] & flag) != 0 ||
+        (store.shape_store.behavior_flags[colliders.second] & flag) != 0
+}
+
+func contact_pair_snapshot(
+    store:BodyStore2D,
+    colliders:ContactColliderPair2D
+) ContactPairSnapshot2D {
+    return ContactPairSnapshot2D(
+        collider_snapshot(store, colliders.first),
+        collider_snapshot(store, colliders.second)
+    )
+}
+
+func collider_snapshot(
+    store:BodyStore2D,
+    dense:int
+) ColliderSnapshot2D {
+    let shape_slot = store.shape_store.dense_slots[dense]
+    let body_slot = store.shape_store.body_slots[dense]
+    let body = store.slot_dense_indices[body_slot]
+    return ColliderSnapshot2D(
+        collider:Collider2D(
+            store,
+            ShapeId2D(
+                shape_slot,
+                store.shape_store.slot_generations[shape_slot]
+            )
+        ),
+        body:RigidBody2D(store, store.body_id_at(body)),
+        shape:store.shape_store.shapes[dense],
+        material:store.shape_store.materials[dense],
+        collision_filter:store.shape_store.collision_filters[dense],
+        is_sensor:(store.shape_store.behavior_flags[dense] & 1) != 0
+    )
+}
+
+func collision_manifold(collision:Collision2D) Manifold2D {
+    var points:ManifoldPoint2D[] = []
+    if collision.contacts.count > 0 {
+        points.append(ManifoldPoint2D(
+            collision.contacts.first,
+            collision.contacts.first_separation
+        ))
+    }
+    if collision.contacts.count > 1 {
+        points.append(ManifoldPoint2D(
+            collision.contacts.second,
+            collision.contacts.second_separation
+        ))
+    }
+    return Manifold2D(collision.normal, points)
+}
+
+func validate_contact_decision(decision:ContactDecision2D) {
+    if let friction = decision.friction {
+        if !finite_world_value(friction) || friction < 0.0 {
+            panic("GFX.Physics.ContactDecision2D friction must be finite and non-negative")
+        }
+    }
+    if let restitution = decision.restitution {
+        if !finite_world_value(restitution) || restitution < 0.0 ||
+            restitution > 1.0
+        {
+            panic("GFX.Physics.ContactDecision2D restitution must be between zero and one")
+        }
+    }
+    if let manifold = decision.manifold {
+        if manifold.point_count() < 1 || manifold.point_count() > 2 ||
+            !finite_world_point(manifold.normal)
+        {
+            panic("GFX.Physics.ContactDecision2D manifold requires one or two finite points and a finite unit normal")
+        }
+        let normal_length = manifold.normal.length_squared()
+        if normal_length < 0.999 || normal_length > 1.001 {
+            panic("GFX.Physics.ContactDecision2D manifold normal must have unit length")
+        }
+        for point in manifold.points {
+            if !finite_world_point(point.point) ||
+                !finite_world_value(point.separation)
+            {
+                panic("GFX.Physics.ContactDecision2D manifold points must be finite")
+            }
+        }
+    }
+}
+
+func combine_material_value(
+    first:float,
+    first_mode:MaterialCombineMode2D,
+    second:float,
+    second_mode:MaterialCombineMode2D
+) float {
+    var mode = first_mode
+    if material_combine_rank(second_mode) > material_combine_rank(first_mode) {
+        mode = second_mode
+    }
+    match mode {
+        average => { return (first + second) * 0.5 }
+        geometric_mean => { return Math.sqrt(first * second) }
+        minimum => { return Math.min(first, second) }
+        maximum => { return Math.max(first, second) }
+        multiply => { return first * second }
+    }
+}
+
+func material_combine_rank(mode:MaterialCombineMode2D) int {
+    match mode {
+        average => { return 0 }
+        geometric_mean => { return 1 }
+        minimum => { return 2 }
+        maximum => { return 3 }
+        multiply => { return 4 }
+    }
 }
 
 func collider_placement(
@@ -4995,7 +5380,7 @@ func build_compact_circle_collision(
         base_separation:distance - combined_radius,
         initial_normal_offset:offset_x * normal_x + offset_y * normal_y,
         initial_normal_velocity:relative_normal_velocity,
-        restitution:Math.min(
+        restitution:Math.max(
             store.restitutions[first_body],
             store.restitutions[second_body]
         ),

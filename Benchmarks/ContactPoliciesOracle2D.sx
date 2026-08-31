@@ -1,0 +1,138 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func reject_tagged(pair:Physics.ContactPairSnapshot2D) bool {
+    return pair.first().material.application_id.value() != 42 &&
+        pair.second().material.application_id.value() != 42
+}
+
+func disable_contact(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+    return Physics.ContactDecision2D() ..enabled = false
+}
+
+func report_materials(
+    input:Physics.ContactPreSolve2D
+) Physics.ContactDecision2D {
+    print("materials $(input.friction) $(input.restitution)")
+    return Physics.ContactDecision2D()
+}
+
+func sideways_normal(
+    input:Physics.ContactPreSolve2D
+) Physics.ContactDecision2D {
+    return Physics.ContactDecision2D()
+        ..manifold = Physics.Manifold2D(
+            Math.Vec2(1.0, 0.0),
+            input.manifold.points
+        )
+}
+
+func add_circle(
+    world:Physics.World2D,
+    fixed:bool,
+    position:Math.Vec2,
+    material:Physics.PhysicsMaterial2D,
+    custom_filter:bool = false,
+    pre_solve:bool = false
+) Physics.RigidBody2D {
+    var settings = Physics.RigidBody2DSettings()
+        ..position = position
+        ..create_implicit_collider = false
+    if fixed { settings.body_type = Physics.BodyType2D.fixed }
+    var body = world.create_rigid_body(settings)
+    world.create_collider(
+        body,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+            ..material = material
+            ..enable_custom_filter = custom_filter
+            ..enable_pre_solve = pre_solve
+    )
+    return body
+}
+
+func filter_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.set_custom_filter(reject_tagged)
+    let tagged = Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(42)
+    add_circle(world, true, Math.Vec2(), tagged, true)
+    var body = add_circle(
+        world,
+        false,
+        Math.Vec2(1.5, 0.0),
+        Physics.PhysicsMaterial2D()
+    )
+    body.set_velocity(Math.Vec2(-2.0, 0.0))
+    world.step(0.25)
+    print("filter $(world.contact_count()) $(body.position().x) $(body.velocity().x)")
+}
+
+func disabled_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.set_pre_solve(disable_contact)
+    add_circle(
+        world,
+        true,
+        Math.Vec2(),
+        Physics.PhysicsMaterial2D(),
+        false,
+        true
+    )
+    var body = add_circle(
+        world,
+        false,
+        Math.Vec2(1.5, 0.0),
+        Physics.PhysicsMaterial2D()
+    )
+    body.set_velocity(Math.Vec2(-2.0, 0.0))
+    world.step(0.25)
+    print("disabled $(world.contact_count()) $(body.position().x) $(body.velocity().x)")
+}
+
+func material_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.set_pre_solve(report_materials)
+    let first = Physics.PhysicsMaterial2D()
+        ..friction = 0.2
+        ..restitution = 0.2
+        ..friction_combine = Physics.MaterialCombineMode2D.average
+        ..restitution_combine = Physics.MaterialCombineMode2D.average
+    let second = Physics.PhysicsMaterial2D()
+        ..friction = 0.8
+        ..restitution = 0.8
+        ..friction_combine = Physics.MaterialCombineMode2D.average
+        ..restitution_combine = Physics.MaterialCombineMode2D.average
+    add_circle(world, true, Math.Vec2(), first, false, true)
+    add_circle(world, false, Math.Vec2(1.5, 0.0), second)
+    world.step(0.0)
+}
+
+func normal_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.set_pre_solve(sideways_normal)
+    add_circle(
+        world,
+        true,
+        Math.Vec2(),
+        Physics.PhysicsMaterial2D(),
+        false,
+        true
+    )
+    var body = add_circle(
+        world,
+        false,
+        Math.Vec2(0.0, 1.5),
+        Physics.PhysicsMaterial2D()
+    )
+    body.set_velocity(Math.Vec2(0.0, -2.0))
+    world.step(0.1)
+    print("normal $(body.position().x) $(body.position().y) $(body.velocity().x) $(body.velocity().y)")
+}
+
+func main() {
+    filter_case()
+    disabled_case()
+    material_case()
+    normal_case()
+}

@@ -331,10 +331,10 @@
       "id": "contact-policies",
       "domain": "collision",
       "capability": "custom pair filtering, material combination and pre-solve",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_Set(?:CustomFilter|PreSolve|Friction|Restitution)Callback$"],
-      "silex_contract": "Typed main-thread policies will return immutable decisions without exposing callback context pointers.",
-      "tracking": "Physique 2D complète 08 — Filtrage avancé et pré-solve"
+      "silex_contract": "Typed main-thread policies return immutable collider snapshots and explicit contact decisions without exposing callback context pointers.",
+      "evidence": ["Tests/Consumer/Tests/ContactPolicies.sx", "Benchmarks/ContactPoliciesOracle2D.sx", "Benchmarks/Oracle2D/ContactPoliciesOracle.c"]
     },
     {
       "id": "world-explosion",
@@ -514,9 +514,10 @@
       "id": "collider-contact-events",
       "domain": "event",
       "capability": "per-collider contact, hit, pre-solve and sensor streams",
-      "status": "planned",
+      "status": "partial",
       "patterns": ["^b2Shape_(?:AreContactEventsEnabled|AreHitEventsEnabled|ArePreSolveEventsEnabled|AreSensorEventsEnabled|EnableContactEvents|EnableHitEvents|EnablePreSolveEvents|EnableSensorEvents|GetContactCapacity|GetContactData|GetSensorCapacity|GetSensorOverlaps)$"],
-      "silex_contract": "Collider2D event options and completed snapshots will retain deterministic collider identities.",
+      "silex_contract": "Collider2D already owns contact, hit, sensor and pre-solve opt-ins; completed event and contact snapshots will retain deterministic collider identities.",
+      "evidence": ["Tests/Consumer/Tests/ContactPolicies.sx", "Tests/Consumer/Tests/Events.sx"],
       "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
     },
     {

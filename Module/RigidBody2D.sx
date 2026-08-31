@@ -19,12 +19,22 @@ public struct PhysicsMaterialId2D {
     func value() uint64 { return self.current_value }
 }
 
+public enum MaterialCombineMode2D {
+    average
+    geometric_mean
+    minimum
+    maximum
+    multiply
+}
+
 public struct PhysicsMaterial2D {
     var friction:float
     var restitution:float
     var rolling_resistance:float
     var tangent_speed:float
     var application_id:PhysicsMaterialId2D
+    var friction_combine:MaterialCombineMode2D
+    var restitution_combine:MaterialCombineMode2D
 
     init() {
         self.friction = 0.6
@@ -32,6 +42,8 @@ public struct PhysicsMaterial2D {
         self.rolling_resistance = 0.0
         self.tangent_speed = 0.0
         self.application_id = PhysicsMaterialId2D()
+        self.friction_combine = MaterialCombineMode2D.geometric_mean
+        self.restitution_combine = MaterialCombineMode2D.maximum
     }
 }
 
@@ -67,6 +79,8 @@ public struct Collider2DSettings {
     var enable_contact_events:bool
     var enable_hit_events:bool
     var enable_sensor_events:bool
+    var enable_custom_filter:bool
+    var enable_pre_solve:bool
 
     init() {
         self.shape = null
@@ -78,6 +92,8 @@ public struct Collider2DSettings {
         self.enable_contact_events = false
         self.enable_hit_events = false
         self.enable_sensor_events = false
+        self.enable_custom_filter = false
+        self.enable_pre_solve = false
     }
 }
 
@@ -240,6 +256,8 @@ package class ShapeStore2D {
         if settings.enable_contact_events { flags += 2 }
         if settings.enable_hit_events { flags += 4 }
         if settings.enable_sensor_events { flags += 8 }
+        if settings.enable_custom_filter { flags += 16 }
+        if settings.enable_pre_solve { flags += 32 }
         self.behavior_flags.append(flags)
         return ShapeId2D(slot, self.slot_generations[slot])
     }
@@ -1173,7 +1191,7 @@ package class BodyStore2D {
         sensor_events:bool
     ) {
         let dense = self.shape_store.require(id)
-        var flags:uint8 = self.shape_store.behavior_flags[dense] & 1
+        var flags:uint8 = self.shape_store.behavior_flags[dense] & 49
         if contact_events { flags += 2 }
         if hit_events { flags += 4 }
         if sensor_events { flags += 8 }
@@ -1487,6 +1505,18 @@ public class Collider2D {
         ] & 8) != 0
     }
 
+    func custom_filter_enabled() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 16) != 0
+    }
+
+    func pre_solve_enabled() bool {
+        return (self.store.shape_store.behavior_flags[
+            self.store.shape_store.require(self.id)
+        ] & 32) != 0
+    }
+
     func set_shape(shape:Shape2D) {
         self.store.require_mutable()
         self.store.set_collider_shape(self.id, shape)
@@ -1529,6 +1559,22 @@ public class Collider2D {
             hit_events,
             sensor_events
         )
+    }
+
+    func set_contact_policy_options(
+        custom_filter:bool,
+        pre_solve:bool
+    ) {
+        self.store.require_mutable()
+        let dense = self.store.shape_store.require(self.id)
+        var flags = self.store.shape_store.behavior_flags[dense] & 15
+        if custom_filter { flags += 16 }
+        if pre_solve { flags += 32 }
+        self.store.shape_store.behavior_flags[dense] = flags
+        let body = self.store.slot_dense_indices[
+            self.store.shape_store.body_slots[dense]
+        ]
+        self.store.wake(body)
     }
 }
 

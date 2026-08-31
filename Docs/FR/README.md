@@ -67,9 +67,9 @@ world.write_contacts(contacts)
 print(world.contact_count())
 ```
 
-La réponse dynamique complète concerne actuellement les boîtes non arrondies
-et les cercles. Les autres formes participent aux requêtes, filtres, contacts
-géométriques et capteurs.
+La réponse dynamique Soft Step couvre toutes les formes publiques. Les
+politiques de contact optionnelles sont évaluées avant le dispatch du solveur,
+sur le thread qui possède `step`.
 
 ## Catalogues et parallélisme
 
@@ -99,6 +99,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Colliders et matériaux](Colliders.md)
 - [Contrat de complétude Box2D](Completeness.md)
 - [Contacts persistants](Contacts.md)
+- [Filtrage avancé et pré-solve](ContactPolicies.md)
 - [Événements, capteurs et CCD](EventsAndCCD.md)
 - [Requêtes géométriques](Geometry.md)
 - [Îlots actifs et sommeil](Islands.md)

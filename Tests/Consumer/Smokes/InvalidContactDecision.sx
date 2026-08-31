@@ -1,0 +1,31 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func invalid_normal(
+    input:Physics.ContactPreSolve2D
+) Physics.ContactDecision2D {
+    return Physics.ContactDecision2D()
+        ..manifold = Physics.Manifold2D(
+            Math.Vec2(),
+            input.manifold.points
+        )
+}
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.set_pre_solve(invalid_normal)
+    var support = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    world.create_collider(
+        support,
+        Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+            ..enable_pre_solve = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    world.step(0.0)
+}

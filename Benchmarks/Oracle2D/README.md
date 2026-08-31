@@ -52,6 +52,7 @@ silex compile Packages/GFX.Physics/Benchmarks/Corpus2D.sx --release -o /tmp/gfx-
 silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /tmp/gfx-physics-silex-geometry
 silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
 silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
+silex compile Packages/GFX.Physics/Benchmarks/ContactPoliciesOracle2D.sx --release -o /tmp/gfx-physics-silex-contact-policies
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -126,6 +127,20 @@ otherwise enforce the physical invariant: the body is motionless and supported
 by a face rather than balanced on an unsupported corner. A supported face must
 be level within 5 mm per metre; this rejects a two-point manifold synthesized
 across a tilted edge whose upper endpoint has not reached the support.
+
+The contact-policy witness compares custom rejection, pre-solve disabling,
+average friction and restitution, and a replacement contact normal:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_contact_policies_oracle > /tmp/box2d-contact-policies.txt
+/tmp/gfx-physics-silex-contact-policies > /tmp/silex-contact-policies.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckContactPolicies.py /tmp/box2d-contact-policies.txt /tmp/silex-contact-policies.txt
+```
+
+The material and disabled-contact records use a 0.01 absolute tolerance. The
+modified-normal position record allows 0.07 because Box2D applies a larger
+speculative positional correction while both engines retain the same modified
+normal and unconstrained velocity trend.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

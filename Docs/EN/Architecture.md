@@ -98,6 +98,12 @@ reusable value arrays and creates opaque body handles only when consumer code
 reads an event. Movement, solid contact, hit, and sensor streams are opt-in so
 an ordinary world does not construct unused payloads.
 
+Custom filtering and pre-solve are likewise opt-in per collider. The world
+evaluates them in stable pair order on the thread owning `step`, before any
+parallel solver dispatch. They receive public snapshots and return an
+independent `ContactDecision2D`; the world lock rejects reentrant mutation.
+Material combine modes need no callback running from a worker.
+
 Continuous motion keeps two costs distinct. Fast ordinary bodies retain the
 non-dynamic-box boundary guard already used by the solver. Bodies created with
 `is_bullet` additionally sweep against dynamic targets and public convex
