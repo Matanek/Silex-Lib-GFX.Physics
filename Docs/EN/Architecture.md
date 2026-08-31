@@ -87,16 +87,16 @@ collider, while narrow-phase filtering and sensor discovery use each collider's
 own filter and flags. The
 broad phase retains stable candidate slots; a general pair refreshes its
 manifold in place and clears the slot when the shapes separate. Public
-`Contact2D` values are read-only snapshots reconstructed in stable body-slot
-order, so BVH nodes, pair hashes, dense indices, and cached impulses do not
-cross the API boundary.
+`Contact2D` values are read-only snapshots reconstructed in stable collider
+creation order. Completed manifolds and impulse values cross the boundary, but
+BVH nodes, pair hashes, dense indices, and mutable solver caches do not.
 
 Sensors retain the geometry and collision-filter path but never enter contact
 islands or the impulse solver. Their overlap pairs and all other event streams
-are deterministic completed-step buffers, not callbacks. Event storage uses
-reusable value arrays and creates opaque body handles only when consumer code
-reads an event. Movement, solid contact, hit, and sensor streams are opt-in so
-an ordinary world does not construct unused payloads.
+are deterministic completed-step buffers, not callbacks. Contact and sensor
+events retain autonomous collider snapshots, including geometry and material,
+alongside generational handles. Movement, solid contact, hit, and sensor
+streams are opt-in so an ordinary world does not construct unused payloads.
 
 Custom filtering and pre-solve are likewise opt-in per collider. The world
 evaluates them in stable pair order on the thread owning `step`, before any

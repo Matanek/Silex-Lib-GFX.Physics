@@ -283,11 +283,10 @@
       "id": "world-events",
       "domain": "event",
       "capability": "post-step movement, contact, hit and sensor streams",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2World_Get(?:Body|Sensor|Contact)Events$"],
-      "silex_contract": "Reusable post-step buffers already avoid worker callbacks; complete events will identify colliders and resolved contact data.",
-      "evidence": ["Tests/Consumer/Tests/Events.sx"],
-      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+      "silex_contract": "Reusable post-step buffers avoid worker callbacks and retain deterministic collider snapshots for contact, hit and sensor streams.",
+      "evidence": ["Tests/Consumer/Tests/Events.sx", "Tests/Consumer/Tests/ContactSnapshots.sx", "Benchmarks/ContactSnapshotsOracle2D.sx"]
     },
     {
       "id": "world-spatial-queries",
@@ -431,10 +430,10 @@
       "id": "body-contacts",
       "domain": "event",
       "capability": "write current body contact data",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_Get(?:ContactCapacity|ContactData)$"],
-      "silex_contract": "Bodies and colliders will write completed contact snapshots into caller-owned buffers.",
-      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+      "silex_contract": "Bodies and colliders write completed manifold, impulse and resolved-material snapshots into caller-owned buffers.",
+      "evidence": ["Tests/Consumer/Tests/ContactSnapshots.sx", "Benchmarks/ContactSnapshotsOracle2D.sx"]
     },
     {
       "id": "body-joints",
@@ -514,11 +513,10 @@
       "id": "collider-contact-events",
       "domain": "event",
       "capability": "per-collider contact, hit, pre-solve and sensor streams",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2Shape_(?:AreContactEventsEnabled|AreHitEventsEnabled|ArePreSolveEventsEnabled|AreSensorEventsEnabled|EnableContactEvents|EnableHitEvents|EnablePreSolveEvents|EnableSensorEvents|GetContactCapacity|GetContactData|GetSensorCapacity|GetSensorOverlaps)$"],
-      "silex_contract": "Collider2D already owns contact, hit, sensor and pre-solve opt-ins; completed event and contact snapshots will retain deterministic collider identities.",
-      "evidence": ["Tests/Consumer/Tests/ContactPolicies.sx", "Tests/Consumer/Tests/Events.sx"],
-      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+      "silex_contract": "Collider2D owns contact, hit, sensor and pre-solve opt-ins; completed events, contacts and sensor overlaps retain deterministic collider identities.",
+      "evidence": ["Tests/Consumer/Tests/ContactPolicies.sx", "Tests/Consumer/Tests/Events.sx", "Tests/Consumer/Tests/ContactSnapshots.sx", "Benchmarks/ContactSnapshotsOracle2D.sx"]
     },
     {
       "id": "collider-user-data",

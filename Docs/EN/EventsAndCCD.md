@@ -1,12 +1,13 @@
 # CCD, sensors, and post-step events
 
 `World2D` collects simulation feedback in deterministic buffers. It never
-invokes gameplay callbacks from a worker. Read the enabled streams immediately
-after `step` and before destroying a body named by an event.
+invokes gameplay callbacks from a worker. Event payloads are autonomous values
+for the completed step, including collider geometry and material snapshots.
 
-## Enable only the streams a body needs
+## Enable only the streams a collider needs
 
-Event generation is opt-in at body creation:
+Event generation is opt-in. Body settings configure the implicit compatibility
+collider; explicit colliders own their own flags:
 
 ```silex
 let trigger = Physics.RigidBody2DSettings()
@@ -28,12 +29,13 @@ keeps its overlap filtering. The retained body-level fields configure the
 implicit compatibility collider. `enable_sensor_events` belongs to the sensor;
 an ordinary visitor does not need
 to opt in. When two enabled sensors overlap, each receives its own event role.
-Contact and hit events are enabled when either solid body requests that stream.
+Contact and hit events are enabled when either solid collider requests that stream.
 
-The flags are immutable body settings. This avoids mismatched begin/end pairs
-caused by changing an event policy while a pair is already touching. Disabled
-streams do not build payloads, and a world without bullets does not enter the
-dynamic-target CCD path.
+`Collider2D.set_event_options(contact, hit, sensor)` may change those flags
+between steps. Enabling a stream while a pair is already touching produces its
+begin event on the next completed step; disabling it produces the matching end
+event. Disabled streams do not build payloads, and a world without bullets does
+not enter the dynamic-target CCD path.
 
 ## Read completed-step buffers
 
@@ -54,10 +56,13 @@ world.write_sensor_end_events(sensor_ended)
 world.write_body_move_events(moves)
 ```
 
-Every `write_*_events` call clears and refills the caller's list. Begin contact
-events contain the completed-step manifold. Hit events contain a world point,
-a normal oriented from `first_body` to `second_body`, and the positive approach
-speed. `World2D` defaults the hit threshold to `1 m/s`; pass
+Every `write_*_events` call clears and refills the caller's list. Contact begin,
+end and hit events expose `pair()`, `first_collider()` and
+`second_collider()` as well as their owning bodies. Begin events contain the
+completed-step manifold. Hit events contain a world point, a normal oriented
+from the first collider to the second, and the positive approach speed.
+Sensor events expose `sensor()` and `visitor()` collider snapshots. `World2D`
+defaults the hit threshold to `1 m/s`; pass
 `hit_event_threshold` to the constructor or call
 `set_hit_event_threshold` between steps.
 
@@ -99,4 +104,5 @@ The public executable proofs are grouped in
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 ```

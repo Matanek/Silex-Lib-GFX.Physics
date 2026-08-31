@@ -63,7 +63,7 @@ contact radius, then limits relative rotation. These rules use
 the same Soft Step graph for circles, capsules, segments, convex or rounded
 polygons, and one-sided chains. Each collider's density contributes to the
 body's composed mass, center of mass, and inertia. Contact and sensor snapshots
-still identify bodies until collider-level event identity is added.
+identify the exact living colliders and their owning bodies.
 
 The sign of `tangent_speed` follows Box2D 3.1.1. On an upward-facing horizontal
 floor, a positive value drives the touching dynamic body toward positive X.

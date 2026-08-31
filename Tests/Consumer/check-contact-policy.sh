@@ -21,4 +21,4 @@ then
     exit 1
 fi
 
-grep -F "cannot be mutated during step" "$policy_output" >/dev/null
+grep -F "cannot be modified during step" "$policy_output" >/dev/null

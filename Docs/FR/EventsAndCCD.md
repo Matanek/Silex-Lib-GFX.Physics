@@ -1,7 +1,8 @@
 # CCD, capteurs et événements post-step
 
-Les flux d’événements sont activés par corps ou collider afin qu’un monde
-ordinaire ne construise aucun payload inutilisé.
+Les flux d’événements sont activés par collider afin qu’un monde ordinaire ne
+construise aucun payload inutilisé. Les réglages du corps configurent son
+collider implicite de compatibilité.
 
 ```silex
 let trigger = Physics.RigidBody2DSettings()
@@ -38,6 +39,17 @@ world.write_sensor_end_events(sensor_ended)
 world.write_body_move_events(moves)
 ```
 
+Les événements de contact et d’impact nomment les deux colliders exacts avec
+`pair()`, `first_collider()` et `second_collider()`, tout en conservant l’accès
+à leurs corps. Les événements capteur distinguent `sensor()` et `visitor()`.
+Leur géométrie, matériau et identifiant applicatif sont des valeurs autonomes :
+ils restent lisibles après destruction, tandis que le handle incorporé devient
+invalide et refuse toute mutation.
+
+`Collider2D.set_event_options(contact, hit, sensor)` modifie les flux entre
+deux pas. Activer un flux sur une paire déjà présente produit un begin au pas
+suivant ; le désactiver produit le end correspondant.
+
 Les bullets balaient chaque paire de colliders autorisée, et pas seulement la
 forme primaire de chaque corps. Un corps composé ou un conteneur cinématique
 conserve donc ses parois secondaires dans le CCD. Le premier impact de toutes
@@ -49,4 +61,5 @@ paient pas ce chemin général et un monde sans bullet le quitte immédiatement.
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 ```

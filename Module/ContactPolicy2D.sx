@@ -3,6 +3,7 @@ use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.RigidBody2D.Collider2D
 use GFX.Physics.RigidBody2D.PhysicsMaterial2D
 use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.RigidBody2D.ShapeId2D
 use GFX.Physics.Shape2D.Shape2D
 
 public struct ColliderSnapshot2D {
@@ -31,6 +32,9 @@ public struct ColliderSnapshot2D {
 
     func collider() Collider2D { return self.current_collider }
     func body() RigidBody2D { return self.current_body }
+    package func collider_id() ShapeId2D {
+        return self.current_collider.collider_id()
+    }
 }
 
 public struct ContactPairSnapshot2D {

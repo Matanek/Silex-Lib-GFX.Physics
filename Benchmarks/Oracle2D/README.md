@@ -142,6 +142,19 @@ modified-normal position record allows 0.07 because Box2D applies a larger
 speculative positional correction while both engines retain the same modified
 normal and unconstrained velocity trend.
 
+The collider-snapshot witness compares two-point contact data, body and shape
+filtering, begin/end collider identities, and current sensor overlaps:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_contact_snapshots_oracle > /tmp/box2d-contact-snapshots.txt
+/tmp/gfx-physics-silex-contact-snapshots > /tmp/silex-contact-snapshots.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckContactSnapshots.py /tmp/box2d-contact-snapshots.txt /tmp/silex-contact-snapshots.txt
+```
+
+Metadata and identities match exactly. Both engines must expose two positive,
+finite normal impulses; their total uses a 0.35 absolute tolerance to allow
+solver-phase differences without accepting a missing contact point.
+
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass
 `--debug-build` to the Silex executable so its record names the configuration

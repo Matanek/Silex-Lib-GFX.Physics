@@ -1,0 +1,140 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func material(id:int, friction:float = 0.33) Physics.PhysicsMaterial2D {
+    return Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(id as uint64)
+        ..friction = friction
+        ..restitution = 0.0
+}
+
+func contact_case() {
+    var world = Physics.World2D(gravity:Math.Vec2(0.0, -10.0))
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.5)
+        ..create_implicit_collider = false
+    )
+    var floor_collider = world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
+        ..material = material(10)
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.5)
+        ..create_implicit_collider = false
+        ..allow_sleep = false
+    )
+    var box_collider = world.create_collider(box, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0, 1.0)))
+        ..material = material(11)
+    )
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    var body_contacts:Physics.Contact2D[] = []
+    world.write_contacts(box, body_contacts)
+    var collider_contacts:Physics.Contact2D[] = []
+    world.write_contacts(box_collider, collider_contacts)
+    var contact = contacts[0]
+    print(
+        "contact $(contacts.count()) $(contact.manifold().point_count()) " +
+        "$(contact.pair().first().material.application_id.value()) " +
+        "$(contact.pair().second().material.application_id.value()) " +
+        "$(body_contacts.count()) $(collider_contacts.count()) " +
+        "$(contact.friction()) $(contact.restitution()) " +
+        "$(contact.normal_impulses()[0]) $(contact.normal_impulses()[1])"
+    )
+    world.write_contacts(floor_collider, collider_contacts)
+    print("floor $(collider_contacts.count())")
+}
+
+func event_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var fixed_collider = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..material = material(31)
+        ..enable_contact_events = true
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.5, 0.0)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(moving, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.75))
+        ..material = material(32)
+    )
+    world.step(0.001)
+    var began:Physics.ContactBeginEvent2D[] = []
+    world.write_contact_begin_events(began)
+    print(
+        "begin $(began.count()) " +
+        "$(began[0].pair().first().material.application_id.value()) " +
+        "$(began[0].pair().second().material.application_id.value())"
+    )
+    world.destroy_collider(fixed_collider)
+    world.step(0.001)
+    var ended:Physics.ContactEndEvent2D[] = []
+    world.write_contact_end_events(ended)
+    print(
+        "end $(ended.count()) " +
+        "$(ended[0].pair().first().material.application_id.value()) " +
+        "$(ended[0].pair().second().material.application_id.value())"
+    )
+}
+
+func sensor_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var small = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..material = material(41)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var large = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(2.0))
+        ..material = material(42)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var visitor_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.5, 0.0)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(visitor_body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..material = material(43)
+    )
+    world.step(0.001)
+    var overlaps:Physics.SensorOverlap2D[] = []
+    world.write_sensor_overlaps(overlaps)
+    var large_overlaps:Physics.SensorOverlap2D[] = []
+    world.write_sensor_overlaps(large, large_overlaps)
+    var small_overlaps:Physics.SensorOverlap2D[] = []
+    world.write_sensor_overlaps(small, small_overlaps)
+    var began:Physics.SensorBeginEvent2D[] = []
+    world.write_sensor_begin_events(began)
+    print(
+        "sensor $(overlaps.count()) $(large_overlaps.count()) " +
+        "$(small_overlaps.count()) $(began.count()) " +
+        "$(began[0].sensor().material.application_id.value()) " +
+        "$(began[0].visitor().material.application_id.value())"
+    )
+}
+
+func main() {
+    contact_case()
+    event_case()
+    sensor_case()
+}

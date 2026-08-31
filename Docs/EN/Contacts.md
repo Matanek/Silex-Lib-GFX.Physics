@@ -10,19 +10,27 @@ world.step(1.0 / 60.0)
 world.write_contacts(contacts)
 
 for contact in contacts {
-    let first = contact.first_body()
-    let second = contact.second_body()
+    let first = contact.first_collider()
+    let second = contact.second_collider()
     let manifold = contact.manifold()
-    print(manifold.point_count())
+    print("$(manifold.point_count()) $(contact.normal_impulses().count())")
 }
 ```
 
 `write_contacts` clears and refills the caller's list. Each `Contact2D` names
-the two live body handles in stable creation-identity order and contains the
-current geometric manifold. Destroying a body invalidates old handles in the
-usual way and removes every pair that referenced it. `contact_count` provides
-the number of touching pairs without materializing snapshots;
+the two exact colliders and their owning bodies in stable creation-identity
+order. It contains the completed manifold, one normal and tangent impulse per
+point, the resolved friction and restitution, and its active state. Overloads
+accept a `RigidBody2D` or `Collider2D` before the output list to select only
+contacts that involve that handle. `contact_count` provides the number of
+touching pairs without materializing snapshots;
 `candidate_pair_count` remains the broader count of active AABB candidates.
+
+These are autonomous completed-step values, not references into the contact
+cache. If a collider is destroyed after an event was copied, its geometry,
+material and application id remain readable from the event's `pair()` snapshot.
+The embedded handle becomes invalid, and any attempted mutation through it
+fails instead of targeting a recycled collider.
 
 Each `Collider2D.collision_filter` applies the same symmetric category, mask,
 and group rules as stateless geometry queries. Rejected collider pairs never
@@ -30,10 +38,12 @@ enter the persistent contact table. The retained
 `RigidBody2DSettings.collision_filter` configures the implicit compatibility
 collider.
 
-Sensor bodies use the same filters but remain outside `contact_count`,
-`write_contacts`, contact islands, and the impulse solver. Their opt-in overlap
-transitions, along with solid contact, hit, move, and sleep events, are
-documented in [`EventsAndCCD.md`](EventsAndCCD.md).
+Sensors use the same filters but remain outside `contact_count`, solid
+`write_contacts`, contact islands, and the impulse solver. Current overlaps are
+available through `write_sensor_overlaps(output)` or
+`write_sensor_overlaps(sensor, output)`. Their opt-in transitions, along with
+solid contact, hit, move, and sleep events, are documented in
+[`EventsAndCCD.md`](EventsAndCCD.md).
 
 The broad phase selects the same reusable deterministic grid for dynamic worlds
 at every worker count. Pair insertion, contact refresh, and snapshot ordering
@@ -42,9 +52,8 @@ their dynamic-tree representation.
 
 Capsules, convex and rounded polygons, segments, one-sided chains, and secondary
 colliders of compound bodies participate in broad-phase, persistent contact,
-and the common Soft Step response. Chains must be fixed bodies. Contact
-snapshots still identify the two owning bodies; collider identity is a later
-event/contact milestone. Retained manifolds warm-start up to two points, while
+and the common Soft Step response. Chains must be fixed bodies. Retained
+manifolds warm-start up to two points, while
 the touched collider or chain segment supplies friction, restitution, tangent
 surface speed, and rolling resistance without changing the public read surface.
 
@@ -66,3 +75,6 @@ They verify creation, persistence, separation and deterministic ordering
 without a window, renderer, input, or visual inspection. Dynamic response and
 material behavior are covered by
 [`../Tests/Consumer/Tests/DynamicShapes.sx`](../../Tests/Consumer/Tests/DynamicShapes.sx).
+Collider identity, resolved impulses, current sensor overlaps and stale-value
+lifetime are covered by
+[`../Tests/Consumer/Tests/ContactSnapshots.sx`](../../Tests/Consumer/Tests/ContactSnapshots.sx).

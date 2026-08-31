@@ -22,6 +22,7 @@ public use GFX.Physics.Events2D.ContactEndEvent2D
 public use GFX.Physics.Events2D.ContactHitEvent2D
 public use GFX.Physics.Events2D.SensorBeginEvent2D
 public use GFX.Physics.Events2D.SensorEndEvent2D
+public use GFX.Physics.Events2D.SensorOverlap2D
 public use GFX.Physics.RigidBody2D.BodyType2D
 public use GFX.Physics.RigidBody2D.Collider2D
 public use GFX.Physics.RigidBody2D.Collider2DSettings

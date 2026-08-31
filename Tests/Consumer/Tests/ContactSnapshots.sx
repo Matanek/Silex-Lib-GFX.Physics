@@ -1,0 +1,254 @@
+use GFX.Physics
+use STD.Math
+
+func material(id:int, friction:float = 0.6) Physics.PhysicsMaterial2D {
+    return Physics.PhysicsMaterial2D()
+        ..application_id = Physics.PhysicsMaterialId2D(id as uint64)
+        ..friction = friction
+}
+
+func override_contact(
+    input:Physics.ContactPreSolve2D
+) Physics.ContactDecision2D {
+    return Physics.ContactDecision2D()
+        ..friction = 0.33
+        ..restitution = 0.44
+}
+
+func populate_snapshot_world(world:Physics.World2D) {
+    var index = 0
+    while index < 3 {
+        let x = index as float * 4.0
+        var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed
+            ..position = Math.Vec2(x, 0.0)
+            ..create_implicit_collider = false
+        )
+        world.create_collider(fixed, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+            ..material = material(100 + index)
+        )
+        var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(x + 1.2, 0.0)
+            ..create_implicit_collider = false
+        )
+        world.create_collider(moving, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+            ..material = material(200 + index)
+        )
+        index++
+    }
+}
+
+test "identify selected colliders and retain autonomous event values" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var inner = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..material = material(1)
+        ..enable_contact_events = true
+    )
+    var outer = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..material = material(2)
+        ..enable_contact_events = true
+    )
+    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.2, 0.0)
+        ..create_implicit_collider = false
+    )
+    var visitor = world.create_collider(moving, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..material = material(3)
+    )
+
+    world.step(0.0)
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].pair().first().material.application_id.value() == 2)
+    assert(contacts[0].pair().second().material.application_id.value() == 3)
+    assert(contacts[0].first_collider().is_valid())
+    assert(contacts[0].second_collider().is_valid())
+    assert(contacts[0].is_active())
+    assert(contacts[0].normal_impulses().count() ==
+        contacts[0].manifold().point_count())
+    assert(contacts[0].tangent_impulses().count() ==
+        contacts[0].manifold().point_count())
+
+    world.write_contacts(fixed, contacts)
+    assert(contacts.count() == 1)
+    world.write_contacts(outer, contacts)
+    assert(contacts.count() == 1)
+    world.write_contacts(inner, contacts)
+    assert(contacts.count() == 0)
+    world.write_contacts(visitor, contacts)
+    assert(contacts.count() == 1)
+
+    var began:Physics.ContactBeginEvent2D[] = []
+    world.write_contact_begin_events(began)
+    assert(began.count() == 1)
+    var saved = began[0]
+    assert(saved.first_collider().is_valid())
+    world.destroy_collider(outer)
+    assert(!saved.first_collider().is_valid())
+    assert(saved.pair().first().material.application_id.value() == 2)
+    world.step(0.0)
+    var ended:Physics.ContactEndEvent2D[] = []
+    world.write_contact_end_events(ended)
+    assert(ended.count() == 1)
+    assert(ended[0].pair().first().material.application_id.value() == 2)
+}
+
+test "publish two-point impulses and resolved pre-solve materials" {
+    var world = Physics.World2D(gravity:Math.Vec2(0.0, -10.0))
+    world.set_pre_solve(override_contact)
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.5)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(floor, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 1.0)))
+        ..material = material(10, 0.2)
+        ..enable_pre_solve = true
+    )
+    var box = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.0, 0.5)
+        ..create_implicit_collider = false
+        ..allow_sleep = false
+    )
+    world.create_collider(box, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0, 1.0)))
+        ..material = material(11, 0.8)
+    )
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        step++
+    }
+
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].manifold().point_count() == 2)
+    assert(contacts[0].normal_impulses().count() == 2)
+    assert(contacts[0].tangent_impulses().count() == 2)
+    assert(contacts[0].normal_impulses()[0] > 0.0)
+    assert(contacts[0].normal_impulses()[1] > 0.0)
+    assert(Math.nearly_equal(contacts[0].friction(), 0.33, 0.0001))
+    assert(Math.nearly_equal(contacts[0].restitution(), 0.44, 0.0001))
+}
+
+test "enumerate multiple sensors and keep option transitions coherent" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var sensors = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var small = world.create_collider(sensors, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..material = material(20)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var large = world.create_collider(sensors, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(2.0))
+        ..material = material(21)
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.5, 0.0)
+        ..create_implicit_collider = false
+    )
+    world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..material = material(22)
+    )
+
+    world.step(0.0)
+    var overlaps:Physics.SensorOverlap2D[] = []
+    world.write_sensor_overlaps(overlaps)
+    assert(overlaps.count() == 1)
+    assert(overlaps[0].sensor().material.application_id.value() == 21)
+    world.write_sensor_overlaps(large, overlaps)
+    assert(overlaps.count() == 1)
+    world.write_sensor_overlaps(small, overlaps)
+    assert(overlaps.count() == 0)
+    var began:Physics.SensorBeginEvent2D[] = []
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 1)
+    assert(began[0].sensor().material.application_id.value() == 21)
+
+    large.set_event_options(false, false, false)
+    world.step(0.0)
+    var ended:Physics.SensorEndEvent2D[] = []
+    world.write_sensor_end_events(ended)
+    assert(ended.count() == 1)
+    world.write_sensor_overlaps(large, overlaps)
+    assert(overlaps.count() == 1)
+
+    large.set_event_options(false, false, true)
+    world.step(0.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 1)
+}
+
+test "preserve collider snapshot order across worker counts" {
+    var scalar = Physics.World2D(gravity:Math.Vec2())
+    var parallel = Physics.World2D(gravity:Math.Vec2())
+    scalar.enable_parallelism(1)
+    parallel.enable_parallelism(4)
+    populate_snapshot_world(scalar)
+    populate_snapshot_world(parallel)
+    scalar.step(0.0)
+    parallel.step(0.0)
+    var scalar_contacts:Physics.Contact2D[] = []
+    var parallel_contacts:Physics.Contact2D[] = []
+    scalar.write_contacts(scalar_contacts)
+    parallel.write_contacts(parallel_contacts)
+    assert(scalar_contacts.count() == 3)
+    assert(parallel_contacts.count() == 3)
+    var index = 0
+    while index < scalar_contacts.count() {
+        assert(scalar_contacts[index].pair().first().material.application_id ==
+            parallel_contacts[index].pair().first().material.application_id)
+        assert(scalar_contacts[index].pair().second().material.application_id ==
+            parallel_contacts[index].pair().second().material.application_id)
+        assert(scalar_contacts[index].normal_impulses().count() ==
+            parallel_contacts[index].normal_impulses().count())
+        index++
+    }
+}
+
+test "apply contact event option changes on the next completed step" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var surface = world.create_collider(fixed, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.5, 0.0)
+    )
+    var began:Physics.ContactBeginEvent2D[] = []
+    var ended:Physics.ContactEndEvent2D[] = []
+
+    world.step(0.0)
+    world.write_contact_begin_events(began)
+    assert(began.count() == 0)
+    surface.set_event_options(true, false, false)
+    world.step(0.0)
+    world.write_contact_begin_events(began)
+    assert(began.count() == 1)
+    surface.set_event_options(false, false, false)
+    world.step(0.0)
+    world.write_contact_end_events(ended)
+    assert(ended.count() == 1)
+}

@@ -15,8 +15,9 @@ ancienne sans exposer slot ni index.
 
 Un corps possède zéro, un ou plusieurs colliders. Les mutations de topologie
 marquent les données dérivées à reconstruire avant le prochain pas. Les
-contacts publics sont des snapshots ordonnés par identité stable ; aucun nœud
-de BVH, hash de paire ou indice dense ne traverse l’API.
+contacts publics sont des snapshots ordonnés par identité stable des
+colliders ; manifold et impulsions terminés traversent l’API, mais aucun nœud
+de BVH, hash de paire, indice dense ou cache mutable du solver.
 
 ## Géométrie, contacts et événements
 
@@ -29,7 +30,8 @@ Les formes générales et corps composés utilisent le cycle persistant de
 contacts. Les capteurs partagent géométrie et filtres sans entrer dans les
 îlots ni le solver. Mouvements, débuts/fins de contact, impacts et transitions
 de capteur sont des buffers déterministes postérieurs au pas et restent
-optionnels.
+optionnels. Ils conservent des snapshots autonomes de géométrie et de matériau
+avec les handles générationnels de leurs colliders.
 
 Le filtrage custom et le pré-solve sont strictement opt-in par collider. Le
 monde les évalue dans l’ordre stable des paires, sur le thread propriétaire de

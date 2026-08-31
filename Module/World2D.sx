@@ -3,6 +3,7 @@ use GFX.Physics.BroadPhase2D.BodyPair2D
 use GFX.Physics.BroadPhase2D.BroadPhase2D
 use GFX.Physics.BroadPhase2D.collect_pairs_parallel
 use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.BodyId2D
 use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.RigidBody2D.Collider2D
 use GFX.Physics.RigidBody2D.Collider2DSettings
@@ -47,6 +48,7 @@ use GFX.Physics.Events2D.ContactEndEvent2D
 use GFX.Physics.Events2D.ContactHitEvent2D
 use GFX.Physics.Events2D.SensorBeginEvent2D
 use GFX.Physics.Events2D.SensorEndEvent2D
+use GFX.Physics.Events2D.SensorOverlap2D
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.Geometry2D.ManifoldPoint2D
@@ -74,29 +76,46 @@ public struct World2DStepProfile {
 }
 
 public class Contact2D {
-    private var current_first_body:RigidBody2D?
-    private var current_second_body:RigidBody2D?
+    private var current_pair:ContactPairSnapshot2D?
     private var current_manifold:Manifold2D
+    private var current_normal_impulses:float[]
+    private var current_tangent_impulses:float[]
+    private var current_friction:float
+    private var current_restitution:float
+    private var current_active:bool
 
     package init(
-        first_body:RigidBody2D,
-        second_body:RigidBody2D,
-        manifold:Manifold2D
+        pair:ContactPairSnapshot2D,
+        manifold:Manifold2D,
+        normal_impulses:float[],
+        tangent_impulses:float[],
+        friction:float,
+        restitution:float,
+        active:bool
     ) {
-        self.current_first_body = first_body
-        self.current_second_body = second_body
+        self.current_pair = pair
         self.current_manifold = manifold
+        self.current_normal_impulses = normal_impulses
+        self.current_tangent_impulses = tangent_impulses
+        self.current_friction = friction
+        self.current_restitution = restitution
+        self.current_active = active
     }
 
-    func first_body() RigidBody2D {
-        if let body = self.current_first_body { return body }
+    func pair() ContactPairSnapshot2D {
+        if let pair = self.current_pair { return pair }
         panic("GFX.Physics.Contact2D is not initialized")
     }
-    func second_body() RigidBody2D {
-        if let body = self.current_second_body { return body }
-        panic("GFX.Physics.Contact2D is not initialized")
-    }
+    func first_collider() Collider2D { return self.pair().first().collider() }
+    func second_collider() Collider2D { return self.pair().second().collider() }
+    func first_body() RigidBody2D { return self.pair().first().body() }
+    func second_body() RigidBody2D { return self.pair().second().body() }
     func manifold() Manifold2D { return self.current_manifold }
+    func normal_impulses() float[] { return self.current_normal_impulses }
+    func tangent_impulses() float[] { return self.current_tangent_impulses }
+    func friction() float { return self.current_friction }
+    func restitution() float { return self.current_restitution }
+    func is_active() bool { return self.current_active }
 }
 
 package class ActiveBodySet2D {
@@ -114,6 +133,13 @@ func soft_step_body_parallel_threshold() int { return 16_384 }
 func soft_step_constraint_parallel_threshold() int { return 4_096 }
 
 struct ContactPair2D {
+    var first_collider:ShapeId2D
+    var second_collider:ShapeId2D
+    var completed_manifold:Manifold2D
+    var resolved_friction:float
+    var resolved_restitution:float
+    var events_published:bool
+    var completed_swapped:bool
     var normal:Math.Vec2
     var first_contact:Math.Vec2
     var second_contact:Math.Vec2
@@ -127,6 +153,13 @@ struct ContactPair2D {
     var second_awake:bool
 
     init() {
+        self.first_collider = ShapeId2D()
+        self.second_collider = ShapeId2D()
+        self.completed_manifold = Manifold2D()
+        self.resolved_friction = 0.0
+        self.resolved_restitution = 0.0
+        self.events_published = false
+        self.completed_swapped = false
         self.normal = Math.Vec2()
         self.first_contact = Math.Vec2()
         self.second_contact = Math.Vec2()
@@ -345,12 +378,16 @@ struct ContinuousHit2D {
     let fraction:float
     let point:Math.Vec2
     let normal:Math.Vec2
+    let mover_collider:ShapeId2D
+    let target_collider:ShapeId2D
 
     init() {
         self.hit = false
         self.fraction = 0.0
         self.point = Math.Vec2()
         self.normal = Math.Vec2()
+        self.mover_collider = ShapeId2D()
+        self.target_collider = ShapeId2D()
     }
 
     init(fraction:float, point:Math.Vec2, normal:Math.Vec2) {
@@ -358,6 +395,23 @@ struct ContinuousHit2D {
         self.fraction = fraction
         self.point = point
         self.normal = normal
+        self.mover_collider = ShapeId2D()
+        self.target_collider = ShapeId2D()
+    }
+
+    init(
+        fraction:float,
+        point:Math.Vec2,
+        normal:Math.Vec2,
+        mover_collider:ShapeId2D,
+        target_collider:ShapeId2D
+    ) {
+        self.hit = true
+        self.fraction = fraction
+        self.point = point
+        self.normal = normal
+        self.mover_collider = mover_collider
+        self.target_collider = target_collider
     }
 }
 
@@ -529,13 +583,12 @@ public class World2D {
     private var parallel_enabled:bool
     private var current_soft_step_stages:int[]
     private var current_soft_step_parallel_dispatch_count:int
-    private var previous_touching_pairs:BodyPair2D[]
-    private var previous_touching_keys:PairSet2D
-    private var current_touching_keys:PairSet2D
-    private var sensor_pairs:BodyPair2D[]
-    private var sensor_pair_keys:PairSet2D
-    private var current_sensor_pairs:BodyPair2D[]
-    private var current_sensor_pair_keys:PairSet2D
+    private var previous_touching_snapshots:ContactPairSnapshot2D[]
+    private var sensor_overlaps:SensorOverlap2D[]
+    private var published_sensor_overlaps:SensorOverlap2D[]
+    private var previous_sensor_overlaps:SensorOverlap2D[]
+    private var pending_contact_ends:ContactPairSnapshot2D[]
+    private var pending_sensor_ends:SensorOverlap2D[]
     private var hit_pair_keys:PairSet2D
     private var step_start_awake:bool[]
     private var body_move_events:BodyMoveEvent2D[]
@@ -640,13 +693,12 @@ public class World2D {
         self.parallel_enabled = false
         self.current_soft_step_stages = []
         self.current_soft_step_parallel_dispatch_count = 0
-        self.previous_touching_pairs = []
-        self.previous_touching_keys = PairSet2D()
-        self.current_touching_keys = PairSet2D()
-        self.sensor_pairs = []
-        self.sensor_pair_keys = PairSet2D()
-        self.current_sensor_pairs = []
-        self.current_sensor_pair_keys = PairSet2D()
+        self.previous_touching_snapshots = []
+        self.sensor_overlaps = []
+        self.published_sensor_overlaps = []
+        self.previous_sensor_overlaps = []
+        self.pending_contact_ends = []
+        self.pending_sensor_ends = []
         self.hit_pair_keys = PairSet2D()
         self.step_start_awake = []
         self.body_move_events = []
@@ -765,33 +817,91 @@ public class World2D {
         output.clear()
         var index = 0
         while index < self.candidate_pairs.count() {
-            if !self.candidate_enabled[index] ||
-                self.candidate_pairs[index].contact_count <= 0 ||
-                !self.store.enabled[self.candidate_bodies[index].first] ||
-                !self.store.enabled[self.candidate_bodies[index].second] ||
-                pair_is_sensor(self.store, self.candidate_bodies[index])
-            {
-                index++
-                continue
-            }
-            let pair = self.candidate_bodies[index]
-            var first = pair.first
-            var second = pair.second
-            if self.store.dense_slots[first] > self.store.dense_slots[second] {
-                let swapped = first
-                first = second
-                second = swapped
-            }
-            let manifold = contact_manifold(self.store, first, second)
-            if manifold.point_count() > 0 {
-                output.append(Contact2D(
-                    RigidBody2D(self.store, self.store.body_id_at(first)),
-                    RigidBody2D(self.store, self.store.body_id_at(second)),
-                    manifold
-                ))
+            if let contact = self.completed_contact(index) {
+                output.append(contact)
             }
             index++
         }
+    }
+    func write_contacts(target:RigidBody2D, output:&Contact2D[]) {
+        if !target.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot inspect contacts for a body owned by another world")
+        }
+        let id = target.body_id()
+        self.store.require(id)
+        output.clear()
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            let pair = self.candidate_bodies[index]
+            if (self.store.body_id_at(pair.first).slot == id.slot ||
+                    self.store.body_id_at(pair.second).slot == id.slot) {
+                if let contact = self.completed_contact(index) {
+                    output.append(contact)
+                }
+            }
+            index++
+        }
+    }
+    func write_contacts(target:Collider2D, output:&Contact2D[]) {
+        if !target.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot inspect contacts for a collider owned by another world")
+        }
+        let id = target.collider_id()
+        self.store.shape_store.require(id)
+        output.clear()
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            let cache = self.candidate_pairs[index]
+            if cache.first_collider.slot == id.slot ||
+                cache.second_collider.slot == id.slot
+            {
+                if let contact = self.completed_contact(index) {
+                    output.append(contact)
+                }
+            }
+            index++
+        }
+    }
+    private func completed_contact(index:int) Contact2D? {
+        if !self.candidate_enabled[index] ||
+            self.candidate_pairs[index].contact_count <= 0 ||
+            !self.store.enabled[self.candidate_bodies[index].first] ||
+            !self.store.enabled[self.candidate_bodies[index].second] ||
+            pair_is_sensor(self.store, self.candidate_bodies[index])
+        {
+            return null
+        }
+        let cache = self.candidate_pairs[index]
+        if !self.store.shape_store.contains(cache.first_collider) ||
+            !self.store.shape_store.contains(cache.second_collider)
+        {
+            return null
+        }
+        var normal_impulses:float[] = [cache.normal_impulse_first]
+        var tangent_impulses:float[] = [cache.tangent_impulse_first]
+        if cache.completed_swapped {
+            tangent_impulses[0] = -tangent_impulses[0]
+        }
+        if cache.contact_count > 1 {
+            normal_impulses.append(cache.normal_impulse_second)
+            tangent_impulses.append(cache.tangent_impulse_second)
+            if cache.completed_swapped {
+                tangent_impulses[1] = -tangent_impulses[1]
+            }
+        }
+        return Contact2D(
+            contact_pair_snapshot_by_id(
+                self.store,
+                cache.first_collider,
+                cache.second_collider
+            ),
+            cache.completed_manifold,
+            normal_impulses,
+            tangent_impulses,
+            cache.resolved_friction,
+            cache.resolved_restitution,
+            true
+        )
     }
     func write_body_move_events(output:&BodyMoveEvent2D[]) {
         output.clear()
@@ -816,6 +926,29 @@ public class World2D {
     func write_sensor_end_events(output:&SensorEndEvent2D[]) {
         output.clear()
         for event in self.sensor_end_events { output.append(event) }
+    }
+    func write_sensor_overlaps(output:&SensorOverlap2D[]) {
+        output.clear()
+        for overlap in self.sensor_overlaps { output.append(overlap) }
+    }
+    func write_sensor_overlaps(
+        sensor:Collider2D,
+        output:&SensorOverlap2D[]
+    ) {
+        if !sensor.belongs_to(self.store) {
+            panic("GFX.Physics.World2D cannot inspect overlaps for a collider owned by another world")
+        }
+        let id = sensor.collider_id()
+        let dense = self.store.shape_store.require(id)
+        if (self.store.shape_store.behavior_flags[dense] & 1) == 0 {
+            panic("GFX.Physics.World2D sensor overlap inspection requires a sensor collider")
+        }
+        output.clear()
+        for overlap in self.sensor_overlaps {
+            if same_shape_id(overlap.sensor().collider_id(), id) {
+                output.append(overlap)
+            }
+        }
     }
     func hit_event_threshold() float { return self.current_hit_event_threshold }
     func set_custom_filter(filter:func(ContactPairSnapshot2D) bool) {
@@ -1177,6 +1310,7 @@ public class World2D {
         if !collider.belongs_to(self.store) {
             panic("GFX.Physics.World2D cannot destroy a collider owned by another world")
         }
+        self.retain_pending_ends_for_collider(collider.collider_id())
         self.store.destroy_collider(collider.collider_id())
     }
 
@@ -1536,6 +1670,7 @@ public class World2D {
         }
         let id = body.body_id()
         let index = self.store.require(id)
+        self.retain_pending_ends_for_body(id)
         self.joints.destroy_attached(id)
         self.swap_remove_world_body(index)
         self.store.destroy(id)
@@ -1548,6 +1683,79 @@ public class World2D {
             panic("GFX.Physics.World2D cannot join a body owned by another world")
         }
         return self.store.require(body.body_id())
+    }
+
+    private func retain_pending_ends_for_collider(id:ShapeId2D) {
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            let cache = self.candidate_pairs[index]
+            if cache.events_published &&
+                (same_shape_id(cache.first_collider, id) ||
+                    same_shape_id(cache.second_collider, id)) &&
+                self.store.shape_store.contains(cache.first_collider) &&
+                self.store.shape_store.contains(cache.second_collider)
+            {
+                self.append_pending_contact_end(contact_pair_snapshot_by_id(
+                    self.store,
+                    cache.first_collider,
+                    cache.second_collider
+                ))
+                self.candidate_pairs[index].events_published = false
+            }
+            index++
+        }
+        var retained:SensorOverlap2D[] = []
+        for overlap in self.published_sensor_overlaps {
+            if same_shape_id(overlap.sensor().collider_id(), id) ||
+                same_shape_id(overlap.visitor().collider_id(), id)
+            {
+                self.append_pending_sensor_end(overlap)
+            } else {
+                retained.append(overlap)
+            }
+        }
+        self.published_sensor_overlaps = retained
+    }
+
+    private func retain_pending_ends_for_body(id:BodyId2D) {
+        var slot = self.store.first_shape_slots[self.store.require(id)]
+        while slot >= 0 {
+            let dense = self.store.shape_store.slot_dense_indices[slot]
+            let next = self.store.shape_store.next_body_shape_slots[dense]
+            self.retain_pending_ends_for_collider(collider_id_at(
+                self.store,
+                dense
+            ))
+            slot = next
+        }
+    }
+
+    private func append_pending_contact_end(
+        snapshot:ContactPairSnapshot2D
+    ) {
+        for pending in self.pending_contact_ends {
+            if same_collider_pair(
+                pending,
+                snapshot.first().collider_id(),
+                snapshot.second().collider_id()
+            ) {
+                return
+            }
+        }
+        self.pending_contact_ends.append(snapshot)
+    }
+
+    private func append_pending_sensor_end(overlap:SensorOverlap2D) {
+        for pending in self.pending_sensor_ends {
+            if same_sensor_overlap(
+                pending,
+                overlap.sensor().collider_id(),
+                overlap.visitor().collider_id()
+            ) {
+                return
+            }
+        }
+        self.pending_sensor_ends.append(overlap)
     }
 
     private func require_distinct_joint_bodies(
@@ -1622,10 +1830,10 @@ public class World2D {
             panic("GFX.Physics.World2D.step requires a non-negative delta")
         }
         self.store.require_mutable()
+        self.begin_step_events()
         if self.store.topology_dirty {
             self.rebuild_after_body_destruction()
         }
-        self.begin_step_events()
         self.store.world_locked = true
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
@@ -1745,27 +1953,44 @@ public class World2D {
         self.contact_hit_events.clear()
         self.sensor_begin_events.clear()
         self.sensor_end_events.clear()
-        self.previous_touching_pairs.clear()
+        for snapshot in self.pending_contact_ends {
+            self.contact_end_events.append(ContactEndEvent2D(snapshot))
+        }
+        self.pending_contact_ends.clear()
+        for overlap in self.pending_sensor_ends {
+            self.sensor_end_events.append(SensorEndEvent2D(
+                overlap.sensor(),
+                overlap.visitor()
+            ))
+        }
+        self.pending_sensor_ends.clear()
+        self.previous_sensor_overlaps.clear()
+        for overlap in self.published_sensor_overlaps {
+            self.previous_sensor_overlaps.append(overlap)
+        }
+        self.published_sensor_overlaps.clear()
+        self.previous_touching_snapshots.clear()
         self.current_ccd_body_count = 0
         self.current_ccd_pair_test_count = 0
 
-        if self.hit_event_body_count > 0 { self.hit_pair_keys.clear() }
-        if self.contact_event_body_count > 0 {
-            self.previous_touching_keys.clear()
-            self.current_touching_keys.clear()
-            var candidate = 0
-            while candidate < self.candidate_pairs.count() {
-                if self.candidate_enabled[candidate] &&
-                    self.candidate_pairs[candidate].contact_count > 0
-                {
-                    let pair = self.candidate_bodies[candidate]
-                    if pair_contact_events_enabled(self.store, pair) {
-                        self.previous_touching_pairs.append(pair)
-                        self.previous_touching_keys.add(pair)
-                    }
-                }
-                candidate++
+        self.hit_pair_keys.clear()
+        var candidate = 0
+        while candidate < self.candidate_pairs.count() {
+            let cache = self.candidate_pairs[candidate]
+            if self.candidate_enabled[candidate] &&
+                cache.contact_count > 0 && cache.events_published &&
+                self.store.shape_store.contains(cache.first_collider) &&
+                self.store.shape_store.contains(cache.second_collider)
+            {
+                self.previous_touching_snapshots.append(
+                    contact_pair_snapshot_by_id(
+                        self.store,
+                        cache.first_collider,
+                        cache.second_collider
+                    )
+                )
             }
+            candidate++
         }
 
         self.step_start_awake.clear()
@@ -1779,12 +2004,13 @@ public class World2D {
     }
 
     private func collect_discrete_hit_events() {
-        if self.hit_event_body_count == 0 { return }
         for candidate in self.active_pairs {
             let pair = self.candidate_bodies[candidate]
+            let hit_colliders = contact_collider_pair(self.store, pair)
             if !self.candidate_pre_solve_allowed[candidate] ||
                 pair_is_sensor(self.store, pair) ||
-                !pair_hit_events_enabled(self.store, pair)
+                !hit_colliders.valid ||
+                !contact_policy_enabled(self.store, hit_colliders, 4)
             {
                 continue
             }
@@ -1884,11 +2110,8 @@ public class World2D {
                         body_placement(self.store, pair.first),
                         body_placement(self.store, pair.second)
                     )
-                    if !self.sensor_pair_keys.contains(pair) &&
-                        !finishes_overlapping
-                    {
-                        self.append_sensor_begin_events(pair)
-                        self.append_sensor_end_events(pair)
+                    if !finishes_overlapping {
+                        self.append_transient_sensor_events(hit)
                     }
                 } else if !earliest.hit || hit.fraction < earliest.fraction {
                     earliest = hit
@@ -1944,6 +2167,7 @@ public class World2D {
         let normal_velocity = velocity_at(self.store, mover, hit.point)
             .subtract(velocity_at(self.store, target, hit.point))
             .dot(hit.normal)
+        var applied_normal_impulse = 0.0
         if normal_velocity < 0.0 && denominator > 0.0 {
             var restitution = 0.0
             if normal_velocity < -1.0 {
@@ -1954,6 +2178,7 @@ public class World2D {
             }
             let magnitude = -(1.0 + restitution) * normal_velocity /
                 denominator
+            applied_normal_impulse = magnitude
             let impulse = hit.normal.multiply(magnitude)
             self.store.velocities_x[mover] +=
                 impulse.x * self.store.inverse_masses[mover]
@@ -1975,10 +2200,8 @@ public class World2D {
 
         let pair = ordered_body_pair(mover, target)
         self.insert_candidate_pair(pair)
-        self.refresh_event_contact(pair)
-        if approach >= self.current_hit_event_threshold &&
-            pair_hit_events_enabled(self.store, pair)
-        {
+        self.refresh_event_contact(pair, applied_normal_impulse)
+        if approach >= self.current_hit_event_threshold {
             var normal = hit.normal
             if pair.first == mover { normal = normal.negated() }
             self.append_contact_hit_event(
@@ -1990,7 +2213,10 @@ public class World2D {
         }
     }
 
-    private func refresh_event_contact(expected:BodyPair2D) {
+    private func refresh_event_contact(
+        expected:BodyPair2D,
+        normal_impulse:float
+    ) {
         var index = 0
         while index < self.candidate_pairs.count() {
             if !self.candidate_enabled[index] ||
@@ -2028,92 +2254,213 @@ public class World2D {
                     )
             }
             self.candidate_pairs[index].contact_count = manifold.point_count()
+            self.candidate_pairs[index].normal_impulse_first = normal_impulse
+            let colliders = contact_collider_pair(self.store, pair)
+            if colliders.valid {
+                let first = self.store.shape_store.materials[colliders.first]
+                let second = self.store.shape_store.materials[colliders.second]
+                self.record_completed_contact(
+                    index,
+                    colliders,
+                    manifold,
+                    combine_material_value(
+                        first.friction,
+                        first.friction_combine,
+                        second.friction,
+                        second.friction_combine
+                    ),
+                    combine_material_value(
+                        first.restitution,
+                        first.restitution_combine,
+                        second.restitution,
+                        second.restitution_combine
+                    )
+                )
+            }
             return
         }
     }
 
     private func collect_contact_events() {
-        if self.contact_event_body_count == 0 { return }
-        self.current_touching_keys.clear()
         var index = 0
         while index < self.candidate_pairs.count() {
+            self.candidate_pairs[index].events_published = false
             if !self.candidate_enabled[index] ||
                 self.candidate_pairs[index].contact_count <= 0
             {
                 index++
                 continue
             }
-            let pair = self.candidate_bodies[index]
-            if !pair_contact_events_enabled(self.store, pair) {
+            let cache = self.candidate_pairs[index]
+            if !completed_contact_events_enabled(self.store, cache) {
                 index++
                 continue
             }
-            self.current_touching_keys.add(pair)
-            if !self.previous_touching_keys.contains(pair) {
-                self.append_contact_begin_event(pair)
+            if !self.previous_contains_contact(
+                cache.first_collider,
+                cache.second_collider
+            ) {
+                self.append_contact_begin_event(index)
+            }
+            self.candidate_pairs[index].events_published = true
+            index++
+        }
+        index = 0
+        while index < self.previous_touching_snapshots.count() {
+            var snapshot = self.previous_touching_snapshots[index]
+            if !self.current_contains_contact(
+                snapshot.first().collider_id(),
+                snapshot.second().collider_id()
+            ) {
+                self.append_contact_end_event(snapshot)
             }
             index++
         }
-        for pair in self.previous_touching_pairs {
-            if !self.current_touching_keys.contains(pair) {
-                self.append_contact_end_event(pair)
+    }
+
+    private func previous_contains_contact(
+        first:ShapeId2D,
+        second:ShapeId2D
+    ) bool {
+        for snapshot in self.previous_touching_snapshots {
+            if same_collider_pair(snapshot, first, second) { return true }
+        }
+        return false
+    }
+
+    private func current_contains_contact(
+        first:ShapeId2D,
+        second:ShapeId2D
+    ) bool {
+        var index = 0
+        while index < self.candidate_pairs.count() {
+            let cache = self.candidate_pairs[index]
+            if self.candidate_enabled[index] && cache.events_published &&
+                same_shape_pair(
+                    cache.first_collider,
+                    cache.second_collider,
+                    first,
+                    second
+                )
+            {
+                return true
+            }
+            index++
+        }
+        return false
+    }
+
+    private func collect_sensor_events() {
+        self.sensor_overlaps.clear()
+        var sensor_slot = 0
+        while sensor_slot < self.store.shape_store.slot_generations.count() {
+            let sensor_id = ShapeId2D(
+                sensor_slot,
+                self.store.shape_store.slot_generations[sensor_slot]
+            )
+            if !self.store.shape_store.contains(sensor_id) {
+                sensor_slot++
+                continue
+            }
+            let sensor_dense = self.store.shape_store.require(sensor_id)
+            let sensor_flags =
+                self.store.shape_store.behavior_flags[sensor_dense]
+            let sensor_body_slot =
+                self.store.shape_store.body_slots[sensor_dense]
+            let sensor_body = self.store.slot_dense_indices[sensor_body_slot]
+            if (sensor_flags & 1) == 0 || !self.store.enabled[sensor_body] {
+                sensor_slot++
+                continue
+            }
+            var visitor_slot = 0
+            while visitor_slot < self.store.shape_store.slot_generations.count() {
+                let visitor_id = ShapeId2D(
+                    visitor_slot,
+                    self.store.shape_store.slot_generations[visitor_slot]
+                )
+                if !self.store.shape_store.contains(visitor_id) {
+                    visitor_slot++
+                    continue
+                }
+                let visitor_dense = self.store.shape_store.require(visitor_id)
+                let visitor_body_slot =
+                    self.store.shape_store.body_slots[visitor_dense]
+                let visitor_body =
+                    self.store.slot_dense_indices[visitor_body_slot]
+                if visitor_body_slot == sensor_body_slot ||
+                    !self.store.enabled[visitor_body] ||
+                    !self.joints.collision_allowed(
+                        self.store.body_id_at(sensor_body),
+                        self.store.body_id_at(visitor_body)
+                    ) || !self.store.shape_store.collision_filters[
+                        sensor_dense
+                    ].allows(self.store.shape_store.collision_filters[
+                        visitor_dense
+                    ]) || !Geometry2D.overlaps(
+                        collider_placement(
+                            self.store,
+                            sensor_body,
+                            sensor_dense
+                        ),
+                        collider_placement(
+                            self.store,
+                            visitor_body,
+                            visitor_dense
+                        )
+                    )
+                {
+                    visitor_slot++
+                    continue
+                }
+                var overlap = SensorOverlap2D(
+                    collider_snapshot(self.store, sensor_dense),
+                    collider_snapshot(self.store, visitor_dense)
+                )
+                self.sensor_overlaps.append(overlap)
+                if (sensor_flags & 8) != 0 {
+                    if !self.previous_contains_sensor(sensor_id, visitor_id) {
+                        self.sensor_begin_events.append(SensorBeginEvent2D(
+                            overlap.sensor(),
+                            overlap.visitor()
+                        ))
+                    }
+                    self.published_sensor_overlaps.append(overlap)
+                }
+                visitor_slot++
+            }
+            sensor_slot++
+        }
+        for overlap in self.previous_sensor_overlaps {
+            if !self.published_contains_sensor(
+                overlap.sensor().collider_id(),
+                overlap.visitor().collider_id()
+            ) {
+                self.sensor_end_events.append(SensorEndEvent2D(
+                    overlap.sensor(),
+                    overlap.visitor()
+                ))
             }
         }
     }
 
-    private func collect_sensor_events() {
-        self.current_sensor_pairs.clear()
-        self.current_sensor_pair_keys.clear()
-        if self.sensor_event_body_count == 0 {
-            self.sensor_pairs.clear()
-            self.sensor_pair_keys.clear()
-            return
+    private func previous_contains_sensor(
+        sensor:ShapeId2D,
+        visitor:ShapeId2D
+    ) bool {
+        for overlap in self.previous_sensor_overlaps {
+            if same_sensor_overlap(overlap, sensor, visitor) { return true }
         }
-        var sensor = 0
-        while sensor < self.store.count() {
-            if !self.store.enabled[sensor] ||
-                (self.store.behavior_flags[sensor] & 2) == 0 ||
-                (self.store.behavior_flags[sensor] & 32) == 0
-            {
-                sensor++
-                continue
-            }
-            var other = 0
-            while other < self.store.count() {
-                if other == sensor || !self.store.enabled[other] {
-                    other++
-                    continue
-                }
-                let pair = ordered_body_pair(sensor, other)
-                if self.current_sensor_pair_keys.contains(pair) {
-                    other++
-                    continue
-                }
-                if self.joints.collision_allowed(
-                    self.store.body_id_at(pair.first),
-                    self.store.body_id_at(pair.second)
-                ) && sensor_pair_overlaps(self.store, sensor, other) {
-                    self.current_sensor_pairs.append(pair)
-                    self.current_sensor_pair_keys.add(pair)
-                    if !self.sensor_pair_keys.contains(pair) {
-                        self.append_sensor_begin_events(pair)
-                    }
-                }
-                other++
-            }
-            sensor++
+        return false
+    }
+
+    private func published_contains_sensor(
+        sensor:ShapeId2D,
+        visitor:ShapeId2D
+    ) bool {
+        for overlap in self.published_sensor_overlaps {
+            if same_sensor_overlap(overlap, sensor, visitor) { return true }
         }
-        for pair in self.sensor_pairs {
-            if !self.current_sensor_pair_keys.contains(pair) {
-                self.append_sensor_end_events(pair)
-            }
-        }
-        self.sensor_pairs.clear()
-        self.sensor_pair_keys.clear()
-        for pair in self.current_sensor_pairs {
-            self.sensor_pairs.append(pair)
-            self.sensor_pair_keys.add(pair)
-        }
+        return false
     }
 
     private func collect_body_move_events() {
@@ -2156,28 +2503,20 @@ public class World2D {
         }
     }
 
-    private func append_contact_begin_event(pair:BodyPair2D) {
-        let stable = stable_body_pair(self.store, pair)
-        let manifold = contact_manifold(
-            self.store,
-            stable.first,
-            stable.second
-        )
+    private func append_contact_begin_event(candidate:int) {
+        let cache = self.candidate_pairs[candidate]
         self.contact_begin_events.append(ContactBeginEvent2D(
-            self.store,
-            self.store.body_id_at(stable.first),
-            self.store.body_id_at(stable.second),
-            manifold
+            contact_pair_snapshot_by_id(
+                self.store,
+                cache.first_collider,
+                cache.second_collider
+            ),
+            cache.completed_manifold
         ))
     }
 
-    private func append_contact_end_event(pair:BodyPair2D) {
-        let stable = stable_body_pair(self.store, pair)
-        self.contact_end_events.append(ContactEndEvent2D(
-            self.store,
-            self.store.body_id_at(stable.first),
-            self.store.body_id_at(stable.second)
-        ))
+    private func append_contact_end_event(snapshot:ContactPairSnapshot2D) {
+        self.contact_end_events.append(ContactEndEvent2D(snapshot))
     }
 
     private func append_contact_hit_event(
@@ -2186,61 +2525,54 @@ public class World2D {
         normal:Math.Vec2,
         approach_speed:float
     ) {
+        let colliders = contact_collider_pair(self.store, pair)
+        if !colliders.valid ||
+            !contact_policy_enabled(self.store, colliders, 4)
+        {
+            return
+        }
         if self.hit_pair_keys.contains(pair) { return }
         self.hit_pair_keys.add(pair)
         let stable = stable_body_pair(self.store, pair)
         var stable_normal = normal
         if stable.first != pair.first { stable_normal = normal.negated() }
         self.contact_hit_events.append(ContactHitEvent2D(
-            self.store,
-            self.store.body_id_at(stable.first),
-            self.store.body_id_at(stable.second),
+            stable_contact_pair_snapshot(self.store, pair),
             point,
             stable_normal,
             approach_speed
         ))
     }
 
-    private func append_sensor_begin_events(pair:BodyPair2D) {
-        if (self.store.behavior_flags[pair.first] & 2) != 0 &&
-            (self.store.behavior_flags[pair.first] & 32) != 0
+    private func append_transient_sensor_events(hit:ContinuousHit2D) {
+        if !self.store.shape_store.contains(hit.mover_collider) ||
+            !self.store.shape_store.contains(hit.target_collider)
         {
-            self.sensor_begin_events.append(SensorBeginEvent2D(
-                self.store,
-                self.store.body_id_at(pair.first),
-                self.store.body_id_at(pair.second)
-            ))
+            return
         }
-        if (self.store.behavior_flags[pair.second] & 2) != 0 &&
-            (self.store.behavior_flags[pair.second] & 32) != 0
+        let mover = self.store.shape_store.require(hit.mover_collider)
+        let target = self.store.shape_store.require(hit.target_collider)
+        var sensor = mover
+        var visitor = target
+        if (self.store.shape_store.behavior_flags[sensor] & 1) == 0 {
+            sensor = target
+            visitor = mover
+        }
+        if (self.store.shape_store.behavior_flags[sensor] & 1) == 0 ||
+            (self.store.shape_store.behavior_flags[sensor] & 8) == 0
         {
-            self.sensor_begin_events.append(SensorBeginEvent2D(
-                self.store,
-                self.store.body_id_at(pair.second),
-                self.store.body_id_at(pair.first)
-            ))
+            return
         }
-    }
-
-    private func append_sensor_end_events(pair:BodyPair2D) {
-        if (self.store.behavior_flags[pair.first] & 2) != 0 &&
-            (self.store.behavior_flags[pair.first] & 32) != 0
-        {
-            self.sensor_end_events.append(SensorEndEvent2D(
-                self.store,
-                self.store.body_id_at(pair.first),
-                self.store.body_id_at(pair.second)
-            ))
-        }
-        if (self.store.behavior_flags[pair.second] & 2) != 0 &&
-            (self.store.behavior_flags[pair.second] & 32) != 0
-        {
-            self.sensor_end_events.append(SensorEndEvent2D(
-                self.store,
-                self.store.body_id_at(pair.second),
-                self.store.body_id_at(pair.first)
-            ))
-        }
+        var sensor_snapshot = collider_snapshot(self.store, sensor)
+        var visitor_snapshot = collider_snapshot(self.store, visitor)
+        self.sensor_begin_events.append(SensorBeginEvent2D(
+            sensor_snapshot,
+            visitor_snapshot
+        ))
+        self.sensor_end_events.append(SensorEndEvent2D(
+            sensor_snapshot,
+            visitor_snapshot
+        ))
     }
 
     private func swap_remove_world_body(index:int) {
@@ -2392,10 +2724,6 @@ public class World2D {
         self.current_candidate_pair_count = 0
         self.current_moved_proxy_count = self.broad_phase.moved_proxy_count()
         self.current_discovered_pair_count = 0
-        self.sensor_pairs.clear()
-        self.sensor_pair_keys.clear()
-        self.current_sensor_pairs.clear()
-        self.current_sensor_pair_keys.clear()
         self.store.topology_dirty = false
     }
 
@@ -3365,6 +3693,7 @@ public class World2D {
             }
             let previous = self.candidate_pairs[index]
             var current = ContactPair2D()
+            current.events_published = previous.events_published
             current.normal = manifold.normal
             current.first_contact =
                 body_contact_cache_point(
@@ -3937,6 +4266,22 @@ public class World2D {
                     store.awake[collision.first_body]
                 self.candidate_pairs[cache].second_awake =
                     store.awake[collision.second_body]
+                let colliders = contact_collider_pair(
+                    store,
+                    self.candidate_bodies[cache]
+                )
+                self.record_completed_contact(
+                    cache,
+                    colliders,
+                    Manifold2D(collision.normal, [ManifoldPoint2D(
+                        body_position(store, collision.first_body).add(
+                            collision.first_contact
+                        ),
+                        collision.base_separation
+                    )]),
+                    collision.combined_friction,
+                    collision.restitution
+                )
             } else {
                 let collision = constraints.collisions[-entry - 1]
                 let cache = collision.cache_index
@@ -3969,12 +4314,50 @@ public class World2D {
                     store.awake[collision.first_body]
                 self.candidate_pairs[cache].second_awake =
                     store.awake[collision.second_body]
+                self.record_completed_contact(
+                    cache,
+                    contact_collider_pair(
+                        store,
+                        self.candidate_bodies[cache]
+                    ),
+                    collision_manifold(collision),
+                    collision.combined_friction,
+                    collision.restitution
+                )
             }
             collision_index++
         }
         if self.profiling_enabled {
             self.current_collision_cache_ms = profile_clock.tick() * 1000.0
         }
+    }
+
+    private func record_completed_contact(
+        cache:int,
+        colliders:ContactColliderPair2D,
+        manifold:Manifold2D,
+        friction:float,
+        restitution:float
+    ) {
+        if !colliders.valid { return }
+        var first = colliders.first
+        var second = colliders.second
+        var completed = manifold
+        let first_body = self.store.shape_store.body_slots[first]
+        let second_body = self.store.shape_store.body_slots[second]
+        self.candidate_pairs[cache].completed_swapped = first_body > second_body
+        if first_body > second_body {
+            first = colliders.second
+            second = colliders.first
+            completed = Manifold2D(manifold.normal.negated(), manifold.points)
+        }
+        self.candidate_pairs[cache].first_collider =
+            collider_id_at(self.store, first)
+        self.candidate_pairs[cache].second_collider =
+            collider_id_at(self.store, second)
+        self.candidate_pairs[cache].completed_manifold = completed
+        self.candidate_pairs[cache].resolved_friction = friction
+        self.candidate_pairs[cache].resolved_restitution = restitution
     }
 
     private func apply_pre_solve_policy(
@@ -4193,6 +4576,57 @@ func pair_contact_events_enabled(
         (store.behavior_flags[pair.second] & 8) != 0
 }
 
+func completed_contact_events_enabled(
+    store:BodyStore2D,
+    contact:ContactPair2D
+) bool {
+    if !store.shape_store.contains(contact.first_collider) ||
+        !store.shape_store.contains(contact.second_collider)
+    {
+        return false
+    }
+    let first = store.shape_store.require(contact.first_collider)
+    let second = store.shape_store.require(contact.second_collider)
+    return (store.shape_store.behavior_flags[first] & 2) != 0 ||
+        (store.shape_store.behavior_flags[second] & 2) != 0
+}
+
+func same_shape_id(first:ShapeId2D, second:ShapeId2D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}
+
+func same_shape_pair(
+    first_a:ShapeId2D,
+    second_a:ShapeId2D,
+    first_b:ShapeId2D,
+    second_b:ShapeId2D
+) bool {
+    return same_shape_id(first_a, first_b) &&
+        same_shape_id(second_a, second_b)
+}
+
+func same_collider_pair(
+    snapshot:ContactPairSnapshot2D,
+    first:ShapeId2D,
+    second:ShapeId2D
+) bool {
+    return same_shape_pair(
+        snapshot.first().collider_id(),
+        snapshot.second().collider_id(),
+        first,
+        second
+    )
+}
+
+func same_sensor_overlap(
+    overlap:SensorOverlap2D,
+    sensor:ShapeId2D,
+    visitor:ShapeId2D
+) bool {
+    return same_shape_id(overlap.sensor().collider_id(), sensor) &&
+        same_shape_id(overlap.visitor().collider_id(), visitor)
+}
+
 func pair_hit_events_enabled(store:BodyStore2D, pair:BodyPair2D) bool {
     return (store.behavior_flags[pair.first] & 16) != 0 ||
         (store.behavior_flags[pair.second] & 16) != 0
@@ -4233,7 +4667,13 @@ func continuous_pair_hit(
                     store.shape_store.collision_filters[target_dense]
                 )
                 if hit.hit && (!earliest.hit || hit.fraction < earliest.fraction) {
-                    earliest = hit
+                    earliest = ContinuousHit2D(
+                        hit.fraction,
+                        hit.point,
+                        hit.normal,
+                        collider_id_at(store, mover_dense),
+                        collider_id_at(store, target_dense)
+                    )
                 }
             }
             target_slot = store.shape_store.next_body_shape_slots[target_dense]
@@ -4950,19 +5390,50 @@ func contact_pair_snapshot(
     )
 }
 
+func stable_contact_pair_snapshot(
+    store:BodyStore2D,
+    pair:BodyPair2D
+) ContactPairSnapshot2D {
+    let colliders = contact_collider_pair(store, pair)
+    if !colliders.valid {
+        panic("GFX.Physics contact event requires a live collider pair")
+    }
+    let first_body = store.shape_store.body_slots[colliders.first]
+    let second_body = store.shape_store.body_slots[colliders.second]
+    if first_body < second_body {
+        return contact_pair_snapshot(store, colliders)
+    }
+    return ContactPairSnapshot2D(
+        collider_snapshot(store, colliders.second),
+        collider_snapshot(store, colliders.first)
+    )
+}
+
+func contact_pair_snapshot_by_id(
+    store:BodyStore2D,
+    first:ShapeId2D,
+    second:ShapeId2D
+) ContactPairSnapshot2D {
+    return ContactPairSnapshot2D(
+        collider_snapshot_by_id(store, first),
+        collider_snapshot_by_id(store, second)
+    )
+}
+
 func collider_snapshot(
     store:BodyStore2D,
     dense:int
 ) ColliderSnapshot2D {
-    let shape_slot = store.shape_store.dense_slots[dense]
+    let id = collider_id_at(store, dense)
+    let shape_slot = id.slot
     let body_slot = store.shape_store.body_slots[dense]
     let body = store.slot_dense_indices[body_slot]
     return ColliderSnapshot2D(
         collider:Collider2D(
             store,
             ShapeId2D(
-                shape_slot,
-                store.shape_store.slot_generations[shape_slot]
+                id.slot,
+                id.generation
             )
         ),
         body:RigidBody2D(store, store.body_id_at(body)),
@@ -4971,6 +5442,18 @@ func collider_snapshot(
         collision_filter:store.shape_store.collision_filters[dense],
         is_sensor:(store.shape_store.behavior_flags[dense] & 1) != 0
     )
+}
+
+func collider_id_at(store:BodyStore2D, dense:int) ShapeId2D {
+    let slot = store.shape_store.dense_slots[dense]
+    return ShapeId2D(slot, store.shape_store.slot_generations[slot])
+}
+
+func collider_snapshot_by_id(
+    store:BodyStore2D,
+    id:ShapeId2D
+) ColliderSnapshot2D {
+    return collider_snapshot(store, store.shape_store.require(id))
 }
 
 func collision_manifold(collision:Collision2D) Manifold2D {

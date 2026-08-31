@@ -1,6 +1,9 @@
 use GFX.Physics.RigidBody2D.BodyId2D
 use GFX.Physics.RigidBody2D.BodyStore2D
 use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.RigidBody2D.Collider2D
+use GFX.Physics.ContactPolicy2D.ColliderSnapshot2D
+use GFX.Physics.ContactPolicy2D.ContactPairSnapshot2D
 use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.Transform2D.Transform2D
 use STD.Math
@@ -29,132 +32,120 @@ public struct BodyMoveEvent2D {
 }
 
 public struct ContactBeginEvent2D {
-    private var store:BodyStore2D
-    private var first_id:BodyId2D
-    private var second_id:BodyId2D
+    private var current_pair:ContactPairSnapshot2D
     private var current_manifold:Manifold2D
 
     package init(
-        store:BodyStore2D,
-        first_id:BodyId2D,
-        second_id:BodyId2D,
+        pair:ContactPairSnapshot2D,
         manifold:Manifold2D
     ) {
-        self.store = store
-        self.first_id = first_id
-        self.second_id = second_id
+        self.current_pair = pair
         self.current_manifold = manifold
     }
 
-    func first_body() RigidBody2D {
-        return RigidBody2D(self.store, self.first_id)
-    }
-    func second_body() RigidBody2D {
-        return RigidBody2D(self.store, self.second_id)
-    }
+    func pair() ContactPairSnapshot2D { return self.current_pair }
+    func first_collider() Collider2D { return self.current_pair.first().collider() }
+    func second_collider() Collider2D { return self.current_pair.second().collider() }
+    func first_body() RigidBody2D { return self.current_pair.first().body() }
+    func second_body() RigidBody2D { return self.current_pair.second().body() }
     func manifold() Manifold2D { return self.current_manifold }
 }
 
 public struct ContactEndEvent2D {
-    private var store:BodyStore2D
-    private var first_id:BodyId2D
-    private var second_id:BodyId2D
+    private var current_pair:ContactPairSnapshot2D
 
-    package init(
-        store:BodyStore2D,
-        first_id:BodyId2D,
-        second_id:BodyId2D
-    ) {
-        self.store = store
-        self.first_id = first_id
-        self.second_id = second_id
+    package init(pair:ContactPairSnapshot2D) {
+        self.current_pair = pair
     }
 
-    func first_body() RigidBody2D {
-        return RigidBody2D(self.store, self.first_id)
-    }
-    func second_body() RigidBody2D {
-        return RigidBody2D(self.store, self.second_id)
-    }
+    func pair() ContactPairSnapshot2D { return self.current_pair }
+    func first_collider() Collider2D { return self.current_pair.first().collider() }
+    func second_collider() Collider2D { return self.current_pair.second().collider() }
+    func first_body() RigidBody2D { return self.current_pair.first().body() }
+    func second_body() RigidBody2D { return self.current_pair.second().body() }
 }
 
 public struct ContactHitEvent2D {
-    private var store:BodyStore2D
-    private var first_id:BodyId2D
-    private var second_id:BodyId2D
+    private var current_pair:ContactPairSnapshot2D
     private var current_point:Math.Vec2
     private var current_normal:Math.Vec2
     private var current_approach_speed:float
 
     package init(
-        store:BodyStore2D,
-        first_id:BodyId2D,
-        second_id:BodyId2D,
+        pair:ContactPairSnapshot2D,
         point:Math.Vec2,
         normal:Math.Vec2,
         approach_speed:float
     ) {
-        self.store = store
-        self.first_id = first_id
-        self.second_id = second_id
+        self.current_pair = pair
         self.current_point = point
         self.current_normal = normal
         self.current_approach_speed = approach_speed
     }
 
-    func first_body() RigidBody2D {
-        return RigidBody2D(self.store, self.first_id)
-    }
-    func second_body() RigidBody2D {
-        return RigidBody2D(self.store, self.second_id)
-    }
+    func pair() ContactPairSnapshot2D { return self.current_pair }
+    func first_collider() Collider2D { return self.current_pair.first().collider() }
+    func second_collider() Collider2D { return self.current_pair.second().collider() }
+    func first_body() RigidBody2D { return self.current_pair.first().body() }
+    func second_body() RigidBody2D { return self.current_pair.second().body() }
     func point() Math.Vec2 { return self.current_point }
     func normal() Math.Vec2 { return self.current_normal }
     func approach_speed() float { return self.current_approach_speed }
 }
 
 public struct SensorBeginEvent2D {
-    private var store:BodyStore2D
-    private var sensor_id:BodyId2D
-    private var visitor_id:BodyId2D
+    private var current_sensor:ColliderSnapshot2D
+    private var current_visitor:ColliderSnapshot2D
 
     package init(
-        store:BodyStore2D,
-        sensor_id:BodyId2D,
-        visitor_id:BodyId2D
+        sensor:ColliderSnapshot2D,
+        visitor:ColliderSnapshot2D
     ) {
-        self.store = store
-        self.sensor_id = sensor_id
-        self.visitor_id = visitor_id
+        self.current_sensor = sensor
+        self.current_visitor = visitor
     }
 
-    func sensor_body() RigidBody2D {
-        return RigidBody2D(self.store, self.sensor_id)
-    }
-    func visitor_body() RigidBody2D {
-        return RigidBody2D(self.store, self.visitor_id)
-    }
+    func sensor() ColliderSnapshot2D { return self.current_sensor }
+    func visitor() ColliderSnapshot2D { return self.current_visitor }
+    func sensor_collider() Collider2D { return self.current_sensor.collider() }
+    func visitor_collider() Collider2D { return self.current_visitor.collider() }
+    func sensor_body() RigidBody2D { return self.current_sensor.body() }
+    func visitor_body() RigidBody2D { return self.current_visitor.body() }
 }
 
 public struct SensorEndEvent2D {
-    private var store:BodyStore2D
-    private var sensor_id:BodyId2D
-    private var visitor_id:BodyId2D
+    private var current_sensor:ColliderSnapshot2D
+    private var current_visitor:ColliderSnapshot2D
 
     package init(
-        store:BodyStore2D,
-        sensor_id:BodyId2D,
-        visitor_id:BodyId2D
+        sensor:ColliderSnapshot2D,
+        visitor:ColliderSnapshot2D
     ) {
-        self.store = store
-        self.sensor_id = sensor_id
-        self.visitor_id = visitor_id
+        self.current_sensor = sensor
+        self.current_visitor = visitor
     }
 
-    func sensor_body() RigidBody2D {
-        return RigidBody2D(self.store, self.sensor_id)
+    func sensor() ColliderSnapshot2D { return self.current_sensor }
+    func visitor() ColliderSnapshot2D { return self.current_visitor }
+    func sensor_collider() Collider2D { return self.current_sensor.collider() }
+    func visitor_collider() Collider2D { return self.current_visitor.collider() }
+    func sensor_body() RigidBody2D { return self.current_sensor.body() }
+    func visitor_body() RigidBody2D { return self.current_visitor.body() }
+}
+
+public struct SensorOverlap2D {
+    private var current_sensor:ColliderSnapshot2D
+    private var current_visitor:ColliderSnapshot2D
+
+    package init(sensor:ColliderSnapshot2D, visitor:ColliderSnapshot2D) {
+        self.current_sensor = sensor
+        self.current_visitor = visitor
     }
-    func visitor_body() RigidBody2D {
-        return RigidBody2D(self.store, self.visitor_id)
-    }
+
+    func sensor() ColliderSnapshot2D { return self.current_sensor }
+    func visitor() ColliderSnapshot2D { return self.current_visitor }
+    func sensor_collider() Collider2D { return self.current_sensor.collider() }
+    func visitor_collider() Collider2D { return self.current_visitor.collider() }
+    func sensor_body() RigidBody2D { return self.current_sensor.body() }
+    func visitor_body() RigidBody2D { return self.current_visitor.body() }
 }
