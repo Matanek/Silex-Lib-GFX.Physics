@@ -49,7 +49,13 @@ silex run Silex-Examples/Sources/CharacterMover2D.sx --release
 ```
 
 The demo drives a capsule across a floor, slope, step, concave corner,
-unobstructed trampoline, light pushable dynamic crate, five bouncing balls,
-and moving kinematic platform. Arena walls retain physical objects. It is owned
-by the public `Silex-Examples` catalog.
+unobstructed trampoline, light pushable dynamic crate, ten bouncing balls,
+and moving kinematic platform. Arena walls retain physical objects. An overlay
+tracks current and lowest FPS, frames longer than 33 ms, and physics-step cost.
+This bounded-speed scene contains no bullet, uses discrete collision detection,
+allows idle props to sleep, and caps catch-up at four steps per frame. It is
+The overlay also shows progressive pushing pressure. Lightweight balls support
+jumping while pressure spreads them away from the capsule so it can squeeze
+between clustered balls. The demo is owned by the public
+`Silex-Examples` catalog.
 Use `A`/`D` or the arrow keys to move, `Space` to jump, and `R` to reset.

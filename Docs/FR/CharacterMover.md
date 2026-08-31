@@ -51,8 +51,14 @@ silex run Silex-Examples/Sources/CharacterMover2D.sx --release
 ```
 
 La démo montre une capsule sur un sol, une pente, une marche, un angle concave,
-un trampoline dégagé, une caisse dynamique légère à pousser, cinq balles
+un trampoline dégagé, une caisse dynamique légère à pousser, dix balles
 rebondissantes et une plateforme cinématique mobile. Des parois retiennent les
-objets physiques dans l'arène. Elle appartient
+objets physiques dans l'arène. Un panneau suit les FPS courants et minimaux,
+les frames supérieures à 33 ms et le coût du pas physique. Cette scène sans
+bullet, aux vitesses bornées, utilise la détection discrète, autorise le sommeil
+des objets et limite le rattrapage à quatre pas par frame. Une barre montre la
+pression progressive exercée sur les objets. Les balles légères servent d'appui
+au saut tandis que la pression les écarte de la capsule afin qu'elle puisse se
+glisser entre plusieurs balles. Elle appartient
 au catalogue public `Silex-Examples`. Utiliser `A`/`D` ou les flèches pour se
 déplacer, `Espace` pour sauter et `R` pour recommencer.
