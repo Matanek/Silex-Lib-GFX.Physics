@@ -48,6 +48,7 @@ winding convention.
 silex run Silex-Examples/Sources/CharacterMover2D.sx --release
 ```
 
-The demo drives a capsule across a floor, slope, step, concave corner, and
-moving kinematic platform. It is owned by the public `Silex-Examples` catalog.
+The demo drives a capsule across a floor, slope, step, concave corner,
+trampoline, pushable dynamic crate, and moving kinematic platform. Arena walls
+retain physical objects. It is owned by the public `Silex-Examples` catalog.
 Use `A`/`D` or the arrow keys to move, `Space` to jump, and `R` to reset.
