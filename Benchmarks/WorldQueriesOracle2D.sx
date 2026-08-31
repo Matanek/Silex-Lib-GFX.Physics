@@ -1,0 +1,46 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0)))
+        ..position = Math.Vec2(2.0, 0.0)
+    )
+    var colliders:Physics.Collider2D[] = []
+    body.write_colliders(colliders)
+    var collider = colliders[0]
+
+    var overlaps:Physics.Collider2D[] = []
+    world.write_aabb_overlaps(
+        Physics.AABB2D(Math.Vec2(2.0, 0.0), Math.Vec2(0.25)),
+        overlaps
+    )
+    print("aabb $(overlaps.count())")
+
+    overlaps.clear()
+    world.write_shape_overlaps(Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.25)),
+        Physics.Transform2D(position:Math.Vec2(2.0, 0.0))
+    ), overlaps)
+    print("overlap_shape $(overlaps.count())")
+
+    let ray = Physics.Ray2D(Math.Vec2(-2.0, 0.0), Math.Vec2(8.0, 0.0))
+    var ray_hit = world.ray_cast_closest(ray)
+    print("ray $(ray_hit.fraction) $(ray_hit.point.x) $(ray_hit.normal.x)")
+
+    let moving = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.25)),
+        Physics.Transform2D(position:Math.Vec2(-2.0, 0.0))
+    )
+    var shape_hit = world.shape_cast_closest(moving, Math.Vec2(8.0, 0.0))
+    print("shape_cast $(shape_hit.fraction) $(shape_hit.point.x) $(shape_hit.normal.x)")
+
+    let bounds = collider.world_aabb()
+    let closest = collider.closest_point(Math.Vec2(4.0, 0.0))
+    let mass = collider.mass_properties()
+    var point_test = 0
+    if collider.test_point(Math.Vec2(2.5, 0.0)) { point_test = 1 }
+    print("collider $(point_test) $(closest.x) $(bounds.center().x) $(bounds.half_size().x) $(mass.mass) $(mass.rotational_inertia)")
+}

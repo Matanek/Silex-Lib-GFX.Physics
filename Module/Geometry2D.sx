@@ -1,4 +1,5 @@
 use GFX.Physics.Box2D.Box2D
+use GFX.Physics.BroadPhase2D.AABB2D
 use GFX.Physics.Capsule2D.Capsule2D
 use GFX.Physics.Chain2D.Chain2D
 use GFX.Physics.Circle2D.Circle2D
@@ -131,6 +132,56 @@ public struct Geometry2D {
         second:ShapePlacement2D
     ) DistanceResult2D {
         return shape_distance(first, second, true)
+    }
+
+    static func aabb(target:ShapePlacement2D) AABB2D {
+        var lower = Math.Vec2(3.4028235e38)
+        var upper = Math.Vec2(-3.4028235e38)
+        for proxy in shape_proxies(target.shape(), target.transform()) {
+            for point in proxy.points {
+                lower.x = Math.min(lower.x, point.x - proxy.radius)
+                lower.y = Math.min(lower.y, point.y - proxy.radius)
+                upper.x = Math.max(upper.x, point.x + proxy.radius)
+                upper.y = Math.max(upper.y, point.y + proxy.radius)
+            }
+        }
+        return AABB2D(lower, upper, true)
+    }
+
+    static func test_point(
+        target:ShapePlacement2D,
+        point:Math.Vec2
+    ) bool {
+        if !finite(point) { return false }
+        var tested = ConvexProxy2D([point], 0.0)
+        for proxy in shape_proxies(target.shape(), target.transform()) {
+            if proxy_front_allows(proxy, tested) &&
+                proxy_distance(proxy, tested, true).distance <= 0.000001
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func closest_point(
+        target:ShapePlacement2D,
+        point:Math.Vec2
+    ) Math.Vec2 {
+        if !finite(point) {
+            panic("GFX.Physics.Geometry2D.closest_point requires a finite point")
+        }
+        var tested = ConvexProxy2D([point], 0.0)
+        var closest = point
+        var minimum_distance = 3.4028235e38
+        for proxy in shape_proxies(target.shape(), target.transform()) {
+            let result = proxy_distance(proxy, tested, true)
+            if result.distance < minimum_distance {
+                minimum_distance = result.distance
+                closest = result.first_point
+            }
+        }
+        return closest
     }
 
     static func overlaps(

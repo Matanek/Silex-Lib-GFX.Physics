@@ -1,6 +1,11 @@
 use GFX.Physics.Box2D.Box2D
 use GFX.Physics.Circle2D.Circle2D
 use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+use GFX.Physics.BroadPhase2D.AABB2D
+use GFX.Physics.Geometry2D.CastResult2D
+use GFX.Physics.Geometry2D.Geometry2D
+use GFX.Physics.Geometry2D.Ray2D
+use GFX.Physics.Geometry2D.ShapePlacement2D
 use GFX.Physics.Shape2D.Shape2D
 use GFX.Physics.Transform2D.Transform2D
 use STD.Math
@@ -182,6 +187,8 @@ package class ShapeStore2D {
     var segment_material_values:PhysicsMaterial2D[]
     var collision_filters:CollisionFilter2D[]
     var behavior_flags:uint8[]
+    var creation_ids:uint64[]
+    var next_creation_id:uint64
 
     init() {
         self.slot_generations = []
@@ -198,6 +205,8 @@ package class ShapeStore2D {
         self.segment_material_values = []
         self.collision_filters = []
         self.behavior_flags = []
+        self.creation_ids = []
+        self.next_creation_id = 1
     }
 
     func count() int { return self.dense_slots.count() }
@@ -241,6 +250,8 @@ package class ShapeStore2D {
         if settings.enable_hit_events { flags += 4 }
         if settings.enable_sensor_events { flags += 8 }
         self.behavior_flags.append(flags)
+        self.creation_ids.append(self.next_creation_id)
+        self.next_creation_id++
         return ShapeId2D(slot, self.slot_generations[slot])
     }
 
@@ -274,6 +285,7 @@ package class ShapeStore2D {
             self.segment_material_counts.swap(dense_index, last)
             self.collision_filters.swap(dense_index, last)
             self.behavior_flags.swap(dense_index, last)
+            self.creation_ids.swap(dense_index, last)
             self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
         }
         self.dense_slots.take_last()
@@ -286,6 +298,7 @@ package class ShapeStore2D {
         self.segment_material_counts.take_last()
         self.collision_filters.take_last()
         self.behavior_flags.take_last()
+        self.creation_ids.take_last()
         self.slot_dense_indices[id.slot] = -1
         self.slot_generations[id.slot]++
         self.free_slots.append(id.slot)
@@ -1249,6 +1262,12 @@ package class BodyStore2D {
         }
     }
 
+    func require_queryable() {
+        if self.world_locked {
+            panic("GFX.Physics.World2D cannot be queried during step")
+        }
+    }
+
     func cache_rotation(index:int) {
         self.rotation_cosines[index] = Math.cos(self.rotations[index])
         self.rotation_sines[index] = Math.sin(self.rotations[index])
@@ -1405,6 +1424,56 @@ public class Collider2D {
         ]
     }
 
+    func transform() Transform2D {
+        let dense = self.store.shape_store.require(self.id)
+        let body = self.store.slot_dense_indices[
+            self.store.shape_store.body_slots[dense]
+        ]
+        return Transform2D(
+            position:Math.Vec2(
+                self.store.positions_x[body],
+                self.store.positions_y[body]
+            ),
+            rotation:self.store.rotations[body]
+        )
+    }
+
+    func world_aabb() AABB2D {
+        return Geometry2D.aabb(ShapePlacement2D(self.shape(), self.transform()))
+    }
+
+    func test_point(point:Math.Vec2) bool {
+        return Geometry2D.test_point(
+            ShapePlacement2D(self.shape(), self.transform()),
+            point
+        )
+    }
+
+    func ray_cast_local(ray:Ray2D) CastResult2D {
+        return Geometry2D.ray_cast(ray, ShapePlacement2D(self.shape()))
+    }
+
+    func closest_point(point:Math.Vec2) Math.Vec2 {
+        return Geometry2D.closest_point(
+            ShapePlacement2D(self.shape(), self.transform()),
+            point
+        )
+    }
+
+    func mass_properties() MassProperties2D {
+        let dense = self.store.shape_store.require(self.id)
+        let properties = shape_mass_properties(
+            self.store.shape_store.shapes[dense],
+            self.store.shape_store.densities[dense]
+        )
+        return MassProperties2D(
+            properties.mass,
+            Math.max(0.0, properties.inertia_about_origin -
+                properties.mass * properties.center.length_squared()),
+            properties.center
+        )
+    }
+
     func density() float {
         return self.store.shape_store.densities[
             self.store.shape_store.require(self.id)
@@ -1559,6 +1628,27 @@ public class RigidBody2D {
     }
 
     func collider_count() int { return self.store.shape_count(self.id) }
+
+    func world_aabb() AABB2D {
+        let body = self.store.require(self.id)
+        var slot = self.store.first_shape_slots[body]
+        if slot < 0 { return AABB2D(self.position(), Math.Vec2()) }
+        var lower = Math.Vec2(3.4028235e38)
+        var upper = Math.Vec2(-3.4028235e38)
+        while slot >= 0 {
+            let dense = self.store.shape_store.slot_dense_indices[slot]
+            let bounds = Geometry2D.aabb(ShapePlacement2D(
+                self.store.shape_store.shapes[dense],
+                Transform2D(position:self.position(), rotation:self.rotation())
+            ))
+            lower.x = Math.min(lower.x, bounds.lower.x)
+            lower.y = Math.min(lower.y, bounds.lower.y)
+            upper.x = Math.max(upper.x, bounds.upper.x)
+            upper.y = Math.max(upper.y, bounds.upper.y)
+            slot = self.store.shape_store.next_body_shape_slots[dense]
+        }
+        return AABB2D(lower, upper, true)
+    }
 
     func write_colliders(output:&Collider2D[]) {
         output.clear()

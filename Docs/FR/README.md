@@ -101,6 +101,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Contacts persistants](Contacts.md)
 - [Événements, capteurs et CCD](EventsAndCCD.md)
 - [Requêtes géométriques](Geometry.md)
+- [Requêtes spatiales du monde](WorldQueries.md)
 - [Îlots actifs et sommeil](Islands.md)
 - [Joints, moteurs et ressorts](Joints.md)
 - [Migration de 0.4 vers 0.5](Migration.md)
