@@ -1,0 +1,48 @@
+# Debug draw physique
+
+`World2D.write_debug_snapshot` transforme l’état du dernier pas terminé en une
+liste autonome de lignes, cercles et labels. Le snapshot ne conserve ni handle
+interne, ni callback, ni verrou sur le monde : il peut être rendu plus tard ou
+à une cadence différente de la simulation.
+
+```silex
+use GFX.Physics
+
+var snapshot = Physics.World2DDebugSnapshot()
+let settings = Physics.World2DDebugSettings()
+    ..bounds = true
+    ..contacts = true
+    ..contact_normals = true
+    ..labels = true
+
+world.step(1.0 / 60.0)
+world.write_debug_snapshot(settings, snapshot)
+
+var drawing = Physics.World2DDebug.canvas(snapshot)
+var scene_canvas = Physics.World2DDebug.scene_canvas(snapshot)
+```
+
+Les couches couvrent les formes, joints, AABB, centres de masse, labels,
+contacts, normales, impulsions, îlots et couleurs du graphe de contraintes.
+`World2DDebugTheme` rend chaque couleur modifiable. Une
+`World2DDebugRegion(lower, upper)` optionnelle élimine les primitives hors de
+la zone visible avant leur écriture.
+
+Le réglage par défaut n’active que les formes et les joints. Mettre `enabled` à
+`false` vide le snapshot sans parcourir le monde. Réutiliser le même
+`World2DDebugSnapshot` conserve ses capacités de stockage ; après une première
+écriture de taille suffisante, `storage_growth_count()` reste stable tant que
+le nombre de primitives n’augmente pas.
+
+Le renderer écrit soit dans un `GFX.Canvas.Canvas` fourni avec `draw`, soit
+dans un nouveau Canvas via `canvas`, soit dans un composant
+`GFX.Scene2D.Canvas` via `scene_canvas`. Il reste un outil de diagnostic et ne
+remplace pas la représentation visuelle du jeu.
+
+La preuve consommateur est
+[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). L’exemple visuel qui
+active toutes les couches se lance depuis la racine du workspace :
+
+```text
+silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release
+```

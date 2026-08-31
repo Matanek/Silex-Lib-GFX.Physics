@@ -1,0 +1,151 @@
+use GFX.Physics
+use STD.Math
+
+func complete_debug_settings() Physics.World2DDebugSettings {
+    return Physics.World2DDebugSettings()
+        ..shapes = true
+        ..joints = true
+        ..bounds = true
+        ..centers_of_mass = true
+        ..labels = true
+        ..contacts = true
+        ..contact_normals = true
+        ..contact_impulses = true
+        ..islands = true
+        ..constraint_graph = true
+}
+
+func populated_debug_world() Physics.World2D {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var floor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.5)))
+        ..position = Math.Vec2(0.0, -0.25)
+        ..debug_label = "box"
+    )
+    var circle = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..position = Math.Vec2(0.0, 0.45)
+        ..gravity_scale = 0.0
+        ..allow_sleep = false
+        ..debug_label = "circle"
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.5, 0.0),
+            Math.Vec2(0.5, 0.0),
+            0.2
+        ))
+        ..position = Math.Vec2(3.0, 0.0)
+        ..gravity_scale = 0.0
+        ..debug_label = "capsule"
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.5, -0.4),
+            Math.Vec2(0.6, -0.3),
+            Math.Vec2(0.0, 0.6)
+        ], 0.05))
+        ..position = Math.Vec2(6.0, 0.0)
+        ..gravity_scale = 0.0
+        ..debug_label = "polygon"
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0)
+        ))
+        ..position = Math.Vec2(9.0, 0.0)
+        ..debug_label = "segment"
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(-0.3, 0.5),
+            Math.Vec2(0.3, 0.5),
+            Math.Vec2(1.0, 0.0)
+        ]))
+        ..position = Math.Vec2(12.0, 0.0)
+        ..debug_label = "chain"
+    )
+    world.create_distance_joint(
+        floor,
+        circle,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2(0.0, 0.0)
+            ..second_anchor = Math.Vec2(0.0, 0.45)
+            ..length = 0.45
+    )
+    world.step(1.0 / 60.0)
+    return world
+}
+
+test "write every diagnostic layer into a reusable snapshot" {
+    var world = populated_debug_world()
+    let settings = complete_debug_settings()
+    var snapshot = Physics.World2DDebugSnapshot()
+
+    world.write_debug_snapshot(settings, snapshot)
+
+    assert(snapshot.line_count() > 20)
+    assert(snapshot.circle_count() >= 5)
+    assert(snapshot.label_count() >= 6)
+    assert(snapshot.line(0).width > 0.0)
+    assert(snapshot.circle(0).radius > 0.0)
+    assert(snapshot.label(0).text != "")
+
+    let growth = snapshot.storage_growth_count()
+    let line_count = snapshot.line_count()
+    let circle_count = snapshot.circle_count()
+    let label_count = snapshot.label_count()
+    world.write_debug_snapshot(settings, snapshot)
+    assert(snapshot.storage_growth_count() == growth)
+    assert(snapshot.line_count() == line_count)
+    assert(snapshot.circle_count() == circle_count)
+    assert(snapshot.label_count() == label_count)
+}
+
+test "cull diagnostics and clear disabled snapshots" {
+    var world = populated_debug_world()
+    let complete = complete_debug_settings()
+    var snapshot = Physics.World2DDebugSnapshot()
+    world.write_debug_snapshot(complete, snapshot)
+    let complete_count = snapshot.line_count() + snapshot.circle_count() +
+        snapshot.label_count()
+
+    let culled = complete_debug_settings()
+        ..region = Physics.World2DDebugRegion(
+            Math.Vec2(-2.5, -2.5),
+            Math.Vec2(2.5, 2.5)
+        )
+    world.write_debug_snapshot(culled, snapshot)
+    let local_count = snapshot.line_count() + snapshot.circle_count() +
+        snapshot.label_count()
+    assert(local_count > 0)
+    assert(local_count < complete_count)
+
+    world.write_debug_snapshot(
+        Physics.World2DDebugSettings() ..enabled = false,
+        snapshot
+    )
+    assert(snapshot.line_count() == 0)
+    assert(snapshot.circle_count() == 0)
+    assert(snapshot.label_count() == 0)
+}
+
+test "render snapshots through Canvas and Scene2D without world ownership" {
+    var world = populated_debug_world()
+    var snapshot = Physics.World2DDebugSnapshot()
+    world.write_debug_snapshot(complete_debug_settings(), snapshot)
+
+    var canvas = Physics.World2DDebug.canvas(snapshot)
+    assert(canvas.command_count() == snapshot.line_count() +
+        snapshot.circle_count() + snapshot.label_count())
+    var scene_canvas = Physics.World2DDebug.scene_canvas(snapshot)
+
+    world = Physics.World2D()
+    assert(canvas.command_count() > 0)
+    assert(scene_canvas.revision() > 0)
+}

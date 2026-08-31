@@ -1,0 +1,462 @@
+use GFX.Color
+use GFX.Canvas
+use GFX.Scene2D
+use GFX.Physics.BroadPhase2D.AABB2D
+use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.BodyType2D
+use GFX.Physics.Joints2D.JointConstraint2D
+use GFX.Physics.Shape2D.Shape2D
+use GFX.Physics.Transform2D.Transform2D
+use STD.Math
+
+public struct DebugLine2D {
+    let start:Math.Vec2
+    let end:Math.Vec2
+    let color:Color
+    let width:float
+
+    init(start:Math.Vec2, end:Math.Vec2, color:Color, width:float = 1.0) {
+        self.start = start
+        self.end = end
+        self.color = color
+        self.width = width
+    }
+}
+
+public struct DebugCircle2D {
+    let center:Math.Vec2
+    let radius:float
+    let color:Color
+    let width:float
+
+    init(center:Math.Vec2, radius:float, color:Color, width:float = 1.0) {
+        self.center = center
+        self.radius = radius
+        self.color = color
+        self.width = width
+    }
+}
+
+public struct DebugLabel2D {
+    let text:str
+    let position:Math.Vec2
+    let color:Color
+    let size:float
+
+    init(text:str, position:Math.Vec2, color:Color, size:float = 12.0) {
+        self.text = text
+        self.position = position
+        self.color = color
+        self.size = size
+    }
+}
+
+public struct World2DDebugRegion {
+    let lower:Math.Vec2
+    let upper:Math.Vec2
+
+    init(lower:Math.Vec2, upper:Math.Vec2) {
+        if lower.x > upper.x || lower.y > upper.y {
+            panic("GFX.Physics.World2DDebugRegion lower bounds must not exceed upper bounds")
+        }
+        self.lower = lower
+        self.upper = upper
+    }
+
+    package func overlaps(bounds:AABB2D) bool {
+        return self.lower.x <= bounds.upper.x && self.upper.x >= bounds.lower.x &&
+            self.lower.y <= bounds.upper.y && self.upper.y >= bounds.lower.y
+    }
+}
+
+public struct World2DDebugTheme {
+    var fixed_shape:Color
+    var kinematic_shape:Color
+    var dynamic_shape:Color
+    var sleeping_shape:Color
+    var sensor_shape:Color
+    var joint:Color
+    var bounds:Color
+    var center_of_mass:Color
+    var contact:Color
+    var contact_normal:Color
+    var contact_impulse:Color
+    var island:Color
+    var label:Color
+
+    init() {
+        self.fixed_shape = Color.gray_400()
+        self.kinematic_shape = Color.cyan_400()
+        self.dynamic_shape = Color.green_400()
+        self.sleeping_shape = Color.blue_400()
+        self.sensor_shape = Color.fuchsia_400()
+        self.joint = Color.yellow_400()
+        self.bounds = Color.gray_600()
+        self.center_of_mass = Color.red_400()
+        self.contact = Color.orange_400()
+        self.contact_normal = Color.cyan_300()
+        self.contact_impulse = Color.red_500()
+        self.island = Color.purple_400()
+        self.label = Color.white()
+    }
+
+    package func shape_color(
+        body_type:BodyType2D,
+        awake:bool,
+        sensor:bool
+    ) Color {
+        if sensor { return self.sensor_shape }
+        if body_type == BodyType2D.fixed { return self.fixed_shape }
+        if body_type == BodyType2D.kinematic { return self.kinematic_shape }
+        if !awake { return self.sleeping_shape }
+        return self.dynamic_shape
+    }
+}
+
+public struct World2DDebugSettings {
+    var enabled:bool
+    var shapes:bool
+    var joints:bool
+    var bounds:bool
+    var centers_of_mass:bool
+    var labels:bool
+    var contacts:bool
+    var contact_normals:bool
+    var contact_impulses:bool
+    var islands:bool
+    var constraint_graph:bool
+    var region:World2DDebugRegion?
+    var line_width:float
+    var contact_radius:float
+    var normal_length:float
+    var impulse_scale:float
+    var label_size:float
+    var theme:World2DDebugTheme
+
+    init() {
+        self.enabled = true
+        self.shapes = true
+        self.joints = true
+        self.bounds = false
+        self.centers_of_mass = false
+        self.labels = false
+        self.contacts = false
+        self.contact_normals = false
+        self.contact_impulses = false
+        self.islands = false
+        self.constraint_graph = false
+        self.region = null
+        self.line_width = 1.0
+        self.contact_radius = 0.04
+        self.normal_length = 0.3
+        self.impulse_scale = 0.03
+        self.label_size = 12.0
+        self.theme = World2DDebugTheme()
+    }
+
+    package func allows(value:AABB2D) bool {
+        if let region = self.region { return region.overlaps(value) }
+        return true
+    }
+
+    package func allows(value:Math.Vec2) bool {
+        return self.allows(AABB2D(value, Math.Vec2()))
+    }
+}
+
+public class World2DDebugSnapshot {
+    private var current_lines:DebugLine2D[]
+    private var current_circles:DebugCircle2D[]
+    private var current_labels:DebugLabel2D[]
+    private var retained_line_count:int
+    private var retained_circle_count:int
+    private var retained_label_count:int
+    private var current_storage_growth_count:int
+
+    init() {
+        self.current_lines = []
+        self.current_circles = []
+        self.current_labels = []
+        self.retained_line_count = 0
+        self.retained_circle_count = 0
+        self.retained_label_count = 0
+        self.current_storage_growth_count = 0
+    }
+
+    func clear() {
+        self.current_lines.clear()
+        self.current_circles.clear()
+        self.current_labels.clear()
+    }
+
+    func line_count() int { return self.current_lines.count() }
+    func circle_count() int { return self.current_circles.count() }
+    func label_count() int { return self.current_labels.count() }
+    func line(index:int) DebugLine2D { return self.current_lines[index] }
+    func circle(index:int) DebugCircle2D { return self.current_circles[index] }
+    func label(index:int) DebugLabel2D { return self.current_labels[index] }
+    func storage_growth_count() int { return self.current_storage_growth_count }
+
+    package func append(value:DebugLine2D) {
+        if self.current_lines.count() >= self.retained_line_count {
+            self.retained_line_count++
+            self.current_storage_growth_count++
+        }
+        self.current_lines.append(value)
+    }
+
+    package func append(value:DebugCircle2D) {
+        if self.current_circles.count() >= self.retained_circle_count {
+            self.retained_circle_count++
+            self.current_storage_growth_count++
+        }
+        self.current_circles.append(value)
+    }
+
+    package func append(value:DebugLabel2D) {
+        if self.current_labels.count() >= self.retained_label_count {
+            self.retained_label_count++
+            self.current_storage_growth_count++
+        }
+        self.current_labels.append(value)
+    }
+}
+
+public static struct World2DDebug {
+    func draw(snapshot:World2DDebugSnapshot, target:Canvas.Canvas) {
+        target.clear()
+        target.paint(func(painter:&Canvas.Painter) {
+            var index = 0
+            while index < snapshot.line_count() {
+                let line = snapshot.line(index)
+                painter.stroke(
+                    Canvas.Line(line.start, line.end),
+                    Canvas.Stroke(line.color, line.width)
+                )
+                index++
+            }
+            index = 0
+            while index < snapshot.circle_count() {
+                let circle = snapshot.circle(index)
+                painter.stroke(
+                    Canvas.Circle(circle.center, circle.radius),
+                    Canvas.Stroke(circle.color, circle.width)
+                )
+                index++
+            }
+            index = 0
+            while index < snapshot.label_count() {
+                let label = snapshot.label(index)
+                painter.text(label.text, label.position,
+                    Canvas.TextStyle(size:label.size, color:label.color))
+                index++
+            }
+        })
+    }
+
+    func canvas(snapshot:World2DDebugSnapshot) Canvas.Canvas {
+        var drawing = Canvas.Canvas()
+        World2DDebug.draw(snapshot, drawing)
+        return drawing
+    }
+
+    func scene_canvas(snapshot:World2DDebugSnapshot) Scene2D.Canvas {
+        return Scene2D.Canvas(World2DDebug.canvas(snapshot))
+    }
+}
+
+package func debug_append_shape(
+    snapshot:World2DDebugSnapshot,
+    shape:Shape2D,
+    transform:Transform2D,
+    color:Color,
+    width:float
+) {
+    match shape {
+        box(value) => {
+            let half = value.size.multiply(0.5)
+            let vertices:Math.Vec2[] = [
+                Math.Vec2(-half.x, -half.y), Math.Vec2(half.x, -half.y),
+                Math.Vec2(half.x, half.y), Math.Vec2(-half.x, half.y)
+            ]
+            debug_append_polygon(snapshot, vertices, transform, color, width, true)
+            debug_append_vertex_radii(
+                snapshot, vertices, transform, value.radius, color, width
+            )
+        }
+        circle(value) => {
+            snapshot.append(DebugCircle2D(transform.position, value.radius, color, width))
+            snapshot.append(DebugLine2D(
+                transform.position,
+                transform.point(Math.Vec2(value.radius, 0.0)),
+                color,
+                width
+            ))
+        }
+        capsule(value) => {
+            let first = transform.point(value.first)
+            let second = transform.point(value.second)
+            let axis = second.subtract(first)
+            if axis.length_squared() > 0.0 {
+                let tangent = Math.Vec2(-axis.y, axis.x).normalized()
+                    .multiply(value.radius)
+                snapshot.append(DebugLine2D(
+                    first.add(tangent), second.add(tangent), color, width
+                ))
+                snapshot.append(DebugLine2D(
+                    first.subtract(tangent), second.subtract(tangent), color, width
+                ))
+            }
+            snapshot.append(DebugCircle2D(first, value.radius, color, width))
+            snapshot.append(DebugCircle2D(second, value.radius, color, width))
+        }
+        polygon(value) => {
+            debug_append_polygon(snapshot, value.vertices, transform, color, width, true)
+            debug_append_vertex_radii(
+                snapshot, value.vertices, transform, value.radius, color, width
+            )
+        }
+        segment(value) => {
+            snapshot.append(DebugLine2D(
+                transform.point(value.first),
+                transform.point(value.second),
+                color,
+                width
+            ))
+        }
+        chain(value) => {
+            debug_append_polygon(
+                snapshot,
+                value.points,
+                transform,
+                color,
+                width,
+                value.loop
+            )
+        }
+    }
+}
+
+package func debug_append_bounds(
+    snapshot:World2DDebugSnapshot,
+    bounds:AABB2D,
+    color:Color,
+    width:float
+) {
+    let lower_right = Math.Vec2(bounds.upper.x, bounds.lower.y)
+    let upper_left = Math.Vec2(bounds.lower.x, bounds.upper.y)
+    snapshot.append(DebugLine2D(bounds.lower, lower_right, color, width))
+    snapshot.append(DebugLine2D(lower_right, bounds.upper, color, width))
+    snapshot.append(DebugLine2D(bounds.upper, upper_left, color, width))
+    snapshot.append(DebugLine2D(upper_left, bounds.lower, color, width))
+}
+
+package func debug_append_cross(
+    snapshot:World2DDebugSnapshot,
+    point:Math.Vec2,
+    radius:float,
+    color:Color,
+    width:float
+) {
+    snapshot.append(DebugLine2D(
+        point.subtract(Math.Vec2(radius, 0.0)),
+        point.add(Math.Vec2(radius, 0.0)),
+        color,
+        width
+    ))
+    snapshot.append(DebugLine2D(
+        point.subtract(Math.Vec2(0.0, radius)),
+        point.add(Math.Vec2(0.0, radius)),
+        color,
+        width
+    ))
+}
+
+package func debug_append_joint(
+    snapshot:World2DDebugSnapshot,
+    store:BodyStore2D,
+    joint:JointConstraint2D,
+    color:Color,
+    width:float,
+    settings:World2DDebugSettings
+) {
+    let first = store.require(joint.first_body)
+    let second = store.require(joint.second_body)
+    let first_point = debug_body_transform(store, first).point(joint.first_anchor)
+    let second_point = debug_body_transform(store, second).point(joint.second_anchor)
+    if !settings.allows(debug_line_bounds(first_point, second_point)) { return }
+    snapshot.append(DebugLine2D(first_point, second_point, color, width))
+    snapshot.append(DebugCircle2D(first_point, 0.03, color, width))
+    snapshot.append(DebugCircle2D(second_point, 0.03, color, width))
+}
+
+package func debug_constraint_color(index:int) Color {
+    if index == 0 { return Color.red_400() }
+    if index == 1 { return Color.orange_400() }
+    if index == 2 { return Color.yellow_400() }
+    if index == 3 { return Color.green_400() }
+    if index == 4 { return Color.cyan_400() }
+    if index == 5 { return Color.blue_400() }
+    if index == 6 { return Color.indigo_400() }
+    if index == 7 { return Color.purple_400() }
+    if index == 8 { return Color.fuchsia_400() }
+    if index == 9 { return Color.pink_400() }
+    if index == 10 { return Color.lime_400() }
+    return Color.gray_300()
+}
+
+func debug_append_polygon(
+    snapshot:World2DDebugSnapshot,
+    vertices:Math.Vec2[],
+    transform:Transform2D,
+    color:Color,
+    width:float,
+    closed:bool
+) {
+    if vertices.count() < 2 { return }
+    var index = 0
+    while index + 1 < vertices.count() {
+        snapshot.append(DebugLine2D(
+            transform.point(vertices[index]),
+            transform.point(vertices[index + 1]),
+            color,
+            width
+        ))
+        index++
+    }
+    if closed {
+        snapshot.append(DebugLine2D(
+            transform.point(vertices[-1]),
+            transform.point(vertices[0]),
+            color,
+            width
+        ))
+    }
+}
+
+func debug_append_vertex_radii(
+    snapshot:World2DDebugSnapshot,
+    vertices:Math.Vec2[],
+    transform:Transform2D,
+    radius:float,
+    color:Color,
+    width:float
+) {
+    if radius <= 0.0 { return }
+    for vertex in vertices {
+        snapshot.append(DebugCircle2D(
+            transform.point(vertex), radius, color, width
+        ))
+    }
+}
+
+func debug_body_transform(store:BodyStore2D, body:int) Transform2D {
+    return Transform2D(
+        position:Math.Vec2(store.positions_x[body], store.positions_y[body]),
+        rotation:store.rotations[body]
+    )
+}
+
+func debug_line_bounds(first:Math.Vec2, second:Math.Vec2) AABB2D {
+    return AABB2D(first.minimum(second), first.maximum(second), true)
+}

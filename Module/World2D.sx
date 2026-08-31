@@ -49,6 +49,16 @@ use GFX.Physics.Events2D.ContactEndEvent2D
 use GFX.Physics.Events2D.ContactHitEvent2D
 use GFX.Physics.Events2D.SensorBeginEvent2D
 use GFX.Physics.Events2D.SensorEndEvent2D
+use GFX.Physics.DebugDraw2D.DebugCircle2D
+use GFX.Physics.DebugDraw2D.DebugLabel2D
+use GFX.Physics.DebugDraw2D.DebugLine2D
+use GFX.Physics.DebugDraw2D.World2DDebugSettings
+use GFX.Physics.DebugDraw2D.World2DDebugSnapshot
+use GFX.Physics.DebugDraw2D.debug_append_bounds
+use GFX.Physics.DebugDraw2D.debug_append_cross
+use GFX.Physics.DebugDraw2D.debug_append_joint
+use GFX.Physics.DebugDraw2D.debug_append_shape
+use GFX.Physics.DebugDraw2D.debug_constraint_color
 use GFX.Physics.Events2D.SensorOverlap2D
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.Manifold2D
@@ -861,6 +871,281 @@ public class World2D {
                 }
             }
             index++
+        }
+    }
+
+    func write_debug_snapshot(
+        settings:World2DDebugSettings,
+        output:World2DDebugSnapshot
+    ) {
+        output.clear()
+        if !settings.enabled { return }
+        if !finite_world_value(settings.line_width) || settings.line_width <= 0.0 ||
+            !finite_world_value(settings.contact_radius) || settings.contact_radius <= 0.0 ||
+            !finite_world_value(settings.normal_length) || settings.normal_length < 0.0 ||
+            !finite_world_value(settings.impulse_scale) || settings.impulse_scale < 0.0 ||
+            !finite_world_value(settings.label_size) || settings.label_size <= 0.0
+        {
+            panic("GFX.Physics.World2DDebugSettings requires positive finite strokes, markers, and labels with non-negative finite vector scales")
+        }
+
+        if settings.shapes || settings.bounds {
+            var collider_slot = 0
+            while collider_slot < self.store.shape_store.slot_dense_indices.count() {
+                let collider = self.store.shape_store.slot_dense_indices[collider_slot]
+                if collider < 0 {
+                    collider_slot++
+                    continue
+                }
+                let body_slot = self.store.shape_store.body_slots[collider]
+                let body = self.store.slot_dense_indices[body_slot]
+                if body < 0 || !self.store.enabled[body] {
+                    collider_slot++
+                    continue
+                }
+                let current_bounds = collider_bounds(self.store, body, collider)
+                if !settings.allows(current_bounds) {
+                    collider_slot++
+                    continue
+                }
+                let color = settings.theme.shape_color(
+                    self.store.body_types[body],
+                    self.store.awake[body],
+                    (self.store.shape_store.behavior_flags[collider] & 1) != 0
+                )
+                if settings.shapes {
+                    debug_append_shape(
+                        output,
+                        self.store.shape_store.shapes[collider],
+                        Transform2D(
+                            position:Math.Vec2(
+                                self.store.positions_x[body],
+                                self.store.positions_y[body]
+                            ),
+                            rotation:self.store.rotations[body]
+                        ),
+                        color,
+                        settings.line_width
+                    )
+                }
+                if settings.bounds {
+                    debug_append_bounds(
+                        output,
+                        current_bounds,
+                        settings.theme.bounds,
+                        settings.line_width
+                    )
+                }
+                collider_slot++
+            }
+        }
+
+        if settings.centers_of_mass || settings.labels {
+            var slot = 0
+            while slot < self.store.slot_dense_indices.count() {
+                let body = self.store.slot_dense_indices[slot]
+                if body >= 0 && self.store.enabled[body] {
+                    let center = self.store.world_center_at(body)
+                    if settings.allows(center) {
+                        if settings.centers_of_mass {
+                            debug_append_cross(
+                                output,
+                                center,
+                                settings.contact_radius * 2.0,
+                                settings.theme.center_of_mass,
+                                settings.line_width
+                            )
+                        }
+                        if settings.labels && self.store.debug_labels[body] != "" {
+                            output.append(DebugLabel2D(
+                                self.store.debug_labels[body],
+                                center,
+                                settings.theme.label,
+                                settings.label_size
+                            ))
+                        }
+                    }
+                }
+                slot++
+            }
+        }
+
+        if settings.joints {
+            var previous = -1
+            var written = 0
+            while written < self.joints.joints.count() {
+                var selected = -1
+                var index = 0
+                while index < self.joints.joints.count() {
+                    let order = self.joints.joints[index].stable_order
+                    if order > previous &&
+                        (selected < 0 || order < self.joints.joints[selected].stable_order)
+                    {
+                        selected = index
+                    }
+                    index++
+                }
+                debug_append_joint(
+                    output,
+                    self.store,
+                    self.joints.joints[selected],
+                    settings.theme.joint,
+                    settings.line_width,
+                    settings
+                )
+                previous = self.joints.joints[selected].stable_order
+                written++
+            }
+        }
+
+        if settings.contacts || settings.contact_normals || settings.contact_impulses {
+            var index = 0
+            while index < self.candidate_pairs.count() {
+                let cache = self.candidate_pairs[index]
+                if self.candidate_enabled[index] && cache.contact_count > 0 &&
+                    self.store.enabled[self.candidate_bodies[index].first] &&
+                    self.store.enabled[self.candidate_bodies[index].second] &&
+                    !pair_is_sensor(self.store, self.candidate_bodies[index]) &&
+                    self.store.shape_store.contains(cache.first_collider) &&
+                    self.store.shape_store.contains(cache.second_collider)
+                {
+                    let manifold = cache.completed_manifold
+                    var point_index = 0
+                    while point_index < manifold.points.count() {
+                        let point = manifold.points[point_index].point
+                        if settings.allows(point) {
+                            if settings.contacts {
+                                output.append(DebugCircle2D(
+                                    point,
+                                    settings.contact_radius,
+                                    settings.theme.contact,
+                                    settings.line_width
+                                ))
+                            }
+                            if settings.contact_normals && settings.normal_length > 0.0 {
+                                output.append(DebugLine2D(
+                                    point,
+                                    point.add(manifold.normal.multiply(settings.normal_length)),
+                                    settings.theme.contact_normal,
+                                    settings.line_width
+                                ))
+                            }
+                            if settings.contact_impulses && settings.impulse_scale > 0.0 {
+                                let tangent = Math.Vec2(-manifold.normal.y, manifold.normal.x)
+                                var normal_impulse = cache.normal_impulse_first
+                                var tangent_impulse = cache.tangent_impulse_first
+                                if point_index == 1 {
+                                    normal_impulse = cache.normal_impulse_second
+                                    tangent_impulse = cache.tangent_impulse_second
+                                }
+                                if cache.completed_swapped {
+                                    tangent_impulse = -tangent_impulse
+                                }
+                                let impulse = manifold.normal.multiply(
+                                    normal_impulse
+                                ).add(tangent.multiply(tangent_impulse))
+                                output.append(DebugLine2D(
+                                    point,
+                                    point.add(impulse.multiply(settings.impulse_scale)),
+                                    settings.theme.contact_impulse,
+                                    settings.line_width
+                                ))
+                            }
+                        }
+                        point_index++
+                    }
+                }
+                index++
+            }
+        }
+
+        if settings.islands {
+            var island = 0
+            while island < self.active_island_roots.count() {
+                var offset = self.active_island_offsets[island]
+                let end = self.active_island_offsets[island + 1]
+                var previous_center:Math.Vec2? = null
+                while offset < end {
+                    let body = self.active_island_bodies[offset]
+                    let center = self.store.world_center_at(body)
+                    if let previous_point = previous_center {
+                        if settings.allows(AABB2D(
+                            previous_point.minimum(center),
+                            previous_point.maximum(center),
+                            true
+                        )) {
+                            output.append(DebugLine2D(
+                                previous_point,
+                                center,
+                                settings.theme.island,
+                                settings.line_width
+                            ))
+                        }
+                    } else {
+                        if settings.allows(center) {
+                            output.append(DebugLabel2D(
+                                "island $(island)",
+                                center,
+                                settings.theme.island,
+                                settings.label_size
+                            ))
+                        }
+                    }
+                    previous_center = center
+                    offset++
+                }
+                island++
+            }
+        }
+
+        if settings.constraint_graph {
+            var entry = 0
+            while entry < self.soft_constraints.entries.count() &&
+                entry < self.constraint_entry_colors.count()
+            {
+                let encoded = self.soft_constraints.entries[entry]
+                var first = 0
+                var second = 0
+                if encoded >= 0 {
+                    first = self.soft_constraints.compact_collisions[encoded].first_body
+                    second = self.soft_constraints.compact_collisions[encoded].second_body
+                } else {
+                    first = self.soft_constraints.collisions[-encoded - 1].first_body
+                    second = self.soft_constraints.collisions[-encoded - 1].second_body
+                }
+                let first_center = self.store.world_center_at(first)
+                let second_center = self.store.world_center_at(second)
+                if settings.allows(AABB2D(
+                    first_center.minimum(second_center),
+                    first_center.maximum(second_center),
+                    true
+                )) {
+                    output.append(DebugLine2D(
+                        first_center,
+                        second_center,
+                        debug_constraint_color(self.constraint_entry_colors[entry]),
+                        settings.line_width * 2.0
+                    ))
+                }
+                entry++
+            }
+            entry = 0
+            while entry < self.joints.joints.count() &&
+                entry < self.joints.entry_colors.count()
+            {
+                let color = self.joints.entry_colors[entry]
+                if color >= 0 {
+                    debug_append_joint(
+                        output,
+                        self.store,
+                        self.joints.joints[entry],
+                        debug_constraint_color(color),
+                        settings.line_width * 2.0,
+                        settings
+                    )
+                }
+                entry++
+            }
         }
     }
     private func completed_contact(index:int) Contact2D? {

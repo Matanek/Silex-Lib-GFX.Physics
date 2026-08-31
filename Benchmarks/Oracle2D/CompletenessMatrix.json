@@ -134,10 +134,10 @@
       "id": "default-debug-draw-settings",
       "domain": "debug",
       "capability": "default physics debug rendering configuration",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2DefaultDebugDraw$"],
       "silex_contract": "World2DDebugSettings will produce retained Canvas/Scene2D commands without native callbacks.",
-      "tracking": "Physique 2D complète 13 — Debug draw physique"
+      "evidence": ["Tests/Consumer/Tests/DebugDraw.sx"]
     },
     {
       "id": "geometry-values",
@@ -273,10 +273,10 @@
       "id": "world-debug-draw",
       "domain": "debug",
       "capability": "physics world debug rendering",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_Draw$"],
       "silex_contract": "A reusable value snapshot will render through GFX.Canvas and GFX.Scene2D without native callbacks.",
-      "tracking": "Physique 2D complète 13 — Debug draw physique"
+      "evidence": ["Tests/Consumer/Tests/DebugDraw.sx"]
     },
     {
       "id": "world-events",

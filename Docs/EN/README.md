@@ -91,6 +91,10 @@ Existing 0.4 world and body usage remains source-compatible across the switch.
 The intentional solver and lifetime changes are listed in
 [`Docs/Migration.md`](Migration.md).
 
+The reusable physics debug snapshot renders shapes, joints, contacts, bounds,
+mass centers, islands, and constraint colors through Canvas or Scene2D without
+native callbacks. See [`Docs/DebugDraw.md`](DebugDraw.md).
+
 Bodies derive composed mass, center of mass, and rotational inertia from their
 colliders. They expose forces, torques, impulses, coordinate conversions,
 fixed rotation, activation, runtime damping and sleep controls, and kinematic

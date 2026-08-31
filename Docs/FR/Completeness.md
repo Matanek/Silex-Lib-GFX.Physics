@@ -15,7 +15,7 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-Le contrat courant compte 24 capacités couvertes, 7 partielles, 16
+Le contrat courant compte 26 capacités couvertes, 7 partielles, 14
 planifiées, 6 divergentes et 8 exclues. Ces nombres comptent des groupes de
 comportements, pas un pourcentage de complétude du moteur.
 

@@ -24,7 +24,7 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current contract contains 24 covered, 7 partial, 16 planned, 6 divergent,
+The current contract contains 26 covered, 7 partial, 14 planned, 6 divergent,
 and 8 excluded capability rows. These counts describe groups of related behavior,
 not percentages of engine completeness. The final sequence gate removes every
 unexplained partial or promise; it does not promote a capability by counting C
