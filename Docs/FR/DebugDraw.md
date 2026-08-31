@@ -41,9 +41,11 @@ remplace pas la représentation visuelle du jeu.
 
 La preuve consommateur est
 [`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). L’exemple visuel
-anime le monde en pas fixes, pilote les corps et joints, puis réécrit le
-snapshot à chaque frame avec toutes les couches actives. Il se lance depuis la
-racine du workspace :
+emploie les mètres, la gravité `(0, -9.81) m/s²` et un pas fixe de 60 Hz. Des
+corps chutent en continu sur une rampe, une chaîne et un sol pendant que les
+joints sont pilotés. Toutes les couches réécrivent le même Canvas retenu et un
+`FPSPanel` affiche la cadence de rendu mesurée. Il se lance depuis la racine du
+workspace :
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release

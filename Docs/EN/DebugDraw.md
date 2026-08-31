@@ -40,8 +40,10 @@ representation.
 
 The consumer proof is
 [`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). The visual example
-advances the world at a fixed step, drives bodies and joints, and rewrites the
-snapshot every frame with all layers enabled. Run it from the workspace root:
+uses metres, `(0, -9.81) m/s²` gravity, and a fixed 60 Hz step. Bodies fall
+continuously onto a ramp, chain, and floor while the joint gallery is driven.
+Every layer rewrites one retained Canvas and an `FPSPanel` reports the measured
+render cadence. Run it from the workspace root:
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release
