@@ -1,0 +1,38 @@
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+
+public struct QueryFilter2D {
+    let category_bits:uint64
+    let mask_bits:uint64
+
+    init(
+        category_bits:uint64 = 1,
+        mask_bits:uint64 = 0xffff_ffff_ffff_ffff
+    ) {
+        if category_bits == 0 {
+            panic("GFX.Physics.QueryFilter2D requires at least one category bit")
+        }
+        self.category_bits = category_bits
+        self.mask_bits = mask_bits
+    }
+
+    package func allows(collider:CollisionFilter2D) bool {
+        return (self.mask_bits & collider.category_bits) != 0 &&
+            (collider.mask_bits & self.category_bits) != 0
+    }
+}
+
+public struct WorldQueryStatistics2D {
+    let visited_count:int
+    let candidate_count:int
+    let hit_count:int
+
+    init(
+        visited_count:int = 0,
+        candidate_count:int = 0,
+        hit_count:int = 0
+    ) {
+        self.visited_count = visited_count
+        self.candidate_count = candidate_count
+        self.hit_count = hit_count
+    }
+}

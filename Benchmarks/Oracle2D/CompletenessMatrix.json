@@ -106,10 +106,10 @@
       "id": "default-query-settings",
       "domain": "query",
       "capability": "default spatial query filter",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2DefaultQueryFilter$"],
-      "silex_contract": "World queries will accept a distinct typed query filter with explicit defaults.",
-      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+      "silex_contract": "World queries accept QueryFilter2D as a distinct typed filter with explicit defaults.",
+      "evidence": ["Tests/Consumer/Tests/WorldQueries.sx", "Benchmarks/WorldQueriesOracle2D.sx"]
     },
     {
       "id": "default-joint-settings",
@@ -171,20 +171,19 @@
       "id": "shape-bounds",
       "domain": "query",
       "capability": "shape and body world bounds",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Compute(?:Circle|Capsule|Polygon|Segment)AABB$", "^b2Body_ComputeAABB$", "^b2Shape_GetAABB$"],
-      "silex_contract": "Living colliders and bodies will expose deterministic world bounds without proxy identities.",
-      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+      "silex_contract": "Living colliders and bodies expose exact deterministic world bounds without proxy identities.",
+      "evidence": ["Tests/Consumer/Tests/WorldQueries.sx", "Benchmarks/WorldQueriesOracle2D.sx", "Benchmarks/Oracle2D/WorldQueriesOracle.c"]
     },
     {
       "id": "point-tests",
       "domain": "query",
       "capability": "point containment against geometry and living colliders",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2PointIn(?:Circle|Capsule|Polygon)$", "^b2Shape_TestPoint$"],
-      "silex_contract": "Geometry2D covers value overlap; Collider2D will add direct point testing against the living world.",
-      "evidence": ["Tests/Consumer/Tests/Geometry.sx"],
-      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+      "silex_contract": "Geometry2D and Collider2D test finite points against value or living geometry.",
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/WorldQueries.sx", "Benchmarks/WorldQueriesOracle2D.sx"]
     },
     {
       "id": "stateless-distance",
@@ -290,10 +289,10 @@
       "id": "world-spatial-queries",
       "domain": "query",
       "capability": "overlap, ray and shape queries against living colliders",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_(?:OverlapAABB|OverlapShape|CastRay|CastRayClosest|CastShape)$"],
-      "silex_contract": "World2D will write stable Collider2D results into caller-owned buffers and provide closest, any and all intentions.",
-      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+      "silex_contract": "World2D writes stable Collider2D results into caller-owned buffers and provides closest, any and all intentions.",
+      "evidence": ["Tests/Consumer/Tests/WorldQueries.sx", "Benchmarks/WorldQueriesOracle2D.sx", "Benchmarks/Oracle2D/WorldQueriesOracle.c", "Benchmarks/Oracle2D/CheckWorldQueries.py"]
     },
     {
       "id": "world-character-queries",
@@ -499,10 +498,10 @@
       "id": "collider-local-queries",
       "domain": "query",
       "capability": "living collider ray cast and closest point",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Shape_(?:RayCast|GetClosestPoint)$"],
-      "silex_contract": "Collider2D will expose local query intentions using world transforms and typed results.",
-      "tracking": "Physique 2D complète 07 — Requêtes spatiales du monde"
+      "silex_contract": "Collider2D exposes local ray cast and world closest-point intentions with typed results.",
+      "evidence": ["Tests/Consumer/Tests/WorldQueries.sx", "Benchmarks/WorldQueriesOracle2D.sx", "Benchmarks/Oracle2D/WorldQueriesOracle.c"]
     },
     {
       "id": "collider-contact-events",

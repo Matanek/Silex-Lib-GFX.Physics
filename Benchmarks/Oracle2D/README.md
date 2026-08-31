@@ -53,6 +53,7 @@ silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /
 silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
 silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
 silex compile Packages/GFX.Physics/Benchmarks/ContinuousCollisionOracle2D.sx --release -o /tmp/gfx-physics-silex-continuous-collision
+silex compile Packages/GFX.Physics/Benchmarks/WorldQueriesOracle2D.sx --release -o /tmp/gfx-physics-silex-world-queries
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -147,6 +148,19 @@ otherwise enforce the physical invariant: the body is motionless and supported
 by a face rather than balanced on an unsupported corner. A supported face must
 be level within 5 mm per metre; this rejects a two-point manifold synthesized
 across a tilted edge whose upper endpoint has not reached the support.
+
+The world-query witness compares AABB and shape overlap, closest ray and shape
+casts, point testing, closest point, world bounds, and collider mass data:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_world_queries_oracle > /tmp/box2d-world-queries.txt
+/tmp/gfx-physics-silex-world-queries > /tmp/silex-world-queries.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckWorldQueries.py /tmp/box2d-world-queries.txt /tmp/silex-world-queries.txt
+```
+
+Fractions and geometry values use a 0.002 absolute tolerance. The collider
+record permits 0.021 because Box2D's `b2Shape_GetAABB` includes its 2 cm broad-
+phase margin while Silex reports exact geometry bounds.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

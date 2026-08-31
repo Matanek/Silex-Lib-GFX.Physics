@@ -62,6 +62,11 @@ ray casts, and shape casts. Independent read queries can run concurrently. See
 [`Docs/Geometry.md`](Geometry.md) and the public consumer proofs under
 [`Tests/Consumer/Tests/Geometry.sx`](../../Tests/Consumer/Tests/Geometry.sx).
 
+Living-world AABB, overlap, ray, and shape queries return stable collider
+handles through caller-owned buffers, `any`, and `closest` intentions. See
+[`Docs/WorldQueries.md`](WorldQueries.md) and
+[`Tests/Consumer/Tests/WorldQueries.sx`](../../Tests/Consumer/Tests/WorldQueries.sx).
+
 `World2D` also retains collision pairs and manifolds across steps. The current
 snapshots can be read without exposing their cache identity:
 

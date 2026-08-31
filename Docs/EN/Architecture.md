@@ -67,6 +67,12 @@ Filters are evaluated at the public query boundary. Every temporary simplex,
 axis, and candidate belongs to one call, which permits parallel read queries
 without locks or world-step state.
 
+World queries traverse living colliders and write handles ordered by creation
+identity into consumer buffers. Their query filter remains distinct from
+contact filtering; AABB, shape overlap, ray cast, and shape cast expose no
+proxy or internal traversal order. Each call owns its temporary values, so
+multiple readers may share a resting world while `step` locks this boundary.
+
 These algorithms are native Silex adaptations informed by Box2D `v3.1.1` at
 commit `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, notably `src/hull.c`,
 `src/distance.c`, `src/geometry.c`, and `src/manifold.c`. Box2D is Copyright

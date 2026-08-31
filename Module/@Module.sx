@@ -7,6 +7,7 @@ public use GFX.Physics.Segment2D.Segment2D
 public use GFX.Physics.Shape2D.Shape2D
 public use GFX.Physics.Transform2D.Transform2D
 public use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+public use GFX.Physics.BroadPhase2D.AABB2D
 public use GFX.Physics.Geometry2D.CastResult2D
 public use GFX.Physics.Geometry2D.DistanceResult2D
 public use GFX.Physics.Geometry2D.Geometry2D
@@ -30,6 +31,8 @@ public use GFX.Physics.RigidBody2D.PhysicsMaterial2D
 public use GFX.Physics.RigidBody2D.PhysicsMaterialId2D
 public use GFX.Physics.RigidBody2D.RigidBody2D
 public use GFX.Physics.RigidBody2D.RigidBody2DSettings
+public use GFX.Physics.SpatialQuery2D.QueryFilter2D
+public use GFX.Physics.SpatialQuery2D.WorldQueryStatistics2D
 public use GFX.Physics.Joints2D.DistanceJoint2D
 public use GFX.Physics.Joints2D.DistanceJoint2DSettings
 public use GFX.Physics.Joints2D.FilterJoint2D
@@ -51,6 +54,7 @@ public use GFX.Physics.World2D.World2DSettings
 public use GFX.Physics.World2D.World2DCounters
 public use GFX.Physics.World2D.World2DStepProfile
 public use GFX.Physics.World2D.Contact2D
+public use GFX.Physics.World2D.WorldCastResult2D
 
 contribute GFX.Components {
     public use GFX.Physics.RigidBody2D.RigidBody2D

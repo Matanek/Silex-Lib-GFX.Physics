@@ -31,6 +31,13 @@ contacts. Les capteurs partagent géométrie et filtres sans entrer dans les
 de capteur sont des buffers déterministes postérieurs au pas et restent
 optionnels.
 
+Les requêtes de monde parcourent les colliders vivants et écrivent des handles
+ordonnés par identité de création dans des buffers consommateurs. Le filtre de
+requête reste distinct du filtre de contact ; AABB, overlap de forme, ray cast
+et shape cast ne révèlent ni proxy ni ordre interne. Les temporaires
+appartiennent à chaque appel, ce qui autorise plusieurs lectures sur un monde
+au repos, tandis que `step` verrouille cette frontière.
+
 Les corps dynamiques rapides balaient toute la géométrie fixe et cinématique
 convexe, translation et rotation comprises. Les bullets étendent ce même
 chemin aux cibles dynamiques. Les corps lents et les paires dynamiques sans
