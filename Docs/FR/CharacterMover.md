@@ -51,7 +51,8 @@ silex run Silex-Examples/Sources/CharacterMover2D.sx --release
 ```
 
 La démo montre une capsule sur un sol, une pente, une marche, un angle concave,
-un trampoline, une caisse dynamique à pousser et une plateforme cinématique
-mobile. Des parois retiennent les objets physiques dans l'arène. Elle appartient
+un trampoline dégagé, une caisse dynamique légère à pousser, cinq balles
+rebondissantes et une plateforme cinématique mobile. Des parois retiennent les
+objets physiques dans l'arène. Elle appartient
 au catalogue public `Silex-Examples`. Utiliser `A`/`D` ou les flèches pour se
 déplacer, `Espace` pour sauter et `R` pour recommencer.
