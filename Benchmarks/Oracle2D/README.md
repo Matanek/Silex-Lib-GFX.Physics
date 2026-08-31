@@ -155,6 +155,23 @@ Metadata and identities match exactly. Both engines must expose two positive,
 finite normal impulses; their total uses a 0.35 absolute tolerance to allow
 solver-phase differences without accepting a missing contact point.
 
+The joint witness exercises runtime spring, limit and motor mutation plus
+completed-step translations, angles and reactions for distance, prismatic,
+revolute and wheel families:
+
+```text
+cmake --build /tmp/gfx-physics-box2d --target gfx_physics_box2d_joints_oracle
+silex compile Packages/GFX.Physics/Benchmarks/JointsOracle2D.sx --release -o /tmp/gfx-physics-silex-joints
+/tmp/gfx-physics-box2d/gfx_physics_box2d_joints_oracle > /tmp/box2d-joints.txt
+/tmp/gfx-physics-silex-joints > /tmp/silex-joints.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckJoints.py /tmp/box2d-joints.txt /tmp/silex-joints.txt
+```
+
+The checker compares the constrained positions and angles within documented
+native-solver tolerances, requires finite reactions, and enforces the configured
+motor force and torque maxima. Different internal impulse caches are not
+treated as public equality.
+
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass
 `--debug-build` to the Silex executable so its record names the configuration

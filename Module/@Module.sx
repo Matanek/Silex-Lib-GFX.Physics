@@ -48,6 +48,7 @@ public use GFX.Physics.Joints2D.WeldJoint2D
 public use GFX.Physics.Joints2D.WeldJoint2DSettings
 public use GFX.Physics.Joints2D.WheelJoint2D
 public use GFX.Physics.Joints2D.WheelJoint2DSettings
+public use GFX.Physics.Joints2D.Joint2D
 public use GFX.Physics.World2D.World2D
 public use GFX.Physics.World2D.World2DStepProfile
 public use GFX.Physics.World2D.Contact2D

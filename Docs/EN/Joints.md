@@ -27,6 +27,18 @@ var hinge = world.create_revolute_joint(
 )
 ```
 
+Typed handles expose the connected bodies and the retained local frames.
+Every family then owns its applicable runtime properties: length, limits,
+spring, motor, target, offsets, maxima, hertz, and damping. Mutators validate
+their values, clear impulses made incompatible by the change, and wake the
+connected island. Like every world mutation, they fail while `step` is active.
+
+```silex
+hinge.set_limits(true, -0.75, 0.75)
+hinge.set_spring(true, 4.0, 0.7)
+hinge.set_motor(3.0, 60.0)
+```
+
 The families express these distinct intentions:
 
 - `DistanceJoint2D` retains an anchor distance and can add a length range, a
@@ -47,7 +59,8 @@ The families express these distinct intentions:
 Connected collision is disabled by default. Set `collide_connected` when the
 corresponding settings type exposes it and the two shapes should still collide.
 The filter joint always disables connected collision and contributes no solver
-impulse.
+impulse. Runtime `set_collide_connected` changes the same policy for every
+other two-body family.
 
 Distance and prismatic handles report current translation, speed where
 relevant, total constraint force, and motor force. Revolute and wheel handles
@@ -56,6 +69,14 @@ torque. Mouse, motor, and weld handles expose their pertinent total reactions.
 These reactions describe the most recently completed `step`; they are zero
 before a positive-duration step. Mouse targets and supported motor speeds can
 be changed through their typed handles, which wakes the connected bodies.
+`separation()` reports the current anchor separation without exposing solver
+rows or accumulated impulses.
+
+`world.write_joints(buffer)` enumerates all joints in stable creation order;
+the `world.write_joints(body, buffer)` overload retains only joints attached to
+that body. The caller-owned array contains the tagged `Joint2D` sum. Matching
+its distance, filter, motor, mouse, prismatic, revolute, weld, or wheel case
+recovers the corresponding specialized handle.
 
 Joint handles follow the same ownership rule as body handles. Calling
 `world.destroy_joint(joint)` invalidates every copy of that handle. Destroying
@@ -71,7 +92,9 @@ large conflict-free colors use the same 4,096-entry dispatch threshold and the
 same kernels for one or several workers. Joint-connected dynamic bodies also
 share sleep-island lifetime.
 
-[`../Tests/Consumer/Tests/Joints.sx`](../../Tests/Consumer/Tests/Joints.sx) is the
-public executable proof. It covers every family, limits, motors, springs,
-reactions, collision suppression and handle invalidation; internal tests add
-deterministic worker-count equivalence and a 4,096-joint parallel color.
+[`Joints.sx`](../../Tests/Consumer/Tests/Joints.sx) and
+[`JointRuntimeConfiguration.sx`](../../Tests/Consumer/Tests/JointRuntimeConfiguration.sx)
+are the public executable proofs. They cover every family, runtime properties,
+enumeration, reactions, collision suppression and handle invalidation;
+internal tests add deterministic worker-count equivalence and a 4,096-joint
+parallel color.

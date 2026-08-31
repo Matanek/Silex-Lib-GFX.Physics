@@ -10,7 +10,7 @@ The executable source of truth is
 Its validator parses all `B2_API` declarations from `base.h`,
 `math_functions.h`, `types.h`, `collision.h` and `box2d.h` in the pinned
 checkout. The current inventory contains 422 symbols, each owned by exactly one
-of 59 behavioral capability rows. A changed revision, header count, missing
+of 61 behavioral capability rows. A changed revision, header count, missing
 symbol, duplicate classification, missing proof, absent future Spec or
 unjustified exclusion fails validation.
 
@@ -24,8 +24,8 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current contract contains 20 covered, 10 partial, 17 planned, 4 divergent and
-8 excluded capability rows. These counts describe groups of related behavior,
+The current contract contains 24 covered, 7 partial, 16 planned, 6 divergent,
+and 8 excluded capability rows. These counts describe groups of related behavior,
 not percentages of engine completeness. The final sequence gate removes every
 unexplained partial or promise; it does not promote a capability by counting C
 wrappers.

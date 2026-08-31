@@ -156,7 +156,10 @@ Joints use a separate generational dense store behind their typed public
 handles. Creation converts world anchors and axes to local body data; body
 compaction therefore cannot invalidate a live constraint. Destroying a body
 first destroys every attached joint, while explicit joint destruction advances
-its own generation. Contact colors claim body masks first, then joint rows join
+its own generation. A tagged `Joint2D` view reconstructs typed handles from
+live generations for world/body enumeration; no dense index escapes. Runtime
+mutations validate values, clear incompatible cached impulses and wake both
+ends before the next solve. Contact colors claim body masks first, then joint rows join
 the same twelve-color schedule. Warm start, biased sweeps, integration, and
 relaxation execute contacts and joints per color before advancing to the next
 color. The scalar overflow rule and 4,096-entry worker threshold are shared.

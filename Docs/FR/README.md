@@ -32,6 +32,8 @@ assert(!body.is_valid())
 Les handles de corps, colliders et joints sont typés et générationnels. Leur
 destruction invalide toutes les copies conservées. Le monde possède l’horloge,
 les ressources de simulation et la frontière de mutation.
+Les huit familles de joints conservent des réglages runtime typés et peuvent
+être énumérées par monde ou corps via la somme `Joint2D`.
 
 ## Géométrie et contacts
 
