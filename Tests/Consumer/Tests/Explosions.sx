@@ -1,0 +1,119 @@
+use GFX.Physics
+use STD.Math
+
+func body(
+    world:&Physics.World2D,
+    label:str,
+    position:Math.Vec2,
+    type:Physics.BodyType2D = Physics.BodyType2D.dynamic,
+    filter:Physics.CollisionFilter2D = Physics.CollisionFilter2D(),
+    enabled:bool = true
+) Physics.RigidBody2D {
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = type
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = position
+        ..collision_filter = filter
+        ..debug_label = label
+        ..is_enabled = enabled
+    )
+}
+
+test "apply a filtered radial impulse with linear attenuation" {
+    let selected = Physics.CollisionFilter2D(
+        category_bits:0x2,
+        mask_bits:0xffff_ffff_ffff_ffff
+    )
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var near = body(world, "near", Math.Vec2(1.0, 0.0), filter:selected)
+    var far = body(world, "far", Math.Vec2(3.0, 0.0), filter:selected)
+    var rejected = body(world, "rejected", Math.Vec2(0.0, 2.0))
+    var fixed = body(world, "fixed", Math.Vec2(-1.0, 0.0),
+        type:Physics.BodyType2D.fixed, filter:selected)
+    var disabled = body(world, "disabled", Math.Vec2(0.0, -1.0),
+        filter:selected, enabled:false)
+    var results:Physics.ExplosionResult2D[] = []
+
+    let count = world.explode(Physics.Explosion2DSettings()
+        ..radius = 4.0
+        ..impulse = 8.0
+        ..filter = Physics.QueryFilter2D(category_bits:0x1, mask_bits:0x2),
+        results
+    )
+
+    assert(count == 2)
+    assert(results.count() == 2)
+    assert(results[0].body().debug_label() == "near")
+    assert(results[1].body().debug_label() == "far")
+    assert(near.velocity().x > far.velocity().x)
+    assert(near.velocity().x > 0.0)
+    assert(far.velocity().x > 0.0)
+    assert(rejected.velocity() == Math.Vec2())
+    assert(fixed.velocity() == Math.Vec2())
+    assert(disabled.velocity() == Math.Vec2())
+}
+
+test "aggregate compound colliders into one off-center body impulse" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var compound = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false
+        ..position = Math.Vec2(2.0, 0.0)
+        ..debug_label = "compound"
+    )
+    world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.75, 0.25), Math.Vec2(-0.25, 0.25),
+            Math.Vec2(-0.25, 0.75), Math.Vec2(-0.75, 0.75)
+        ]))
+    )
+    world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(0.25, 0.25), Math.Vec2(0.75, 0.25),
+            Math.Vec2(0.75, 0.75), Math.Vec2(0.25, 0.75)
+        ]))
+    )
+    var results:Physics.ExplosionResult2D[] = []
+    world.explode(Physics.Explosion2DSettings()
+        ..radius = 4.0
+        ..impulse = 5.0,
+        results
+    )
+
+    assert(results.count() == 1)
+    assert(results[0].body().debug_label() == "compound")
+    assert(results[0].impulse.length() <= 5.000001)
+    assert(compound.velocity().x > 0.0)
+    assert(Math.abs(compound.angular_velocity()) > 0.000001)
+}
+
+test "respect constant and quadratic falloff and the wake option" {
+    var constant_world = Physics.World2D(gravity:Math.Vec2())
+    var quadratic_world = Physics.World2D(gravity:Math.Vec2())
+    var constant_body = body(constant_world, "constant", Math.Vec2(2.0, 0.0))
+    var quadratic_body = body(quadratic_world, "quadratic", Math.Vec2(2.0, 0.0))
+    constant_world.explode(Physics.Explosion2DSettings()
+        ..radius = 4.0
+        ..impulse = 4.0
+        ..falloff = Physics.ExplosionFalloff2D.constant
+    )
+    quadratic_world.explode(Physics.Explosion2DSettings()
+        ..radius = 4.0
+        ..impulse = 4.0
+        ..falloff = Physics.ExplosionFalloff2D.quadratic
+    )
+    assert(constant_body.velocity().x > quadratic_body.velocity().x)
+
+    var sleeping_world = Physics.World2D(gravity:Math.Vec2())
+    var sleeper = body(sleeping_world, "sleeper", Math.Vec2(1.0, 0.0))
+    var step = 0
+    while step < 120 { sleeping_world.step(1.0 / 60.0); step++ }
+    assert(!sleeper.is_awake())
+    let affected = sleeping_world.explode(Physics.Explosion2DSettings()
+        ..radius = 2.0
+        ..impulse = 2.0
+        ..wake = false
+    )
+    assert(affected == 0)
+    assert(!sleeper.is_awake())
+    assert(sleeper.velocity() == Math.Vec2())
+}

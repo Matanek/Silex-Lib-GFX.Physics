@@ -23,6 +23,9 @@ public use GFX.Physics.Events2D.ContactEndEvent2D
 public use GFX.Physics.Events2D.ContactHitEvent2D
 public use GFX.Physics.Events2D.SensorBeginEvent2D
 public use GFX.Physics.Events2D.SensorEndEvent2D
+public use GFX.Physics.Explosion2D.Explosion2DSettings
+public use GFX.Physics.Explosion2D.ExplosionFalloff2D
+public use GFX.Physics.Explosion2D.ExplosionResult2D
 public use GFX.Physics.RigidBody2D.BodyType2D
 public use GFX.Physics.RigidBody2D.Collider2D
 public use GFX.Physics.RigidBody2D.Collider2DSettings

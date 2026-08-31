@@ -1,0 +1,57 @@
+use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.SpatialQuery2D.QueryFilter2D
+use STD.Math
+
+public enum ExplosionFalloff2D {
+    constant
+    linear
+    quadratic
+}
+
+public struct Explosion2DSettings {
+    var center:Math.Vec2
+    var radius:float
+    var impulse:float
+    var filter:QueryFilter2D
+    var falloff:ExplosionFalloff2D
+    var wake:bool
+
+    init() {
+        self.center = Math.Vec2()
+        self.radius = 1.0
+        self.impulse = 1.0
+        self.filter = QueryFilter2D()
+        self.falloff = ExplosionFalloff2D.linear
+        self.wake = true
+    }
+}
+
+public class ExplosionResult2D {
+    private var current_body:RigidBody2D?
+    let point:Math.Vec2
+    let impulse:Math.Vec2
+
+    package init(body:RigidBody2D, point:Math.Vec2, impulse:Math.Vec2) {
+        self.current_body = body
+        self.point = point
+        self.impulse = impulse
+    }
+
+    func body() RigidBody2D {
+        if let body = self.current_body { return body }
+        panic("GFX.Physics.ExplosionResult2D is not initialized")
+    }
+}
+
+package func explosion_attenuation(
+    falloff:ExplosionFalloff2D,
+    distance:float,
+    radius:float
+) float {
+    if falloff == ExplosionFalloff2D.constant { return 1.0 }
+    let remaining = 1.0 - Math.min(1.0, distance / radius)
+    if falloff == ExplosionFalloff2D.quadratic {
+        return remaining * remaining
+    }
+    return remaining
+}

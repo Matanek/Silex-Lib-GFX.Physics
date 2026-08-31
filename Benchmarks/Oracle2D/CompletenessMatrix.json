@@ -126,10 +126,10 @@
       "id": "default-explosion-settings",
       "domain": "world",
       "capability": "default radial explosion configuration",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2DefaultExplosionDef$"],
-      "silex_contract": "Explosion2DSettings will provide typed defaults for radial impulse gameplay.",
-      "tracking": "Physique 2D complète 12 — Explosions et forces radiales"
+      "silex_contract": "Explosion2DSettings provides typed defaults for filtered radial impulse gameplay.",
+      "evidence": ["Tests/Consumer/Tests/Explosions.sx", "Benchmarks/ExplosionOracle2D.sx"]
     },
     {
       "id": "default-debug-draw-settings",
@@ -340,10 +340,10 @@
       "id": "world-explosion",
       "domain": "world",
       "capability": "radial world impulse",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_Explode$"],
-      "silex_contract": "World2D.explode will aggregate collider contributions into deterministic typed body results.",
-      "tracking": "Physique 2D complète 12 — Explosions et forces radiales"
+      "silex_contract": "World2D.explode aggregates collider contributions into deterministic typed body results.",
+      "evidence": ["Tests/Consumer/Tests/Explosions.sx", "Benchmarks/ExplosionOracle2D.sx"]
     },
     {
       "id": "world-observation",

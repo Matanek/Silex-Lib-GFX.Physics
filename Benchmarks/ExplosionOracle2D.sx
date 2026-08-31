@@ -1,0 +1,33 @@
+use GFX.Physics
+use STD.Math
+
+func circle(world:&Physics.World2D, position:Math.Vec2, selected:bool) Physics.RigidBody2D {
+    var category:uint64 = 1
+    if selected { category = 2 }
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = position
+        ..collision_filter = Physics.CollisionFilter2D(
+            category_bits:category,
+            mask_bits:0xffff_ffff_ffff_ffff
+        )
+    )
+}
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var near = circle(world, Math.Vec2(1.0, 0.0), true)
+    var far = circle(world, Math.Vec2(3.0, 0.0), true)
+    var rejected = circle(world, Math.Vec2(0.0, 2.0), false)
+    var results:Physics.ExplosionResult2D[] = []
+    world.explode(Physics.Explosion2DSettings()
+        ..radius = 4.0
+        ..impulse = 8.0
+        ..filter = Physics.QueryFilter2D(category_bits:1, mask_bits:2),
+        results
+    )
+    print("count $(results.count())")
+    print("near $(near.velocity().x) $(near.velocity().y)")
+    print("far $(far.velocity().x) $(far.velocity().y)")
+    print("rejected $(rejected.velocity().x) $(rejected.velocity().y)")
+}

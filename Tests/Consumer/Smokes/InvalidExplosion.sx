@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.explode(Physics.Explosion2DSettings()..radius = 0.0)
+}

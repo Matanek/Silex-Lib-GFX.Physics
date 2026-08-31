@@ -100,6 +100,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Contrat de complétude Box2D](Completeness.md)
 - [Contacts persistants](Contacts.md)
 - [Événements, capteurs et CCD](EventsAndCCD.md)
+- [Explosions et impulsions radiales](Explosions.md)
 - [Requêtes géométriques](Geometry.md)
 - [Requêtes spatiales du monde](WorldQueries.md)
 - [Îlots actifs et sommeil](Islands.md)
