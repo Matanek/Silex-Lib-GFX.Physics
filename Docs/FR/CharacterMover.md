@@ -58,7 +58,9 @@ les frames supérieures à 33 ms et le coût du pas physique. Cette scène sans
 bullet, aux vitesses bornées, utilise la détection discrète, autorise le sommeil
 des objets et limite le rattrapage à quatre pas par frame. Une barre montre la
 pression progressive exercée sur les objets. Les balles légères servent d'appui
-au saut tandis que la pression les écarte de la capsule afin qu'elle puisse se
-glisser entre plusieurs balles. Elle appartient
+au saut et restent des obstacles du mover. Dès le premier contact de shape cast,
+elles reçoivent une vitesse d'accompagnement qui les écarte sans laisser la
+capsule les traverser ; la pression soutenue ouvre ensuite les groupes de
+balles autour du personnage. Elle appartient
 au catalogue public `Silex-Examples`. Utiliser `A`/`D` ou les flèches pour se
 déplacer, `Espace` pour sauter et `R` pour recommencer.

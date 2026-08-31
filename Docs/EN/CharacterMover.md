@@ -55,7 +55,8 @@ tracks current and lowest FPS, frames longer than 33 ms, and physics-step cost.
 This bounded-speed scene contains no bullet, uses discrete collision detection,
 allows idle props to sleep, and caps catch-up at four steps per frame. It is
 The overlay also shows progressive pushing pressure. Lightweight balls support
-jumping while pressure spreads them away from the capsule so it can squeeze
-between clustered balls. The demo is owned by the public
+jumping and remain mover obstacles. The first shape-cast contact gives them
+lead velocity so they yield without letting the capsule pass through; sustained
+pressure then opens clustered balls around the character. The demo is owned by the public
 `Silex-Examples` catalog.
 Use `A`/`D` or the arrow keys to move, `Space` to jump, and `R` to reset.
