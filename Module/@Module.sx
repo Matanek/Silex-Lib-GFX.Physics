@@ -57,11 +57,21 @@ public use GFX.Physics.ContactPolicy2D.ColliderSnapshot2D
 public use GFX.Physics.ContactPolicy2D.ContactDecision2D
 public use GFX.Physics.ContactPolicy2D.ContactPairSnapshot2D
 public use GFX.Physics.ContactPolicy2D.ContactPreSolve2D
+public use GFX.Physics.Application2D.Physics2DExecutionMode
+public use GFX.Physics.Application2D.Physics2DFrameEvents
+public use GFX.Physics.Application2D.PhysicsBody2D
+public use GFX.Physics.Application2D.Plugin as Physics2DPlugin
 
 contribute GFX.Components {
     public use GFX.Physics.RigidBody2D.RigidBody2D
+    public use GFX.Physics.Application2D.PhysicsBody2D
 }
 
 contribute GFX.Resources {
     public use GFX.Physics.World2D.World2D
+    public use GFX.Physics.Application2D.Physics2DFrameEvents
+}
+
+contribute GFX.Plugins {
+    public use GFX.Physics.Application2D.Plugin as Physics2D
 }

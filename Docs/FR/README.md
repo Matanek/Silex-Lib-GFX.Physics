@@ -95,6 +95,7 @@ Les seuils ne modifient que la répartition du même travail.
 ## Guides
 
 - [Architecture](Architecture.md)
+- [Intégration Application, ECS et Scene2D](ApplicationIntegration.md)
 - [Masse, forces et contrôle des corps](BodyControl.md)
 - [Colliders et matériaux](Colliders.md)
 - [Contrat de complétude Box2D](Completeness.md)

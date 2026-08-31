@@ -1,0 +1,11 @@
+use GFX.Application
+use GFX.Physics
+use GFX.Plugins
+
+func main() {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..execution = Physics.Physics2DExecutionMode.workers(0)
+        ))
+    application.prepare()
+}

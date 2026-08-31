@@ -2,6 +2,9 @@
 
 `GFX.Physics` possède l’espace de noms `GFX.Physics` sous l’autorité de GFX.
 La simulation reste indépendante de toute fenêtre, scène, renderer ou ECS.
+Le module optionnel `Application2D` dépend de `GFX.Application`, `GFX.ECS` et
+`GFX.Scene2D`, mais cette couche orchestre le même `World2D` public sans entrer
+dans son cœur headless.
 L’API exprime les intentions physiques ; intégration numérique, stockage,
 accélération spatiale, contacts et données du solver restent privés.
 

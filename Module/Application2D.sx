@@ -1,0 +1,373 @@
+use GFX.Application
+use GFX.Application.FrameTime
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Application.Time as TimePlugin
+use GFX.ECS
+use GFX.ECS.Entity
+use GFX.Physics.Events2D.BodyMoveEvent2D
+use GFX.Physics.Events2D.ContactBeginEvent2D
+use GFX.Physics.Events2D.ContactEndEvent2D
+use GFX.Physics.Events2D.ContactHitEvent2D
+use GFX.Physics.Events2D.SensorBeginEvent2D
+use GFX.Physics.Events2D.SensorEndEvent2D
+use GFX.Physics.Events2D.SensorOverlap2D
+use GFX.Physics.RigidBody2D.BodyType2D
+use GFX.Physics.RigidBody2D.Collider2DSettings
+use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.Transform2D.Transform2D as PhysicsTransform2D
+use GFX.Physics.World2D.World2D
+use GFX.Physics.World2D.World2DSettings
+use GFX.Scene2D.Transform as SceneTransform2D
+use STD.Math
+
+public enum Physics2DExecutionMode {
+    synchronous
+    workers(int)
+}
+
+public struct PhysicsBody2D {
+    private let creation_settings:RigidBody2DSettings
+    private let creation_colliders:Collider2DSettings[]
+    private var current_body:RigidBody2D?
+
+    init(
+        settings:RigidBody2DSettings = RigidBody2DSettings(),
+        colliders:Collider2DSettings[] = []
+    ) {
+        self.creation_settings = settings
+        self.creation_colliders = colliders
+        self.current_body = null
+    }
+
+    func settings() RigidBody2DSettings { return self.creation_settings }
+    func colliders() Collider2DSettings[] { return self.creation_colliders }
+    func is_bound() bool {
+        if let body = self.current_body { return body.is_valid() }
+        return false
+    }
+    func body() RigidBody2D? {
+        if let body = self.current_body {
+            if body.is_valid() { return body }
+        }
+        return null
+    }
+
+    package func bind(body:RigidBody2D) { self.current_body = body }
+    package func unbind() { self.current_body = null }
+}
+
+public class Physics2DFrameEvents {
+    private var completed_steps:int
+    private var body_moves:BodyMoveEvent2D[]
+    private var contact_begins:ContactBeginEvent2D[]
+    private var contact_ends:ContactEndEvent2D[]
+    private var contact_hits:ContactHitEvent2D[]
+    private var sensor_begins:SensorBeginEvent2D[]
+    private var sensor_ends:SensorEndEvent2D[]
+    private var sensor_overlaps:SensorOverlap2D[]
+    private var scratch_body_moves:BodyMoveEvent2D[]
+    private var scratch_contact_begins:ContactBeginEvent2D[]
+    private var scratch_contact_ends:ContactEndEvent2D[]
+    private var scratch_contact_hits:ContactHitEvent2D[]
+    private var scratch_sensor_begins:SensorBeginEvent2D[]
+    private var scratch_sensor_ends:SensorEndEvent2D[]
+    private var scratch_sensor_overlaps:SensorOverlap2D[]
+
+    init() {
+        self.completed_steps = 0
+        self.body_moves = []
+        self.contact_begins = []
+        self.contact_ends = []
+        self.contact_hits = []
+        self.sensor_begins = []
+        self.sensor_ends = []
+        self.sensor_overlaps = []
+        self.scratch_body_moves = []
+        self.scratch_contact_begins = []
+        self.scratch_contact_ends = []
+        self.scratch_contact_hits = []
+        self.scratch_sensor_begins = []
+        self.scratch_sensor_ends = []
+        self.scratch_sensor_overlaps = []
+    }
+
+    func fixed_step_count() int { return self.completed_steps }
+    func body_move_count() int { return self.body_moves.count() }
+    func contact_begin_count() int { return self.contact_begins.count() }
+    func contact_end_count() int { return self.contact_ends.count() }
+    func contact_hit_count() int { return self.contact_hits.count() }
+    func sensor_begin_count() int { return self.sensor_begins.count() }
+    func sensor_end_count() int { return self.sensor_ends.count() }
+    func sensor_overlap_count() int { return self.sensor_overlaps.count() }
+    func body_move(index:int) BodyMoveEvent2D { return self.body_moves[index] }
+    func contact_begin(index:int) ContactBeginEvent2D { return self.contact_begins[index] }
+    func contact_end(index:int) ContactEndEvent2D { return self.contact_ends[index] }
+    func contact_hit(index:int) ContactHitEvent2D { return self.contact_hits[index] }
+    func sensor_begin(index:int) SensorBeginEvent2D { return self.sensor_begins[index] }
+    func sensor_end(index:int) SensorEndEvent2D { return self.sensor_ends[index] }
+    func sensor_overlap(index:int) SensorOverlap2D { return self.sensor_overlaps[index] }
+
+    package func begin_frame() {
+        self.completed_steps = 0
+        self.body_moves.clear()
+        self.contact_begins.clear()
+        self.contact_ends.clear()
+        self.contact_hits.clear()
+        self.sensor_begins.clear()
+        self.sensor_ends.clear()
+        self.sensor_overlaps.clear()
+    }
+
+    package func capture(world:&World2D) {
+        self.completed_steps++
+        world.write_body_move_events(self.scratch_body_moves)
+        world.write_contact_begin_events(self.scratch_contact_begins)
+        world.write_contact_end_events(self.scratch_contact_ends)
+        world.write_contact_hit_events(self.scratch_contact_hits)
+        world.write_sensor_begin_events(self.scratch_sensor_begins)
+        world.write_sensor_end_events(self.scratch_sensor_ends)
+        world.write_sensor_overlaps(self.scratch_sensor_overlaps)
+        for event in self.scratch_body_moves { self.body_moves.append(event) }
+        for event in self.scratch_contact_begins { self.contact_begins.append(event) }
+        for event in self.scratch_contact_ends { self.contact_ends.append(event) }
+        for event in self.scratch_contact_hits { self.contact_hits.append(event) }
+        for event in self.scratch_sensor_begins { self.sensor_begins.append(event) }
+        for event in self.scratch_sensor_ends { self.sensor_ends.append(event) }
+        for event in self.scratch_sensor_overlaps { self.sensor_overlaps.append(event) }
+    }
+}
+
+struct Physics2DBinding {
+    let entity:Entity
+    var body:RigidBody2D
+    var seen:bool
+}
+
+class Physics2DRuntime {
+    let fixed_delta:float
+    let maximum_catch_up_steps:int
+    let scene_units_per_meter:float
+    var accumulator:float
+    var bindings:Physics2DBinding[]
+
+    init(
+        fixed_delta:float,
+        maximum_catch_up_steps:int,
+        scene_units_per_meter:float
+    ) {
+        self.fixed_delta = fixed_delta
+        self.maximum_catch_up_steps = maximum_catch_up_steps
+        self.scene_units_per_meter = scene_units_per_meter
+        self.accumulator = 0.0
+        self.bindings = []
+    }
+
+    func begin_reconcile() {
+        var index = 0
+        while index < self.bindings.count() {
+            self.bindings[index].seen = false
+            index++
+        }
+    }
+
+    func find(entity:Entity) int {
+        var index = 0
+        while index < self.bindings.count() {
+            let candidate = self.bindings[index].entity
+            if candidate.index == entity.index &&
+                candidate.generation == entity.generation
+            {
+                return index
+            }
+            index++
+        }
+        return -1
+    }
+
+    func take_body(index:int) RigidBody2D {
+        var body = self.bindings[index].body
+        var current = index
+        while current + 1 < self.bindings.count() {
+            self.bindings.swap(current, current + 1)
+            current++
+        }
+        self.bindings.take_last()
+        return body
+    }
+}
+
+public struct Plugin:PluginProtocol {
+    struct Settings {
+        var world:World2DSettings
+        var fixed_delta:float
+        var maximum_catch_up_steps:int
+        var scene_units_per_meter:float
+        var execution:Physics2DExecutionMode
+
+        init(
+            world:World2DSettings = World2DSettings(),
+            fixed_delta:float = 1.0 / 60.0,
+            maximum_catch_up_steps:int = 4,
+            scene_units_per_meter:float = 1.0,
+            execution:Physics2DExecutionMode = Physics2DExecutionMode.synchronous
+        ) {
+            self.world = world
+            self.fixed_delta = fixed_delta
+            self.maximum_catch_up_steps = maximum_catch_up_steps
+            self.scene_units_per_meter = scene_units_per_meter
+            self.execution = execution
+        }
+    }
+
+    private let settings:Settings
+
+    init(settings:Settings = Plugin.Settings()) { self.settings = settings }
+
+    func id() str { return "GFX.Physics.Plugin2D" }
+
+    func build(host:&Application) {
+        require_application_settings(self.settings)
+        host.add_plugin(ECS.Plugin())
+        if !host.inherits_plugin(self.id()) { host.extend_bundles(self) }
+        host.add_plugin(TimePlugin())
+        var world = World2D(self.settings.world)
+        match self.settings.execution {
+            synchronous => { world.enable_parallelism(1) }
+            workers(count) => {
+                if count < 1 {
+                    panic("GFX.Physics Physics2D worker count must be positive")
+                }
+                world.enable_parallelism(count)
+            }
+        }
+        host.add_resource(world)
+        host.add_resource(Physics2DFrameEvents())
+        host.add_resource(Physics2DRuntime(
+            self.settings.fixed_delta,
+            self.settings.maximum_catch_up_steps,
+            self.settings.scene_units_per_meter
+        ))
+        host.add_system(Schedule.post_update, update_application_physics)
+        host.add_after_system(Schedule.shutdown, stop_application_physics)
+    }
+}
+
+func update_application_physics(
+    time:@FrameTime,
+    physics:&World2D,
+    events:&Physics2DFrameEvents,
+    runtime:&Physics2DRuntime,
+    bodies:ECS.Query<(Entity, &PhysicsBody2D, &SceneTransform2D)>
+) {
+    events.begin_frame()
+    runtime.begin_reconcile()
+    for (entity, component, transform) in bodies {
+        var binding = runtime.find(entity)
+        if binding >= 0 && !component.is_bound() {
+            var previous_body = runtime.take_body(binding)
+            physics.destroy_rigid_body(previous_body)
+            binding = -1
+        }
+        if binding < 0 {
+            var settings = component.settings()
+            settings.position = transform.position.divide(
+                runtime.scene_units_per_meter
+            )
+            settings.rotation = transform.rotation
+            let colliders = component.colliders()
+            if !colliders.is_empty() { settings.create_implicit_collider = false }
+            var body = physics.create_rigid_body(settings)
+            for collider in colliders { physics.create_collider(body, collider) }
+            component.bind(body)
+            runtime.bindings.append(Physics2DBinding(
+                entity:entity,
+                body:body,
+                seen:true
+            ))
+            binding = runtime.bindings.count() - 1
+        }
+        runtime.bindings[binding].seen = true
+    }
+
+    var index = runtime.bindings.count() - 1
+    while index >= 0 {
+        if !runtime.bindings[index].seen {
+            var body = runtime.take_body(index)
+            if body.is_valid() { physics.destroy_rigid_body(body) }
+        }
+        index--
+    }
+
+    runtime.accumulator += Math.max(0.0, time.delta)
+    var step = 0
+    while runtime.accumulator >= runtime.fixed_delta &&
+        step < runtime.maximum_catch_up_steps
+    {
+        for (_, component, transform) in bodies {
+            if let body = component.body() {
+                if body.body_type() == BodyType2D.fixed {
+                    body.set_position(transform.position.divide(
+                        runtime.scene_units_per_meter
+                    ))
+                    body.set_rotation(transform.rotation)
+                } else if body.body_type() == BodyType2D.kinematic {
+                    body.set_target_transform(
+                        PhysicsTransform2D(
+                            position:transform.position.divide(
+                                runtime.scene_units_per_meter
+                            ),
+                            rotation:transform.rotation
+                        ),
+                        runtime.fixed_delta
+                    )
+                }
+            }
+        }
+        physics.step(runtime.fixed_delta)
+        events.capture(physics)
+        runtime.accumulator -= runtime.fixed_delta
+        step++
+    }
+
+    for (_, component, transform) in bodies {
+        if let body = component.body() {
+            if body.body_type() == BodyType2D.dynamic {
+                transform.position = body.position().multiply(
+                    runtime.scene_units_per_meter
+                )
+                transform.rotation = body.rotation()
+            }
+        }
+    }
+}
+
+func stop_application_physics(
+    physics:&World2D,
+    runtime:&Physics2DRuntime
+) {
+    while !runtime.bindings.is_empty() {
+        var body = runtime.take_body(runtime.bindings.count() - 1)
+        if body.is_valid() { physics.destroy_rigid_body(body) }
+    }
+}
+
+func require_application_settings(settings:Plugin.Settings) {
+    if settings.fixed_delta != settings.fixed_delta ||
+        settings.fixed_delta <= 0.0 ||
+        settings.fixed_delta + settings.fixed_delta == settings.fixed_delta
+    {
+        panic("GFX.Physics Physics2D fixed delta must be finite and positive")
+    }
+    if settings.maximum_catch_up_steps < 1 {
+        panic("GFX.Physics Physics2D maximum catch-up steps must be positive")
+    }
+    if settings.scene_units_per_meter != settings.scene_units_per_meter ||
+        settings.scene_units_per_meter <= 0.0 ||
+        settings.scene_units_per_meter + settings.scene_units_per_meter ==
+            settings.scene_units_per_meter
+    {
+        panic("GFX.Physics Physics2D scene units per meter must be finite and positive")
+    }
+}

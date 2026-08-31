@@ -94,6 +94,10 @@ Existing 0.4 world and body usage remains source-compatible across the switch.
 The intentional solver and lifetime changes are listed in
 [`Docs/Migration.md`](Migration.md).
 
+Applications may delegate fixed stepping, ECS lifecycle, Scene2D transform
+authority, and completed event aggregation to the optional
+[`Plugins.Physics2D` integration](ApplicationIntegration.md).
+
 Bodies derive composed mass, center of mass, and rotational inertia from their
 colliders. They expose forces, torques, impulses, coordinate conversions,
 fixed rotation, activation, runtime damping and sleep controls, and kinematic

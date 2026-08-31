@@ -1,0 +1,265 @@
+use GFX.Application
+use GFX.Components
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+func set_frame_delta(application:Application, delta:float) {
+    var resources = application.resources()
+    var time = resources.get_mut<Resources.FrameTime>()
+    time.delta = delta
+}
+
+func run_physics_frame(application:Application) {
+    application.run_schedule(Application.Schedule.update)
+    application.run_schedule(Application.Schedule.post_update)
+}
+
+func required_body(world:@Resources.World, entity:ECS.Entity) Physics.RigidBody2D {
+    let component = world.get<Components.PhysicsBody2D>(entity)
+    if let body = component.body() { return body }
+    panic("expected a bound PhysicsBody2D")
+}
+
+func physics_entity_count(world:@Resources.World) int {
+    var count = 0
+    for entity in world.entities() {
+        if world.has<Components.PhysicsBody2D>(entity) { count++ }
+    }
+    return count
+}
+
+test "own fixed catch-up binding events and deferred ECS lifecycle" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..world = (Physics.World2DSettings() ..gravity = Math.Vec2())
+            ..fixed_delta = 0.1
+            ..maximum_catch_up_steps = 2
+        ))
+    application.prepare()
+
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(
+                Physics.RigidBody2DSettings()
+                    ..velocity = Math.Vec2(1.0, 0.0)
+                    ..gravity_scale = 0.0
+                    ..allow_sleep = false
+                    ..enable_move_events = true,
+                [
+                    Physics.Collider2DSettings()
+                        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25)),
+                    Physics.Collider2DSettings()
+                        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+                ]
+            ))
+        )
+    }
+
+    set_frame_delta(application, 0.35)
+    run_physics_frame(application)
+    {
+        var resources = application.resources()
+        let events = resources.get<Resources.Physics2DFrameEvents>()
+        let world = resources.get<Resources.World>()
+        let transform = world.get<Components.Transform2D>(entity)
+        assert(events.fixed_step_count() == 2)
+        assert(events.body_move_count() == 2)
+        assert(Math.nearly_equal(transform.position.x, 0.2, 0.0001))
+        var colliders:Physics.Collider2D[] = []
+        var body = required_body(world, entity)
+        body.write_colliders(colliders)
+        assert(colliders.count() == 2)
+    }
+
+    set_frame_delta(application, 0.0)
+    run_physics_frame(application)
+    {
+        var resources = application.resources()
+        let events = resources.get<Resources.Physics2DFrameEvents>()
+        let world = resources.get<Resources.World>()
+        assert(events.fixed_step_count() == 1)
+        assert(Math.nearly_equal(
+            world.get<Components.Transform2D>(entity).position.x,
+            0.3,
+            0.0001
+        ))
+    }
+
+    var retired:Physics.RigidBody2D? = null
+    {
+        var resources = application.resources()
+        retired = required_body(resources.get<Resources.World>(), entity)
+        var commands = resources.get_mut<Resources.Commands>()
+        commands.destroy(entity)
+    }
+    application.run_schedule(Application.Schedule.post_update)
+    set_frame_delta(application, 0.0)
+    run_physics_frame(application)
+    if let body = retired { assert(!body.is_valid()) }
+    else { assert(false) }
+
+    {
+        var resources = application.resources()
+        var commands = resources.get_mut<Resources.Commands>()
+        commands.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D(position:Math.Vec2(2.0, 0.0)))
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5)))
+                ..gravity_scale = 0.0
+            ))
+        )
+    }
+    application.run_schedule(Application.Schedule.post_update)
+    set_frame_delta(application, 0.1)
+    run_physics_frame(application)
+    {
+        var resources = application.resources()
+        let world = resources.get<Resources.World>()
+        assert(physics_entity_count(world) == 1)
+        for candidate in world.entities() {
+            if world.has<Components.PhysicsBody2D>(candidate) {
+                assert(world.get<Components.PhysicsBody2D>(candidate).is_bound())
+            }
+        }
+    }
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "apply ECS authority to fixed and kinematic bodies and physics authority to dynamics" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..world = (Physics.World2DSettings() ..gravity = Math.Vec2())
+            ..fixed_delta = 0.1
+            ..scene_units_per_meter = 10.0
+        ))
+    application.prepare()
+    var fixed_entity = ECS.Entity()
+    var kinematic_entity = ECS.Entity()
+    var dynamic_entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        fixed_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D(position:Math.Vec2(30.0, 10.0)))
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..body_type = Physics.BodyType2D.fixed
+            ))
+        )
+        kinematic_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D(position:Math.Vec2(50.0, 10.0)))
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..body_type = Physics.BodyType2D.kinematic
+            ))
+        )
+        dynamic_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..velocity = Math.Vec2(1.0, 0.0)
+                ..gravity_scale = 0.0
+                ..allow_sleep = false
+            ))
+        )
+    }
+    set_frame_delta(application, 0.1)
+    run_physics_frame(application)
+
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        world.update<Components.Transform2D>(fixed_entity,
+            func(transform:&Components.Transform2D) {
+                transform.position = Math.Vec2(40.0, 20.0)
+                transform.rotation = 0.25
+            })
+        world.update<Components.Transform2D>(kinematic_entity,
+            func(transform:&Components.Transform2D) {
+                transform.position = Math.Vec2(70.0, 10.0)
+                transform.rotation = 0.5
+            })
+        world.update<Components.Transform2D>(dynamic_entity,
+            func(transform:&Components.Transform2D) {
+                transform.position = Math.Vec2(99.0, 0.0)
+            })
+    }
+    set_frame_delta(application, 0.1)
+    run_physics_frame(application)
+    {
+        var resources = application.resources()
+        let world = resources.get<Resources.World>()
+        var fixed_body = required_body(world, fixed_entity)
+        var kinematic_body = required_body(world, kinematic_entity)
+        assert(fixed_body.position().nearly_equal(Math.Vec2(4.0, 2.0), 0.0001))
+        assert(Math.nearly_equal(fixed_body.rotation(), 0.25, 0.0001))
+        assert(kinematic_body.position().nearly_equal(Math.Vec2(7.0, 1.0), 0.0001))
+        assert(Math.nearly_equal(kinematic_body.rotation(), 0.5, 0.0001))
+        assert(Math.nearly_equal(
+            world.get<Components.Transform2D>(dynamic_entity).position.x,
+            2.0,
+            0.0001
+        ))
+    }
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+func execution_signature(mode:Physics.Physics2DExecutionMode) float[] {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..world = (Physics.World2DSettings() ..gravity = Math.Vec2())
+            ..fixed_delta = 0.05
+            ..maximum_catch_up_steps = 3
+            ..execution = mode
+        ))
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..velocity = Math.Vec2(2.0, -1.0)
+                ..gravity_scale = 0.0
+                ..allow_sleep = false
+                ..enable_move_events = true
+            ))
+        )
+    }
+    var signature:float[] = []
+    let deltas:float[] = [0.16, 0.0, 0.07, 0.04]
+    for delta in deltas {
+        set_frame_delta(application, delta)
+        run_physics_frame(application)
+        var resources = application.resources()
+        let events = resources.get<Resources.Physics2DFrameEvents>()
+        let transform = resources.get<Resources.World>()
+            .get<Components.Transform2D>(entity)
+        signature.append(transform.position.x)
+        signature.append(transform.position.y)
+        signature.append(events.fixed_step_count() as float)
+        signature.append(events.body_move_count() as float)
+    }
+    application.run_schedule(Application.Schedule.shutdown)
+    return signature
+}
+
+test "preserve the logical sequence across synchronous and worker modes" {
+    let synchronous = execution_signature(
+        Physics.Physics2DExecutionMode.synchronous
+    )
+    let workers = execution_signature(
+        Physics.Physics2DExecutionMode.workers(4)
+    )
+    assert(synchronous.count() == workers.count())
+    var index = 0
+    while index < synchronous.count() {
+        assert(Math.nearly_equal(synchronous[index], workers[index], 0.000001))
+        index++
+    }
+}

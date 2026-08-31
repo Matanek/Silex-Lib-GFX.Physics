@@ -1,0 +1,10 @@
+use GFX.Application
+use GFX.Plugins
+
+func main() {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..fixed_delta = 0.0
+        ))
+    application.prepare()
+}

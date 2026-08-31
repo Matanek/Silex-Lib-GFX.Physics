@@ -3,6 +3,9 @@
 `GFX.Physics` is an optional child package of GFX and owns the
 `GFX.Physics` namespace. It depends on GFX as its authorized parent while its
 simulation remains usable without a window, renderer, scene, or ECS world.
+The optional `Application2D` module depends on `GFX.Application`, `GFX.ECS`,
+and `GFX.Scene2D`, but it orchestrates the same public `World2D` without
+entering the headless core.
 
 The public API expresses physical intentions. Numerical integration, storage,
 spatial acceleration, contact generation, and solver data remain private.

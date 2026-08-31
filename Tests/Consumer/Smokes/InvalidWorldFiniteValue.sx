@@ -7,5 +7,5 @@ func main() {
     var world = Physics.World2D(Physics.World2DSettings()
         ..gravity = Math.Vec2(infinite, 0.0)
     )
-    print(world.gravity())
+    print(world.gravity().x)
 }
