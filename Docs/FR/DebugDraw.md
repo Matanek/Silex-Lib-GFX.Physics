@@ -40,8 +40,10 @@ dans un nouveau Canvas via `canvas`, soit dans un composant
 remplace pas la représentation visuelle du jeu.
 
 La preuve consommateur est
-[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). L’exemple visuel qui
-active toutes les couches se lance depuis la racine du workspace :
+[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). L’exemple visuel
+anime le monde en pas fixes, pilote les corps et joints, puis réécrit le
+snapshot à chaque frame avec toutes les couches actives. Il se lance depuis la
+racine du workspace :
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release

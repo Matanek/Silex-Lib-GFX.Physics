@@ -39,8 +39,9 @@ new Canvas with `canvas`, or create a `GFX.Scene2D.Canvas` component with
 representation.
 
 The consumer proof is
-[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). Run the visual example
-that enables every layer from the workspace root:
+[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). The visual example
+advances the world at a fixed step, drives bodies and joints, and rewrites the
+snapshot every frame with all layers enabled. Run it from the workspace root:
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release
