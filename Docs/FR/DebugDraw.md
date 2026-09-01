@@ -49,9 +49,11 @@ séparent les intentions de diagnostic. Le premier emploie les mètres, la
 gravité `(0, -9.81) m/s²` et un pas fixe de 60 Hz ; des corps chutent en continu
 sur une rampe, une chaîne et un sol. Ses labels fixes vivent dans un Canvas
 vectoriel immuable, tandis que le Canvas géométrique est réécrit uniquement
-après un pas physique. Le second anime séparément les huit familles de joints,
-leurs bounds, centres de masse et couleurs de graphe. Chaque exemple affiche
-sa cadence avec `FPSPanel` :
+après un pas physique. Le second place les huit familles de joints sous la même
+gravité SI dans des mécanismes suspendus : masse sur ressort, pendules filtrés,
+servo, cible souple, glissière, pendule articulé, paire soudée et suspension de
+roue. La cible mondiale du mouse joint fait partie du tracé. Chaque exemple
+affiche sa cadence avec `FPSPanel` :
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release

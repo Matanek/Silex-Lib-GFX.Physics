@@ -172,3 +172,26 @@ test "omit non-colliding ghost edges from open chain diagnostics" {
     assert(snapshot.line(0).start == Math.Vec2(-1.0, 0.0))
     assert(snapshot.line(0).end == Math.Vec2(1.0, 0.0))
 }
+
+test "draw a mouse joint from its body anchor to the world target" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.0, 2.0)
+    )
+    var joint = world.create_mouse_joint(body, Physics.MouseJoint2DSettings()
+        ..target = body.position()
+    )
+    joint.set_target(Math.Vec2(4.0, 5.0))
+    var snapshot = Physics.World2DDebugSnapshot()
+
+    world.write_debug_snapshot(
+        Physics.World2DDebugSettings()
+            ..shapes = false
+            ..joints = true,
+        snapshot
+    )
+
+    assert(snapshot.line_count() == 1)
+    assert(snapshot.line(0).start == Math.Vec2(1.0, 2.0))
+    assert(snapshot.line(0).end == Math.Vec2(4.0, 5.0))
+}

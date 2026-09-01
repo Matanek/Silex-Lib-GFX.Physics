@@ -47,9 +47,11 @@ The consumer proof is
 separate the diagnostic intentions. The first uses metres, `(0, -9.81) m/s²`
 gravity, and a fixed 60 Hz step; bodies fall continuously onto a ramp, a chain,
 and a floor. Its fixed labels live in an immutable vector Canvas, while the
-geometric Canvas is rewritten only after a physics step. The second separately
-animates all eight joint families, their bounds, centers of mass, and constraint
-graph colors. Each example displays its cadence with `FPSPanel`:
+geometric Canvas is rewritten only after a physics step. The second places all
+eight joint families under the same SI gravity as suspended mechanisms: spring
+mass, filtered pendulums, servo, soft target, slider, hinged pendulum, welded
+pair, and wheel suspension. The mouse joint's world target is part of the
+diagnostic drawing. Each example displays its cadence with `FPSPanel`:
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release

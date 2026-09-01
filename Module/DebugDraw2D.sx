@@ -5,6 +5,7 @@ use GFX.Physics.BroadPhase2D.AABB2D
 use GFX.Physics.RigidBody2D.BodyStore2D
 use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.Joints2D.JointConstraint2D
+use GFX.Physics.Joints2D.JointKind2D
 use GFX.Physics.Shape2D.Shape2D
 use GFX.Physics.Transform2D.Transform2D
 use STD.Math
@@ -391,9 +392,12 @@ package func debug_append_joint(
     settings:World2DDebugSettings
 ) {
     let first = store.require(joint.first_body)
-    let second = store.require(joint.second_body)
     let first_point = debug_body_transform(store, first).point(joint.first_anchor)
-    let second_point = debug_body_transform(store, second).point(joint.second_anchor)
+    var second_point = joint.linear_target
+    if joint.kind != JointKind2D.mouse {
+        let second = store.require(joint.second_body)
+        second_point = debug_body_transform(store, second).point(joint.second_anchor)
+    }
     if !settings.allows(debug_line_bounds(first_point, second_point)) { return }
     snapshot.append(DebugLine2D(first_point, second_point, color, width))
     snapshot.append(DebugCircle2D(first_point, 0.03, color, width))
