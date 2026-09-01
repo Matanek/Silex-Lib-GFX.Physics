@@ -40,14 +40,16 @@ dans un nouveau Canvas via `canvas`, soit dans un composant
 remplace pas la représentation visuelle du jeu.
 
 La preuve consommateur est
-[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). L’exemple visuel
-emploie les mètres, la gravité `(0, -9.81) m/s²` et un pas fixe de 60 Hz. Des
-corps chutent en continu sur une rampe, une chaîne et un sol. La galerie
-complète des joints demeure une référence diagnostique stable ; seul le Canvas
-gravitaire vivant est réécrit à chaque frame afin d’éviter de retraiter la
-géométrie immobile. Un `FPSPanel` affiche la cadence de rendu mesurée. Il se
-lance depuis la racine du workspace :
+[`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). Deux exemples visuels
+séparent les intentions de diagnostic. Le premier emploie les mètres, la
+gravité `(0, -9.81) m/s²` et un pas fixe de 60 Hz ; des corps chutent en continu
+sur une rampe, une chaîne et un sol. Ses labels fixes vivent dans un Canvas
+vectoriel immuable, tandis que le Canvas géométrique est réécrit uniquement
+après un pas physique. Le second anime séparément les huit familles de joints,
+leurs bounds, centres de masse et couleurs de graphe. Chaque exemple affiche
+sa cadence avec `FPSPanel` :
 
 ```text
 silex run Silex-Examples/Sources/PhysicsDebugDraw2D/Main.sx --release
+silex run Silex-Examples/Sources/PhysicsJointDebugDraw2D/Main.sx --release
 ```

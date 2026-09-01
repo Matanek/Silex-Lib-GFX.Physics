@@ -2422,6 +2422,10 @@ public class World2D {
             self.current_ccd_body_count++
             var earliest = ContinuousHit2D()
             var earliest_target = -1
+            let swept_mover_bounds = continuous_body_bounds(
+                self.store,
+                mover
+            )
             var target = 0
             while target < self.store.count() {
                 if target == mover || !self.store.enabled[target] {
@@ -2439,6 +2443,13 @@ public class World2D {
                         target++
                         continue
                     }
+                }
+                if !swept_mover_bounds.overlaps(continuous_body_bounds(
+                    self.store,
+                    target
+                )) {
+                    target++
+                    continue
                 }
                 let pair = ordered_body_pair(mover, target)
                 if !self.store.collision_filters[pair.first].allows(
@@ -5345,6 +5356,72 @@ func body_maximum_sweep_radius(store:BodyStore2D, body:int) float {
     return maximum
 }
 
+func continuous_body_bounds(store:BodyStore2D, body:int) AABB2D {
+    let start_position = Math.Vec2(
+        store.previous_positions_x[body],
+        store.previous_positions_y[body]
+    )
+    let start = body_bounds_at(
+        store,
+        body,
+        start_position,
+        store.previous_rotations[body]
+    )
+    let finish = body_bounds(store, body)
+    let rotation_margin = Math.abs(
+        store.rotations[body] - store.previous_rotations[body]
+    ) * body_maximum_sweep_radius(store, body)
+    return AABB2D(
+        Math.Vec2(
+            Math.min(start.lower.x, finish.lower.x) - rotation_margin,
+            Math.min(start.lower.y, finish.lower.y) - rotation_margin
+        ),
+        Math.Vec2(
+            Math.max(start.upper.x, finish.upper.x) + rotation_margin,
+            Math.max(start.upper.y, finish.upper.y) + rotation_margin
+        ),
+        true
+    )
+}
+
+func body_bounds_at(
+    store:BodyStore2D,
+    body:int,
+    position:Math.Vec2,
+    rotation:float
+) AABB2D {
+    if store.shape_counts[body] == 0 {
+        return AABB2D(position, Math.Vec2())
+    }
+    let cosine = Math.cos(rotation)
+    let sine = Math.sin(rotation)
+    var slot = store.first_shape_slots[body]
+    var lower = Math.Vec2(3.4028235e38)
+    var upper = Math.Vec2(-3.4028235e38)
+    while slot >= 0 {
+        let dense = store.shape_store.slot_dense_indices[slot]
+        let metrics = shape_metrics(store.shape_store.shapes[dense])
+        var bounds = AABB2D(position, Math.Vec2(metrics.radius))
+        if metrics.kind != 1 {
+            bounds = transformed_bounds_at(
+                position,
+                cosine,
+                sine,
+                metrics.lower.x,
+                metrics.lower.y,
+                metrics.upper.x,
+                metrics.upper.y
+            )
+        }
+        lower.x = Math.min(lower.x, bounds.lower.x)
+        lower.y = Math.min(lower.y, bounds.lower.y)
+        upper.x = Math.max(upper.x, bounds.upper.x)
+        upper.y = Math.max(upper.y, bounds.upper.y)
+        slot = store.shape_store.next_body_shape_slots[dense]
+    }
+    return AABB2D(lower, upper, true)
+}
+
 func body_minimum_continuous_extent(
     store:BodyStore2D,
     body:int
@@ -5398,9 +5475,26 @@ func transformed_local_bounds(
     upper_x:float,
     upper_y:float
 ) AABB2D {
-    let cosine = store.rotation_cosines[body]
-    let sine = store.rotation_sines[body]
-    let position = body_position(store, body)
+    return transformed_bounds_at(
+        body_position(store, body),
+        store.rotation_cosines[body],
+        store.rotation_sines[body],
+        lower_x,
+        lower_y,
+        upper_x,
+        upper_y
+    )
+}
+
+func transformed_bounds_at(
+    position:Math.Vec2,
+    cosine:float,
+    sine:float,
+    lower_x:float,
+    lower_y:float,
+    upper_x:float,
+    upper_y:float
+) AABB2D {
     let first = Math.Vec2(
         position.x + cosine * lower_x - sine * lower_y,
         position.y + sine * lower_x + cosine * lower_y

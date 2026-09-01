@@ -39,6 +39,13 @@ Le sommeil retire le fond calme des piles du chemin chaud. Les corps bullets et
 flux d’événements restent opt-in. Le pas stabilisé n’alloue ni par contact ni
 par job.
 
+Avant un shape cast CCD, `World2D` élimine les cibles dont les bounds ne
+recouvrent pas les bounds balayés du corps rapide. Ces bounds réunissent les
+positions précédente et courante et ajoutent une marge conservatrice pour la
+rotation. Les cibles lointaines ne multiplient donc pas le coût CCD d’une petite
+scène sans modifier le test continu des paires qui peuvent réellement se
+rencontrer.
+
 ## Profil public
 
 ```silex
