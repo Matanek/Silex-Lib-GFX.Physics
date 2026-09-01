@@ -38,6 +38,12 @@ on emission timing.
 general-contact load of `World2D/FallingBody.sx`; combine it with
 `--falling-body --awake` when investigating the integrated stress path.
 
+Before a CCD shape cast, `World2D` rejects targets whose bounds do not overlap
+the fast body's swept bounds. Those bounds unite its previous and current
+positions and include a conservative rotation margin. Distant targets
+therefore do not multiply CCD cost in a small scene, while pairs that can
+actually meet still take the continuous collision path.
+
 `JointScale2D.sx` isolates 4,096 awake bodies, each owned by one mouse joint in
 the same conflict-free color. Creation is outside the measured interval. The
 single-worker Release median is currently 54.970 ms/step and the four-worker

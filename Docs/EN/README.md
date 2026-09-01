@@ -103,6 +103,10 @@ Applications may delegate fixed stepping, ECS lifecycle, Scene2D transform
 authority, and completed event aggregation to the optional
 [`Plugins.Physics2D` integration](ApplicationIntegration.md).
 
+The reusable physics debug snapshot renders shapes, joints, contacts, bounds,
+mass centers, islands, and constraint colors through Canvas or Scene2D without
+native callbacks. See [`Docs/DebugDraw.md`](DebugDraw.md).
+
 Bodies derive composed mass, center of mass, and rotational inertia from their
 colliders. They expose forces, torques, impulses, coordinate conversions,
 fixed rotation, activation, runtime damping and sleep controls, and kinematic
@@ -170,8 +174,10 @@ dense-pile regressions in [`Tests/World2D.sx`](../../Tests/World2D.sx).
 
 `World2D` also owns typed distance, filter, motor, mouse, prismatic, revolute,
 weld, and wheel joints. World-space anchors and axes become private local
-constraint data; limits, motors, springs, and completed-step reaction forces
-remain observable through the corresponding typed handle. Destroying either
+constraint data; limits, motors, springs, targets and offsets remain readable
+and mutable through the corresponding typed handle. Completed-step reactions
+and tagged enumeration by world or body preserve introspection without exposing
+solver state. Destroying either
 attached body invalidates its joints. Contacts and joints share one deterministic
 color graph, including the same parallel dispatch threshold for large
 conflict-free colors. See [`Docs/Joints.md`](Joints.md) and

@@ -1,0 +1,96 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func fixed_body(world:Physics.World2D) Physics.RigidBody2D {
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+    )
+}
+
+func dynamic_body(
+    world:Physics.World2D,
+    position:Math.Vec2
+) Physics.RigidBody2D {
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = position
+        ..allow_sleep = false
+    )
+}
+
+func run_steps(world:Physics.World2D, count:int) {
+    var step = 0
+    while step < count {
+        world.step(1.0 / 120.0)
+        step++
+    }
+}
+
+func distance_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = fixed_body(world)
+    var body = dynamic_body(world, Math.Vec2(2.0, 0.0))
+    var joint = world.create_distance_joint(
+        ground,
+        body,
+        Physics.DistanceJoint2DSettings()
+            ..first_anchor = Math.Vec2()
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+    )
+    joint.set_length(1.2)
+    joint.set_spring(true, 6.0, 1.0)
+    joint.set_limits(true, 0.8, 2.0)
+    run_steps(world, 180)
+    print("distance $(joint.current_length()) $(body.position().x) $(body.velocity().x) $(joint.constraint_force().x)")
+}
+
+func prismatic_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = fixed_body(world)
+    var body = dynamic_body(world, Math.Vec2())
+    var joint = world.create_prismatic_joint(ground, body)
+    joint.set_limits(true, -0.5, 0.5)
+    joint.set_spring(false, 0.0, 0.0)
+    joint.set_motor(2.0, 40.0)
+    run_steps(world, 120)
+    print("prismatic $(joint.translation()) $(joint.speed()) $(joint.motor_force()) $(body.position().x)")
+}
+
+func revolute_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = fixed_body(world)
+    var body = dynamic_body(world, Math.Vec2(1.0, 0.0))
+    var joint = world.create_revolute_joint(
+        ground,
+        body,
+        Physics.RevoluteJoint2DSettings()..anchor = Math.Vec2()
+    )
+    joint.set_limits(true, -0.4, 0.4)
+    joint.set_motor(1.0, 20.0)
+    run_steps(world, 120)
+    print("revolute $(joint.angle()) $(body.angular_velocity()) $(joint.motor_torque()) $(body.position().length())")
+}
+
+func wheel_case() {
+    var world = Physics.World2D(gravity:Math.Vec2(0.0, -10.0))
+    var ground = fixed_body(world)
+    var body = dynamic_body(world, Math.Vec2(0.0, 0.5))
+    var joint = world.create_wheel_joint(
+        ground,
+        body,
+        Physics.WheelJoint2DSettings()
+            ..anchor = Math.Vec2(0.0, 0.5)
+            ..axis = Math.Vec2(0.0, 1.0)
+    )
+    joint.set_limits(true, -0.5, 0.5)
+    joint.set_spring(true, 5.0, 1.0)
+    joint.set_motor(3.0, 20.0)
+    run_steps(world, 180)
+    print("wheel $(joint.translation()) $(joint.speed()) $(body.angular_velocity()) $(joint.motor_torque())")
+}
+
+func main() {
+    distance_case()
+    prismatic_case()
+    revolute_case()
+    wheel_case()
+}

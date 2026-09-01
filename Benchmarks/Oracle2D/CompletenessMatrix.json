@@ -115,11 +115,10 @@
       "id": "default-joint-settings",
       "domain": "joint",
       "capability": "default typed joint configuration",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2Default(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)JointDef$"],
-      "silex_contract": "Eight typed Silex settings already construct joints; their full runtime configuration remains scheduled.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
-      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+      "silex_contract": "Eight typed settings construct joints and their handles retain the applicable runtime configuration.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"]
     },
     {
       "id": "default-explosion-settings",
@@ -134,10 +133,10 @@
       "id": "default-debug-draw-settings",
       "domain": "debug",
       "capability": "default physics debug rendering configuration",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2DefaultDebugDraw$"],
       "silex_contract": "World2DDebugSettings will produce retained Canvas/Scene2D commands without native callbacks.",
-      "tracking": "Physique 2D complète 13 — Debug draw physique"
+      "evidence": ["Tests/Consumer/Tests/DebugDraw.sx"]
     },
     {
       "id": "geometry-values",
@@ -270,10 +269,10 @@
       "id": "world-debug-draw",
       "domain": "debug",
       "capability": "physics world debug rendering",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2World_Draw$"],
       "silex_contract": "A reusable value snapshot will render through GFX.Canvas and GFX.Scene2D without native callbacks.",
-      "tracking": "Physique 2D complète 13 — Debug draw physique"
+      "evidence": ["Tests/Consumer/Tests/DebugDraw.sx"]
     },
     {
       "id": "world-events",
@@ -432,10 +431,10 @@
       "id": "body-joints",
       "domain": "joint",
       "capability": "enumerate a body's joints",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_Get(?:JointCount|Joints)$"],
-      "silex_contract": "Bodies and worlds will enumerate a tagged Joint2D view while preserving typed handles.",
-      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+      "silex_contract": "World2D writes a stable tagged Joint2D view for the whole world or one body while preserving typed handles.",
+      "evidence": ["Tests/Consumer/Tests/JointRuntimeConfiguration.sx"]
     },
     {
       "id": "body-event-options",
@@ -542,21 +541,39 @@
       "id": "joint-common-introspection",
       "domain": "joint",
       "capability": "joint bodies, kind, world, anchors, axis, reaction and separation",
-      "status": "partial",
-      "patterns": ["^b2Joint_(?:GetType|GetBodyA|GetBodyB|GetWorld|GetLocalAnchorA|GetLocalAnchorB|GetReferenceAngle|GetLocalAxisA|GetCollideConnected|WakeBodies|GetConstraintForce|GetConstraintTorque|GetLinearSeparation|GetAngularSeparation|GetConstraintTuning|SetLocalAnchorA|SetLocalAnchorB|SetReferenceAngle|SetLocalAxisA|SetCollideConnected|SetConstraintTuning)$"],
-      "silex_contract": "Typed handles already expose completed-step reactions; complete common runtime inspection and mutation remain scheduled.",
+      "status": "covered",
+      "patterns": ["^b2Joint_(?:GetType|GetBodyA|GetBodyB|GetLocalAnchorA|GetLocalAnchorB|GetReferenceAngle|GetLocalAxisA|GetCollideConnected|WakeBodies|GetConstraintForce|GetConstraintTorque|GetLinearSeparation|GetAngularSeparation|SetLocalAnchorA|SetLocalAnchorB|SetReferenceAngle|SetLocalAxisA|SetCollideConnected)$"],
+      "silex_contract": "Typed handles expose connected bodies, local frames, collision policy, wake, separation and completed-step reactions without solver state.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"]
+    },
+    {
+      "id": "joint-world-back-reference",
+      "domain": "joint",
+      "capability": "recover a world identifier from a joint",
+      "status": "divergent",
+      "patterns": ["^b2Joint_GetWorld$"],
+      "silex_contract": "World2D owns every joint operation and validates handle ownership without retaining a public world back-reference.",
       "evidence": ["Tests/Consumer/Tests/Joints.sx"],
-      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+      "rationale": "A returned world handle would add an ownership cycle without enabling an operation that World2D does not already express."
+    },
+    {
+      "id": "joint-generic-constraint-tuning",
+      "domain": "joint",
+      "capability": "generic solver constraint tuning",
+      "status": "divergent",
+      "patterns": ["^b2Joint_(?:GetConstraintTuning|SetConstraintTuning)$"],
+      "silex_contract": "Typed family APIs expose only the applicable spring hertz and damping intentions.",
+      "evidence": ["Tests/Consumer/Tests/JointRuntimeConfiguration.sx"],
+      "rationale": "A generic solver-tuning pair would erase family semantics and expose an advanced implementation control rather than a gameplay intention."
     },
     {
       "id": "joint-family-configuration",
       "domain": "joint",
       "capability": "complete runtime configuration for all eight joint families",
-      "status": "partial",
+      "status": "covered",
       "patterns": ["^b2(?:Distance|Motor|Mouse|Prismatic|Revolute|Weld|Wheel)Joint_.*$"],
-      "silex_contract": "Each typed joint will expose its relevant limits, motors, springs, offsets, targets and measurements.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
-      "tracking": "Physique 2D complète 09 — Joints entièrement configurables"
+      "silex_contract": "Each typed joint exposes its relevant limits, motors, springs, offsets, targets, maxima and measurements for validated runtime mutation.",
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"]
     },
     {
       "id": "joint-user-data",

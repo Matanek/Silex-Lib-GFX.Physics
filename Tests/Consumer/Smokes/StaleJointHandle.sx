@@ -1,0 +1,13 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings())
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(2.0, 0.0)
+    )
+    var joint = world.create_distance_joint(first, second)
+    world.destroy_joint(joint)
+    joint.length()
+}

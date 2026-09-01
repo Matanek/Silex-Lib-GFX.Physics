@@ -32,6 +32,8 @@ assert(!body.is_valid())
 Les handles de corps, colliders et joints sont typés et générationnels. Leur
 destruction invalide toutes les copies conservées. Le monde possède l’horloge,
 les ressources de simulation et la frontière de mutation.
+Les huit familles de joints conservent des réglages runtime typés et peuvent
+être énumérées par monde ou corps via la somme `Joint2D`.
 
 ## Géométrie et contacts
 
@@ -99,6 +101,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Masse, forces et contrôle des corps](BodyControl.md)
 - [Colliders et matériaux](Colliders.md)
 - [Contrat de complétude Box2D](Completeness.md)
+- [Debug draw physique](DebugDraw.md)
 - [Contacts persistants](Contacts.md)
 - [Filtrage avancé et pré-solve](ContactPolicies.md)
 - [Événements, capteurs et CCD](EventsAndCCD.md)

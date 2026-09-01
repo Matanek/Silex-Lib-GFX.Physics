@@ -1,5 +1,6 @@
 use GFX.Physics.RigidBody2D.BodyId2D
 use GFX.Physics.RigidBody2D.BodyStore2D
+use GFX.Physics.RigidBody2D.RigidBody2D
 use STD.Math
 use STD.Threading
 
@@ -208,6 +209,7 @@ package struct JointId2D {
 }
 
 package struct JointConstraint2D {
+    var stable_order:int
     var kind:JointKind2D
     var first_body:BodyId2D
     var second_body:BodyId2D
@@ -246,6 +248,7 @@ package struct JointConstraint2D {
     var current_motor_torque:float
 
     init(kind:JointKind2D, first_body:BodyId2D, second_body:BodyId2D) {
+        self.stable_order = -1
         self.kind = kind
         self.first_body = first_body
         self.second_body = second_body
@@ -287,6 +290,7 @@ package struct JointConstraint2D {
 
 package class JointStore2D {
     var bodies:BodyStore2D
+    var next_stable_order:int
     var slot_generations:int[]
     var slot_dense_indices:int[]
     var dense_slots:int[]
@@ -299,6 +303,7 @@ package class JointStore2D {
 
     init() {
         self.bodies = BodyStore2D()
+        self.next_stable_order = 0
         self.slot_generations = []
         self.slot_dense_indices = []
         self.dense_slots = []
@@ -312,6 +317,7 @@ package class JointStore2D {
 
     init(bodies:BodyStore2D) {
         self.bodies = bodies
+        self.next_stable_order = 0
         self.slot_generations = []
         self.slot_dense_indices = []
         self.dense_slots = []
@@ -338,6 +344,81 @@ package class JointStore2D {
         }
     }
 
+    func joint_at(index:int) Joint2D {
+        let id = JointId2D(
+            self.dense_slots[index],
+            self.slot_generations[self.dense_slots[index]]
+        )
+        let kind = self.joints[index].kind
+        if kind == JointKind2D.distance {
+            return Joint2D.distance(DistanceJoint2D(self, id))
+        }
+        if kind == JointKind2D.filter {
+            return Joint2D.filter(FilterJoint2D(self, id))
+        }
+        if kind == JointKind2D.motor {
+            return Joint2D.motor(MotorJoint2D(self, id))
+        }
+        if kind == JointKind2D.mouse {
+            return Joint2D.mouse(MouseJoint2D(self, id))
+        }
+        if kind == JointKind2D.prismatic {
+            return Joint2D.prismatic(PrismaticJoint2D(self, id))
+        }
+        if kind == JointKind2D.revolute {
+            return Joint2D.revolute(RevoluteJoint2D(self, id))
+        }
+        if kind == JointKind2D.weld {
+            return Joint2D.weld(WeldJoint2D(self, id))
+        }
+        return Joint2D.wheel(WheelJoint2D(self, id))
+    }
+
+    func write_all(output:&Joint2D[]) {
+        output.clear()
+        var previous = -1
+        while output.count() < self.joints.count() {
+            var selected = -1
+            var index = 0
+            while index < self.joints.count() {
+                let order = self.joints[index].stable_order
+                if order > previous &&
+                    (selected < 0 || order < self.joints[selected].stable_order)
+                {
+                    selected = index
+                }
+                index++
+            }
+            output.append(self.joint_at(selected))
+            previous = self.joints[selected].stable_order
+        }
+    }
+
+    func write_attached(body:BodyId2D, output:&Joint2D[]) {
+        self.bodies.require(body)
+        output.clear()
+        var previous = -1
+        while true {
+            var selected = -1
+            var index = 0
+            while index < self.joints.count() {
+                let joint = self.joints[index]
+                let attached = joint.first_body.slot == body.slot ||
+                    joint.second_body.slot == body.slot
+                if attached && joint.stable_order > previous &&
+                    (selected < 0 || joint.stable_order <
+                        self.joints[selected].stable_order)
+                {
+                    selected = index
+                }
+                index++
+            }
+            if selected < 0 { return }
+            output.append(self.joint_at(selected))
+            previous = self.joints[selected].stable_order
+        }
+    }
+
     func append(joint:JointConstraint2D) JointId2D {
         var slot = self.slot_generations.count()
         if !self.free_slots.is_empty() {
@@ -348,7 +429,10 @@ package class JointStore2D {
         }
         self.slot_dense_indices[slot] = self.joints.count()
         self.dense_slots.append(slot)
-        self.joints.append(joint)
+        var stored = joint
+        stored.stable_order = self.next_stable_order
+        self.next_stable_order++
+        self.joints.append(stored)
         return JointId2D(slot, self.slot_generations[slot])
     }
 
@@ -435,8 +519,131 @@ package class JointStore2D {
         return self.joints[self.require(id)].current_motor_torque
     }
 
+    func kind(id:JointId2D) JointKind2D {
+        return self.joints[self.require(id)].kind
+    }
+
+    func first_body_handle(id:JointId2D) RigidBody2D {
+        return RigidBody2D(self.bodies, self.first_body(id))
+    }
+
+    func second_body_handle(id:JointId2D) RigidBody2D {
+        return RigidBody2D(self.bodies, self.second_body(id))
+    }
+
+    func first_anchor(id:JointId2D) Math.Vec2 {
+        return self.joints[self.require(id)].first_anchor
+    }
+
+    func second_anchor(id:JointId2D) Math.Vec2 {
+        return self.joints[self.require(id)].second_anchor
+    }
+
+    func local_axis(id:JointId2D) Math.Vec2 {
+        return self.joints[self.require(id)].local_axis
+    }
+
+    func linear_target(id:JointId2D) Math.Vec2 {
+        return self.joints[self.require(id)].linear_target
+    }
+
+    func reference_angle(id:JointId2D) float {
+        return self.joints[self.require(id)].reference_angle
+    }
+
+    func scalar_target(id:JointId2D) float {
+        return self.joints[self.require(id)].scalar_target
+    }
+
+    func minimum(id:JointId2D) float {
+        return self.joints[self.require(id)].minimum
+    }
+
+    func maximum(id:JointId2D) float {
+        return self.joints[self.require(id)].maximum
+    }
+
+    func spring_hertz(id:JointId2D) float {
+        return self.joints[self.require(id)].spring_hertz
+    }
+
+    func spring_damping_ratio(id:JointId2D) float {
+        return self.joints[self.require(id)].spring_damping_ratio
+    }
+
+    func angular_hertz(id:JointId2D) float {
+        return self.joints[self.require(id)].angular_hertz
+    }
+
+    func angular_damping_ratio(id:JointId2D) float {
+        return self.joints[self.require(id)].angular_damping_ratio
+    }
+
+    func motor_speed(id:JointId2D) float {
+        return self.joints[self.require(id)].motor_speed
+    }
+
+    func maximum_motor_force(id:JointId2D) float {
+        return self.joints[self.require(id)].maximum_motor_force
+    }
+
+    func maximum_motor_torque(id:JointId2D) float {
+        return self.joints[self.require(id)].maximum_motor_torque
+    }
+
+    func correction_factor(id:JointId2D) float {
+        return self.joints[self.require(id)].correction_factor
+    }
+
+    func spring_enabled(id:JointId2D) bool {
+        return self.joints[self.require(id)].spring_enabled
+    }
+
+    func limit_enabled(id:JointId2D) bool {
+        return self.joints[self.require(id)].limit_enabled
+    }
+
+    func motor_enabled(id:JointId2D) bool {
+        return self.joints[self.require(id)].motor_enabled
+    }
+
+    func collide_connected(id:JointId2D) bool {
+        return self.joints[self.require(id)].collide_connected
+    }
+
+    func separation(id:JointId2D) Math.Vec2 {
+        let index = self.require(id)
+        let joint = self.joints[index]
+        let first = self.bodies.require(joint.first_body)
+        let first_point = joint_world_point(
+            self.bodies,
+            first,
+            joint.first_anchor
+        )
+        if joint.kind == JointKind2D.mouse {
+            return joint.linear_target.subtract(first_point)
+        }
+        let second = self.bodies.require(joint.second_body)
+        return joint_world_point(
+            self.bodies,
+            second,
+            joint.second_anchor
+        ).subtract(first_point)
+    }
+
+    func angular_separation(id:JointId2D) float {
+        let joint = self.joints[self.require(id)]
+        let first = self.bodies.require(joint.first_body)
+        let second = self.bodies.require(joint.second_body)
+        return self.bodies.rotations[second] -
+            self.bodies.rotations[first] - joint.reference_angle
+    }
+
     func set_target(id:JointId2D, target:Math.Vec2) {
         self.bodies.require_mutable()
+        if !finite_joint_vector(target) {
+            panic("GFX.Physics joint target must be finite")
+        }
         let index = self.require(id)
         self.joints[index].linear_target = target
         self.wake_joint(index)
@@ -444,6 +651,11 @@ package class JointStore2D {
 
     func set_motor(id:JointId2D, speed:float, maximum:float) {
         self.bodies.require_mutable()
+        if !finite_joint_value(speed) || !finite_joint_value(maximum) ||
+            maximum < 0.0
+        {
+            panic("GFX.Physics joint motor settings are invalid")
+        }
         let index = self.require(id)
         self.joints[index].motor_speed = speed
         if self.joints[index].kind == JointKind2D.revolute ||
@@ -455,6 +667,187 @@ package class JointStore2D {
         }
         self.joints[index].motor_enabled = maximum > 0.0
         self.wake_joint(index)
+    }
+
+    func set_motor_enabled(id:JointId2D, enabled:bool) {
+        self.bodies.require_mutable()
+        let index = self.require(id)
+        self.joints[index].motor_enabled = enabled
+        self.joints[index].motor_impulse = 0.0
+        self.wake_joint(index)
+    }
+
+    func set_collide_connected(id:JointId2D, enabled:bool) {
+        self.bodies.require_mutable()
+        let index = self.require(id)
+        if self.joints[index].kind == JointKind2D.filter && enabled {
+            panic("GFX.Physics filter joints cannot enable connected collision")
+        }
+        self.joints[index].collide_connected = enabled
+        let first = self.bodies.require(self.joints[index].first_body)
+        let second = self.bodies.require(self.joints[index].second_body)
+        self.bodies.dirty_transforms[first] = true
+        self.bodies.dirty_transforms[second] = true
+        self.wake_joint(index)
+    }
+
+    func set_local_anchors(
+        id:JointId2D,
+        first:Math.Vec2,
+        second:Math.Vec2
+    ) {
+        self.bodies.require_mutable()
+        if !finite_joint_vector(first) || !finite_joint_vector(second) {
+            panic("GFX.Physics joint anchors must be finite")
+        }
+        let index = self.require(id)
+        self.joints[index].first_anchor = first
+        self.joints[index].second_anchor = second
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_local_axis(id:JointId2D, axis:Math.Vec2) {
+        self.bodies.require_mutable()
+        if !finite_joint_vector(axis) || axis.length() <= 0.000001 {
+            panic("GFX.Physics joint axis must be finite and non-zero")
+        }
+        let index = self.require(id)
+        self.joints[index].local_axis = axis.multiply(1.0 / axis.length())
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_scalar_target(id:JointId2D, target:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(target) {
+            panic("GFX.Physics joint scalar target must be finite")
+        }
+        let index = self.require(id)
+        self.joints[index].scalar_target = target
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_reference_angle(id:JointId2D, angle:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(angle) {
+            panic("GFX.Physics joint reference angle must be finite")
+        }
+        let index = self.require(id)
+        self.joints[index].reference_angle = angle
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_limits(id:JointId2D, enabled:bool, minimum:float, maximum:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(minimum) || !finite_joint_value(maximum) ||
+            minimum > maximum
+        {
+            panic("GFX.Physics joint limits are invalid")
+        }
+        let index = self.require(id)
+        self.joints[index].minimum = minimum
+        self.joints[index].maximum = maximum
+        self.joints[index].limit_enabled = enabled
+        self.joints[index].lower_impulse = 0.0
+        self.joints[index].upper_impulse = 0.0
+        self.wake_joint(index)
+    }
+
+    func set_spring(
+        id:JointId2D,
+        enabled:bool,
+        hertz:float,
+        damping_ratio:float
+    ) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(hertz) || !finite_joint_value(damping_ratio) ||
+            hertz < 0.0 || damping_ratio < 0.0
+        {
+            panic("GFX.Physics joint spring settings are invalid")
+        }
+        let index = self.require(id)
+        self.joints[index].spring_enabled = enabled
+        self.joints[index].spring_hertz = hertz
+        self.joints[index].spring_damping_ratio = damping_ratio
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_angular_spring(
+        id:JointId2D,
+        hertz:float,
+        damping_ratio:float
+    ) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(hertz) || !finite_joint_value(damping_ratio) ||
+            hertz < 0.0 || damping_ratio < 0.0
+        {
+            panic("GFX.Physics joint angular spring settings are invalid")
+        }
+        let index = self.require(id)
+        self.joints[index].angular_hertz = hertz
+        self.joints[index].angular_damping_ratio = damping_ratio
+        self.joints[index].spring_enabled = hertz > 0.0 ||
+            self.joints[index].spring_hertz > 0.0
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_motor_offsets(
+        id:JointId2D,
+        linear:Math.Vec2,
+        angular:float
+    ) {
+        self.bodies.require_mutable()
+        if !finite_joint_vector(linear) || !finite_joint_value(angular) {
+            panic("GFX.Physics motor joint offsets must be finite")
+        }
+        let index = self.require(id)
+        self.joints[index].linear_target = linear
+        self.joints[index].reference_angle = angular
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_motor_maxima(id:JointId2D, force:float, torque:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(force) || !finite_joint_value(torque) ||
+            force < 0.0 || torque < 0.0
+        {
+            panic("GFX.Physics motor joint maxima are invalid")
+        }
+        let index = self.require(id)
+        self.joints[index].maximum_motor_force = force
+        self.joints[index].maximum_motor_torque = torque
+        self.reset_impulses(index)
+        self.wake_joint(index)
+    }
+
+    func set_correction_factor(id:JointId2D, factor:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(factor) || factor < 0.0 || factor > 1.0 {
+            panic("GFX.Physics motor joint correction factor must be in [0, 1]")
+        }
+        let index = self.require(id)
+        self.joints[index].correction_factor = factor
+        self.wake_joint(index)
+    }
+
+    func wake(id:JointId2D) {
+        self.bodies.require_mutable()
+        self.wake_joint(self.require(id))
+    }
+
+    func reset_impulses(index:int) {
+        self.joints[index].linear_impulse = Math.Vec2()
+        self.joints[index].axial_impulse = 0.0
+        self.joints[index].angular_impulse = 0.0
+        self.joints[index].motor_impulse = 0.0
+        self.joints[index].lower_impulse = 0.0
+        self.joints[index].upper_impulse = 0.0
     }
 
     func first_body(id:JointId2D) BodyId2D {
@@ -1516,11 +1909,52 @@ public class DistanceJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
     func current_length() float { return self.store.current_translation(self.id) }
+    func length() float { return self.store.scalar_target(self.id) }
+    func set_length(length:float) { self.store.set_scalar_target(self.id, length) }
+    func minimum_length() float { return self.store.minimum(self.id) }
+    func maximum_length() float { return self.store.maximum(self.id) }
+    func limits_enabled() bool { return self.store.limit_enabled(self.id) }
+    func set_limits(enabled:bool, minimum:float, maximum:float) {
+        self.store.set_limits(self.id, enabled, minimum, maximum)
+    }
+    func spring_enabled() bool { return self.store.spring_enabled(self.id) }
+    func spring_hertz() float { return self.store.spring_hertz(self.id) }
+    func spring_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func set_spring(enabled:bool, hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, enabled, hertz, damping_ratio)
+    }
+    func motor_enabled() bool { return self.store.motor_enabled(self.id) }
+    func motor_speed() float { return self.store.motor_speed(self.id) }
+    func maximum_motor_force() float {
+        return self.store.maximum_motor_force(self.id)
+    }
     func motor_force() float { return self.store.motor_force(self.id) }
     func set_motor(speed:float, maximum_force:float) {
         self.store.set_motor(self.id, speed, maximum_force)
+    }
+    func set_motor_enabled(enabled:bool) {
+        self.store.set_motor_enabled(self.id, enabled)
     }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
@@ -1536,8 +1970,38 @@ public class MotorJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
+    func linear_offset() Math.Vec2 { return self.store.linear_target(self.id) }
+    func angular_offset() float { return self.store.reference_angle(self.id) }
+    func set_offsets(linear:Math.Vec2, angular:float) {
+        self.store.set_motor_offsets(self.id, linear, angular)
+    }
+    func maximum_force() float { return self.store.maximum_motor_force(self.id) }
+    func maximum_torque() float { return self.store.maximum_motor_torque(self.id) }
+    func set_maxima(force:float, torque:float) {
+        self.store.set_motor_maxima(self.id, force, torque)
+    }
+    func correction_factor() float { return self.store.correction_factor(self.id) }
+    func set_correction_factor(factor:float) {
+        self.store.set_correction_factor(self.id, factor)
+    }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
 }
@@ -1552,8 +2016,29 @@ public class MouseJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func set_local_anchor(anchor:Math.Vec2) {
+        self.store.set_local_anchors(self.id, anchor, anchor)
+    }
+    func wake_body() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float { return 0.0 }
+    func target() Math.Vec2 { return self.store.linear_target(self.id) }
     func set_target(target:Math.Vec2) { self.store.set_target(self.id, target) }
+    func spring_hertz() float { return self.store.spring_hertz(self.id) }
+    func spring_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func set_spring(hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, true, hertz, damping_ratio)
+    }
+    func maximum_force() float { return self.store.maximum_motor_force(self.id) }
+    func set_maximum_force(force:float) {
+        self.store.set_motor_maxima(self.id, force, 0.0)
+    }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
 }
@@ -1568,6 +2053,16 @@ public class FilterJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func collide_connected() bool { return false }
+    func wake_bodies() { self.store.wake(self.id) }
+    func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
+    func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
 }
@@ -1582,13 +2077,61 @@ public class PrismaticJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func local_axis() Math.Vec2 { return self.store.local_axis(self.id) }
+    func set_local_axis(axis:Math.Vec2) { self.store.set_local_axis(self.id, axis) }
+    func reference_angle() float { return self.store.reference_angle(self.id) }
+    func set_reference_angle(angle:float) {
+        self.store.set_reference_angle(self.id, angle)
+    }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
     func translation() float { return self.store.current_translation(self.id) }
     func speed() float { return self.store.current_speed(self.id) }
+    func target_translation() float { return self.store.scalar_target(self.id) }
+    func set_target_translation(target:float) {
+        self.store.set_scalar_target(self.id, target)
+    }
+    func lower_translation() float { return self.store.minimum(self.id) }
+    func upper_translation() float { return self.store.maximum(self.id) }
+    func limits_enabled() bool { return self.store.limit_enabled(self.id) }
+    func set_limits(enabled:bool, lower:float, upper:float) {
+        self.store.set_limits(self.id, enabled, lower, upper)
+    }
+    func spring_enabled() bool { return self.store.spring_enabled(self.id) }
+    func spring_hertz() float { return self.store.spring_hertz(self.id) }
+    func spring_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func set_spring(enabled:bool, hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, enabled, hertz, damping_ratio)
+    }
+    func motor_enabled() bool { return self.store.motor_enabled(self.id) }
+    func motor_speed() float { return self.store.motor_speed(self.id) }
+    func maximum_motor_force() float {
+        return self.store.maximum_motor_force(self.id)
+    }
     func motor_force() float { return self.store.motor_force(self.id) }
     func set_motor(speed:float, maximum_force:float) {
         self.store.set_motor(self.id, speed, maximum_force)
+    }
+    func set_motor_enabled(enabled:bool) {
+        self.store.set_motor_enabled(self.id, enabled)
     }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
@@ -1604,12 +2147,56 @@ public class RevoluteJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func reference_angle() float { return self.store.reference_angle(self.id) }
+    func set_reference_angle(angle:float) {
+        self.store.set_reference_angle(self.id, angle)
+    }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
     func angle() float { return self.store.current_angle(self.id) }
+    func target_angle() float { return self.store.scalar_target(self.id) }
+    func set_target_angle(target:float) { self.store.set_scalar_target(self.id, target) }
+    func lower_angle() float { return self.store.minimum(self.id) }
+    func upper_angle() float { return self.store.maximum(self.id) }
+    func limits_enabled() bool { return self.store.limit_enabled(self.id) }
+    func set_limits(enabled:bool, lower:float, upper:float) {
+        self.store.set_limits(self.id, enabled, lower, upper)
+    }
+    func spring_enabled() bool { return self.store.spring_enabled(self.id) }
+    func spring_hertz() float { return self.store.spring_hertz(self.id) }
+    func spring_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func set_spring(enabled:bool, hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, enabled, hertz, damping_ratio)
+    }
+    func motor_enabled() bool { return self.store.motor_enabled(self.id) }
+    func motor_speed() float { return self.store.motor_speed(self.id) }
+    func maximum_motor_torque() float {
+        return self.store.maximum_motor_torque(self.id)
+    }
     func motor_torque() float { return self.store.motor_torque(self.id) }
     func set_motor(speed:float, maximum_torque:float) {
         self.store.set_motor(self.id, speed, maximum_torque)
+    }
+    func set_motor_enabled(enabled:bool) {
+        self.store.set_motor_enabled(self.id, enabled)
     }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
@@ -1625,8 +2212,42 @@ public class WeldJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func reference_angle() float { return self.store.reference_angle(self.id) }
+    func set_reference_angle(angle:float) {
+        self.store.set_reference_angle(self.id, angle)
+    }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
+    func linear_hertz() float { return self.store.spring_hertz(self.id) }
+    func linear_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func angular_hertz() float { return self.store.angular_hertz(self.id) }
+    func angular_damping_ratio() float {
+        return self.store.angular_damping_ratio(self.id)
+    }
+    func set_linear_spring(hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, hertz > 0.0, hertz, damping_ratio)
+    }
+    func set_angular_spring(hertz:float, damping_ratio:float) {
+        self.store.set_angular_spring(self.id, hertz, damping_ratio)
+    }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
 }
@@ -1641,14 +2262,73 @@ public class WheelJoint2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+    func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
+    func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
+    func first_local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
+    func second_local_anchor() Math.Vec2 { return self.store.second_anchor(self.id) }
+    func set_local_anchors(first:Math.Vec2, second:Math.Vec2) {
+        self.store.set_local_anchors(self.id, first, second)
+    }
+    func local_axis() Math.Vec2 { return self.store.local_axis(self.id) }
+    func set_local_axis(axis:Math.Vec2) { self.store.set_local_axis(self.id, axis) }
+    func collide_connected() bool { return self.store.collide_connected(self.id) }
+    func set_collide_connected(enabled:bool) {
+        self.store.set_collide_connected(self.id, enabled)
+    }
+    func wake_bodies() { self.store.wake(self.id) }
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
+    func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func angular_separation() float {
+        return self.store.angular_separation(self.id)
+    }
     func translation() float { return self.store.current_translation(self.id) }
     func speed() float { return self.store.current_speed(self.id) }
+    func lower_translation() float { return self.store.minimum(self.id) }
+    func upper_translation() float { return self.store.maximum(self.id) }
+    func limits_enabled() bool { return self.store.limit_enabled(self.id) }
+    func set_limits(enabled:bool, lower:float, upper:float) {
+        self.store.set_limits(self.id, enabled, lower, upper)
+    }
+    func spring_enabled() bool { return self.store.spring_enabled(self.id) }
+    func spring_hertz() float { return self.store.spring_hertz(self.id) }
+    func spring_damping_ratio() float {
+        return self.store.spring_damping_ratio(self.id)
+    }
+    func set_spring(enabled:bool, hertz:float, damping_ratio:float) {
+        self.store.set_spring(self.id, enabled, hertz, damping_ratio)
+    }
+    func motor_enabled() bool { return self.store.motor_enabled(self.id) }
+    func motor_speed() float { return self.store.motor_speed(self.id) }
+    func maximum_motor_torque() float {
+        return self.store.maximum_motor_torque(self.id)
+    }
     func motor_torque() float { return self.store.motor_torque(self.id) }
     func set_motor(speed:float, maximum_torque:float) {
         self.store.set_motor(self.id, speed, maximum_torque)
     }
+    func set_motor_enabled(enabled:bool) {
+        self.store.set_motor_enabled(self.id, enabled)
+    }
     package func belongs_to(store:JointStore2D) bool { return self.store == store }
     package func joint_id() JointId2D { return self.id }
+}
+
+public enum Joint2D {
+    distance(DistanceJoint2D)
+    filter(FilterJoint2D)
+    motor(MotorJoint2D)
+    mouse(MouseJoint2D)
+    prismatic(PrismaticJoint2D)
+    revolute(RevoluteJoint2D)
+    weld(WeldJoint2D)
+    wheel(WheelJoint2D)
+}
+
+func finite_joint_value(value:float) bool {
+    return value == value && value > -1.0e30 && value < 1.0e30
+}
+
+func finite_joint_vector(value:Math.Vec2) bool {
+    return finite_joint_value(value.x) && finite_joint_value(value.y)
 }

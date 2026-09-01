@@ -16,6 +16,11 @@ chauds des corps et colliders vivent dans des tableaux denses ; supprimer une
 valeur compacte ces tableaux, incrémente sa génération et invalide toute copie
 ancienne sans exposer slot ni index.
 
+Une vue somme `Joint2D` reconstruit les handles typés depuis leurs générations
+vivantes pour l’énumération par monde ou corps. Les mutations runtime valident
+les valeurs, effacent les impulsions devenues incompatibles et réveillent les
+deux extrémités avant le prochain pas ; aucun état du solver n’est exposé.
+
 Un corps possède zéro, un ou plusieurs colliders. Les mutations de topologie
 marquent les données dérivées à reconstruire avant le prochain pas. Les
 contacts publics sont des snapshots ordonnés par identité stable des

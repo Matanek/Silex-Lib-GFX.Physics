@@ -23,6 +23,14 @@ public use GFX.Physics.Events2D.ContactEndEvent2D
 public use GFX.Physics.Events2D.ContactHitEvent2D
 public use GFX.Physics.Events2D.SensorBeginEvent2D
 public use GFX.Physics.Events2D.SensorEndEvent2D
+public use GFX.Physics.DebugDraw2D.DebugCircle2D
+public use GFX.Physics.DebugDraw2D.DebugLabel2D
+public use GFX.Physics.DebugDraw2D.DebugLine2D
+public use GFX.Physics.DebugDraw2D.World2DDebug
+public use GFX.Physics.DebugDraw2D.World2DDebugRegion
+public use GFX.Physics.DebugDraw2D.World2DDebugSettings
+public use GFX.Physics.DebugDraw2D.World2DDebugSnapshot
+public use GFX.Physics.DebugDraw2D.World2DDebugTheme
 public use GFX.Physics.Events2D.SensorOverlap2D
 public use GFX.Physics.Explosion2D.Explosion2DSettings
 public use GFX.Physics.Explosion2D.ExplosionFalloff2D
@@ -59,6 +67,7 @@ public use GFX.Physics.Joints2D.WeldJoint2D
 public use GFX.Physics.Joints2D.WeldJoint2DSettings
 public use GFX.Physics.Joints2D.WheelJoint2D
 public use GFX.Physics.Joints2D.WheelJoint2DSettings
+public use GFX.Physics.Joints2D.Joint2D
 public use GFX.Physics.World2D.World2D
 public use GFX.Physics.World2D.World2DSettings
 public use GFX.Physics.World2D.World2DCounters

@@ -35,6 +35,10 @@ Dimensions et rayons doivent être finis, les rayons positifs et les extrémité
 distinctes. Un polygone accepte trois à huit points, soude les voisins proches,
 construit leur hull convexe anti-horaire et refuse un résultat collinéaire. Une
 chaîne exige quatre points et son côté solide se trouve à droite du parcours.
+Dans une chaîne ouverte, le premier et le dernier segment servent de géométrie
+fantôme pour raccorder les normales aux extrémités : seuls les segments compris
+entre eux collisionnent. Fournissez donc un point fantôme avant et après le
+tracé collisionnel voulu.
 
 Les filtres utilisent catégories et masques 64 bits. Les groupes positifs
 égaux forcent le contact, les groupes négatifs égaux l’interdisent. La distance

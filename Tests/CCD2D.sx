@@ -102,3 +102,26 @@ test "count general fixed and moving kinematic CCD pairs" {
     assert(kinematic_world.ccd_body_count() == 1)
     assert(kinematic_world.ccd_pair_test_count() == 1)
 }
+
+test "cull fixed CCD targets outside the swept bounds" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var index = 0
+    while index < 64 {
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed
+            ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.2)))
+            ..position = Math.Vec2(100.0 + index as float, 0.0)
+        )
+        index++
+    }
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..velocity = Math.Vec2(120.0, 0.0)
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+
+    assert(world.ccd_body_count() == 1)
+    assert(world.ccd_pair_test_count() == 0)
+}
