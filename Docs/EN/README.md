@@ -117,6 +117,11 @@ never produce physical response. See
 [`Docs/EventsAndCCD.md`](EventsAndCCD.md) and the public consumer proofs in
 [`Tests/Consumer/Tests/Events.sx`](../../Tests/Consumer/Tests/Events.sx).
 
+Filtered radial explosions apply one bounded impulse per dynamic body and can
+write deterministic body, point, and impulse results into a caller-owned
+buffer. See [`Docs/Explosions.md`](Explosions.md) and
+[`Tests/Consumer/Tests/Explosions.sx`](../../Tests/Consumer/Tests/Explosions.sx).
+
 When both packages are active, the same owned declarations are also available
 through GFX's umbrella catalogs:
 

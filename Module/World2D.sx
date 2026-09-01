@@ -49,6 +49,9 @@ use GFX.Physics.Events2D.ContactHitEvent2D
 use GFX.Physics.Events2D.SensorBeginEvent2D
 use GFX.Physics.Events2D.SensorEndEvent2D
 use GFX.Physics.Events2D.SensorOverlap2D
+use GFX.Physics.Explosion2D.Explosion2DSettings
+use GFX.Physics.Explosion2D.ExplosionResult2D
+use GFX.Physics.Explosion2D.explosion_attenuation
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.CastResult2D
 use GFX.Physics.Geometry2D.Manifold2D
@@ -1395,6 +1398,107 @@ public class World2D {
             }
         }
         return closest
+    }
+
+    func explode(settings:Explosion2DSettings) int {
+        var ignored:ExplosionResult2D[] = []
+        return self.explode(settings, ignored)
+    }
+
+    func explode(
+        settings:Explosion2DSettings,
+        output:&ExplosionResult2D[]
+    ) int {
+        self.store.require_mutable()
+        if !finite_world_value(settings.center.x) ||
+            !finite_world_value(settings.center.y) ||
+            !finite_world_value(settings.radius) || settings.radius <= 0.0 ||
+            !finite_world_value(settings.impulse) || settings.impulse < 0.0
+        {
+            panic("GFX.Physics.World2D explosion requires a finite center, a positive finite radius, and a non-negative finite impulse")
+        }
+        output.clear()
+        if settings.impulse == 0.0 { return 0 }
+
+        var body_slots:int[] = []
+        var point_sums:Math.Vec2[] = []
+        var point_weights:float[] = []
+        var maximum_attenuations:float[] = []
+        var candidate_by_body_slot:int[] = []
+        while candidate_by_body_slot.count() < self.store.slot_generations.count() {
+            candidate_by_body_slot.append(-1)
+        }
+        for collider_dense in ordered_query_colliders(self.store) {
+            if !query_collider_enabled(self.store, collider_dense) ||
+                !settings.filter.allows(
+                    self.store.shape_store.collision_filters[collider_dense]
+                )
+            {
+                continue
+            }
+            let body_slot = self.store.shape_store.body_slots[collider_dense]
+            let body = self.store.slot_dense_indices[body_slot]
+            if self.store.body_types[body] != BodyType2D.dynamic ||
+                !self.store.enabled[body] ||
+                (!settings.wake && !self.store.awake[body])
+            {
+                continue
+            }
+            let point = Geometry2D.closest_point(
+                query_collider_placement(self.store, collider_dense),
+                settings.center
+            )
+            let distance = point.subtract(settings.center).length()
+            if distance > settings.radius { continue }
+            let attenuation = explosion_attenuation(
+                settings.falloff,
+                distance,
+                settings.radius
+            )
+            if attenuation <= 0.0 { continue }
+
+            let candidate = candidate_by_body_slot[body_slot]
+            if candidate < 0 {
+                candidate_by_body_slot[body_slot] = body_slots.count()
+                body_slots.append(body_slot)
+                point_sums.append(point.multiply(attenuation))
+                point_weights.append(attenuation)
+                maximum_attenuations.append(attenuation)
+            } else {
+                point_sums[candidate] = point_sums[candidate].add(
+                    point.multiply(attenuation)
+                )
+                point_weights[candidate] += attenuation
+                maximum_attenuations[candidate] = Math.max(
+                    maximum_attenuations[candidate],
+                    attenuation
+                )
+            }
+        }
+
+        var candidate = 0
+        while candidate < body_slots.count() {
+            let body = self.store.slot_dense_indices[body_slots[candidate]]
+            var point = point_sums[candidate].divide(point_weights[candidate])
+            var direction = point.subtract(settings.center)
+            if direction.length_squared() <= 0.000000000001 {
+                direction = self.store.world_center_at(body).subtract(
+                    settings.center
+                )
+                if direction.length_squared() <= 0.000000000001 {
+                    direction = Math.Vec2(1.0, 0.0)
+                }
+                point = self.store.world_center_at(body)
+            }
+            let impulse = direction.normalized().multiply(
+                settings.impulse * maximum_attenuations[candidate]
+            )
+            var handle = RigidBody2D(self.store, self.store.body_id_at(body))
+            handle.apply_linear_impulse(impulse, point, settings.wake)
+            output.append(ExplosionResult2D(handle, point, impulse))
+            candidate++
+        }
+        return output.count()
     }
     func write_body_move_events(output:&BodyMoveEvent2D[]) {
         output.clear()

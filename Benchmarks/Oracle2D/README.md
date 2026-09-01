@@ -56,6 +56,7 @@ silex compile Packages/GFX.Physics/Benchmarks/ContactPoliciesOracle2D.sx --relea
 silex compile Packages/GFX.Physics/Benchmarks/ContinuousCollisionOracle2D.sx --release -o /tmp/gfx-physics-silex-continuous-collision
 silex compile Packages/GFX.Physics/Benchmarks/WorldQueriesOracle2D.sx --release -o /tmp/gfx-physics-silex-world-queries
 silex compile Packages/GFX.Physics/Benchmarks/CharacterMoverOracle2D.sx --release -o /tmp/gfx-physics-silex-character-mover
+silex compile Packages/GFX.Physics/Benchmarks/ExplosionOracle2D.sx --release -o /tmp/gfx-physics-silex-explosion
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -204,6 +205,16 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCharacterMover.py /tmp/box
 The checker requires the same three cases, finite values, and a 0.03 absolute
 tolerance for geometry. Counts remain diagnostic within one iteration because
 Silex exposes stable colliders rather than Box2D's callback records.
+
+The radial-explosion witness compares affected positions, impulse directions,
+filter exclusions, and linear attenuation against the pinned Box2D world
+explosion:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_explosion_oracle > /tmp/box2d-explosion.txt
+/tmp/gfx-physics-silex-explosion > /tmp/silex-explosion.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckExplosion.py /tmp/box2d-explosion.txt /tmp/silex-explosion.txt
+```
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

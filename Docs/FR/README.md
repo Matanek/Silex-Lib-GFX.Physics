@@ -102,6 +102,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Contacts persistants](Contacts.md)
 - [Filtrage avancé et pré-solve](ContactPolicies.md)
 - [Événements, capteurs et CCD](EventsAndCCD.md)
+- [Explosions et impulsions radiales](Explosions.md)
 - [Requêtes géométriques](Geometry.md)
 - [Requêtes spatiales du monde](WorldQueries.md)
 - [Îlots actifs et sommeil](Islands.md)
