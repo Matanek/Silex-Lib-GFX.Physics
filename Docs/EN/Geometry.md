@@ -62,8 +62,10 @@ Invalid public geometry fails immediately with a diagnostic:
 Polygon input order is intentionally irrelevant because `Polygon2D` computes a
 counter-clockwise convex hull. Chain order is meaningful: as in Box2D 3, the
 solid front is the right side while looking from one point to the next. Open
-chains contain `count - 1` segments; looped chains close the last point to the
-first implicitly, so callers must not repeat the first point.
+chains use their first and final segments as ghost geometry for endpoint
+normals; only the segments between those ghosts collide. Supply one ghost point
+before and after the intended collision path. Looped chains instead close the
+last point to the first implicitly, so callers must not repeat the first point.
 
 `CollisionFilter2D` uses 64-bit category and mask bits. Both masks must accept
 the other category. Equal non-zero positive group indices force a match, while

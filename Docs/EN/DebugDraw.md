@@ -38,6 +38,10 @@ new Canvas with `canvas`, or create a `GFX.Scene2D.Canvas` component with
 `scene_canvas`. It remains a diagnostic facility, not the final game
 representation.
 
+For an open chain, the `shapes` layer draws only the colliding segments. The
+two ghost segments around its endpoints remain hidden so the diagnostic does
+not suggest a solid surface that is not present.
+
 The consumer proof is
 [`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). Two visual examples
 separate the diagnostic intentions. The first uses metres, `(0, -9.81) m/s²`

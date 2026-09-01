@@ -149,3 +149,26 @@ test "render snapshots through Canvas and Scene2D without world ownership" {
     assert(canvas.command_count() > 0)
     assert(scene_canvas.revision() > 0)
 }
+
+test "omit non-colliding ghost edges from open chain diagnostics" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-2.0, 0.0),
+            Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0),
+            Math.Vec2(2.0, 0.0)
+        ]))
+    )
+    var snapshot = Physics.World2DDebugSnapshot()
+
+    world.write_debug_snapshot(
+        Physics.World2DDebugSettings() ..shapes = true,
+        snapshot
+    )
+
+    assert(snapshot.line_count() == 1)
+    assert(snapshot.line(0).start == Math.Vec2(-1.0, 0.0))
+    assert(snapshot.line(0).end == Math.Vec2(1.0, 0.0))
+}

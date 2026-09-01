@@ -39,6 +39,10 @@ dans un nouveau Canvas via `canvas`, soit dans un composant
 `GFX.Scene2D.Canvas` via `scene_canvas`. Il reste un outil de diagnostic et ne
 remplace pas la représentation visuelle du jeu.
 
+Pour une chaîne ouverte, la couche `shapes` dessine uniquement les segments
+collisionnels. Les deux segments fantômes qui encadrent les extrémités restent
+invisibles afin que le diagnostic ne suggère pas une surface solide absente.
+
 La preuve consommateur est
 [`DebugDraw.sx`](../../Tests/Consumer/Tests/DebugDraw.sx). Deux exemples visuels
 séparent les intentions de diagnostic. Le premier emploie les mètres, la

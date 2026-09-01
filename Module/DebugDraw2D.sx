@@ -325,14 +325,24 @@ package func debug_append_shape(
             ))
         }
         chain(value) => {
-            debug_append_polygon(
-                snapshot,
-                value.points,
-                transform,
-                color,
-                width,
-                value.loop
-            )
+            if value.loop {
+                debug_append_polygon(
+                    snapshot,
+                    value.points,
+                    transform,
+                    color,
+                    width,
+                    true
+                )
+            } else {
+                debug_append_open_chain(
+                    snapshot,
+                    value.points,
+                    transform,
+                    color,
+                    width
+                )
+            }
         }
     }
 }
@@ -431,6 +441,25 @@ func debug_append_polygon(
             color,
             width
         ))
+    }
+}
+
+func debug_append_open_chain(
+    snapshot:World2DDebugSnapshot,
+    points:Math.Vec2[],
+    transform:Transform2D,
+    color:Color,
+    width:float
+) {
+    var index = 1
+    while index + 2 < points.count() {
+        snapshot.append(DebugLine2D(
+            transform.point(points[index]),
+            transform.point(points[index + 1]),
+            color,
+            width
+        ))
+        index++
     }
 }
 
