@@ -79,12 +79,14 @@ begin and end sensor events in that step, so the trigger crossing is not lost.
 
 ## Continuous motion
 
-Fast ordinary bodies retain the inexpensive fixed-box boundary protection used
-by the solver. `is_bullet` deliberately expands continuous collision work to
-dynamic targets and all public convex geometry. Linear motion uses the common
-shape-cast geometry; angular motion searches the swept poses and refines the
-first overlap. The earliest solid hit clips the bullet and removes inward
-motion. Sensors report the crossing without clipping or applying an impulse.
+Every sufficiently fast dynamic convex collider sweeps against allowed fixed
+and kinematic geometry. A kinematic target contributes its complete relative
+motion instead of behaving like a teleport. `is_bullet` deliberately expands
+the same work to dynamic targets. Linear motion uses the common shape-cast
+geometry; angular motion searches the swept poses and refines the first
+overlap. The earliest solid hit receives the resolved response and normal
+post-step events. Sensors report a complete crossing without clipping or
+applying an impulse.
 
 CCD evaluates every filter-compatible collider pair, not only each body's
 primary shape. Secondary walls of a compound or kinematic container therefore
@@ -92,17 +94,24 @@ participate in the sweep, and the earliest admissible collider hit wins. A
 continuous hit reuses the owning body pair when it is already cached; it never
 adds duplicate constraints for the same two bodies.
 
-The CCD path preserves collision filters and filter-joint exclusions. It does
-not turn every dynamic pair into a continuous pair: that cost is paid only by
-bullets. Solver callbacks and general concurrent world mutation remain outside
+The CCD path preserves collision filters, filter-joint exclusions, disabled
+state, and one-sided chain rules. Slow bodies leave before pair traversal, and
+it does not turn every dynamic pair into a continuous pair: that cost is paid
+only by bullets. Solver callbacks and general concurrent world mutation remain outside
 the contract. `World2D` and its body and joint handles reject mutation while
 `step` is active; post-step buffers are the supported place for gameplay to
 react and then mutate the world.
 
 The public executable proofs are grouped in
-[`../Tests/Consumer/Tests/Events.sx`](../../Tests/Consumer/Tests/Events.sx):
+[`../Tests/Consumer/Tests/ContinuousCollision.sx`](../../Tests/Consumer/Tests/ContinuousCollision.sx)
+and [`../Tests/Consumer/Tests/Events.sx`](../../Tests/Consumer/Tests/Events.sx):
 
 ```text
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContinuousCollision.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 ```
+
+The pinned Box2D 3.1.1 one-step comparison, including its documented response
+divergences, is described in
+[`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).

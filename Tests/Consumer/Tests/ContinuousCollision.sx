@@ -1,0 +1,215 @@
+use GFX.Physics
+use STD.Math
+
+func fast_shape_result(
+    shape:Physics.Shape2D,
+    mass:float = 0.0,
+    workers:int = 1
+) float[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = shape
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..mass = mass
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+
+    return [
+        body.position().x,
+        body.position().y,
+        body.velocity().x,
+        body.velocity().y
+    ]
+}
+
+func assert_stopped_by_wall(result:float[]) {
+    assert(result[0] < 0.0, "fast shape crossed the wall: x=$(result[0])")
+    assert(result[0] > -1.0, "fast shape stopped before its sweep: x=$(result[0])")
+    assert(result[2] < 299.0, "fast shape received no impact response: vx=$(result[2])")
+}
+
+test "sweep every convex dynamic shape against a thin fixed wall" {
+    assert_stopped_by_wall(fast_shape_result(
+        Physics.Shape2D.circle(Physics.Circle2D(0.1))
+    ))
+    assert_stopped_by_wall(fast_shape_result(
+        Physics.Shape2D.capsule(Physics.Capsule2D(
+            Math.Vec2(-0.2, 0.0),
+            Math.Vec2(0.2, 0.0),
+            0.1
+        ))
+    ))
+    assert_stopped_by_wall(fast_shape_result(
+        Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.15, -0.15),
+            Math.Vec2(0.15, -0.15),
+            Math.Vec2(0.15, 0.15),
+            Math.Vec2(-0.15, 0.15)
+        ], 0.03))
+    ))
+    assert_stopped_by_wall(fast_shape_result(
+        Physics.Shape2D.segment(Physics.Segment2D(
+            Math.Vec2(0.0, -0.2),
+            Math.Vec2(0.0, 0.2)
+        )),
+        mass:1.0
+    ))
+}
+
+test "sweep a moving kinematic platform through a resting dynamic body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.kinematic
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..enable_hit_events = true
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..allow_sleep = false
+        ..enable_hit_events = true
+    )
+    var hits:Physics.ContactHitEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_contact_hit_events(hits)
+
+    assert(body.velocity().x > 250.0)
+    assert(hits.count() == 1)
+    assert(hits[0].approach_speed() > 250.0)
+}
+
+test "sweep an ordinary polygon against the front side of a thin chain" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(0.0, 3.0),
+            Math.Vec2(0.0, 1.0),
+            Math.Vec2(0.0, -1.0),
+            Math.Vec2(0.0, -3.0)
+        ]))
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.15, -0.15),
+            Math.Vec2(0.15, -0.15),
+            Math.Vec2(0.15, 0.15),
+            Math.Vec2(-0.15, 0.15)
+        ], 0.03))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+
+    assert(body.position().x < 0.0)
+    assert(body.velocity().x < 299.0)
+}
+
+test "retain an ordinary fast crossing through a fixed sensor" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..is_sensor = true
+        ..enable_sensor_events = true
+    )
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+    var ended:Physics.SensorEndEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_sensor_begin_events(began)
+    world.write_sensor_end_events(ended)
+
+    assert(!visitor.is_bullet())
+    assert(visitor.position().x > 2.0)
+    assert(visitor.velocity().x > 299.0)
+    assert(began.count() == 1)
+    assert(ended.count() == 1)
+}
+
+test "respect filters before entering the continuous pair path" {
+    let wall_filter = Physics.CollisionFilter2D(
+        category_bits:0x1,
+        mask_bits:0x1
+    )
+    let mover_filter = Physics.CollisionFilter2D(
+        category_bits:0x2,
+        mask_bits:0x2
+    )
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..collision_filter = wall_filter
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..collision_filter = mover_filter
+        ..allow_sleep = false
+    )
+
+    world.step(1.0 / 60.0)
+
+    assert(body.position().x > 2.0)
+}
+
+test "detect fast ordinary rotation between separated endpoint poses" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var rotor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.1)))
+        ..angular_velocity = 188.49556
+        ..allow_sleep = false
+        ..enable_hit_events = true
+    )
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.2))
+        ..position = Math.Vec2(1.4, 1.4)
+    )
+    var hits:Physics.ContactHitEvent2D[] = []
+
+    world.step(1.0 / 60.0)
+    world.write_contact_hit_events(hits)
+
+    assert(!rotor.is_bullet())
+    assert(rotor.rotation() < 3.0)
+    assert(rotor.angular_velocity() > 0.0)
+    assert(rotor.angular_velocity() < 50.0)
+    assert(hits.count() == 1)
+}
+
+test "preserve general CCD results across worker counts" {
+    let shape = Physics.Shape2D.capsule(Physics.Capsule2D(
+        Math.Vec2(-0.2, 0.0),
+        Math.Vec2(0.2, 0.0),
+        0.1
+    ))
+    let serial = fast_shape_result(shape, workers:1)
+    let parallel = fast_shape_result(shape, workers:4)
+    assert(serial.count() == parallel.count())
+    var index = 0
+    while index < serial.count() {
+        assert(Math.nearly_equal(serial[index], parallel[index], 0.000001))
+        index++
+    }
+}

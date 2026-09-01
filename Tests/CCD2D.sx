@@ -70,3 +70,35 @@ test "reserve bullet CCD for motion large enough to tunnel" {
     assert(world.ccd_body_count() == 0)
     assert(world.ccd_pair_test_count() == 0)
 }
+
+test "count general fixed and moving kinematic CCD pairs" {
+    var fixed_world = Physics.World2D(gravity:Math.Vec2())
+    fixed_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+    )
+    fixed_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+        ..allow_sleep = false
+    )
+    fixed_world.step(1.0 / 60.0)
+    assert(fixed_world.ccd_body_count() == 1)
+    assert(fixed_world.ccd_pair_test_count() == 1)
+
+    var kinematic_world = Physics.World2D(gravity:Math.Vec2())
+    kinematic_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.kinematic
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1, 2.0)))
+        ..position = Math.Vec2(-2.0, 0.0)
+        ..velocity = Math.Vec2(300.0, 0.0)
+    )
+    kinematic_world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..allow_sleep = false
+    )
+    kinematic_world.step(1.0 / 60.0)
+    assert(kinematic_world.ccd_body_count() == 1)
+    assert(kinematic_world.ccd_pair_test_count() == 1)
+}

@@ -53,6 +53,9 @@ silex compile Packages/GFX.Physics/Benchmarks/GeometryOracle2D.sx --release -o /
 silex compile Packages/GFX.Physics/Benchmarks/BodyControlOracle2D.sx --release -o /tmp/gfx-physics-silex-body-control
 silex compile Packages/GFX.Physics/Benchmarks/DynamicShapesOracle2D.sx --release -o /tmp/gfx-physics-silex-dynamic-shapes
 silex compile Packages/GFX.Physics/Benchmarks/ContactPoliciesOracle2D.sx --release -o /tmp/gfx-physics-silex-contact-policies
+silex compile Packages/GFX.Physics/Benchmarks/ContinuousCollisionOracle2D.sx --release -o /tmp/gfx-physics-silex-continuous-collision
+silex compile Packages/GFX.Physics/Benchmarks/WorldQueriesOracle2D.sx --release -o /tmp/gfx-physics-silex-world-queries
+silex compile Packages/GFX.Physics/Benchmarks/CharacterMoverOracle2D.sx --release -o /tmp/gfx-physics-silex-character-mover
 ```
 
 The CMake configuration fetches only the immutable Box2D commit above. Run a
@@ -98,6 +101,26 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckBodyControl.py /tmp/box2d-
 
 As with geometry, this differential target is benchmark-only and introduces no
 runtime dependency on Box2D.
+
+The continuous-collision witness drives circle, capsule, segment and rounded
+polygon bodies through a thin fixed wall in one step. It also covers relative
+motion from a kinematic target and the explicit bullet path to a dynamic
+target:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_continuous_collision_oracle > /tmp/box2d-continuous-collision.txt
+/tmp/gfx-physics-silex-continuous-collision > /tmp/silex-continuous-collision.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckContinuousCollision.py /tmp/box2d-continuous-collision.txt /tmp/silex-continuous-collision.txt
+```
+
+The four fixed-target cases require both solvers to stop at matching TOI
+positions within 2 mm. The checker also records three deliberate one-step
+response divergences in the pinned oracle: Box2D retains the incoming velocity
+after that TOI placement, does not transfer the traversing kinematic target's
+motion, and does not transfer the bullet impulse during the same step. Silex
+must apply all three responses because they are part of its public completed-
+step contract. These classifications are checked explicitly rather than hidden
+behind a broad floating-point tolerance.
 
 The dynamic-shape witness settles circle, capsule, segment and rounded-polygon
 bodies on a polygon floor, then the massive shapes on the solid middle edge of
@@ -154,6 +177,33 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckContactSnapshots.py /tmp/b
 Metadata and identities match exactly. Both engines must expose two positive,
 finite normal impulses; their total uses a 0.35 absolute tolerance to allow
 solver-phase differences without accepting a missing contact point.
+
+The world-query witness compares AABB and shape overlap, closest ray and shape
+casts, point testing, closest point, world bounds, and collider mass data:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_world_queries_oracle > /tmp/box2d-world-queries.txt
+/tmp/gfx-physics-silex-world-queries > /tmp/silex-world-queries.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckWorldQueries.py /tmp/box2d-world-queries.txt /tmp/silex-world-queries.txt
+```
+
+Fractions and geometry values use a 0.002 absolute tolerance. The collider
+record permits 0.021 because Box2D's `b2Shape_GetAABB` includes its 2 cm broad-
+phase margin while Silex reports exact geometry bounds.
+
+The character-mover witness compares collision-plane collection, initial
+depenetration, and iterative floor-to-wall movement with Box2D's pinned mover
+queries and plane solver:
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_character_mover_oracle > /tmp/box2d-character-mover.txt
+/tmp/gfx-physics-silex-character-mover > /tmp/silex-character-mover.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCharacterMover.py /tmp/box2d-character-mover.txt /tmp/silex-character-mover.txt
+```
+
+The checker requires the same three cases, finite values, and a 0.03 absolute
+tolerance for geometry. Counts remain diagnostic within one iteration because
+Silex exposes stable colliders rather than Box2D's callback records.
 
 For Debug correctness, configure the Box2D witness with
 `-DCMAKE_BUILD_TYPE=Debug`, compile the Silex witness with `--debug`, and pass

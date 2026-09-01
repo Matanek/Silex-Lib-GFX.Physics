@@ -62,6 +62,11 @@ ray casts, and shape casts. Independent read queries can run concurrently. See
 [`Docs/Geometry.md`](Geometry.md) and the public consumer proofs under
 [`Tests/Consumer/Tests/Geometry.sx`](../../Tests/Consumer/Tests/Geometry.sx).
 
+Living-world AABB, overlap, ray, and shape queries return stable collider
+handles through caller-owned buffers, `any`, and `closest` intentions. See
+[`Docs/WorldQueries.md`](WorldQueries.md) and
+[`Tests/Consumer/Tests/WorldQueries.sx`](../../Tests/Consumer/Tests/WorldQueries.sx).
+
 `World2D` also retains collision pairs and manifolds across steps. The current
 snapshots can be read without exposing their cache identity:
 
@@ -167,6 +172,11 @@ color graph, including the same parallel dispatch threshold for large
 conflict-free colors. See [`Docs/Joints.md`](Joints.md) and
 [`Tests/Consumer/Tests/Joints.sx`](../../Tests/Consumer/Tests/Joints.sx).
 
+`CharacterMover2D` calculates bounded capsule motion against living colliders,
+including initial depenetration, slopes, corners, and kinematic platforms,
+without mutating the world. See [`Docs/CharacterMover.md`](CharacterMover.md)
+and the interactive [CharacterMover2D application](https://github.com/Matanek/Silex-Examples/blob/main/Sources/CharacterMover2D.sx).
+
 Large moving worlds can opt into the persistent STD worker pool:
 
 ```silex
@@ -188,13 +198,12 @@ The executable parity boundary and every currently covered, partial, planned,
 divergent or excluded Box2D capability are documented in
 [`Docs/Completeness.md`](Completeness.md).
 
-The existing `World2D` regression contact solver still resolves only unrounded boxes
-and circles. Additional forms can be attached to the world and produce
-persistent geometric contacts, but do not receive impulses or positional
-correction yet. Continuous response for every ordinary dynamic pair and
-application plugins remain outside the current world contract. The public
-shape cast is also the geometry foundation of bullet CCD;
-ordinary bodies do not silently opt into its dynamic-target cost.
+`World2D` resolves circle, capsule, segment, rounded-polygon and compound
+contacts through the same persistent Soft Step path. Every sufficiently fast
+dynamic convex collider also sweeps against fixed and kinematic geometry;
+ordinary bodies do not silently opt into the additional dynamic-target cost,
+which remains reserved for bullets. Application plugins remain outside the
+current world contract.
 
 [Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/RotatingPhysicsContainer)
 is the recommended visual introduction: it progressively reveals 120 circles and

@@ -1,7 +1,7 @@
 use STD.Math
 use STD.Threading
 
-package struct AABB2D {
+public struct AABB2D {
     let lower:Math.Vec2
     let upper:Math.Vec2
 
@@ -11,6 +11,11 @@ package struct AABB2D {
     }
 
     init(center:Math.Vec2, half_size:Math.Vec2) {
+        if !finite_aabb_point(center) || !finite_aabb_point(half_size) ||
+            half_size.x < 0.0 || half_size.y < 0.0
+        {
+            panic("GFX.Physics.AABB2D requires finite values and non-negative half extents")
+        }
         self.lower = center.subtract(half_size)
         self.upper = center.add(half_size)
     }
@@ -23,6 +28,11 @@ package struct AABB2D {
     func contains(other:AABB2D) bool {
         return self.lower.x <= other.lower.x && self.lower.y <= other.lower.y &&
             self.upper.x >= other.upper.x && self.upper.y >= other.upper.y
+    }
+
+    func center() Math.Vec2 { return self.lower.add(self.upper).multiply(0.5) }
+    func half_size() Math.Vec2 {
+        return self.upper.subtract(self.lower).multiply(0.5)
     }
 
     func overlaps(other:AABB2D) bool {
@@ -46,6 +56,14 @@ package struct AABB2D {
         else { upper.y += prediction.y }
         return AABB2D(lower, upper, true)
     }
+}
+
+func finite_aabb_point(point:Math.Vec2) bool {
+    return finite_aabb_value(point.x) && finite_aabb_value(point.y)
+}
+
+func finite_aabb_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
 }
 
 package struct BodyPair2D {

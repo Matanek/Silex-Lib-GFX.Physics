@@ -70,6 +70,17 @@ Filters are evaluated at the public query boundary. Every temporary simplex,
 axis, and candidate belongs to one call, which permits parallel read queries
 without locks or world-step state.
 
+World queries traverse living colliders and write handles ordered by creation
+identity into consumer buffers. Their query filter remains distinct from
+contact filtering; AABB, shape overlap, ray cast, and shape cast expose no
+proxy or internal traversal order. Each call owns its temporary values, so
+multiple readers may share a resting world while `step` locks this boundary.
+
+`CharacterMover2D` composes world overlaps and shape casts around a capsule.
+Plane collection, bounded iterative solving, and gameplay state application
+remain separate. Calculation mutates neither world nor bodies and returns a
+value for the consuming controller to apply.
+
 These algorithms are native Silex adaptations informed by Box2D `v3.1.1` at
 commit `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, notably `src/hull.c`,
 `src/distance.c`, `src/geometry.c`, and `src/manifold.c`. Box2D is Copyright
@@ -107,19 +118,19 @@ parallel solver dispatch. They receive public snapshots and return an
 independent `ContactDecision2D`; the world lock rejects reentrant mutation.
 Material combine modes need no callback running from a worker.
 
-Continuous motion keeps two costs distinct. Fast ordinary bodies retain the
-non-dynamic-box boundary guard already used by the solver. Bodies created with
-`is_bullet` additionally sweep against dynamic targets and public convex
-geometry; rotational motion refines the first swept overlap. Sensor hits emit
-transitions without response. A world with no bullet returns before entering
-this dynamic-target path.
+Continuous motion keeps two costs distinct. Fast ordinary dynamic bodies sweep
+every public convex collider against fixed and kinematic geometry; rotational
+motion refines the first swept overlap and kinematic targets contribute their
+relative sweep. Bodies created with `is_bullet` additionally test dynamic
+targets. Sensor hits emit transitions without response. Slow bodies return
+before pair traversal.
 
 Kinematic bodies retain zero inverse mass and inertia, so contacts never alter
 their prescribed motion. `World2D.step` advances their linear and angular
 velocities before contact generation, excludes them from gravity and sleep,
 and exposes their surface velocity to dynamic contact response. They share the
 non-dynamic broad-phase set with fixed bodies but keep their previous transform
-for bullet sweeps and opt-in movement events.
+for continuous sweeps and opt-in movement events.
 
 Worker count never selects a different broad phase or solver. Worlds with
 dynamic shapes use the same reusable deterministic grid for one or several
@@ -196,9 +207,9 @@ second grid containing only sleeping circles. A segment-circle intersection
 clips the moving centre to its earliest contact whenever one fixed step would
 carry it through a sleeping support. This targeted continuous test prevents the
 slow-emission case from tunnelling into an already settled pile without
-substepping the whole world. Bullets additionally use the general swept path
-described above for awake targets, boxes, mixed convex shapes, and rotation;
-ordinary bodies do not pay that broader CCD cost.
+substepping the whole world. The general swept path described above covers
+fixed and kinematic targets, mixed convex shapes, chains, and rotation;
+bullets alone extend it to dynamic targets.
 
 Parallelism is explicit at the world boundary. `enable_parallelism` creates a
 persistent STD executor. The common stage graph dispatches body ranges only at
@@ -246,10 +257,9 @@ reports the four stable phases `motion_ms`, `broad_phase_ms`, `solve_ms`, and
 remain package-private.
 
 Every following capability must first appear in a focused executable example
-and a consumer-facing test. Dynamic response for the new geometry,
-solver-level continuous collision detection, application
-integration, cloth, soft bodies, fluids, and 3D are intentionally outside the
-current contract. Dense contact and joint solving already share the
+and a consumer-facing test. Application integration, cloth, soft bodies,
+fluids, and 3D are intentionally outside the current contract. Dense contact
+and joint solving already share the
 conflict-free constraint graph and worker pool. Additional SIMD kernels likewise
 depend on a
 portable vector surface in the Silex backend; the current SoA and contiguous

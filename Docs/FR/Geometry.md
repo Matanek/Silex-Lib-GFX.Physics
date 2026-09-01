@@ -1,7 +1,8 @@
 # Géométrie et requêtes de collision
 
-`Physics.Geometry2D` fournit distance, recouvrement, manifold, ray cast et
-shape cast sur des `ShapePlacement2D` transformés et filtrés.
+`Physics.Geometry2D` fournit AABB, test et point le plus proche, distance,
+recouvrement, manifold, ray cast et shape cast sur des `ShapePlacement2D`
+transformés et filtrés.
 
 ```silex
 use GFX.Physics
@@ -20,6 +21,8 @@ let wall = Physics.ShapePlacement2D(
 )
 
 let distance = Physics.Geometry2D.distance(player, wall)
+let contains = Physics.Geometry2D.test_point(player, Math.Vec2(2.0, 3.0))
+let closest = Physics.Geometry2D.closest_point(wall, Math.Vec2(4.0, 0.0))
 let manifold = Physics.Geometry2D.manifold(player, wall)
 let hit = Physics.Geometry2D.shape_cast(
     player,

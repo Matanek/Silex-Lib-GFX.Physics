@@ -43,9 +43,22 @@ retournent une `ContactDecision2D` autonome ; le verrou du monde interdit toute
 mutation réentrante. Les modes de combinaison appartiennent aux matériaux et
 ne demandent aucun callback exécuté par un worker.
 
-Les bullets balayent les cibles dynamiques et la géométrie convexe. Les corps
-ordinaires rapides conservent la garde continue plus étroite. Un monde sans
-bullet quitte ce chemin immédiatement.
+Les requêtes de monde parcourent les colliders vivants et écrivent des handles
+ordonnés par identité de création dans des buffers consommateurs. Le filtre de
+requête reste distinct du filtre de contact ; AABB, overlap de forme, ray cast
+et shape cast ne révèlent ni proxy ni ordre interne. Les temporaires
+appartiennent à chaque appel, ce qui autorise plusieurs lectures sur un monde
+au repos, tandis que `step` verrouille cette frontière.
+
+`CharacterMover2D` compose les overlaps et shape casts de monde autour d'une
+capsule. La collecte de plans, leur résolution itérative bornée et l'application
+du déplacement restent séparées. Le calcul ne mute ni le monde ni les corps ;
+il renvoie une valeur que le contrôleur de gameplay applique à son propre état.
+
+Les corps dynamiques rapides balaient toute la géométrie fixe et cinématique
+convexe, translation et rotation comprises. Les bullets étendent ce même
+chemin aux cibles dynamiques. Les corps lents et les paires dynamiques sans
+bullet évitent ce coût.
 
 ## Solver, parallélisme et sommeil
 

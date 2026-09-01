@@ -1,0 +1,445 @@
+use GFX.Physics.Capsule2D.Capsule2D
+use GFX.Physics.Geometry2D.Geometry2D
+use GFX.Physics.Geometry2D.ShapePlacement2D
+use GFX.Physics.RigidBody2D.Collider2D
+use GFX.Physics.RigidBody2D.RigidBody2D
+use GFX.Physics.RigidBody2D.ShapeId2D
+use GFX.Physics.Shape2D.Shape2D
+use GFX.Physics.SpatialQuery2D.QueryFilter2D
+use GFX.Physics.SpatialQuery2D.WorldQueryStatistics2D
+use GFX.Physics.Transform2D.Transform2D
+use GFX.Physics.World2D.World2D
+use GFX.Physics.World2D.WorldCastResult2D
+use STD.Math
+
+public struct CharacterMover2DSettings {
+    var capsule:Capsule2D
+    var query_filter:QueryFilter2D
+    var tolerance:float
+    var maximum_iterations:int
+    var maximum_plane_iterations:int
+    var include_sensors:bool
+
+    init() {
+        self.capsule = Capsule2D(
+            Math.Vec2(0.0, -0.45),
+            Math.Vec2(0.0, 0.45),
+            0.3
+        )
+        self.query_filter = QueryFilter2D()
+        self.tolerance = 0.005
+        self.maximum_iterations = 8
+        self.maximum_plane_iterations = 20
+        self.include_sensors = false
+    }
+}
+
+public struct CharacterCollisionPlane2D {
+    let normal:Math.Vec2
+    let point:Math.Vec2
+    let separation:float
+    private var current_collider:Collider2D?
+    private var current_push:float
+
+    package init(
+        collider:Collider2D,
+        normal:Math.Vec2,
+        point:Math.Vec2,
+        separation:float
+    ) {
+        self.normal = normal
+        self.point = point
+        self.separation = separation
+        self.current_collider = collider
+        self.current_push = 0.0
+    }
+
+    func collider() Collider2D {
+        if let collider = self.current_collider { return collider }
+        panic("GFX.Physics.CharacterCollisionPlane2D is not initialized")
+    }
+    func body() RigidBody2D { return self.collider().body() }
+    func push() float { return self.current_push }
+
+    package func collider_id() ShapeId2D {
+        return self.collider().collider_id()
+    }
+    package func with_push(value:float) CharacterCollisionPlane2D {
+        var updated = CharacterCollisionPlane2D(
+            self.collider(),
+            self.normal,
+            self.point,
+            self.separation
+        )
+        updated.current_push = value
+        return updated
+    }
+}
+
+public struct CharacterPlaneSolveResult2D {
+    let translation:Math.Vec2
+    let iteration_count:int
+
+    init(translation:Math.Vec2 = Math.Vec2(), iteration_count:int = 0) {
+        self.translation = translation
+        self.iteration_count = iteration_count
+    }
+}
+
+public struct CharacterMoveResult2D {
+    let applied_translation:Math.Vec2
+    let remaining_translation:Math.Vec2
+    let iteration_count:int
+    let plane_iteration_count:int
+    let started_overlapping:bool
+    private var current_planes:CharacterCollisionPlane2D[]
+    private var current_colliders:Collider2D[]
+
+    package init(
+        applied_translation:Math.Vec2,
+        remaining_translation:Math.Vec2,
+        iteration_count:int,
+        plane_iteration_count:int,
+        started_overlapping:bool,
+        planes:CharacterCollisionPlane2D[],
+        colliders:Collider2D[]
+    ) {
+        self.applied_translation = applied_translation
+        self.remaining_translation = remaining_translation
+        self.iteration_count = iteration_count
+        self.plane_iteration_count = plane_iteration_count
+        self.started_overlapping = started_overlapping
+        self.current_planes = planes
+        self.current_colliders = colliders
+    }
+
+    func planes() CharacterCollisionPlane2D[] { return self.current_planes }
+    func colliders() Collider2D[] { return self.current_colliders }
+}
+
+public class CharacterMover2D {
+    private var current_settings:CharacterMover2DSettings
+    private var overlap_scratch:Collider2D[]
+    private var cast_scratch:WorldCastResult2D[]
+
+    init(settings:CharacterMover2DSettings = CharacterMover2DSettings()) {
+        validate_character_mover_settings(settings)
+        self.current_settings = settings
+        self.overlap_scratch = []
+        self.cast_scratch = []
+    }
+
+    func settings() CharacterMover2DSettings { return self.current_settings }
+
+    func collect_planes(
+        world:@World2D,
+        position:Math.Vec2,
+        output:&CharacterCollisionPlane2D[]
+    ) WorldQueryStatistics2D {
+        require_finite_character_vector(
+            position,
+            "GFX.Physics.CharacterMover2D.collect_planes requires a finite position"
+        )
+        output.clear()
+        var mover = self.placement(position)
+        var overlap_scratch = self.overlap_scratch
+        let statistics = world.write_shape_overlaps(
+            mover,
+            overlap_scratch,
+            self.current_settings.query_filter
+        )
+        self.overlap_scratch = overlap_scratch
+        for collider in overlap_scratch {
+            if collider.is_sensor() && !self.current_settings.include_sensors {
+                continue
+            }
+            var target = ShapePlacement2D(
+                collider.shape(),
+                collider.transform(),
+                collider.collision_filter()
+            )
+            let manifold = Geometry2D.manifold(target, mover)
+            if manifold.point_count() == 0 ||
+                manifold.normal.length_squared() < 0.999
+            {
+                continue
+            }
+            var deepest = manifold.points[0]
+            var point_index = 1
+            while point_index < manifold.point_count() {
+                if manifold.points[point_index].separation < deepest.separation {
+                    deepest = manifold.points[point_index]
+                }
+                point_index++
+            }
+            output.append(CharacterCollisionPlane2D(
+                collider,
+                manifold.normal.normalized(),
+                deepest.point,
+                Math.min(0.0, deepest.separation)
+            ))
+        }
+        return WorldQueryStatistics2D(
+            statistics.visited_count,
+            statistics.candidate_count,
+            output.count()
+        )
+    }
+
+    func solve_planes(
+        target_translation:Math.Vec2,
+        planes:&CharacterCollisionPlane2D[]
+    ) CharacterPlaneSolveResult2D {
+        require_finite_character_vector(
+            target_translation,
+            "GFX.Physics.CharacterMover2D.solve_planes requires finite motion"
+        )
+        var pushes:float[] = []
+        var reset_index = 0
+        while reset_index < planes.count() {
+            pushes.append(0.0)
+            reset_index++
+        }
+        var translation = target_translation
+        var used_iterations = 0
+        while used_iterations < self.current_settings.maximum_plane_iterations {
+            var total_push = 0.0
+            var plane_index = 0
+            while plane_index < planes.count() {
+                let normal = planes[plane_index].normal
+                let separation = planes[plane_index].separation +
+                    translation.dot(normal) +
+                    self.current_settings.tolerance
+                let requested_push = -separation
+                let previous_push = pushes[plane_index]
+                let accumulated_push = Math.max(
+                    0.0,
+                    previous_push + requested_push
+                )
+                let applied_push = accumulated_push - previous_push
+                pushes[plane_index] = accumulated_push
+                translation = translation.add(
+                    normal.multiply(applied_push)
+                )
+                total_push += Math.abs(applied_push)
+                plane_index++
+            }
+            used_iterations++
+            if total_push < self.current_settings.tolerance { break }
+        }
+        var update_index = 0
+        while update_index < planes.count() {
+            planes[update_index] = planes[update_index].with_push(
+                pushes[update_index]
+            )
+            update_index++
+        }
+        return CharacterPlaneSolveResult2D(translation, used_iterations)
+    }
+
+    func clip_vector(
+        vector:Math.Vec2,
+        planes:CharacterCollisionPlane2D[]
+    ) Math.Vec2 {
+        require_finite_character_vector(
+            vector,
+            "GFX.Physics.CharacterMover2D.clip_vector requires a finite vector"
+        )
+        var clipped = vector
+        for plane in planes {
+            if plane.push() <= 0.0 { continue }
+            let inward = Math.min(0.0, clipped.dot(plane.normal))
+            clipped = clipped.subtract(plane.normal.multiply(inward))
+        }
+        return clipped
+    }
+
+    func calculate_move(
+        world:@World2D,
+        position:Math.Vec2,
+        target_translation:Math.Vec2
+    ) CharacterMoveResult2D {
+        require_finite_character_vector(
+            position,
+            "GFX.Physics.CharacterMover2D.calculate_move requires a finite position"
+        )
+        require_finite_character_vector(
+            target_translation,
+            "GFX.Physics.CharacterMover2D.calculate_move requires finite motion"
+        )
+        let target = position.add(target_translation)
+        var current = position
+        var carried_planes:CharacterCollisionPlane2D[] = []
+        var encountered_planes:CharacterCollisionPlane2D[] = []
+        var encountered_colliders:Collider2D[] = []
+        var started_overlapping = false
+        var iteration = 0
+        var plane_iterations = 0
+        while iteration < self.current_settings.maximum_iterations {
+            var planes:CharacterCollisionPlane2D[] = []
+            for plane in carried_planes { planes.append(plane) }
+            var overlaps:CharacterCollisionPlane2D[] = []
+            self.collect_planes(world, current, overlaps)
+            if iteration == 0 && overlaps.count() > 0 {
+                started_overlapping = true
+            }
+            for plane in overlaps { append_character_plane(planes, plane) }
+            var solved = self.solve_planes(target.subtract(current), planes)
+            plane_iterations += solved.iteration_count
+            for plane in planes {
+                append_character_plane(encountered_planes, plane)
+                append_character_collider(encountered_colliders, plane.collider())
+            }
+            let translation = solved.translation
+            if translation.length_squared() <=
+                self.current_settings.tolerance * self.current_settings.tolerance
+            {
+                current = current.add(translation)
+                iteration++
+                break
+            }
+
+            let cast_index = self.closest_blocking_cast(
+                world,
+                current,
+                translation
+            )
+            if cast_index < 0 {
+                current = current.add(translation)
+                iteration++
+                break
+            }
+
+            var hit = self.cast_scratch[cast_index]
+            let applied = translation.multiply(hit.fraction)
+            current = current.add(applied)
+            var collision_plane = CharacterCollisionPlane2D(
+                hit.collider(),
+                hit.normal.normalized(),
+                hit.point,
+                0.0
+            )
+            carried_planes.clear()
+            carried_planes.append(collision_plane)
+            append_character_plane(encountered_planes, collision_plane)
+            append_character_collider(encountered_colliders, hit.collider())
+            iteration++
+            if applied.length_squared() <=
+                self.current_settings.tolerance * self.current_settings.tolerance &&
+                target.subtract(current).dot(hit.normal) >=
+                    -self.current_settings.tolerance
+            {
+                break
+            }
+        }
+
+        let applied = current.subtract(position)
+        return CharacterMoveResult2D(
+            applied,
+            target_translation.subtract(applied),
+            iteration,
+            plane_iterations,
+            started_overlapping,
+            encountered_planes,
+            encountered_colliders
+        )
+    }
+
+    private func placement(position:Math.Vec2) ShapePlacement2D {
+        return ShapePlacement2D(
+            Shape2D.capsule(self.current_settings.capsule),
+            Transform2D(position:position)
+        )
+    }
+
+    private func closest_blocking_cast(
+        world:@World2D,
+        position:Math.Vec2,
+        translation:Math.Vec2
+    ) int {
+        var cast_scratch = self.cast_scratch
+        world.write_shape_casts(
+            self.placement(position),
+            translation,
+            cast_scratch,
+            self.current_settings.query_filter
+        )
+        self.cast_scratch = cast_scratch
+        var closest = -1
+        var index = 0
+        while index < cast_scratch.count() {
+            var hit = cast_scratch[index]
+            if (!hit.collider().is_sensor() ||
+                    self.current_settings.include_sensors) &&
+                translation.dot(hit.normal) < -self.current_settings.tolerance &&
+                (closest < 0 ||
+                    hit.fraction < cast_scratch[closest].fraction)
+            {
+                closest = index
+            }
+            index++
+        }
+        return closest
+    }
+}
+
+func append_character_plane(
+    output:&CharacterCollisionPlane2D[],
+    candidate:CharacterCollisionPlane2D
+) {
+    var index = 0
+    while index < output.count() {
+        if same_character_collider(
+            output[index].collider_id(),
+            candidate.collider_id()
+        ) && output[index].normal.dot(candidate.normal) > 0.999
+        {
+            if candidate.separation < output[index].separation ||
+                candidate.push() > output[index].push()
+            {
+                output[index] = candidate
+            }
+            return
+        }
+        index++
+    }
+    output.append(candidate)
+}
+
+func append_character_collider(output:&Collider2D[], candidate:Collider2D) {
+    let candidate_id = candidate.collider_id()
+    for collider in output {
+        if same_character_collider(collider.collider_id(), candidate_id) {
+            return
+        }
+    }
+    output.append(candidate)
+}
+
+func same_character_collider(first:ShapeId2D, second:ShapeId2D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}
+
+func validate_character_mover_settings(settings:CharacterMover2DSettings) {
+    if !finite_character_value(settings.tolerance) || settings.tolerance <= 0.0 {
+        panic("GFX.Physics.CharacterMover2D tolerance must be finite and positive")
+    }
+    if settings.maximum_iterations < 1 || settings.maximum_iterations > 32 {
+        panic("GFX.Physics.CharacterMover2D maximum iterations must be between 1 and 32")
+    }
+    if settings.maximum_plane_iterations < 1 ||
+        settings.maximum_plane_iterations > 64
+    {
+        panic("GFX.Physics.CharacterMover2D maximum plane iterations must be between 1 and 64")
+    }
+}
+
+func require_finite_character_vector(value:Math.Vec2, message:str) {
+    if !finite_character_value(value.x) || !finite_character_value(value.y) {
+        panic(message)
+    }
+}
+
+func finite_character_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

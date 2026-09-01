@@ -1,0 +1,62 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func floor_world() Physics.World2D {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.25)
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 0.5)))
+    )
+    return world
+}
+
+func mover() Physics.CharacterMover2D {
+    return Physics.CharacterMover2D(Physics.CharacterMover2DSettings()
+        ..capsule = Physics.Capsule2D(
+            Math.Vec2(0.0, -0.4),
+            Math.Vec2(0.0, 0.4),
+            0.3
+        )
+    )
+}
+
+func plane_case(position:Math.Vec2, name:str) {
+    var world = floor_world()
+    var character = mover()
+    var planes:Physics.CharacterCollisionPlane2D[] = []
+    character.collect_planes(world, position, planes)
+    let desired = Math.Vec2(2.0, -1.0)
+    let solved = character.solve_planes(desired, planes)
+    print(
+        "$(name) $(planes.count()) $(planes[0].normal.x) " +
+        "$(planes[0].normal.y) $(solved.translation.x) " +
+        "$(solved.translation.y) $(planes[0].push())"
+    )
+}
+
+func move_case() {
+    var world = floor_world()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(2.25, 1.0)
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5, 2.5)))
+    )
+    var character = mover()
+    var result = character.calculate_move(
+        world,
+        Math.Vec2(0.0, 0.7),
+        Math.Vec2(4.0, -1.0)
+    )
+    print(
+        "move $(result.applied_translation.x) " +
+        "$(result.applied_translation.y) $(result.colliders().count()) " +
+        "$(result.iteration_count)"
+    )
+}
+
+func main() {
+    plane_case(Math.Vec2(0.0, 0.7), "floor")
+    plane_case(Math.Vec2(0.0, 0.5), "penetration")
+    move_case()
+}

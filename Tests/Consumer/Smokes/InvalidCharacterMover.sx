@@ -1,0 +1,8 @@
+use GFX.Physics
+
+func main() {
+    Physics.CharacterMover2D(
+        Physics.CharacterMover2DSettings()
+            ..maximum_iterations = 0
+    )
+}

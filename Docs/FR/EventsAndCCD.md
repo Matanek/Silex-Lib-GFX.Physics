@@ -56,10 +56,26 @@ conserve donc ses parois secondaires dans le CCD. Le premier impact de toutes
 les paires admissibles est retenu, y compris avec raffinement rotationnel, et
 une même paire de corps ne peut occuper qu’une entrée du cache de contacts.
 
-Les capteurs signalent les transitions sans réponse. Les corps ordinaires ne
-paient pas ce chemin général et un monde sans bullet le quitte immédiatement.
+Tout collider convexe dynamique assez rapide balaie les formes fixes et
+cinématiques autorisées. Une cible cinématique fournit son mouvement relatif
+complet au sweep au lieu d’être traitée comme une téléportation. `is_bullet`
+étend volontairement ce travail aux cibles dynamiques.
+
+Le CCD évalue chaque paire de colliders, et pas seulement la forme primaire de
+chaque corps. Le premier impact admissible est retenu, y compris avec
+raffinement rotationnel, puis reçoit la réponse et les événements ordinaires.
+Une même paire de corps ne peut occuper qu’une entrée du cache de contacts.
+Les capteurs rapides signalent une traversée complète sans réponse physique.
+Filtres, filter joints et côté unilatéral des chaînes restent identiques au
+chemin discret. Les corps lents quittent le chemin avant toute recherche de
+paire, et seules les bullets paient les tests dynamique contre dynamique.
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContinuousCollision.sx
 ```
+
+La comparaison sur un pas avec Box2D 3.1.1, y compris les divergences de
+réponse documentées, est décrite dans
+[`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).

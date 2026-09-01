@@ -50,10 +50,14 @@ use GFX.Physics.Events2D.SensorBeginEvent2D
 use GFX.Physics.Events2D.SensorEndEvent2D
 use GFX.Physics.Events2D.SensorOverlap2D
 use GFX.Physics.Geometry2D.Geometry2D
+use GFX.Physics.Geometry2D.CastResult2D
 use GFX.Physics.Geometry2D.Manifold2D
 use GFX.Physics.Geometry2D.ManifoldPoint2D
+use GFX.Physics.Geometry2D.Ray2D
 use GFX.Physics.Geometry2D.ShapePlacement2D
 use GFX.Physics.Shape2D.Shape2D
+use GFX.Physics.SpatialQuery2D.QueryFilter2D
+use GFX.Physics.SpatialQuery2D.WorldQueryStatistics2D
 use GFX.Physics.Transform2D.Transform2D
 use STD.Math
 use STD.Threading
@@ -123,6 +127,35 @@ public struct World2DStepProfile {
         self.solve_ms = 0.0
         self.sleep_ms = 0.0
         self.total_ms = 0.0
+    }
+}
+
+public struct WorldCastResult2D {
+    let hit:bool
+    let point:Math.Vec2
+    let normal:Math.Vec2
+    let fraction:float
+    private var current_collider:Collider2D?
+
+    init() {
+        self.hit = false
+        self.point = Math.Vec2()
+        self.normal = Math.Vec2()
+        self.fraction = 0.0
+        self.current_collider = null
+    }
+
+    package init(collider:Collider2D, result:CastResult2D) {
+        self.hit = true
+        self.point = result.point
+        self.normal = result.normal
+        self.fraction = result.fraction
+        self.current_collider = collider
+    }
+
+    func collider() Collider2D {
+        if let collider = self.current_collider { return collider }
+        panic("GFX.Physics.WorldCastResult2D has no collider when hit is false")
     }
 }
 
@@ -1094,6 +1127,274 @@ public class World2D {
             cache.resolved_restitution,
             true
         )
+    }
+
+    func write_aabb_overlaps(
+        bounds:AABB2D,
+        output:&Collider2D[],
+        filter:QueryFilter2D = QueryFilter2D()
+    ) WorldQueryStatistics2D {
+        self.store.require_queryable()
+        output.clear()
+        let colliders = ordered_query_colliders(self.store)
+        var visited = 0
+        var candidates = 0
+        for dense in colliders {
+            visited++
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            candidates++
+            output.append(query_collider_handle(self.store, dense))
+        }
+        return WorldQueryStatistics2D(visited, candidates, output.count())
+    }
+
+    func aabb_overlaps_any(
+        bounds:AABB2D,
+        filter:QueryFilter2D = QueryFilter2D()
+    ) bool {
+        self.store.require_queryable()
+        for dense in ordered_query_colliders(self.store) {
+            if query_collider_enabled(self.store, dense) &&
+                filter.allows(self.store.shape_store.collision_filters[dense]) &&
+                bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    func write_shape_overlaps(
+        shape:ShapePlacement2D,
+        output:&Collider2D[],
+        filter:QueryFilter2D = QueryFilter2D()
+    ) WorldQueryStatistics2D {
+        self.store.require_queryable()
+        output.clear()
+        let query = ShapePlacement2D(shape.shape(), shape.transform())
+        let bounds = Geometry2D.aabb(query)
+        let colliders = ordered_query_colliders(self.store)
+        var visited = 0
+        var candidates = 0
+        for dense in colliders {
+            visited++
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            candidates++
+            if Geometry2D.overlaps(query, query_collider_placement(self.store, dense)) {
+                output.append(query_collider_handle(self.store, dense))
+            }
+        }
+        return WorldQueryStatistics2D(visited, candidates, output.count())
+    }
+
+    func shape_overlaps_any(
+        shape:ShapePlacement2D,
+        filter:QueryFilter2D = QueryFilter2D()
+    ) bool {
+        self.store.require_queryable()
+        let query = ShapePlacement2D(shape.shape(), shape.transform())
+        let bounds = Geometry2D.aabb(query)
+        for dense in ordered_query_colliders(self.store) {
+            if query_collider_enabled(self.store, dense) &&
+                filter.allows(self.store.shape_store.collision_filters[dense]) &&
+                bounds.overlaps(query_collider_bounds(self.store, dense)) &&
+                Geometry2D.overlaps(query, query_collider_placement(self.store, dense))
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    func write_ray_casts(
+        ray:Ray2D,
+        output:&WorldCastResult2D[],
+        filter:QueryFilter2D = QueryFilter2D()
+    ) WorldQueryStatistics2D {
+        self.store.require_queryable()
+        output.clear()
+        let bounds = ray_query_bounds(ray)
+        let colliders = ordered_query_colliders(self.store)
+        var visited = 0
+        var candidates = 0
+        for dense in colliders {
+            visited++
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            candidates++
+            let result = Geometry2D.ray_cast(
+                ray,
+                query_collider_placement(self.store, dense)
+            )
+            if result.hit {
+                output.append(WorldCastResult2D(
+                    query_collider_handle(self.store, dense),
+                    result
+                ))
+            }
+        }
+        return WorldQueryStatistics2D(visited, candidates, output.count())
+    }
+
+    func ray_cast_any(
+        ray:Ray2D,
+        filter:QueryFilter2D = QueryFilter2D()
+    ) bool {
+        self.store.require_queryable()
+        let bounds = ray_query_bounds(ray)
+        for dense in ordered_query_colliders(self.store) {
+            if query_collider_enabled(self.store, dense) &&
+                filter.allows(self.store.shape_store.collision_filters[dense]) &&
+                bounds.overlaps(query_collider_bounds(self.store, dense)) &&
+                Geometry2D.ray_cast(
+                    ray,
+                    query_collider_placement(self.store, dense)
+                ).hit
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    func ray_cast_closest(
+        ray:Ray2D,
+        filter:QueryFilter2D = QueryFilter2D()
+    ) WorldCastResult2D {
+        self.store.require_queryable()
+        let bounds = ray_query_bounds(ray)
+        var closest = WorldCastResult2D()
+        for dense in ordered_query_colliders(self.store) {
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            let result = Geometry2D.ray_cast(
+                ray,
+                query_collider_placement(self.store, dense)
+            )
+            if result.hit && (!closest.hit || result.fraction < closest.fraction) {
+                closest = WorldCastResult2D(
+                    query_collider_handle(self.store, dense),
+                    result
+                )
+            }
+        }
+        return closest
+    }
+
+    func write_shape_casts(
+        moving:ShapePlacement2D,
+        translation:Math.Vec2,
+        output:&WorldCastResult2D[],
+        filter:QueryFilter2D = QueryFilter2D(),
+        max_fraction:float = 1.0
+    ) WorldQueryStatistics2D {
+        self.store.require_queryable()
+        output.clear()
+        let query = ShapePlacement2D(moving.shape(), moving.transform())
+        let bounds = shape_cast_query_bounds(query, translation, max_fraction)
+        let colliders = ordered_query_colliders(self.store)
+        var visited = 0
+        var candidates = 0
+        for dense in colliders {
+            visited++
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            candidates++
+            let result = Geometry2D.shape_cast(
+                query,
+                translation,
+                query_collider_placement(self.store, dense),
+                max_fraction
+            )
+            if result.hit {
+                output.append(WorldCastResult2D(
+                    query_collider_handle(self.store, dense),
+                    result
+                ))
+            }
+        }
+        return WorldQueryStatistics2D(visited, candidates, output.count())
+    }
+
+    func shape_cast_any(
+        moving:ShapePlacement2D,
+        translation:Math.Vec2,
+        filter:QueryFilter2D = QueryFilter2D(),
+        max_fraction:float = 1.0
+    ) bool {
+        self.store.require_queryable()
+        let query = ShapePlacement2D(moving.shape(), moving.transform())
+        let bounds = shape_cast_query_bounds(query, translation, max_fraction)
+        for dense in ordered_query_colliders(self.store) {
+            if query_collider_enabled(self.store, dense) &&
+                filter.allows(self.store.shape_store.collision_filters[dense]) &&
+                bounds.overlaps(query_collider_bounds(self.store, dense)) &&
+                Geometry2D.shape_cast(
+                    query,
+                    translation,
+                    query_collider_placement(self.store, dense),
+                    max_fraction
+                ).hit
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    func shape_cast_closest(
+        moving:ShapePlacement2D,
+        translation:Math.Vec2,
+        filter:QueryFilter2D = QueryFilter2D(),
+        max_fraction:float = 1.0
+    ) WorldCastResult2D {
+        self.store.require_queryable()
+        let query = ShapePlacement2D(moving.shape(), moving.transform())
+        let bounds = shape_cast_query_bounds(query, translation, max_fraction)
+        var closest = WorldCastResult2D()
+        for dense in ordered_query_colliders(self.store) {
+            if !query_collider_enabled(self.store, dense) ||
+                !filter.allows(self.store.shape_store.collision_filters[dense]) ||
+                !bounds.overlaps(query_collider_bounds(self.store, dense))
+            {
+                continue
+            }
+            let result = Geometry2D.shape_cast(
+                query,
+                translation,
+                query_collider_placement(self.store, dense),
+                max_fraction
+            )
+            if result.hit && (!closest.hit || result.fraction < closest.fraction) {
+                closest = WorldCastResult2D(
+                    query_collider_handle(self.store, dense),
+                    result
+                )
+            }
+        }
+        return closest
     }
     func write_body_move_events(output:&BodyMoveEvent2D[]) {
         output.clear()
@@ -2275,7 +2576,24 @@ public class World2D {
             // Box2D can rely on speculative contacts up to half the minimum
             // extent. This solver has no speculative contact row yet, so start
             // the sweep at the quarter-extent allowance used for chain CCD.
-            if surface_motion <= 0.25 * minimum_extent {
+            var requires_sweep = surface_motion > 0.25 * minimum_extent
+            if !requires_sweep {
+                for possible_target in self.non_dynamic_bodies {
+                    if self.store.enabled[possible_target] &&
+                        self.store.body_types[possible_target] ==
+                            BodyType2D.kinematic &&
+                        continuous_pair_requires_sweep(
+                            self.store,
+                            mover,
+                            possible_target
+                        )
+                    {
+                        requires_sweep = true
+                        break
+                    }
+                }
+            }
+            if !requires_sweep {
                 mover++
                 continue
             }
@@ -2299,6 +2617,14 @@ public class World2D {
                         target++
                         continue
                     }
+                }
+                if !continuous_pair_requires_sweep(
+                    self.store,
+                    mover,
+                    target
+                ) {
+                    target++
+                    continue
                 }
                 let pair = ordered_body_pair(mover, target)
                 if !self.store.collision_filters[pair.first].allows(
@@ -2381,7 +2707,7 @@ public class World2D {
         var applied_normal_impulse = 0.0
         if normal_velocity < 0.0 && denominator > 0.0 {
             var restitution = 0.0
-            if normal_velocity < -1.0 {
+            if normal_velocity < -self.current_restitution_threshold {
                 restitution = Math.max(
                     self.store.restitutions[mover],
                     self.store.restitutions[target]
@@ -4454,9 +4780,6 @@ public class World2D {
                 color++
             }
             self.current_soft_step_stages.append(8)
-            if self.current_continuous_collision_enabled {
-                self.clip_body_motion_against_non_dynamic_boxes()
-            }
             self.current_soft_step_stages.append(9)
             self.joints.finish_step(1.0 / delta)
         } else {
@@ -5008,6 +5331,39 @@ func pair_hit_events_enabled(store:BodyStore2D, pair:BodyPair2D) bool {
         (store.behavior_flags[pair.second] & 16) != 0
 }
 
+func continuous_pair_requires_sweep(
+    store:BodyStore2D,
+    mover:int,
+    target:int
+) bool {
+    let mover_motion = body_position(store, mover).subtract(Math.Vec2(
+        store.previous_positions_x[mover],
+        store.previous_positions_y[mover]
+    ))
+    var target_motion = Math.Vec2()
+    var target_rotation_motion = 0.0
+    if store.body_types[target] != BodyType2D.fixed {
+        target_motion = body_position(store, target).subtract(Math.Vec2(
+            store.previous_positions_x[target],
+            store.previous_positions_y[target]
+        ))
+        target_rotation_motion = store.rotations[target] -
+            store.previous_rotations[target]
+    }
+    let relative_motion = mover_motion.subtract(target_motion)
+    let mover_rotation_motion = store.rotations[mover] -
+        store.previous_rotations[mover]
+    let surface_motion = relative_motion.length() +
+        Math.abs(mover_rotation_motion) *
+            body_maximum_sweep_radius(store, mover) +
+        Math.abs(target_rotation_motion) *
+            body_maximum_sweep_radius(store, target)
+    return surface_motion > 0.25 * body_minimum_continuous_extent(
+        store,
+        mover
+    )
+}
+
 func continuous_pair_hit(
     store:BodyStore2D,
     mover:int,
@@ -5118,7 +5474,11 @@ func continuous_pair_hit_for_shapes(
             target_placement
         )
         if cast.hit {
-            return ContinuousHit2D(cast.fraction, cast.point, cast.normal)
+            return ContinuousHit2D(
+                cast.fraction,
+                cast.point.add(target_motion.multiply(cast.fraction)),
+                cast.normal
+            )
         }
         return ContinuousHit2D()
     }
@@ -5282,6 +5642,102 @@ func integrate_body_velocity(
     }
     store.angular_velocities[index] *= 1.0 / (
         1.0 + store.angular_dampings[index] * delta
+    )
+}
+
+func ordered_query_colliders(store:BodyStore2D) int[] {
+    var ordered:int[] = []
+    var dense = 0
+    while dense < store.shape_store.count() {
+        var destination = ordered.count()
+        ordered.append(dense)
+        while destination > 0 &&
+            store.shape_store.creation_ids[ordered[destination - 1]] >
+                store.shape_store.creation_ids[dense]
+        {
+            ordered[destination] = ordered[destination - 1]
+            destination--
+        }
+        ordered[destination] = dense
+        dense++
+    }
+    return ordered
+}
+
+func query_collider_body(store:BodyStore2D, dense:int) int {
+    return store.slot_dense_indices[store.shape_store.body_slots[dense]]
+}
+
+func query_collider_enabled(store:BodyStore2D, dense:int) bool {
+    return store.enabled[query_collider_body(store, dense)]
+}
+
+func query_collider_handle(store:BodyStore2D, dense:int) Collider2D {
+    let slot = store.shape_store.dense_slots[dense]
+    return Collider2D(
+        store,
+        ShapeId2D(slot, store.shape_store.slot_generations[slot])
+    )
+}
+
+func query_collider_placement(
+    store:BodyStore2D,
+    dense:int
+) ShapePlacement2D {
+    let body = query_collider_body(store, dense)
+    return ShapePlacement2D(
+        store.shape_store.shapes[dense],
+        Transform2D(
+            position:body_position(store, body),
+            rotation:store.rotations[body]
+        )
+    )
+}
+
+func query_collider_bounds(store:BodyStore2D, dense:int) AABB2D {
+    return Geometry2D.aabb(query_collider_placement(store, dense))
+}
+
+func ray_query_bounds(ray:Ray2D) AABB2D {
+    let finish = ray.origin.add(ray.translation.multiply(ray.max_fraction))
+    let lower = Math.Vec2(
+        Math.min(ray.origin.x, finish.x),
+        Math.min(ray.origin.y, finish.y)
+    )
+    let upper = Math.Vec2(
+        Math.max(ray.origin.x, finish.x),
+        Math.max(ray.origin.y, finish.y)
+    )
+    return AABB2D(lower, upper, true)
+}
+
+func shape_cast_query_bounds(
+    moving:ShapePlacement2D,
+    translation:Math.Vec2,
+    max_fraction:float
+) AABB2D {
+    if !finite_world_value(translation.x) ||
+        !finite_world_value(translation.y) ||
+        !finite_world_value(max_fraction) || max_fraction <= 0.0
+    {
+        panic("GFX.Physics.World2D shape cast requires finite motion and a positive maximum fraction")
+    }
+    let start = Geometry2D.aabb(moving)
+    let displacement = translation.multiply(max_fraction)
+    let finish = AABB2D(
+        start.center().add(displacement),
+        start.half_size()
+    )
+    return AABB2D(
+        Math.Vec2(
+            Math.min(start.lower.x, finish.lower.x),
+            Math.min(start.lower.y, finish.lower.y)
+        ),
+        Math.Vec2(
+            Math.max(start.upper.x, finish.upper.x),
+            Math.max(start.upper.y, finish.upper.y)
+        ),
+        true
     )
 }
 

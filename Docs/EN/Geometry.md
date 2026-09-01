@@ -22,6 +22,8 @@ let wall = Physics.ShapePlacement2D(
 )
 
 let distance = Physics.Geometry2D.distance(player, wall)
+let contains = Physics.Geometry2D.test_point(player, Math.Vec2(2.0, 3.0))
+let closest = Physics.Geometry2D.closest_point(wall, Math.Vec2(4.0, 0.0))
 let manifold = Physics.Geometry2D.manifold(player, wall)
 let hit = Physics.Geometry2D.shape_cast(
     player,
@@ -30,7 +32,9 @@ let hit = Physics.Geometry2D.shape_cast(
 )
 ```
 
-`distance` returns the closest surface points, the normal from the first shape
+`aabb` returns exact transformed bounds, `test_point` checks containment, and
+`closest_point` projects a finite point onto the nearest surface. `distance`
+returns the closest surface points, the normal from the first shape
 to the second, and a non-negative separation. `overlaps` applies both placement
 filters and reports whether that separation is zero. `manifold` additionally
 returns a normal and up to two geometric contact points. These points have no
