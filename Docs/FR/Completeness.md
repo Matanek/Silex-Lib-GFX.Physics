@@ -15,13 +15,16 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-Le contrat courant compte 41 capacités couvertes, 6 planifiées, 6 divergentes
-et 8 exclues. Ces nombres comptent des groupes de
-comportements, pas un pourcentage de complétude du moteur.
+Le contrat final compte 47 capacités couvertes, 6 divergentes et 8 exclues,
+sans aucune capacité de gameplay partielle ou planifiée. Ces nombres comptent
+des groupes de comportements, pas un pourcentage de complétude du moteur. La
+porte finale refuse toute réintroduction future d’une capacité partielle ou
+promise sans explication.
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \
-    --box2d-source /tmp/silex-box2d-v3.1.1
+    --box2d-source /tmp/silex-box2d-v3.1.1 \
+    --final
 ```
 
 Box2D est un oracle de benchmark sous licence MIT ; il n’est ni lié ni livré

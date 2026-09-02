@@ -205,8 +205,8 @@ and the internal [`Benchmarks/CircleScale2D.sx`](../../Benchmarks/CircleScale2D.
 [`Docs/Performance.md`](Performance.md) for the reproducible 1k/5k/10k
 cases. The reconstruction corpus and pinned Box2D oracle are documented in
 [`Docs/OracleAndBudgets.md`](OracleAndBudgets.md).
-The executable parity boundary and every currently covered, partial, planned,
-divergent or excluded Box2D capability are documented in
+The executable parity boundary and every covered, divergent or excluded Box2D
+capability are documented in
 [`Docs/Completeness.md`](Completeness.md).
 
 `World2D` resolves circle, capsule, segment, rounded-polygon and compound

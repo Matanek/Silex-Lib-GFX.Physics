@@ -211,6 +211,11 @@ def main() -> int:
         default=pathlib.Path(__file__).with_name("CompletenessMatrix.json"),
     )
     parser.add_argument("--report", type=pathlib.Path)
+    parser.add_argument(
+        "--final",
+        action="store_true",
+        help="reject every partial or planned gameplay capability",
+    )
     arguments = parser.parse_args()
 
     try:
@@ -235,6 +240,13 @@ def main() -> int:
 
         package_root = pathlib.Path(__file__).resolve().parents[2]
         expanded, status_counts = validate_rows(matrix, symbols, package_root)
+        if arguments.final:
+            incomplete = status_counts["partial"] + status_counts["planned"]
+            if incomplete:
+                fail(
+                    "final matrix retains "
+                    f"partial={status_counts['partial']} planned={status_counts['planned']}"
+                )
         if arguments.report is not None:
             write_report(arguments.report, matrix, expanded, len(symbols))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:

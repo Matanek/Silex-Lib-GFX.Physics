@@ -32,12 +32,15 @@ Run the validator against the immutable source checkout:
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \
-    --box2d-source /tmp/silex-box2d-v3.1.1
+    --box2d-source /tmp/silex-box2d-v3.1.1 \
+    --final
 ```
 
 The validator checks the revision, version, per-header counts, unique ownership
-of all public symbols, evidence paths and required tracking or rationale. The
-CMake project also registers it as `gfx_physics_box2d_completeness` for CTest.
+of all public symbols, evidence paths and required tracking or rationale. Its
+final mode also rejects every remaining `partial` or `planned` capability. The
+CMake project registers that final gate as
+`gfx_physics_box2d_completeness` for CTest.
 See [`../../Docs/Completeness.md`](../../Docs/Completeness.md) for the contract
 boundary and current status.
 

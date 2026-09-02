@@ -24,11 +24,11 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current contract contains 41 covered, 6 planned, 6 divergent and 8 excluded
-capability rows. These counts describe groups of related behavior,
-not percentages of engine completeness. The final sequence gate removes every
-unexplained partial or promise; it does not promote a capability by counting C
-wrappers.
+The final contract contains 47 covered, 6 divergent and 8 excluded capability
+rows, with no partial or planned gameplay capability. These counts describe
+groups of related behavior, not percentages of engine completeness. The final
+gate rejects any future reintroduction of an unexplained partial or promise;
+it does not promote a capability by counting C wrappers.
 
 ## Intentional boundary
 
@@ -57,7 +57,8 @@ From the workspace root, after configuring the pinned oracle checkout:
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \
-    --box2d-source /tmp/silex-box2d-v3.1.1
+    --box2d-source /tmp/silex-box2d-v3.1.1 \
+    --final
 ```
 
 Pass `--report /tmp/gfx-physics-completeness.md` to expand every capability row

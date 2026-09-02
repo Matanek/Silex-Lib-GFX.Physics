@@ -97,10 +97,10 @@
       "id": "default-collider-settings",
       "domain": "shape",
       "capability": "default collider, chain, filter and material configuration",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Default(?:ShapeDef|ChainDef|Filter|SurfaceMaterial)$"],
-      "silex_contract": "Collider2DSettings, PhysicsMaterial2D and chain materials will express these defaults as typed Silex values.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "Collider2DSettings, PhysicsMaterial2D, CollisionFilter2D and chain segment materials express these defaults as typed Silex values.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
     {
       "id": "default-query-settings",
@@ -413,10 +413,10 @@
       "id": "body-colliders",
       "domain": "shape",
       "capability": "enumerate a body's living colliders",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Body_Get(?:ShapeCount|Shapes)$"],
-      "silex_contract": "RigidBody2D will enumerate stable Collider2D handles without exposing dense slots.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "RigidBody2D counts and writes stable Collider2D handles without exposing dense slots.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx"]
     },
     {
       "id": "body-contacts",
@@ -469,28 +469,28 @@
       "id": "collider-lifecycle",
       "domain": "shape",
       "capability": "living collider creation, identity, ownership and destruction",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2(?:CreateCapsuleShape|CreateCircleShape|CreatePolygonShape|CreateSegmentShape|DestroyShape)$", "^b2Shape_(?:IsValid|GetWorld|GetBody|GetType|GetParentChain)$"],
-      "silex_contract": "World2D will own stable Collider2D handles distinct from Shape2D geometry values.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "World2D owns stable invalidable Collider2D handles distinct from Shape2D geometry values.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
     {
       "id": "collider-geometry",
       "domain": "shape",
       "capability": "inspect and replace collider geometry",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Shape_(?:GetCapsule|GetChainSegment|GetCircle|GetPolygon|GetSegment|SetCapsule|SetCircle|SetPolygon|SetSegment)$"],
-      "silex_contract": "Collider2D will read and replace validated Shape2D values while retaining its living identity.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "Collider2D reads and replaces validated Shape2D values while retaining its living identity.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
     {
       "id": "collider-material-and-filter",
       "domain": "shape",
       "capability": "collider density, material, filter and sensor state",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2Shape_(?:GetDensity|GetFilter|GetFriction|GetMassData|GetMaterial|GetRestitution|GetSurfaceMaterial|IsSensor|SetDensity|SetFilter|SetFriction|SetMaterial|SetRestitution|SetSurfaceMaterial)$"],
-      "silex_contract": "Collider2DSettings and PhysicsMaterial2D will own every surface and mass property per collider.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "Collider2DSettings and PhysicsMaterial2D own every surface and mass property per collider.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/Tests/BodyControl.sx"]
     },
     {
       "id": "collider-local-queries",
@@ -523,10 +523,10 @@
       "id": "chain-colliders",
       "domain": "shape",
       "capability": "chain collider lifetime, segments and materials",
-      "status": "planned",
+      "status": "covered",
       "patterns": ["^b2(?:CreateChain|DestroyChain)$", "^b2Chain_.*$"],
-      "silex_contract": "Collider2D will retain one-sided Chain2D geometry with common or per-segment typed materials.",
-      "tracking": "Physique 2D complète 02 — Colliders multiples et matériaux"
+      "silex_contract": "Collider2D retains one-sided Chain2D geometry with common or per-segment typed materials.",
+      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
     {
       "id": "joint-lifecycle",

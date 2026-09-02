@@ -72,6 +72,7 @@ if(Python3_Interpreter_FOUND)
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/CheckCompleteness.py
             --box2d-source ${box2d_SOURCE_DIR}
+            --final
     )
 endif()
 
