@@ -71,6 +71,14 @@ neutral in overlapping ranges at ratios 28.8988 and 16.2913. The candidate is
 locally green; its exact Linux/Windows portability run remains pending and all
 three Part 16 parity criteria still fail.
 
+The subsequent [ARM64 aggregate-parameter pairing](2026-09-04-spec16-arm64-aggregate-parameter-pairs.md)
+halves the 22-leaf contact-constraint prologue transfers and removes 22 native
+instructions. Its disjoint alternating ranges demonstrate another 5.472%
+contact reduction, from 234.169 to 221.355 ms, for a same-layout ratio of
+5.6759. Integration and preparation remain neutral in overlapping ranges.
+The complete optimizer gate rejected an earlier two-slot form; the retained
+value-aggregate scope passes all gates.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
