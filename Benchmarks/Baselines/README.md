@@ -20,6 +20,33 @@ Physical invariants and per-engine deterministic signatures pass; the direct
 performance gate correctly fails. Binary hashes, exact configurations and
 the uncommitted engine-candidate status are recorded with the raw data.
 
+Two further campaigns compare three binaries in rotating order, with one
+excluded warm-up and seven processes per binary. The same configuration and
+physical state are retained. Each before/after file includes the campaign's
+Box2D observations; validate each file separately, never pool those duplicates.
+
+| Compiler change | Before | After | Box2D | After / Box2D |
+| --- | ---: | ---: | ---: | ---: |
+| Safe memory SIMD (`18806d5`) | 43.916560 ms | 43.917210 ms | 4.449716 ms | 9.869666× |
+| Unused borrowed fields (`9cd1f58`) | 43.831646 ms | 43.260345 ms | 4.438417 ms | 9.746796× |
+
+The [SIMD before](2026-09-03-spec15-simd-before.jsonl) and
+[SIMD after](2026-09-03-spec15-simd-after.jsonl) campaign is neutral: it
+establishes correctness and non-regression, not a dense-scene speedup.
+The [field-load before](2026-09-03-spec15-projected-before.jsonl) and
+[field-load after](2026-09-03-spec15-projected-after.jsonl) campaign measures
+a 1.303% reduction. Its observed ranges do not overlap; timing MAD is
+0.287% before, 0.216% after and 0.095% for Box2D. Ordinary interactive
+background activity was present, but no task-owned compilation or test ran
+concurrently. The gap to Box2D remains unresolved; neither compiler commit
+qualifies the engine for parity or closes its functionality and memory gates.
+
+The separate [RSS qualification](2026-09-03-spec15-projected-memory.jsonl)
+also remains red: seven processes per scenario give a 7,667,712 B baseline
+and 23,330,816 B dense median. The 15,663,104 B increment exceeds the existing
+14,395,904 B body-plus-persistent-pair budget by 1,267,200 B. This series uses
+`/usr/bin/time -l`; its times are not pooled with the paired timing campaign.
+
 ## Initial reference — 2026-08-23
 
 The initial ARM64 reference was captured on 2026-08-23 while the machine was
