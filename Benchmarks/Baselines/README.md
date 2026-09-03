@@ -62,6 +62,15 @@ records the subsequent X64 unordered-comparison correction and a successful
 exact-SHA run on Linux and Windows, in Debug and Release. This closes the
 candidate's portability check; it does not change the three performance ratios.
 
+The [mutable-view reference correction](2026-09-04-spec16-mutable-view-reference-reuse.md)
+then reuses the two checked destination element references and removes dead
+checked snapshots around six contact-field writes. Its alternating campaign
+reduces contact from 290.448 to 224.655 ms, a demonstrated 22.652% reduction;
+the same-layout ratio falls to 5.9574. Integration and preparation remain
+neutral in overlapping ranges at ratios 28.8988 and 16.2913. The candidate is
+locally green; its exact Linux/Windows portability run remains pending and all
+three Part 16 parity criteria still fail.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
