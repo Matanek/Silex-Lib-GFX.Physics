@@ -40,6 +40,12 @@ The [following math-call residence correction](2026-09-03-spec16-math-calls.md)
 reduces integration time by 32.995% without changing any checked state. Its
 remaining ratio is 29.7626. Contact and preparation binaries are unchanged.
 
+The [pure aggregate residence correction](2026-09-03-spec16-aggregate-residence.md)
+reduces preparation time by 35.684% after correcting an early-use SIMD
+regression caught by the full witness. Its remaining ratio is 15.9330; contact
+and integration binaries are unchanged. Native portability validation remains
+pending.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
