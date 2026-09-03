@@ -4,6 +4,10 @@ This directory builds a benchmark-only executable against the official Box2D
 3 reference. It is not a package dependency and no Box2D code is linked into
 the GFX.Physics runtime.
 
+The [native stage witnesses](StageKernels.md) map isolated contact and body
+integration cases to the real Physics/Box2D paths, including layout, precision,
+FMA replay verification and the separate compiler-parity gate.
+
 ## Pinned sources and attribution
 
 | Project | Role | Revision | License |

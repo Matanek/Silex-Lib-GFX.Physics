@@ -80,10 +80,30 @@ if(UNIX AND CMAKE_C_COMPILER_ID MATCHES "Clang")
     target_compile_definitions(gfx_physics_contact_kernel_reference PRIVATE BOX2D_CHECK)
     target_include_directories(gfx_physics_contact_kernel_reference PRIVATE ${box2d_SOURCE_DIR}/src)
     target_link_libraries(gfx_physics_contact_kernel_reference PRIVATE box2d)
+
+    foreach(layout IN ITEMS slots packed)
+        add_executable(gfx_physics_integration_kernel_${layout} EXCLUDE_FROM_ALL IntegrationKernel.c)
+        target_compile_features(gfx_physics_integration_kernel_${layout} PRIVATE c_std_17)
+        target_compile_options(gfx_physics_integration_kernel_${layout} PRIVATE
+            -O3 -ffp-contract=fast -Wall -Wextra -Wpedantic)
+        target_compile_definitions(gfx_physics_integration_kernel_${layout} PRIVATE NDEBUG)
+    endforeach()
+    target_compile_definitions(gfx_physics_integration_kernel_slots PRIVATE SLOT8)
+    add_executable(gfx_physics_integration_kernel_reference EXCLUDE_FROM_ALL IntegrationKernel.c)
+    target_compile_features(gfx_physics_integration_kernel_reference PRIVATE c_std_17)
+    target_compile_definitions(gfx_physics_integration_kernel_reference PRIVATE BOX2D_CHECK)
+    target_compile_options(gfx_physics_integration_kernel_reference PRIVATE -ffp-contract=off)
+    target_include_directories(gfx_physics_integration_kernel_reference PRIVATE ${box2d_SOURCE_DIR}/src)
+    target_link_libraries(gfx_physics_integration_kernel_reference PRIVATE box2d)
 endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME gfx_physics_stage_kernel_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestStageKernels.py
+    )
     add_test(
         NAME gfx_physics_contact_kernel_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover

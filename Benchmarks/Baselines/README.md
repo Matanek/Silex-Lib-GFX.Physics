@@ -27,6 +27,11 @@ retains bounds diagnostics and removes 84 unused loads and 84 stores from the
 contact function. Its alternating campaign demonstrates a 19.877% reduction;
 the remaining Silex/Clang ratio is 9.0783, still above the parity target.
 
+The [body integration witness](2026-09-03-spec16-integration.md) broadens the
+coverage beyond contacts. Its same-layout ratio is 45.3167. Every local step
+passes the actual Box2D replay; the separate accumulated FMA trajectory
+difference remains explicit. This witness does not establish compiler parity.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)

@@ -1,0 +1,305 @@
+{
+  "schema": 1,
+  "stage": "integration",
+  "captured_at": "2026-09-03T11:06:34.996804+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "workload": {
+    "count": 8192,
+    "passes": 2048,
+    "workers": 1,
+    "float_bits": 32,
+    "fma": true,
+    "allocation_in_kernel": false
+  },
+  "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+  "numerical_budgets": {
+    "fields": 8,
+    "exact_fields": [
+      7
+    ],
+    "weights": [
+      1,
+      2,
+      3,
+      5,
+      7,
+      11,
+      13,
+      17
+    ],
+    "short_absolute": 2e-05,
+    "short_relative": 2e-06,
+    "full_absolute": 0.002,
+    "full_relative": 0.0002
+  },
+  "correctness": {
+    "silex": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 2.4999999993724487e-05
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 1.1400000005323818e-05,
+        "oracle": "every transition from identical candidate inputs",
+        "independent_trajectory_max_error": 0.008434084120000001,
+        "independent_trajectory_within_initial_budget": false
+      }
+    },
+    "clang-slots": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 1.189999999873237e-06
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 9.500000004436515e-07,
+        "oracle": "every transition from identical candidate inputs",
+        "independent_trajectory_max_error": 1.5300000001161607e-05,
+        "independent_trajectory_within_initial_budget": true
+      }
+    },
+    "clang-packed": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 1.189999999873237e-06
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 9.500000004436515e-07,
+        "oracle": "every transition from identical candidate inputs",
+        "independent_trajectory_max_error": 1.5300000001161607e-05,
+        "independent_trajectory_within_initial_budget": true
+      }
+    }
+  },
+  "executables": {
+    "silex": {
+      "path": "/private/tmp/spec16-01a06651/integration-release",
+      "sha256": "55c306a2b9413d1efdde4037fa5b7e9fa7ae65639e6d7eb79ad093eef0154688"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_slots",
+      "sha256": "44eb27582e0202a2b39bf3eb7dbc948a8a891ac7b4546921391459905dc8db24"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_packed",
+      "sha256": "9d93d02e83845e50e7106ada297c12bdff36a9c7d2bf47a33bb3497bb72c3415"
+    },
+    "box2d-check": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_reference",
+      "sha256": "4714ca572e293bbc49251614e75c2f4aadbdac33a15273055a9f9abb265d36f3"
+    }
+  },
+  "warmup": {
+    "silex": {
+      "elapsed_ms": 2130.636,
+      "signature": -1454735.8291015625,
+      "engine": "silex",
+      "layout": "slots8"
+    },
+    "clang-slots": {
+      "elapsed_ms": 46.906000003,
+      "signature": -1454797.1943359375,
+      "engine": "clang",
+      "layout": "slots8"
+    },
+    "clang-packed": {
+      "elapsed_ms": 44.918,
+      "signature": -1454797.216796875,
+      "engine": "clang",
+      "layout": "packed4"
+    }
+  },
+  "samples": {
+    "silex": [
+      {
+        "elapsed_ms": 2134.324,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2130.605,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2140.197,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2131.319,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2130.1628,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2134.6582,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 2155.221,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      }
+    ],
+    "clang-slots": [
+      {
+        "elapsed_ms": 46.677000006,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 46.898000001,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 47.09800001,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 46.757999982,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 47.215999977,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 47.566000023,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 47.374000016,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      }
+    ],
+    "clang-packed": [
+      {
+        "elapsed_ms": 44.614000013,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 47.179999994,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 44.458999997,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 45.402000018,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 45.320999983,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 44.550999999,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 45.458999986,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      }
+    ]
+  },
+  "summary": {
+    "silex": {
+      "median_ms": 2134.324,
+      "min_ms": 2130.1628,
+      "max_ms": 2155.221,
+      "mad_percent": 0.17424720895234513
+    },
+    "clang-slots": {
+      "median_ms": 47.09800001,
+      "min_ms": 46.677000006,
+      "max_ms": 47.566000023,
+      "mad_percent": 0.5860121575043431
+    },
+    "clang-packed": {
+      "median_ms": 45.320999983,
+      "min_ms": 44.458999997,
+      "max_ms": 47.179999994,
+      "mad_percent": 1.55998316512256
+    }
+  },
+  "silex_over_clang_same_layout": 45.31665887185939,
+  "clang_slots_over_packed": 1.0392091972301263,
+  "timing_admissible": true,
+  "compiler_parity": "missed",
+  "compiler_candidate": "4183a600a17a2cdbbce25cf33b5c5d37a2684537",
+  "physics_production_baseline": "7ed0c851c7c0f04676b8b7e927c1636bc1f340ce",
+  "source_sha256": {
+    "Benchmarks/IntegrationKernel2D.sx": "28bea84390bf02b7c129b73bca0b1a8cdda23a2dbf99f443b7ccf786120976a1",
+    "Benchmarks/Oracle2D/IntegrationKernel.c": "f6f85e38f493d63084046f6eb317f51b5a765e55de0332e81e93249def692609",
+    "Benchmarks/Oracle2D/RunStageKernels.py": "9fd3b11ad4e735347f1cfb733df2ad1e088c875c52fe04d8a962c418e9c1997b",
+    "Benchmarks/Oracle2D/CMakeLists.txt": "e5700258702ec8c568d56b98b3825cd5782493906484ee7b2e35ed778126b281"
+  },
+  "compiler_executable_sha256": "8f4038063b0fbc60079f56f8010ea341751b4d1cc55922b290486b401fce769d",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "clang_flags": [
+    "-O3",
+    "-DNDEBUG",
+    "-ffp-contract=fast"
+  ],
+  "box2d_flags": [
+    "Release",
+    "-ffp-contract=off"
+  ],
+  "debug_correctness": {
+    "short": {
+      "records": 128,
+      "max_absolute_error": 2.4999999993724487e-05
+    },
+    "full": {
+      "records": 32768,
+      "max_absolute_error": 1.1400000005323818e-05,
+      "oracle": "every transition from identical candidate inputs",
+      "independent_trajectory_max_error": 0.008434084120000001,
+      "independent_trajectory_within_initial_budget": false
+    }
+  }
+}

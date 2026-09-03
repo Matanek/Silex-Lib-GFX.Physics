@@ -1,0 +1,152 @@
+// Adapted from Box2D 3.1.1 solver.c velocity/position integration.
+// Revision 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3.
+// Copyright (c) 2023 Erin Catto. MIT: Oracle2D/Box2D-LICENSE.txt.
+// Technical witness; World2D retains its own integration pipeline.
+use STD.Math
+use STD.Process
+use STD.Time.Clock
+
+struct Body {
+    var vx:float
+    var vy:float
+    var w:float
+    var px:float
+    var py:float
+    var c:float
+    var s:float
+}
+
+struct Forces {
+    var x:float
+    var y:float
+    var torque:float
+    var inverse_mass:float
+    var inverse_inertia:float
+    var gravity_scale:float
+    var linear_damping:float
+    var angular_damping:float
+    var allow_fast_rotation:bool
+    var speed_capped:bool
+}
+
+func integrate_velocity(body:&Body, forces:&Forces) {
+    let h:float = 1.0 / 240.0
+    let max_angular:float = (0.25 * 3.14159265359) * 60.0
+    let linear_damping = 1.0 / (1.0 + h * forces.linear_damping)
+    let angular_damping = 1.0 / (1.0 + h * forces.angular_damping)
+    var gravity_scale = 0.0
+    if forces.inverse_mass > 0.0 { gravity_scale = forces.gravity_scale }
+    let dx = (h * forces.inverse_mass) * forces.x + (h * gravity_scale) * 0.0
+    let dy = (h * forces.inverse_mass) * forces.y + (h * gravity_scale) * -10.0
+    let dw = h * forces.inverse_inertia * forces.torque
+    var vx = dx + linear_damping * body.vx
+    var vy = dy + linear_damping * body.vy
+    var w = dw + angular_damping * body.w
+    if vx * vx + vy * vy > 16.0 {
+        let ratio = 4.0 / Math.sqrt(vx * vx + vy * vy)
+        vx = ratio * vx
+        vy = ratio * vy
+        forces.speed_capped = true
+    }
+    if w * w > max_angular * max_angular && !forces.allow_fast_rotation {
+        let ratio = max_angular / Math.abs(w)
+        w *= ratio
+        forces.speed_capped = true
+    }
+    body.vx = vx
+    body.vy = vy
+    body.w = w
+}
+
+func integrate_position(body:&Body) {
+    let h:float = 1.0 / 240.0
+    let angle = h * body.w
+    let c = body.c - angle * body.s
+    let s = body.s + angle * body.c
+    let magnitude = Math.sqrt(s * s + c * c)
+    var inverse = 0.0
+    if magnitude > 0.0 { inverse = 1.0 / magnitude }
+    body.c = c * inverse
+    body.s = s * inverse
+    body.px += h * body.vx
+    body.py += h * body.vy
+}
+
+func integrate(bodies:&Body[..], forces:&Forces[..]) {
+    var i = 0
+    while i < bodies.count() {
+        integrate_velocity(bodies[i], forces[i])
+        i++
+    }
+    i = 0
+    while i < bodies.count() {
+        integrate_position(bodies[i])
+        i++
+    }
+}
+
+func main() {
+    var check = false
+    var full = false
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == "--check" { check = true }
+                if argument == "--check-full" { check = true; full = true }
+            }
+        }
+    }
+    var count = 8192
+    var passes = 2048
+    if check { count = 16; if !full { passes = 8 } }
+    var bodies:Body[] = []
+    var forces:Forces[] = []
+    var i = 0
+    while i < count {
+        let k = (i % 16) as float
+        bodies.append(Body(vx:k - 8.0, vy:0.5, w:(k - 8.0) * 16.0,
+            px:0.0, py:0.0, c:0.6, s:0.8))
+        var force = Forces(x:k * 0.125, y:0.25, torque:k - 8.0,
+            inverse_mass:0.5, inverse_inertia:0.25, gravity_scale:1.0,
+            linear_damping:k * 0.25, angular_damping:k * 0.125,
+            allow_fast_rotation:i % 4 == 1, speed_capped:false)
+        if i % 4 == 0 { force.inverse_mass = 0.0; force.inverse_inertia = 0.0 }
+        forces.append(force)
+        i++
+    }
+    var body_view = &bodies[0:bodies.count()]
+    var force_view = &forces[0:forces.count()]
+    var clock = Clock()
+    clock.tick()
+    var pass = 0
+    while pass < passes {
+        integrate(body_view, force_view)
+        if check {
+            i = 0
+            while i < count {
+                var capped = 0.0
+                if force_view[i].speed_capped { capped = 1.0 }
+                print("STATE ", pass, " ", i, " ", body_view[i].vx, " ",
+                    body_view[i].vy, " ", body_view[i].w, " ", body_view[i].px, " ",
+                    body_view[i].py, " ", body_view[i].c, " ", body_view[i].s, " ", capped)
+                i++
+            }
+        }
+        pass++
+    }
+    if !check {
+        let elapsed = clock.tick() * 1000.0
+        var signature:float64 = 0.0
+        i = 0
+        while i < count {
+            var capped = 0.0
+            if force_view[i].speed_capped { capped = 1.0 }
+            signature += (body_view[i].vx + body_view[i].vy * 2.0 + body_view[i].w * 3.0 +
+                body_view[i].px * 5.0 + body_view[i].py * 7.0 + body_view[i].c * 11.0 +
+                body_view[i].s * 13.0 + capped * 17.0) as float64
+            i++
+        }
+        print("KERNEL integration silex slots8 ", count, " ", passes, " ", elapsed, " ", signature)
+    }
+}
