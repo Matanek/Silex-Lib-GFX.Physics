@@ -46,7 +46,8 @@ the gate still executes both native Debug and Release. The fixture also emits
 Linux/Windows X64 Debug and Release; emission alone is not native validation.
 
 The early-use exclusion is shared by the lane allocator. Native Linux/Windows
-validation remains pending; no remote workflow has run. This is a local
-compiler candidate, not Part 16 completion. No production Physics solver code
-changes. Diagnostic probes and the rejected executable are preserved under
+validation was pending at measurement time; the subsequent
+[targeted native run](2026-09-03-spec16-native-portability.md) passes on this
+exact compiler commit. This remains a compiler candidate, not Part 16
+completion. No production Physics solver code changes. Diagnostic probes and the rejected executable are preserved under
 `/private/tmp/spec16-01a06651`; no temporary probe remains in the repositories.

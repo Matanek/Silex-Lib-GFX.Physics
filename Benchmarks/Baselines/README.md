@@ -43,8 +43,13 @@ remaining ratio is 29.7626. Contact and preparation binaries are unchanged.
 The [pure aggregate residence correction](2026-09-03-spec16-aggregate-residence.md)
 reduces preparation time by 35.684% after correcting an early-use SIMD
 regression caught by the full witness. Its remaining ratio is 15.9330; contact
-and integration binaries are unchanged. Native portability validation remains
-pending.
+and integration binaries are unchanged. Its subsequent native portability
+validation is recorded below.
+
+The [native Linux/Windows qualification](2026-09-03-spec16-native-portability.md)
+passes on compiler `f4cae16`, including native Debug/Release and interpreter
+execution of the aggregate regression. The outstanding targeted portability
+check is closed for this candidate; the performance parity gap remains open.
 
 ## Matched Box2D diagnostics — 2026-09-03
 

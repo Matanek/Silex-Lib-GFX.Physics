@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "run": {
+    "attempt": 1,
+    "conclusion": "success",
+    "createdAt": "2026-09-03T14:27:50Z",
+    "databaseId": 33766985023,
+    "event": "workflow_dispatch",
+    "headBranch": "spec-physics-2d-complete-16",
+    "headSha": "f4cae16615ed9e6cd9de19c93b8b2f4adf1d5e6a",
+    "status": "completed",
+    "updatedAt": "2026-09-03T14:34:58Z",
+    "url": "https://github.com/Matanek/Silex/actions/runs/33766985023",
+    "workflowName": "Validate Silex native portability"
+  },
+  "dispatch": {
+    "run_id": 33766985023,
+    "url": "https://github.com/Matanek/Silex/actions/runs/33766985023",
+    "created_at": "2026-09-03T14:27:50Z",
+    "repository": "Matanek/Silex",
+    "head_branch": "spec-physics-2d-complete-16",
+    "head_sha": "f4cae16615ed9e6cd9de19c93b8b2f4adf1d5e6a",
+    "workflow": "native-portability.yml",
+    "inputs": {
+      "target": "all"
+    },
+    "source_sha256": {
+      ".github/workflows/native-portability.yml": "cca17f5c73f8d296236091f1bde1252dcb7c9a73547ed429f9e642f64c460fa2",
+      "Toolchain/Benchmarks/Optimizer/Regressions/AggregateFieldStores.sx": "b70552d20701048af3061b4206e787ff8423907f14fc7ab5f35f450d86797956",
+      "Tests/Native/X64Portability.sx": "674a524e8b68e6f4cbda94fc2de67e5f6cb7dec971773366b16aaf6ea78262fc",
+      "Tests/Native/DistributionSmoke.sx": "83ebbfd22bf9cdafb47cd3fedcd8e38acc19a66e634ea3c5c908d48c80be08e7"
+    },
+    "jobs": {
+      "linux-x64": 100687283691,
+      "windows-x64": 100687283841
+    },
+    "status": "completed",
+    "publication": "Only the named Silex branch; no tag, release, other branch or Physics push."
+  },
+  "jobs": [
+    {
+      "id": 100687283691,
+      "name": "linux-x64",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 33766985023,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Check out Silex",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Install Zig 0.16.0",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Build and validate Silex on Linux X64",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Check out Silex",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ]
+    },
+    {
+      "id": 100687283841,
+      "name": "windows-x64",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 33766985023,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Check out Silex",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Install Zig 0.16.0",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Build and validate Silex on Windows X64",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Check out Silex",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ]
+    }
+  ],
+  "logs": {
+    "linux-x64": {
+      "sha256": "2fec7f8b2faf94eeeffcf3c768ad43c2efda5e490d11052f15ff67af3b07ebc3",
+      "path": "/private/tmp/spec16-01a06651/native-portability/linux-x64.log",
+      "test_counts": [
+        4,
+        1,
+        18
+      ],
+      "failed_tests": 0
+    },
+    "windows-x64": {
+      "sha256": "1ef65eff7cdd20c44d9410b1e5432ed8be97f240009455df13d4e1245b192391",
+      "path": "/private/tmp/spec16-01a06651/native-portability/windows-x64.log",
+      "test_counts": [
+        4,
+        1,
+        18
+      ],
+      "failed_tests": 0
+    }
+  },
+  "validation": {
+    "native_execution": [
+      "Linux X64",
+      "Windows X64"
+    ],
+    "compiler_build": "Zig 0.16.0; ReleaseFast; baseline CPU",
+    "tests": [
+      "Str/Operators.sx: 4 tests",
+      "Str/Returns.sx: 1 test",
+      "X64Portability.sx: 18 tests",
+      "X64Portability.sx: native Release plus exactly six cycle finalizers",
+      "DistributionSmoke.sx: native Release with exact stdout",
+      "AggregateFieldStores.sx: interpreter plus native Debug and Release with exact stdout"
+    ],
+    "timing_campaign": false,
+    "part16_complete": false,
+    "remaining_same_layout_ratios": {
+      "contact": 9.0783,
+      "integration": 29.7626,
+      "preparation": 15.933
+    }
+  },
+  "publication": {
+    "silex_branch": "spec-physics-2d-complete-16",
+    "silex_sha": "f4cae16615ed9e6cd9de19c93b8b2f4adf1d5e6a",
+    "tags": [],
+    "release": false,
+    "other_repositories_pushed": []
+  }
+}
