@@ -43,6 +43,18 @@ class StageKernelTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 timing(invalid, "integration", "silex", signature)
 
+    def test_preparation_checks_all_fields_and_each_pass_contributes(self):
+        profile = PROFILES["preparation"]
+        reference = {(0, 0): (0.0,) * 26}
+        for index in range(26):
+            values = [0.0] * 26
+            values[index] = 1.0
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                compare_states(reference, {(0, 0): values}, profile)
+        # A lost early pass cannot disappear behind the last pass's signature.
+        early = {(0, 0): (1.0,) + (0.0,) * 25, (2047, 0): (0.0,) * 26}
+        self.assertEqual(signature_interval(early, profile)[0], 512.0)
+
 
 if __name__ == "__main__":
     unittest.main()

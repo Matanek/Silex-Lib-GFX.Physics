@@ -1,0 +1,325 @@
+{
+  "schema": 1,
+  "stage": "preparation",
+  "captured_at": "2026-09-03T11:17:05.297988+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "workload": {
+    "count": 8192,
+    "passes": 2048,
+    "workers": 1,
+    "float_bits": 32,
+    "fma": true,
+    "allocation_in_kernel": false,
+    "signature_reduction_in_kernel": true,
+    "input_frames": 16
+  },
+  "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+  "numerical_budgets": {
+    "fields": 26,
+    "exact_fields": [],
+    "weights": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ],
+    "short_absolute": 2e-06,
+    "short_relative": 2e-06,
+    "full_absolute": 2e-06,
+    "full_relative": 2e-06,
+    "replay": false,
+    "accumulate_passes": true
+  },
+  "correctness": {
+    "silex": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 8.000000040198074e-08
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 2.1999999999522402e-07,
+        "oracle": "every prepared field from identical inputs",
+        "independent_trajectory_max_error": 2.1999999999522402e-07,
+        "independent_trajectory_within_initial_budget": true
+      }
+    },
+    "clang-slots": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 2.299999999344493e-07
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 2.399999998736746e-07,
+        "oracle": "every prepared field from identical inputs",
+        "independent_trajectory_max_error": 2.399999998736746e-07,
+        "independent_trajectory_within_initial_budget": true
+      }
+    },
+    "clang-packed": {
+      "short": {
+        "records": 128,
+        "max_absolute_error": 2.299999999344493e-07
+      },
+      "full": {
+        "records": 32768,
+        "max_absolute_error": 2.399999998736746e-07,
+        "oracle": "every prepared field from identical inputs",
+        "independent_trajectory_max_error": 2.399999998736746e-07,
+        "independent_trajectory_within_initial_budget": true
+      }
+    }
+  },
+  "executables": {
+    "silex": {
+      "path": "/private/tmp/spec16-01a06651/preparation-release",
+      "sha256": "9f0c750dc1736d7dc438e9fee89176e51840b8da6c98a97024864f9354266f1e"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_slots",
+      "sha256": "2c896f403bd5c3e6f179f52e917d99a6e4f47220b2fdb0051bfb802de8fb413c"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_packed",
+      "sha256": "72e283008a053ef7db6bcd076dd0ca2efc6dfe134a883dd1110755a26aa72ff5"
+    },
+    "box2d-check": {
+      "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_reference",
+      "sha256": "b98fd549259396c6b6bc86e8ecf94aaf015b9291a97bd481a6a72369020e95d1"
+    }
+  },
+  "warmup": {
+    "silex": {
+      "elapsed_ms": 5390.348,
+      "signature": 4744923641.0,
+      "engine": "silex",
+      "layout": "slots8"
+    },
+    "clang-slots": {
+      "elapsed_ms": 214.458999981,
+      "signature": 4744923641.0,
+      "engine": "clang",
+      "layout": "slots8"
+    },
+    "clang-packed": {
+      "elapsed_ms": 157.402000041,
+      "signature": 4744923641.0,
+      "engine": "clang",
+      "layout": "packed4"
+    }
+  },
+  "samples": {
+    "silex": [
+      {
+        "elapsed_ms": 5415.119,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5390.581,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5400.108,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5385.96,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5384.643,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5398.924,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 5380.9683,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      }
+    ],
+    "clang-slots": [
+      {
+        "elapsed_ms": 214.013000019,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 214.134000009,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 213.88299996,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 214.060999977,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 214.793000021,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 214.675000054,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      {
+        "elapsed_ms": 214.135000017,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      }
+    ],
+    "clang-packed": [
+      {
+        "elapsed_ms": 157.603,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.230999961,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.554999983,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.134999987,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.18899999,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.117000024,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      {
+        "elapsed_ms": 157.585000037,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      }
+    ]
+  },
+  "summary": {
+    "silex": {
+      "median_ms": 5390.581,
+      "min_ms": 5380.9683,
+      "max_ms": 5415.119,
+      "mad_percent": 0.15476995893392284
+    },
+    "clang-slots": {
+      "median_ms": 214.134000009,
+      "min_ms": 213.88299996,
+      "max_ms": 214.793000021,
+      "mad_percent": 0.05650666871908047
+    },
+    "clang-packed": {
+      "median_ms": 157.230999961,
+      "min_ms": 157.117000024,
+      "max_ms": 157.603,
+      "mad_percent": 0.07250474590144038
+    }
+  },
+  "silex_over_clang_same_layout": 25.173867763986266,
+  "clang_slots_over_packed": 1.361907003466965,
+  "timing_admissible": true,
+  "compiler_parity": "missed",
+  "compiler_candidate": "4183a600a17a2cdbbce25cf33b5c5d37a2684537",
+  "physics_production_baseline": "7ed0c851c7c0f04676b8b7e927c1636bc1f340ce",
+  "source_sha256": {
+    "Benchmarks/PreparationKernel2D.sx": "9b358e4f91f971203302a7d8c63f271b765485dd8a65e85d5386a0fb6c552088",
+    "Benchmarks/Oracle2D/PreparationKernel.c": "b824f59303ba899173fb15dbffd51c1cede2886fec89ba870ab500b2ed074df4",
+    "Benchmarks/Oracle2D/RunStageKernels.py": "999eb06f04af29be79fa93508d1cc8bef57dc5ef92df871b4d242126ef437bac",
+    "Benchmarks/Oracle2D/CMakeLists.txt": "d7eaa7ea01936c5b9c8da82479f2da8da179364294cb6d15a8e113b02307c4bc"
+  },
+  "compiler_executable_sha256": "8f4038063b0fbc60079f56f8010ea341751b4d1cc55922b290486b401fce769d",
+  "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "clang_flags": [
+    "-O3",
+    "-DNDEBUG",
+    "-ffp-contract=fast"
+  ],
+  "box2d_flags": [
+    "Release",
+    "-ffp-contract=off"
+  ],
+  "debug_correctness": {
+    "short": {
+      "records": 128,
+      "max_absolute_error": 8.000000040198074e-08
+    },
+    "full": {
+      "records": 32768,
+      "max_absolute_error": 2.1999999999522402e-07,
+      "oracle": "every prepared field from identical inputs",
+      "independent_trajectory_max_error": 2.1999999999522402e-07,
+      "independent_trajectory_within_initial_budget": true
+    }
+  }
+}

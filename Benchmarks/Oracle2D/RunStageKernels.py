@@ -21,6 +21,13 @@ PROFILES = {
         "fields": 8, "exact_fields": [7], "weights": [1, 2, 3, 5, 7, 11, 13, 17],
         "short_absolute": 2e-5, "short_relative": 2e-6,
         "full_absolute": 2e-3, "full_relative": 2e-4,
+        "replay": True, "accumulate_passes": False,
+    },
+    "preparation": {
+        "fields": 26, "exact_fields": [], "weights": list(range(1, 27)),
+        "short_absolute": 2e-6, "short_relative": 2e-6,
+        "full_absolute": 2e-6, "full_relative": 2e-6,
+        "replay": False, "accumulate_passes": True,
     },
 }
 COUNT, PASSES = 8192, 2048
@@ -67,7 +74,7 @@ def signature_interval(final_states, profile):
     # Account for float32 weighted-sum rounding and decimal state printing.
     total = magnitude = 0.0
     for (step, _), values in final_states.items():
-        if step != PASSES - 1:
+        if not profile["accumulate_passes"] and step != PASSES - 1:
             continue
         terms = [v * w for v, w in zip(values, profile["weights"], strict=True)]
         total += sum(terms)
@@ -125,7 +132,9 @@ def main():
     result = {"schema": 1, "stage": args.stage, "captured_at": datetime.now(timezone.utc).isoformat(),
               "host": platform.platform(), "machine": platform.machine(),
               "workload": {"count": COUNT, "passes": PASSES, "workers": 1, "float_bits": 32,
-                           "fma": True, "allocation_in_kernel": False},
+                           "fma": True, "allocation_in_kernel": False,
+                           "signature_reduction_in_kernel": profile["accumulate_passes"],
+                           "input_frames": 16 if args.stage == "preparation" else 1},
               "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
               "numerical_budgets": profile, "correctness": {}, "executables": {},
               "warmup": {}, "samples": {}, "summary": {}}
@@ -136,14 +145,15 @@ def main():
         result["correctness"][name] = {}
         for full in (False, True):
             candidate = states(execute(binary, "--check-full" if full else "--check"), profile, full)
-            reference = replay(args.box2d_check, candidate, profile) if full else references[full]
+            reference = replay(args.box2d_check, candidate, profile) if full and profile["replay"] else references[full]
             error = compare_states(reference, candidate, profile)
             key = "full" if full else "short"
             result["correctness"][name][key] = {"records": len(candidate), "max_absolute_error": error}
             if full:
                 signatures[name] = signature_interval(candidate, profile)
                 independent = references[full]
-                result["correctness"][name][key]["oracle"] = "every transition from identical candidate inputs"
+                result["correctness"][name][key]["oracle"] = (
+                    "every transition from identical candidate inputs" if profile["replay"] else "every prepared field from identical inputs")
                 result["correctness"][name][key]["independent_trajectory_max_error"] = max(
                     abs(a - b) for k in candidate for a, b in zip(candidate[k], independent[k], strict=True))
                 try:

@@ -32,6 +32,10 @@ coverage beyond contacts. Its same-layout ratio is 45.3167. Every local step
 passes the actual Box2D replay; the separate accumulated FMA trajectory
 difference remains explicit. This witness does not establish compiler parity.
 
+The [constraint preparation witness](2026-09-03-spec16-preparation.md) completes
+the three-family diagnostic coverage. All prepared fields match Box2D, but the
+same-layout ratio is 25.1739. The compiler parity gate remains open in every case.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
