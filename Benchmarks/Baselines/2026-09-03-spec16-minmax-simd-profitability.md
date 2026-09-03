@@ -42,9 +42,14 @@ tests pass. The dense 5,000-body corpus reproduces all 34 non-timing fields from
 the preceding compiler candidate.
 
 The scalar min/max fixture passes macOS Debug and Release and is added to the
-Linux/Windows portability workflow for native execution on this exact commit.
-That remote run is still pending and must be recorded separately before this
-compiler candidate has cross-target evidence.
+Linux/Windows portability workflow. Run
+[`33810121895`](https://github.com/Matanek/Silex/actions/runs/33810121895)
+checked out this exact compiler commit, but both jobs stopped before compiling
+the fixture because the standalone Silex checkout did not provide `STD.Math`.
+Compiler commit `38dc99c395853eb8d641a8b0cab49efb63130d9c` corrects the workflow by
+checking out STD at pinned commit `5a018305fb470dfe00e94466150b3c04f207e252`
+and linking it in the runner workspace. A new remote run is still required
+before this compiler candidate has cross-target execution evidence.
 
 Three experiments were rejected and remain only under
 `/private/tmp/spec16-01a06651`: aggressive preparation inlining regressed a
