@@ -64,8 +64,31 @@ add_executable(gfx_physics_box2d_joints_oracle JointsOracle.c)
 target_compile_features(gfx_physics_box2d_joints_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_joints_oracle PRIVATE box2d)
 
+# Internal one-point solver comparison. POSIX timing, opt-in build only;
+# neither this harness nor Box2D enters the Silex runtime.
+if(UNIX AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+    foreach(layout IN ITEMS slots packed)
+        add_executable(gfx_physics_contact_kernel_${layout} EXCLUDE_FROM_ALL ContactKernel.c)
+        target_compile_features(gfx_physics_contact_kernel_${layout} PRIVATE c_std_17)
+        target_compile_options(gfx_physics_contact_kernel_${layout} PRIVATE
+            -O3 -ffp-contract=fast -Wall -Wextra -Wpedantic)
+        target_compile_definitions(gfx_physics_contact_kernel_${layout} PRIVATE NDEBUG)
+    endforeach()
+    target_compile_definitions(gfx_physics_contact_kernel_slots PRIVATE SLOT8)
+    add_executable(gfx_physics_contact_kernel_reference EXCLUDE_FROM_ALL ContactKernel.c)
+    target_compile_features(gfx_physics_contact_kernel_reference PRIVATE c_std_17)
+    target_compile_definitions(gfx_physics_contact_kernel_reference PRIVATE BOX2D_CHECK)
+    target_include_directories(gfx_physics_contact_kernel_reference PRIVATE ${box2d_SOURCE_DIR}/src)
+    target_link_libraries(gfx_physics_contact_kernel_reference PRIVATE box2d)
+endif()
+
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME gfx_physics_contact_kernel_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestContactKernel.py
+    )
     add_test(
         NAME gfx_physics_box2d_comparison_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover

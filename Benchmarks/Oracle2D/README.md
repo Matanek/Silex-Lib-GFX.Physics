@@ -299,6 +299,71 @@ record.
 
 ## Repetition and comparison
 
+### Isolate compiler cost from engine architecture
+
+`ContactKernel2D.sx` and `ContactKernel.c` implement the same fused,
+single-point contact calculation: separation, normal impulse, friction and
+rolling resistance. This is an internal diagnostic, not a replacement for
+`World2D` or a claim of whole-engine parity. The adaptation is attributed to
+the pinned `src/contact_solver.c:b2SolveOverflowContacts`; its MIT notice is
+preserved in [Box2D-LICENSE.txt](Box2D-LICENSE.txt).
+
+The short check compares all six velocities and four impulse values after
+each of eight alternating bias/relaxation passes for sixteen contacts against
+the **actual unmodified Box2D function**. Fixtures include separated and
+penetrating contacts, zero inverse mass/inertia, friction clamps, an offset
+anchor, delta rotation, tangent speed and rolling resistance. The 2e-6
+absolute tolerance covers float32 arithmetic/FMA and decimal output, not
+different physical trajectories. Signed zero is compared numerically.
+
+The timing uses 2,048 independent contacts and 2,048 passes, one worker,
+float32, and no allocation or output inside the measured kernel. The bodies'
+delta positions/rotations remain fixed: this is repeated constraint solving,
+not a simulated time interval. All constraints and bodies remain observable
+through the final weighted signature. The C helpers reproduce STD.Math's
+NaN and signed-zero branches, and body indexing keeps negative-index and
+bounds checks. Failure diagnostics themselves are outside the valid workload.
+
+Build three C witnesses with the existing pinned-oracle CMake configuration:
+
+```text
+cmake -S Packages/GFX.Physics/Benchmarks/Oracle2D -B /tmp/gfx-physics-box2d -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/gfx-physics-box2d --target gfx_physics_contact_kernel_slots gfx_physics_contact_kernel_packed gfx_physics_contact_kernel_reference
+silex compile Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx --release -o /tmp/gfx-physics-contact-kernel
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py --silex /tmp/gfx-physics-contact-kernel --clang-slots /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_slots --clang-packed /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_packed --box2d-check /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_reference --output /tmp/contact-kernel.json
+```
+
+These optional targets use a POSIX clock and Clang; they are not part of
+the default build. On the current macOS ARM64 backend, every Silex scalar
+occupies an eight-byte storage slot. `slots` reproduces those offsets and
+strides (State 56 B, Constraint 176 B, Impulses 32 B), while `packed` keeps
+four-byte floats. Both retain 64-bit indices. Comparing Silex with `slots`
+isolates compilation/runtime overhead; comparing the two C witnesses diagnoses
+layout cost. Neither comparison changes the public engine's representation.
+
+Silex Release fuses eligible multiply/add operations. The C timing targets
+therefore use `-O3 -DNDEBUG -ffp-contract=fast`, **without fast-math** or
+disabled SIMD. The real Box2D reference remains a correctness check and is
+not timed by this harness. Its established full-engine build flags are unchanged.
+
+The runner checks correctness before timing, excludes one warm-up per binary,
+rotates seven serial processes per variant, checks final signatures and reports
+median, range and MAD. A minimum below 20 ms or MAD above 5% makes the timing
+inadmissible. The JSON includes raw samples and executable hashes. Use
+`--check-only` for Debug/correctness validation. `--require-parity` returns 1
+unless the measured Silex range is no slower than the same-layout C range;
+overlap is explicitly inconclusive. This is a separate diagnostic gate from
+the full-engine comparison above. The caller remains responsible for recording
+the actual compiler revisions, build flags and machine availability.
+
+The comparator's negative tests run with:
+
+```text
+python3 -B -m unittest discover -s Packages/GFX.Physics/Benchmarks/Oracle2D -p TestContactKernel.py
+```
+
+### Full-engine campaigns
+
 - Run one untimed warm-up followed by seven measured process executions.
 - Use the median as the central value and report minimum, maximum and median
   absolute deviation. Keep all seven raw records.

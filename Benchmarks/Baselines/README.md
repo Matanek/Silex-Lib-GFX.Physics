@@ -338,6 +338,59 @@ through `--boids-kernel-baseline`. No X64 timing baseline is expected:
 portable Silex changes use native GitHub Actions for correctness on the exact
 pushed commit instead.
 
+## Isolated contact-kernel compiler comparison, 2026-09-03
+
+[`2026-09-03-spec15-contact-kernel.json`](2026-09-03-spec15-contact-kernel.json)
+is a diagnostic baseline, **not an accepted engine-performance result**.
+The [kernel protocol](../Oracle2D/README.md#isolate-compiler-cost-from-engine-architecture)
+separates semantic alignment, native compilation cost, and storage layout.
+
+Host: macOS 26.6.2 (25G83), Apple M3 Pro ARM64, 12 cores. Silex 0.43.0
+at `bd0e76b6ab494f72e96d409cdd071169237160f3`, Release;
+STD 0.21.0 at `5a018305fb470dfe00e94466150b3c04f207e252` from the workspace
+user link. Apple Clang 21.0.0 (`clang-2100.1.1.101`),
+`-O3 -DNDEBUG -ffp-contract=fast`, no fast-math, SIMD not disabled.
+The actual Box2D 3.1.1 correctness reference uses the pinned
+`8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3` sources and the existing
+Release `-ffp-contract=off` library. Executable hashes are in the JSON.
+No compiler or production-physics source changed for this campaign.
+
+After correctness checks and one excluded warm-up per binary, seven serial
+processes per variant ran in rotating order. No task-owned compilation,
+test suite or other benchmark ran concurrently; ordinary interactive
+background activity remained. Each process solves 2,048 independent
+one-point constraints 2,048 times (4,194,304 contact solves), without timed
+initialization, allocation or output. All measured variants have exactly the
+same emitted final signature.
+
+| Variant | Median | Range | MAD |
+| --- | ---: | ---: | ---: |
+| Silex, 8-byte scalar slots | 555.709 ms | 532.647–557.701 ms | 0.358% |
+| Clang, matching slots | 38.973 ms | 36.815–39.398 ms | 1.090% |
+| Clang, compact floats | 38.491 ms | 36.507–39.039 ms | 1.242% |
+
+The same-layout ratio is **14.2588×**. The C layout variants overlap, so this
+series does not establish a layout speedup. The compiler gap is independently
+reproduced without broad phase, graph coloring, world scheduling or events.
+It is not a numerical attribution of the full-engine 9.18× gap: the isolated
+kernel is a one-point fused solve, not the current production four-normal path.
+
+Release and explicit Debug pass 1,280 per-pass scalar checks against the real
+Box2D function. Maximum absolute differences are `6.4e-7` for Silex and
+`9.5e-7` for the FMA-enabled C witnesses. Ten negative/positive checker tests
+and the existing eight full-corpus comparator tests pass. With
+`--require-parity`, the timing runner correctly exits 1 with
+`compiler_parity: missed`; functional validation remains green.
+
+Native inspection on these exact binaries gives a 15,560-byte Silex
+`solve_contact` and a 908-byte C function. Silex reserves 6,144 bytes of
+local/save stack plus the 16-byte frame record; C needs only that 16-byte
+record. These static sizes include cold error handling and do not measure
+executed instruction counts. Reconstructed whole aggregates on field stores,
+repeated view bounds/address work, and scalar/SIMD/stack transfers are concrete
+compiler follow-up targets, not yet measured shares of the slowdown.
+No X64 execution or performance claim follows from this ARM64 diagnostic.
+
 ## Infrastructure verification before capture
 
 On 2026-08-23, before accepting any timing baseline:

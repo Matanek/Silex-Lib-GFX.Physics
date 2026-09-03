@@ -1,0 +1,225 @@
+{
+  "schema": 1,
+  "captured_at": "2026-09-03T07:49:51.770772+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "workload": {
+    "contacts": 2048,
+    "passes": 2048,
+    "workers": 1,
+    "float_bits": 32,
+    "fma": true,
+    "allocation_in_kernel": false
+  },
+  "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+  "correctness": {
+    "silex": {
+      "records": 128,
+      "max_absolute_error": 6.399999996631323e-07
+    },
+    "clang-slots": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    },
+    "clang-packed": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    }
+  },
+  "executables": {
+    "silex": {
+      "path": "/private/tmp/spec15-contact-kernel-silex",
+      "sha256": "89156849dba532d4c99fced27aacac2b19d03f312599272a7b0f7299642240ed"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+      "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+      "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+    },
+    "box2d-check": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_reference",
+      "sha256": "2bae3d0ebb1cbf382d9216def1cd9375c8510ebe50c32b0f3369efc6ed135572"
+    }
+  },
+  "warmup": {
+    "silex": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 524.451,
+      "signature": 88453969.40002441
+    },
+    "clang-slots": {
+      "engine": "clang",
+      "layout": "slots8",
+      "elapsed_ms": 38.802999945,
+      "signature": 88453969.40002441
+    },
+    "clang-packed": {
+      "engine": "clang",
+      "layout": "packed4",
+      "elapsed_ms": 36.459000024,
+      "signature": 88453969.40002441
+    }
+  },
+  "samples": {
+    "silex": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 557.62305,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 555.709,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 552.91895,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 557.701,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 556.267,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 552.108,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 532.64703,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-slots": [
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 36.814999999,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 37.552999973,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 36.816000007,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.084999997,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.064000011,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.397999994,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.972999959,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-packed": [
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.291000004,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.490999956,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.969000045,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.506999983,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.656999997,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.551000027,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 39.038999996,
+        "signature": 88453969.40002441
+      }
+    ]
+  },
+  "summary": {
+    "silex": {
+      "median_ms": 555.709,
+      "min_ms": 532.64703,
+      "max_ms": 557.701,
+      "mad_percent": 0.35846099307372664
+    },
+    "clang-slots": {
+      "median_ms": 38.972999959,
+      "min_ms": 36.814999999,
+      "max_ms": 39.397999994,
+      "mad_percent": 1.090498641231386
+    },
+    "clang-packed": {
+      "median_ms": 38.490999956,
+      "min_ms": 36.506999983,
+      "max_ms": 39.038999996,
+      "mad_percent": 1.241848976504668
+    }
+  },
+  "silex_over_clang_same_layout": 14.25882022386297,
+  "clang_slots_over_packed": 1.0125224079278528,
+  "timing_admissible": true,
+  "compiler_parity": "missed"
+}

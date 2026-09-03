@@ -1,0 +1,224 @@
+// One-point adaptation of Box2D 3.1.1 src/contact_solver.c,
+// b2SolveOverflowContacts, revision 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3.
+// Copyright (c) 2022-2023 Erin Catto. MIT license: Oracle2D/Box2D-LICENSE.txt.
+// Benchmark only: this does not replace the production World2D solver.
+use STD.Math
+use STD.Process
+use STD.Time.Clock
+
+struct State {
+    var vx:float
+    var vy:float
+    var w:float
+    var px:float
+    var py:float
+    var c:float
+    var s:float
+}
+
+struct Constraint {
+    var first:int
+    var second:int
+    var nx:float
+    var ny:float
+    var ma:float
+    var mb:float
+    var ia:float
+    var ib:float
+    var ax:float
+    var ay:float
+    var bx:float
+    var by:float
+    var separation:float
+    var normal_mass:float
+    var tangent_mass:float
+    var bias_rate:float
+    var mass_scale:float
+    var impulse_scale:float
+    var friction:float
+    var tangent_speed:float
+    var rolling_mass:float
+    var rolling_resistance:float
+}
+
+struct Impulses {
+    var normal:float
+    var tangent:float
+    var total:float
+    var rolling:float
+}
+
+func solve_contact(states:&State[..], c:@Constraint, p:&Impulses, use_bias:bool) {
+    let a = copy states[c.first]
+    let b = copy states[c.second]
+    var vx_a = a.vx
+    var vy_a = a.vy
+    var w_a = a.w
+    var vx_b = b.vx
+    var vy_b = b.vy
+    var w_b = b.w
+    let dx = (b.px - a.px) +
+        ((b.c * c.bx - b.s * c.by) - (a.c * c.ax - a.s * c.ay))
+    let dy = (b.py - a.py) +
+        ((b.s * c.bx + b.c * c.by) - (a.s * c.ax + a.c * c.ay))
+    let separation = c.separation + (dx * c.nx + dy * c.ny)
+    var bias = 0.0
+    var mass_scale = 1.0
+    var impulse_scale = 0.0
+    if separation > 0.0 {
+        bias = separation * 240.0
+    } else if use_bias {
+        bias = Math.max(c.bias_rate * separation, -3.0)
+        mass_scale = c.mass_scale
+        impulse_scale = c.impulse_scale
+    }
+    let vrx = (vx_b - w_b * c.by) - (vx_a - w_a * c.ay)
+    let vry = (vy_b + w_b * c.bx) - (vy_a + w_a * c.ax)
+    let vn = vrx * c.nx + vry * c.ny
+    var impulse = -c.normal_mass * mass_scale * (vn + bias) - impulse_scale * p.normal
+    let next_normal = Math.max(p.normal + impulse, 0.0)
+    impulse = next_normal - p.normal
+    p.normal = next_normal
+    p.total += next_normal
+    var impulse_x = impulse * c.nx
+    var impulse_y = impulse * c.ny
+    vx_a -= c.ma * impulse_x
+    vy_a -= c.ma * impulse_y
+    w_a -= c.ia * (c.ax * impulse_y - c.ay * impulse_x)
+    vx_b += c.mb * impulse_x
+    vy_b += c.mb * impulse_y
+    w_b += c.ib * (c.bx * impulse_y - c.by * impulse_x)
+
+    let tx = c.ny
+    let ty = -c.nx
+    let vtx = (vx_b - w_b * c.by) - (vx_a - w_a * c.ay)
+    let vty = (vy_b + w_b * c.bx) - (vy_a + w_a * c.ax)
+    let vt = (vtx * tx + vty * ty) - c.tangent_speed
+    impulse = c.tangent_mass * (-vt)
+    let limit = c.friction * p.normal
+    let next_tangent = Math.min(Math.max(p.tangent + impulse, -limit), limit)
+    impulse = next_tangent - p.tangent
+    p.tangent = next_tangent
+    impulse_x = impulse * tx
+    impulse_y = impulse * ty
+    vx_a -= c.ma * impulse_x
+    vy_a -= c.ma * impulse_y
+    w_a -= c.ia * (c.ax * impulse_y - c.ay * impulse_x)
+    vx_b += c.mb * impulse_x
+    vy_b += c.mb * impulse_y
+    w_b += c.ib * (c.bx * impulse_y - c.by * impulse_x)
+
+    var rolling_delta = -c.rolling_mass * (w_b - w_a)
+    let rolling_limit = c.rolling_resistance * next_normal
+    let next_rolling = Math.min(Math.max(p.rolling + rolling_delta, -rolling_limit), rolling_limit)
+    rolling_delta = next_rolling - p.rolling
+    p.rolling = next_rolling
+    w_a -= c.ia * rolling_delta
+    w_b += c.ib * rolling_delta
+    states[c.first].vx = vx_a
+    states[c.first].vy = vy_a
+    states[c.first].w = w_a
+    states[c.second].vx = vx_b
+    states[c.second].vy = vy_b
+    states[c.second].w = w_b
+}
+
+func run_kernel(states:&State[..], constraints:@Constraint[..], impulses:&Impulses[..], passes:int) {
+    var pass = 0
+    while pass < passes {
+        var index = 0
+        while index < constraints.count() {
+            solve_contact(states, constraints[index], impulses[index], pass % 2 == 0)
+            index++
+        }
+        pass++
+    }
+}
+
+func main() {
+    var check = false
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == "--check" { check = true }
+            }
+        }
+    }
+    var count = 2048
+    var passes = 2048
+    if check { count = 16; passes = 8 }
+    var states:State[] = []
+    var constraints:Constraint[] = []
+    var impulses:Impulses[] = []
+    var i = 0
+    while i < count {
+        let k = (i % 16) as float
+        states.append(State(vx:k * 0.125, vy:-0.5, w:0.25,
+            px:0.0, py:0.0, c:1.0, s:0.0))
+        states.append(State(vx:-0.25, vy:k * 0.0625 - 1.0, w:-0.5,
+            px:0.00390625, py:-0.0078125, c:0.6, s:0.8))
+        var constraint = Constraint()
+        constraint.first = i * 2
+        constraint.second = i * 2 + 1
+        constraint.nx = 0.6
+        constraint.ny = 0.8
+        constraint.ma = 1.0
+        constraint.mb = 0.5
+        constraint.ia = 0.25
+        constraint.ib = 0.5
+        if i % 4 == 0 { constraint.ma = 0.0; constraint.ia = 0.0 }
+        constraint.ax = 0.125
+        constraint.ay = -0.0625
+        constraint.bx = -0.125
+        constraint.by = 0.0625
+        constraint.separation = (k - 8.0) * 0.03125
+        constraint.normal_mass = 0.5
+        constraint.tangent_mass = 0.375
+        constraint.bias_rate = 12.0
+        constraint.mass_scale = 0.75
+        constraint.impulse_scale = 0.25
+        constraint.friction = (i % 4) as float * 0.25
+        constraint.tangent_speed = (k - 8.0) * 0.125
+        constraint.rolling_mass = 0.5
+        constraint.rolling_resistance = 0.125
+        constraints.append(constraint)
+        impulses.append(Impulses(normal:0.125, tangent:0.03125, total:0.0, rolling:-0.015625))
+        i++
+    }
+    var state_view = &states[0:states.count()]
+    let constraint_view = @constraints[0:constraints.count()]
+    var impulse_view = &impulses[0:impulses.count()]
+    var clock = Clock()
+    clock.tick()
+    if check {
+        var pass = 0
+        while pass < passes {
+            var j = 0
+            while j < count {
+                solve_contact(state_view, constraint_view[j], impulse_view[j], pass % 2 == 0)
+                print("STATE ", pass, " ", j, " ",
+                    state_view[j * 2].vx, " ", state_view[j * 2].vy, " ", state_view[j * 2].w, " ",
+                    state_view[j * 2 + 1].vx, " ", state_view[j * 2 + 1].vy, " ", state_view[j * 2 + 1].w, " ",
+                    impulse_view[j].normal, " ", impulse_view[j].tangent, " ",
+                    impulse_view[j].total, " ", impulse_view[j].rolling)
+                j++
+            }
+            pass++
+        }
+    } else {
+        run_kernel(state_view, constraint_view, impulse_view, passes)
+        let elapsed_ms = clock.tick() * 1000.0
+        var signature:float64 = 0.0
+        i = 0
+        while i < count {
+            signature += (state_view[i * 2].vx + state_view[i * 2].vy * 2.0 +
+                state_view[i * 2].w * 3.0 + state_view[i * 2 + 1].vx * 5.0 +
+                state_view[i * 2 + 1].vy * 7.0 + state_view[i * 2 + 1].w * 11.0 +
+                impulse_view[i].normal * 13.0 + impulse_view[i].tangent * 17.0 +
+                impulse_view[i].total * 19.0 + impulse_view[i].rolling * 23.0) as float64
+            i++
+        }
+        print("KERNEL silex slots8 ", count, " ", passes, " ", elapsed_ms, " ", signature)
+    }
+}
