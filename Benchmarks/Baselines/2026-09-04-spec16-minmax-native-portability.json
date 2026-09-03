@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "final_run": {
+    "database_id": 33813586089,
+    "attempt": 1,
+    "workflow": "native-portability.yml",
+    "workflow_name": "Validate Silex native portability",
+    "event": "workflow_dispatch",
+    "inputs": { "target": "all" },
+    "head_branch": "spec-physics-2d-complete-16",
+    "head_sha": "e5907b4a1816fa6721133afadecb5c0563b5bede",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-09-03T22:33:03Z",
+    "updated_at": "2026-09-03T22:40:30Z",
+    "url": "https://github.com/Matanek/Silex/actions/runs/33813586089"
+  },
+  "dependency": {
+    "repository": "Matanek/Silex-Lib-STD",
+    "path": "Dependencies/STD",
+    "sha": "5a018305fb470dfe00e94466150b3c04f207e252"
+  },
+  "source_sha256": {
+    ".github/workflows/native-portability.yml": "4b17f1f4c2f7e5489faea7d85f1914594a3af2d2305e057e7dbc85ae245fbfa4",
+    "Toolchain/Benchmarks/Native/ScalarMathMinMax.sx": "4a85cd5061612e00870b8315b9f0b0e573060cb5179f351bff6e627825a88b73",
+    "Tests/Native/ScalarMathMinMax.sx": "6a9cb574128b809ff275733c0b19cc2e7b6f6f99ec8922476d57778e4085c75a",
+    "Toolchain/Sources/X64/Encoder.zig": "885703630f55d65f1f89d36c959303079173ece8d1fd6bea6018870fb535e589"
+  },
+  "jobs": [
+    {
+      "id": 100840694865,
+      "name": "linux-x64",
+      "runner": "ubuntu-24.04",
+      "started_at": "2026-09-03T22:33:08Z",
+      "completed_at": "2026-09-03T22:37:11Z",
+      "conclusion": "success",
+      "build_and_validate_step": "success",
+      "url": "https://github.com/Matanek/Silex/actions/runs/33813586089/job/100840694865"
+    },
+    {
+      "id": 100840694926,
+      "name": "windows-x64",
+      "runner": "windows-2025",
+      "started_at": "2026-09-03T22:33:08Z",
+      "completed_at": "2026-09-03T22:40:29Z",
+      "conclusion": "success",
+      "build_and_validate_step": "success",
+      "url": "https://github.com/Matanek/Silex/actions/runs/33813586089/job/100840694926"
+    }
+  ],
+  "predecessor_attempts": [
+    {
+      "database_id": 33810121895,
+      "head_sha": "dcbdcefd0d7a73d21cc000aebcd6efbf4f1ccac0",
+      "conclusion": "failure",
+      "cause": "The standalone checkout did not provide STD.Math; the scalar fixture did not compile.",
+      "log_sha256": "31593d90a79c42745d84ce7de6e70cf5157192637f79df163d7029fd91de6028",
+      "url": "https://github.com/Matanek/Silex/actions/runs/33810121895"
+    },
+    {
+      "database_id": 33812339053,
+      "head_sha": "38dc99c395853eb8d641a8b0cab49efb63130d9c",
+      "conclusion": "failure",
+      "cause": "The fixture exposed incorrect unordered X64 float comparisons in native Debug on both targets.",
+      "log_sha256": "fcb4bf571b91bbac245f9128141e766da578567bbf9e3e00a24d917b0c14aedb",
+      "url": "https://github.com/Matanek/Silex/actions/runs/33812339053"
+    }
+  ],
+  "retained_log": {
+    "path": "/private/tmp/spec16-01a06651/native-portability-e5907b4/run.log",
+    "sha256": "9ba29841467e9a2641543e364daf518b98f44b4baeca81b6f7b1257d18157f0f"
+  },
+  "validation": {
+    "native_execution": ["Linux X64 Debug", "Linux X64 Release", "Windows X64 Debug", "Windows X64 Release"],
+    "scalar_math_fixture": "passed",
+    "timing_campaign": false,
+    "part16_complete": false,
+    "remaining_same_layout_ratios": {
+      "contact": 7.5998,
+      "integration": 30.4481,
+      "preparation": 16.0049
+    }
+  },
+  "publication": {
+    "silex_branch": "spec-physics-2d-complete-16",
+    "silex_sha": "e5907b4a1816fa6721133afadecb5c0563b5bede",
+    "tags": [],
+    "release": false,
+    "other_repositories_pushed": []
+  }
+}

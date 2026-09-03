@@ -44,12 +44,16 @@ the preceding compiler candidate.
 The scalar min/max fixture passes macOS Debug and Release and is added to the
 Linux/Windows portability workflow. Run
 [`33810121895`](https://github.com/Matanek/Silex/actions/runs/33810121895)
-checked out this exact compiler commit, but both jobs stopped before compiling
-the fixture because the standalone Silex checkout did not provide `STD.Math`.
-Compiler commit `38dc99c395853eb8d641a8b0cab49efb63130d9c` corrects the workflow by
-checking out STD at pinned commit `5a018305fb470dfe00e94466150b3c04f207e252`
-and linking it in the runner workspace. A new remote run is still required
-before this compiler candidate has cross-target execution evidence.
+first exposed the missing STD dependency in the standalone checkout. After the
+workflow linked pinned STD commit `5a018305fb470dfe00e94466150b3c04f207e252`,
+run [`33812339053`](https://github.com/Matanek/Silex/actions/runs/33812339053)
+reached the fixture and exposed incorrect unordered X64 float comparisons.
+Compiler `e5907b4a1816fa6721133afadecb5c0563b5bede` fixes all six comparison
+predicates. Final run
+[`33813586089`](https://github.com/Matanek/Silex/actions/runs/33813586089)
+passes native Debug and Release on Linux X64 and Windows X64 at that exact SHA.
+The full sequence is retained in the
+[native portability record](2026-09-04-spec16-minmax-native-portability.md).
 
 Three experiments were rejected and remain only under
 `/private/tmp/spec16-01a06651`: aggressive preparation inlining regressed a

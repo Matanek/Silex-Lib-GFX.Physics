@@ -57,8 +57,10 @@ same-layout ratio falls to 7.5998. Integration and preparation are unchanged
 within their observed ranges and remain at 30.4481 and 16.0049 respectively.
 All three parity criteria still fail. The first Linux/Windows run on compiler
 `dcbdcef` exposed a missing pinned STD fixture dependency before native
-execution; workflow correction `38dc99c` is locally validated and awaits its
-exact remote run.
+execution. Its [final native portability qualification](2026-09-04-spec16-minmax-native-portability.md)
+records the subsequent X64 unordered-comparison correction and a successful
+exact-SHA run on Linux and Windows, in Debug and Release. This closes the
+candidate's portability check; it does not change the three performance ratios.
 
 ## Matched Box2D diagnostics — 2026-09-03
 
