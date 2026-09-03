@@ -9,6 +9,10 @@ matching-layout Clang time. The full-engine observations are identical, but
 their overlapping timing ranges do not demonstrate an engine speedup.
 This is a validated compiler slice; Part 16 parity remains open.
 
+The [following stack-layout correction](2026-09-03-spec16-stack-layout.md)
+reduces the contact function's frame by 22.60%, with neutral measured timing
+and unchanged physical observations. It does not close the parity gap.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
