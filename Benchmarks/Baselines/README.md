@@ -22,6 +22,11 @@ A later [read-reuse experiment](2026-09-03-spec16-read-reuse-rejected.md)
 passed semantic validation but slowed the contact kernel. Its isolated variants
 demonstrated no gain either, so the optimization was not retained.
 
+The [unused checked-payload correction](2026-09-03-spec16-dead-loads.md)
+retains bounds diagnostics and removes 84 unused loads and 84 stores from the
+contact function. Its alternating campaign demonstrates a 19.877% reduction;
+the remaining Silex/Clang ratio is 9.0783, still above the parity target.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
