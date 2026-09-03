@@ -1,0 +1,52 @@
+use GFX.Physics
+use STD.Math
+
+test "refresh compact contact eligibility after material and shape changes" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..position = Math.Vec2(1.5, 0.0)
+    )
+    var colliders:Physics.Collider2D[] = []
+    first.write_colliders(colliders)
+    var collider = colliders[0]
+    let original_material = collider.material()
+
+    world.step(0.0)
+    assert(world.compact_collision_count() == 1)
+    collider.set_material(Physics.PhysicsMaterial2D()..rolling_resistance = 0.25)
+    world.step(0.0)
+    assert(world.compact_collision_count() == 0)
+    assert(world.contact_count() == 1)
+    collider.set_material(original_material)
+    world.step(0.0)
+    assert(world.compact_collision_count() == 1)
+
+    collider.set_material(Physics.PhysicsMaterial2D()..tangent_speed = 1.0)
+    world.step(0.0)
+    assert(world.compact_collision_count() == 0)
+    collider.set_material(Physics.PhysicsMaterial2D()
+        ..friction_combine = Physics.MaterialCombineMode2D.average)
+    world.step(0.0)
+    assert(world.compact_collision_count() == 0)
+    collider.set_material(original_material)
+    collider.set_shape(Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))))
+    world.step(0.0)
+    assert(world.compact_collision_count() == 0)
+    collider.set_shape(Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+    world.step(0.0)
+    assert(world.compact_collision_count() == 1)
+
+    world.destroy_rigid_body(second)
+    world.step(0.0)
+    assert(world.compact_collision_count() == 0)
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..position = Math.Vec2(1.5, 0.0)
+    )
+    world.step(0.0)
+    assert(world.compact_collision_count() == 1)
+}

@@ -68,7 +68,11 @@ bullet évitent ce coût.
 ## Solver, parallélisme et sommeil
 
 Le solver Soft Step unique exécute quatre sous-pas par défaut, warm start,
-contraintes colorées, friction, restitution et relaxation. Les réglages du
+contraintes colorées, friction, restitution et relaxation. Chaque sous-pas
+intègre les vitesses, applique le warm start, effectue une résolution avec
+biais, intègre les positions puis effectue une relaxation sans biais. La
+friction intervient dans les deux résolutions ; la restitution et la
+conservation des impulsions suivent les sous-pas. Les réglages du
 monde permettent de choisir les sous-pas, la raideur, l’amortissement et les
 limites de vitesse sans exposer l’ordonnancement interne. Toutes les formes
 partagent ce chemin ; les contacts parallèles de faces résolvent leurs deux

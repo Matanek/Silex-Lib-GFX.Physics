@@ -340,6 +340,10 @@ pushed commit instead.
 
 ## Isolated contact-kernel compiler comparison, 2026-09-03
 
+The later [retained solver qualification](2026-09-03-spec15-stabilization.md)
+records the correction gates for the production checkpoint and the comparison
+infrastructure. All performance and RSS failures below remain open.
+
 [`2026-09-03-spec15-contact-kernel.json`](2026-09-03-spec15-contact-kernel.json)
 is a diagnostic baseline, **not an accepted engine-performance result**.
 The [kernel protocol](../Oracle2D/README.md#isolate-compiler-cost-from-engine-architecture)

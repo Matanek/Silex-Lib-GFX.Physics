@@ -154,8 +154,9 @@ shapes use the same reusable deterministic grid regardless of worker count, so
 parallelism cannot change the candidate set. Contact impulses persist across
 steps and warm-start the next solve. General and compact circle constraints are
 colored by body conflict and execute one common four-substep Soft Step graph:
-velocity integration, warm start, two alternating biased sweeps, position
-integration, normal relaxation, restitution, and cache storage. A load threshold
+velocity integration, warm start, one biased sweep, position integration,
+and one unbiased relaxation sweep. Both sweeps solve friction; restitution
+and cache storage follow the substeps. A load threshold
 may dispatch a color to workers but never selects a historical solver.
 Joint and non-primitive general-shape islands sleep atomically after their
 residual surface motion remains below the stability thresholds. Primitive box

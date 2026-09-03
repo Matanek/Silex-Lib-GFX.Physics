@@ -156,9 +156,9 @@ surface speed, and rolling resistance.
 The solver prepares general contacts and a compact dynamic-circle form, then
 places every constraint into deterministic conflict-free colors. Four true
 substeps run by default; callers can choose another positive count per step.
-Each substep integrates velocities, warm-starts, runs two alternating biased
-color sweeps, integrates positions, and performs one normal-only relaxation
-sweep. Friction runs on the second biased sweep; restitution and impulse-cache
+Each substep integrates velocities, warm-starts, runs one biased color sweep,
+integrates positions, and performs one unbiased relaxation sweep. Both sweeps
+solve friction; restitution and impulse-cache
 storage follow the substeps. World settings control the physical contact
 tuning and speed limits without exposing this schedule. One worker calls the
 same jobs directly, while a large color partitions the same kernel across the
