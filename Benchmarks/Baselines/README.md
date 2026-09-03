@@ -13,6 +13,11 @@ The [following stack-layout correction](2026-09-03-spec16-stack-layout.md)
 reduces the contact function's frame by 22.60%, with neutral measured timing
 and unchanged physical observations. It does not close the parity gap.
 
+The [direct floating-point transfers](2026-09-03-spec16-float-memory.md)
+remove 75 emitted contact instructions while preserving exact payloads.
+Their overlapping timing ranges leave the speedup inconclusive; the remaining
+Silex/Clang ratio is 11.3310.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
