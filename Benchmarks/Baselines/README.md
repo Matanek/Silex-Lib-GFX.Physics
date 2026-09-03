@@ -59,6 +59,16 @@ The earlier RSS qualification belongs to `9cd1f58`; memory must be
 requalified on later candidates. No parity or functional-completion claim
 follows from this timing improvement.
 
+The subsequent arithmetic-scheduling campaign (`54f08b3`) establishes native
+SIMD use in the single-contact kernel, but no dense-scene speedup. The
+[before](2026-09-03-spec15-scheduled-before.jsonl) median is 40.549496 ms;
+[after](2026-09-03-spec15-scheduled-after.jsonl) is 40.756770 ms (0.511% slower),
+with overlapping ranges and MAD of 0.153% and 0.105%. Box2D measures
+4.425653 ms, leaving a 9.209210 ratio. All Silex state signatures are identical.
+The four-contact kernel still has no SIMD residences despite 2,464 portable
+affinity groups; the scheduling change alone does not solve that bottleneck.
+No RSS measurement or parity acceptance follows from this campaign.
+
 ## Initial reference — 2026-08-23
 
 The initial ARM64 reference was captured on 2026-08-23 while the machine was
