@@ -1,0 +1,319 @@
+{
+  "schema": 1,
+  "captured_at": "2026-09-03T10:27:18.713186+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "workload": {
+    "contacts": 2048,
+    "passes": 2048,
+    "workers": 1,
+    "float_bits": 32,
+    "fma": true,
+    "allocation_in_kernel": false
+  },
+  "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+  "correctness": {
+    "silex": {
+      "records": 128,
+      "max_absolute_error": 6.399999996631323e-07
+    },
+    "clang-slots": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    },
+    "clang-packed": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    },
+    "silex-before": {
+      "records": 128,
+      "max_absolute_error": 6.399999996631323e-07
+    }
+  },
+  "executables": {
+    "silex": {
+      "path": "/private/tmp/spec16-01a06651/contact-memory-reads-fixed",
+      "sha256": "0233deac04b51a7dcaacb96e79f7098d111ad6a961bc6142f0279f9103a0f9b7"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+      "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+      "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+    },
+    "silex-before": {
+      "path": "/private/tmp/spec16-01a06651/contact-float-memory",
+      "sha256": "f05ca481f3e14f4189e274835e296b648394a7e8964d4cd1bcfeac4ed9ff58e7"
+    },
+    "box2d-check": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_reference",
+      "sha256": "2bae3d0ebb1cbf382d9216def1cd9375c8510ebe50c32b0f3369efc6ed135572"
+    }
+  },
+  "warmup": {
+    "silex": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 462.982,
+      "signature": 88453969.40002441
+    },
+    "clang-slots": {
+      "engine": "clang",
+      "layout": "slots8",
+      "elapsed_ms": 39.150999975,
+      "signature": 88453969.40002441
+    },
+    "clang-packed": {
+      "engine": "clang",
+      "layout": "packed4",
+      "elapsed_ms": 38.972000009,
+      "signature": 88453969.40002441
+    },
+    "silex-before": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 447.69,
+      "signature": 88453969.40002441
+    }
+  },
+  "samples": {
+    "silex": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 450.834,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 450.89502,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 450.638,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 454.717,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 449.463,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 452.781,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 449.88303,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-slots": [
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.208000002,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.033000008,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.860999979,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.148000011,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.228000038,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.20400003,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.889000018,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-packed": [
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.513000007,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 39.196999976,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.594999991,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 39.049000014,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.656999997,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.743000012,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.648999995,
+        "signature": 88453969.40002441
+      }
+    ],
+    "silex-before": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 448.031,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 445.954,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 446.469,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 448.242,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 447.292,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 446.607,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 446.382,
+        "signature": 88453969.40002441
+      }
+    ]
+  },
+  "summary": {
+    "silex": {
+      "median_ms": 450.834,
+      "min_ms": 449.463,
+      "max_ms": 454.717,
+      "mad_percent": 0.21093573244253624
+    },
+    "clang-slots": {
+      "median_ms": 39.148000011,
+      "min_ms": 38.860999979,
+      "max_ms": 39.228000038,
+      "mad_percent": 0.20435278169387497
+    },
+    "clang-packed": {
+      "median_ms": 38.656999997,
+      "min_ms": 38.513000007,
+      "max_ms": 39.196999976,
+      "mad_percent": 0.2224694492761399
+    },
+    "silex-before": {
+      "median_ms": 446.607,
+      "min_ms": 445.954,
+      "max_ms": 448.242,
+      "mad_percent": 0.1462135613637986
+    }
+  },
+  "silex_over_clang_same_layout": 11.516143861073935,
+  "clang_slots_over_packed": 1.0127014515880204,
+  "timing_admissible": true,
+  "compiler_parity": "missed",
+  "silex_after_over_before": 1.009464697149843,
+  "silex_after_over_before_observed_range": [
+    1.0027239749956496,
+    1.0196500087452967
+  ],
+  "compiler_baseline": "8ab6a1bc45e7632feba9d1aa07f1f669827ec884",
+  "candidate_status": "uncommitted experiment, not retained",
+  "proposal": {
+    "directory": "/private/tmp/spec16-01a06651/memory-reads-preserved",
+    "patch_sha256": "53ddc67863b731275b7630ba897bf502f51982e4ef32d8efce0630105f88c93c",
+    "manifest": {
+      "base": "8ab6a1bc45e7632feba9d1aa07f1f669827ec884",
+      "files": {
+        "Docs/Release-optimization.md": "a4a0f00613fec07257e505746d336991327c6a09dab8bde28bf401ced7ef54d6",
+        "Toolchain/Benchmarks/Optimizer/Regressions/AggregateFieldStores.sx": "3884ecadd2c11ddf23763f2a16e45a379f0070d013fdbc9ee1134ce1700cd6cd",
+        "Toolchain/Sources/Optimize/Release.zig": "86dac6328b259448f3c8c8ec0c726172bc5d3b403fcfca15a89e82c5047c87eb",
+        "Toolchain/Tools/OptimizerOracle/Generator.zig": "8890ac61a4114da0edb049a74a86965228d6579de34dcb4b63d8fad5f3f4bc13",
+        "Toolchain/Sources/Optimize/MemoryReads.zig": "1c09e5c742f2645836282d20dd07356eef019754d6c1d6dbb3bdad8d80e2e50b",
+        "Toolchain/Sources/Optimize/MemoryReadsTests.zig": "782497b9acbd8c6eeed8465c6216652d48cb6e792686fef6848c1d961b0ba8e0"
+      }
+    }
+  },
+  "contact_instruction_count": {
+    "before": 3128,
+    "after": 3075
+  },
+  "frame_bytes": {
+    "before": 5152,
+    "after": 5152
+  }
+}

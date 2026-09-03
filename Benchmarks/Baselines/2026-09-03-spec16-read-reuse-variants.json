@@ -1,0 +1,388 @@
+{
+  "purpose": "diagnostic separation of optimizer transformations",
+  "captured_at": "2026-09-03T10:30:44.949964+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit",
+  "executables": {
+    "before": {
+      "path": "/private/tmp/spec16-01a06651/contact-float-memory",
+      "sha256": "f05ca481f3e14f4189e274835e296b648394a7e8964d4cd1bcfeac4ed9ff58e7"
+    },
+    "both": {
+      "path": "/private/tmp/spec16-01a06651/contact-memory-reads-fixed",
+      "sha256": "0233deac04b51a7dcaacb96e79f7098d111ad6a961bc6142f0279f9103a0f9b7"
+    },
+    "reference-only": {
+      "path": "/private/tmp/spec16-01a06651/contact-memory-reference-only",
+      "sha256": "d4f4390d7b83bbda90499cb89a7a501cb14bd6022fd7a890abf929a01d6f4a64"
+    },
+    "projection-only": {
+      "path": "/private/tmp/spec16-01a06651/contact-memory-projection-only",
+      "sha256": "8d5780c5326c0314574b84de7e6bd3f2d299811a4d768eaf29d6d89f3306a554"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+      "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+      "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+    }
+  },
+  "correctness": {
+    "before": 6.399999996631323e-07,
+    "both": 6.399999996631323e-07,
+    "reference-only": 6.399999996631323e-07,
+    "projection-only": 6.399999996631323e-07,
+    "clang-slots": 9.500000004436515e-07,
+    "clang-packed": 9.500000004436515e-07
+  },
+  "warmup": {
+    "before": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 417.956,
+      "signature": 88453969.40002441
+    },
+    "both": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 443.25302,
+      "signature": 88453969.40002441
+    },
+    "reference-only": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 464.137,
+      "signature": 88453969.40002441
+    },
+    "projection-only": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 467.387,
+      "signature": 88453969.40002441
+    },
+    "clang-slots": {
+      "engine": "clang",
+      "layout": "slots8",
+      "elapsed_ms": 39.031000051,
+      "signature": 88453969.40002441
+    },
+    "clang-packed": {
+      "engine": "clang",
+      "layout": "packed4",
+      "elapsed_ms": 36.552999984,
+      "signature": 88453969.40002441
+    }
+  },
+  "samples": {
+    "before": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 420.757,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 417.569,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 416.337,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 445.53198,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 447.474,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 420.535,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 424.96802,
+        "signature": 88453969.40002441
+      }
+    ],
+    "both": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 444.436,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 421.169,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 424.358,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 420.758,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 451.805,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 426.14,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 449.80902,
+        "signature": 88453969.40002441
+      }
+    ],
+    "reference-only": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 418.79202,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 417.842,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 445.272,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 423.623,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 418.428,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 446.17798,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 422.439,
+        "signature": 88453969.40002441
+      }
+    ],
+    "projection-only": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 445.844,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 419.327,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 449.327,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 449.332,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 424.954,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 419.422,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 426.078,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-slots": [
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.193000004,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 37.471999996,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 36.767999991,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 36.697999982,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.290999946,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 37.577999989,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.739999989,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-packed": [
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.459999974,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 37.703999958,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 37.921999989,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.426999955,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.239000016,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.572999961,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.384999985,
+        "signature": 88453969.40002441
+      }
+    ]
+  },
+  "summary": {
+    "before": {
+      "median_ms": 420.757,
+      "min_ms": 416.337,
+      "max_ms": 447.474,
+      "mad_percent": 1.0008199507078952
+    },
+    "both": {
+      "median_ms": 426.14,
+      "min_ms": 420.758,
+      "max_ms": 451.805,
+      "mad_percent": 1.2629652226967676
+    },
+    "reference-only": {
+      "median_ms": 422.439,
+      "min_ms": 417.842,
+      "max_ms": 446.17798,
+      "mad_percent": 0.949486198007292
+    },
+    "projection-only": {
+      "median_ms": 426.078,
+      "min_ms": 419.327,
+      "max_ms": 449.332,
+      "mad_percent": 1.5844516731678182
+    },
+    "clang-slots": {
+      "median_ms": 37.577999989,
+      "min_ms": 36.697999982,
+      "max_ms": 39.193000004,
+      "mad_percent": 2.1555165209353926
+    },
+    "clang-packed": {
+      "median_ms": 36.572999961,
+      "min_ms": 36.384999985,
+      "max_ms": 38.239000016,
+      "mad_percent": 0.514040347252006
+    }
+  },
+  "admissible": true,
+  "variant_definition": {
+    "before": "8ab6a1b",
+    "both": "complete preserved proposal",
+    "reference-only": "disable scalar field_load reuse; retain reference_load and field-address reuse",
+    "projection-only": "disable scalar reference_load reuse; retain field_load and field-address reuse"
+  }
+}

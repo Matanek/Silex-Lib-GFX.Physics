@@ -18,6 +18,10 @@ remove 75 emitted contact instructions while preserving exact payloads.
 Their overlapping timing ranges leave the speedup inconclusive; the remaining
 Silex/Clang ratio is 11.3310.
 
+A later [read-reuse experiment](2026-09-03-spec16-read-reuse-rejected.md)
+passed semantic validation but slowed the contact kernel. Its isolated variants
+demonstrated no gain either, so the optimization was not retained.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
