@@ -51,6 +51,13 @@ passes on compiler `f4cae16`, including native Debug/Release and interpreter
 execution of the aggregate regression. The outstanding targeted portability
 check is closed for this candidate; the performance parity gap remains open.
 
+The [scalar min/max and lane-profitability correction](2026-09-03-spec16-minmax-simd-profitability.md)
+reduces the contact witness by 16.126%, from 360.689 to 302.524 ms. Its
+same-layout ratio falls to 7.5998. Integration and preparation are unchanged
+within their observed ranges and remain at 30.4481 and 16.0049 respectively.
+All three parity criteria still fail; native Linux/Windows execution of the new
+exact min/max fixture is pending for compiler `dcbdcef`.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
