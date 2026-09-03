@@ -47,6 +47,18 @@ and 23,330,816 B dense median. The 15,663,104 B increment exceeds the existing
 14,395,904 B body-plus-persistent-pair budget by 1,267,200 B. This series uses
 `/usr/bin/time -l`; its times are not pooled with the paired timing campaign.
 
+Removing overwritten aggregate local stores (`86477d0`) has a larger effect
+in the next independent three-binary campaign. The [before](2026-09-03-spec15-overwritten-before.jsonl)
+and [after](2026-09-03-spec15-overwritten-after.jsonl) series measure
+44.528137 ms and 41.907570 ms respectively, a 5.885% reduction. Box2D is
+4.534857 ms, so the remaining ratio is 9.241211. MAD is 0.187%, 0.266%
+and 0.170%; before/after ranges are disjoint. The exact Silex physical state
+is unchanged. This change reduces the contact-recording function from
+12,868 to 6,236 bytes and the complete executable by 147,776 bytes.
+The earlier RSS qualification belongs to `9cd1f58`; memory must be
+requalified on later candidates. No parity or functional-completion claim
+follows from this timing improvement.
+
 ## Initial reference — 2026-08-23
 
 The initial ARM64 reference was captured on 2026-08-23 while the machine was
