@@ -82,6 +82,7 @@ def parity_result(candidate, reference, admissible):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--silex", required=True, type=Path)
+    parser.add_argument("--baseline-silex", type=Path, help="Include the compiler baseline in the same alternating series")
     parser.add_argument("--clang-slots", required=True, type=Path)
     parser.add_argument("--clang-packed", required=True, type=Path)
     parser.add_argument("--box2d-check", required=True, type=Path)
@@ -92,6 +93,8 @@ def main():
     if args.check_only and args.require_parity:
         parser.error("--require-parity needs timing")
     binaries = {"silex": args.silex, "clang-slots": args.clang_slots, "clang-packed": args.clang_packed}
+    if args.baseline_silex:
+        binaries["silex-before"] = args.baseline_silex
     reference = states(execute(args.box2d_check, "--check"))
     result = {"schema": 1, "captured_at": datetime.now(timezone.utc).isoformat(),
               "host": platform.platform(), "machine": platform.machine(),
@@ -113,9 +116,10 @@ def main():
         names = list(binaries)
         signature = result["warmup"]["clang-slots"]["signature"]
         for sample in range(7):
-            for name in names[sample % 3:] + names[:sample % 3]:
+            offset = sample % len(names)
+            for name in names[offset:] + names[:offset]:
                 record = timing(execute(binaries[name]))
-                expected_engine = "silex" if name == "silex" else "clang"
+                expected_engine = "silex" if name.startswith("silex") else "clang"
                 expected_layout = "packed4" if name == "clang-packed" else "slots8"
                 if (record["engine"], record["layout"]) != (expected_engine, expected_layout):
                     raise ValueError(f"wrong executable metadata for {name}")
@@ -130,6 +134,11 @@ def main():
         result["timing_admissible"] = all(s["mad_percent"] <= 5 and s["min_ms"] >= 20 for s in result["summary"].values())
         candidate, reference_time = result["summary"]["silex"], result["summary"]["clang-slots"]
         result["compiler_parity"] = parity_result(candidate, reference_time, result["timing_admissible"])
+        if args.baseline_silex:
+            before = result["summary"]["silex-before"]
+            result["silex_after_over_before"] = candidate["median_ms"] / before["median_ms"]
+            result["silex_after_over_before_observed_range"] = [
+                candidate["min_ms"] / before["max_ms"], candidate["max_ms"] / before["min_ms"]]
         print(json.dumps(result["summary"], indent=2))
         print(f"Silex / Clang same layout: {result['silex_over_clang_same_layout']:.4f}")
         print(f"Clang slots / packed: {result['clang_slots_over_packed']:.4f}")

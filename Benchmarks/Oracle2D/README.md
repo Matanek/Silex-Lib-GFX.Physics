@@ -350,6 +350,12 @@ The runner checks correctness before timing, excludes one warm-up per binary,
 rotates seven serial processes per variant, checks final signatures and reports
 median, range and MAD. A minimum below 20 ms or MAD above 5% makes the timing
 inadmissible. The JSON includes raw samples and executable hashes. Use
+`--baseline-silex <binary-before>` to include a compiler baseline in the same
+seven-process series. It receives the same correctness checks and excluded
+warmup; all four variants rotate through the execution order. The report adds
+the after/before median ratio and its observed minimum/maximum range, which is
+a sample envelope, not a statistical confidence interval. This comparison
+does not replace the Clang parity gate. Use
 `--check-only` for Debug/correctness validation. `--require-parity` returns 1
 unless the measured Silex range is no slower than the same-layout C range;
 overlap is explicitly inconclusive. This is a separate diagnostic gate from

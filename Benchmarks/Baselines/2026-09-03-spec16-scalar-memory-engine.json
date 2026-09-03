@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "captured_at": "2026-09-03T09:18:16.477224+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "purpose": "Part 16 compiler impact; not engine parity qualification",
+  "arguments": [
+    "--circle-5000",
+    "--box2d-parity"
+  ],
+  "binaries": {
+    "before": {
+      "path": "/private/tmp/spec15-resume-01a06651/corpus-release",
+      "sha256": "f0e3551557b4e26f679fb9cd1d32cdda6cf72130adc387f3127b45e2a466bcbb"
+    },
+    "after": {
+      "path": "/private/tmp/spec16-01a06651/corpus-current",
+      "sha256": "e43c75895f5c4cc933b7a656789215487041f9f95a14ed9ba2abdf00f90469b3"
+    }
+  },
+  "warmup": {
+    "before": {
+      "elapsed_ms": 12054.499,
+      "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12054.499 step_ms=40.181664 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+    },
+    "after": {
+      "elapsed_ms": 11959.545,
+      "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=11959.545 step_ms=39.86515 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+    }
+  },
+  "samples": {
+    "before": [
+      {
+        "elapsed_ms": 12381.389,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12381.389 step_ms=41.271297 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12302.622,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12302.622 step_ms=41.00874 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12360.96,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12360.96 step_ms=41.2032 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12283.349,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12283.349 step_ms=40.944496 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12345.005,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12345.005 step_ms=41.150017 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12767.15,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12767.15 step_ms=42.557167 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12749.909,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12749.909 step_ms=42.4997 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      }
+    ],
+    "after": [
+      {
+        "elapsed_ms": 11971.491,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=11971.491 step_ms=39.904972 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12032.631,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12032.631 step_ms=40.10877 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12083.533,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12083.533 step_ms=40.278442 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12042.634,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12042.634 step_ms=40.142113 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12076.049,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12076.049 step_ms=40.253494 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12322.879,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12322.879 step_ms=41.076263 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      },
+      {
+        "elapsed_ms": 12204.44,
+        "record": "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 solver=soft-step substeps=4 scenario=circle-5000 workload=box2d-3.1.1-v1 gravity_y=-10.0 contact_hertz=30.0 contact_damping=10.0 sleep_enabled=false body_mass=1.0 mode=release workers=1 bodies=5000 steps=300 dt=0.016666668 elapsed_ms=12204.44 step_ms=40.68147 centroid_x=-0.036399815 centroid_y=-2.420846 max_speed=0.000027298927 min_y=-2.9771101 max_overlap_mm=16.319561 awake=5000 contacts=170 state_signature=-83418950.0 memory_bytes=-1 candidate_slots=18185 persistent_pairs=18117 constraints=18117 compact_constraints=17947 parallel_dispatches=0 maximum_color_count=2523"
+      }
+    ]
+  },
+  "summary": {
+    "before": {
+      "median_ms": 12360.96,
+      "min_ms": 12283.349,
+      "max_ms": 12767.15,
+      "mad_percent": 0.47195363466914986
+    },
+    "after": {
+      "median_ms": 12076.049,
+      "min_ms": 11971.491,
+      "max_ms": 12322.879,
+      "mad_percent": 0.35953812376880456
+    }
+  },
+  "after_over_before": 0.9769507384539714,
+  "observed_ratio_range": [
+    0.9376792001347207,
+    1.0032181777135862
+  ],
+  "timing_admissible": true,
+  "identical_observations": true,
+  "source_sha256": {
+    "Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx": "a53e717faa68d7963390ce9df582a87f88ff93846bbd28fb889893343ee5f797",
+    "Packages/GFX.Physics/Benchmarks/Oracle2D/ContactKernel.c": "b7e68407a723b824ab0150bafd1812c7d765331a32fec24149338c4651643c42",
+    "Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py": "389e3ebdfe430c126bcdcda19046fd48c7522a9626abceec880acdb9a1f5a975",
+    "Packages/GFX.Physics/Benchmarks/Corpus2D.sx": "86b510cc8ccaf916f04f176674a234ba4325e8b7abd748d0153e15d0d8cad116"
+  },
+  "compiler_baseline": "bd0e76b6ab494f72e96d409cdd071169237160f3",
+  "physics_production_baseline": "7ed0c851c7c0f04676b8b7e927c1636bc1f340ce",
+  "compiler_executable_sha256": "7f967a16d2710be889d706088713584ed8213eaa73dd707ff2cc364809b91a9f",
+  "c_flags": null,
+  "compiler_candidate": "d8f37f3bab4a37572d781bc9c796dbea79096c2f"
+}

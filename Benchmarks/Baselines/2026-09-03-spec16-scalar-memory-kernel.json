@@ -1,0 +1,309 @@
+{
+  "schema": 1,
+  "captured_at": "2026-09-03T09:17:23.169954+00:00",
+  "host": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "workload": {
+    "contacts": 2048,
+    "passes": 2048,
+    "workers": 1,
+    "float_bits": 32,
+    "fma": true,
+    "allocation_in_kernel": false
+  },
+  "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+  "correctness": {
+    "silex": {
+      "records": 128,
+      "max_absolute_error": 6.399999996631323e-07
+    },
+    "clang-slots": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    },
+    "clang-packed": {
+      "records": 128,
+      "max_absolute_error": 9.500000004436515e-07
+    },
+    "silex-before": {
+      "records": 128,
+      "max_absolute_error": 6.399999996631323e-07
+    }
+  },
+  "executables": {
+    "silex": {
+      "path": "/private/tmp/spec16-01a06651/contact-current",
+      "sha256": "39cab07c0f8a3750c5fc24ae359d195653a6fb32bbc4a68ea688f0b83206a8b9"
+    },
+    "clang-slots": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+      "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+    },
+    "clang-packed": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+      "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+    },
+    "silex-before": {
+      "path": "/private/tmp/spec16-01a06651/contact-before",
+      "sha256": "f15344ca133ca55c2b6590df6310d52f8840327122db18ed5fb196de9329d1ea"
+    },
+    "box2d-check": {
+      "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_reference",
+      "sha256": "2bae3d0ebb1cbf382d9216def1cd9375c8510ebe50c32b0f3369efc6ed135572"
+    }
+  },
+  "warmup": {
+    "silex": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 474.863,
+      "signature": 88453969.40002441
+    },
+    "clang-slots": {
+      "engine": "clang",
+      "layout": "slots8",
+      "elapsed_ms": 39.356000023,
+      "signature": 88453969.40002441
+    },
+    "clang-packed": {
+      "engine": "clang",
+      "layout": "packed4",
+      "elapsed_ms": 37.300999975,
+      "signature": 88453969.40002441
+    },
+    "silex-before": {
+      "engine": "silex",
+      "layout": "slots8",
+      "elapsed_ms": 553.04095,
+      "signature": 88453969.40002441
+    }
+  },
+  "samples": {
+    "silex": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 456.806,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 461.579,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 463.37302,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 463.219,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 460.67603,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 459.839,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 460.00497,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-slots": [
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.228999987,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.317000017,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.255999971,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.323000015,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.077000052,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 38.982000027,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 39.172000019,
+        "signature": 88453969.40002441
+      }
+    ],
+    "clang-packed": [
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 37.858999975,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 37.957999972,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 37.465000001,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.271000027,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.822999981,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.685999985,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 38.995999959,
+        "signature": 88453969.40002441
+      }
+    ],
+    "silex-before": [
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 554.08606,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 551.148,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 553.065,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 552.27203,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 553.788,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 554.961,
+        "signature": 88453969.40002441
+      },
+      {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 558.018,
+        "signature": 88453969.40002441
+      }
+    ]
+  },
+  "summary": {
+    "silex": {
+      "median_ms": 460.67603,
+      "min_ms": 456.806,
+      "max_ms": 463.37302,
+      "mad_percent": 0.19600976417201085
+    },
+    "clang-slots": {
+      "median_ms": 39.077000052,
+      "min_ms": 38.255999971,
+      "max_ms": 39.317000017,
+      "mad_percent": 0.38897544539686246
+    },
+    "clang-packed": {
+      "median_ms": 38.271000027,
+      "min_ms": 37.465000001,
+      "max_ms": 38.995999959,
+      "mad_percent": 1.0843718682742085
+    },
+    "silex-before": {
+      "median_ms": 553.788,
+      "min_ms": 551.148,
+      "max_ms": 558.018,
+      "mad_percent": 0.2118139071269153
+    }
+  },
+  "silex_over_clang_same_layout": 11.788930301378704,
+  "clang_slots_over_packed": 1.021060333527511,
+  "timing_admissible": true,
+  "compiler_parity": "missed",
+  "silex_after_over_before": 0.8318635109464272,
+  "silex_after_over_before_observed_range": [
+    0.8186223383475084,
+    0.8407415431063888
+  ],
+  "source_sha256": {
+    "Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx": "a53e717faa68d7963390ce9df582a87f88ff93846bbd28fb889893343ee5f797",
+    "Packages/GFX.Physics/Benchmarks/Oracle2D/ContactKernel.c": "b7e68407a723b824ab0150bafd1812c7d765331a32fec24149338c4651643c42",
+    "Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py": "389e3ebdfe430c126bcdcda19046fd48c7522a9626abceec880acdb9a1f5a975",
+    "Packages/GFX.Physics/Benchmarks/Corpus2D.sx": "86b510cc8ccaf916f04f176674a234ba4325e8b7abd748d0153e15d0d8cad116"
+  },
+  "compiler_baseline": "bd0e76b6ab494f72e96d409cdd071169237160f3",
+  "physics_production_baseline": "7ed0c851c7c0f04676b8b7e927c1636bc1f340ce",
+  "compiler_executable_sha256": "7f967a16d2710be889d706088713584ed8213eaa73dd707ff2cc364809b91a9f",
+  "c_flags": [
+    "-O3",
+    "-DNDEBUG",
+    "-ffp-contract=fast"
+  ],
+  "compiler_candidate": "d8f37f3bab4a37572d781bc9c796dbea79096c2f"
+}

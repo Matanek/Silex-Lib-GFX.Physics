@@ -1,5 +1,14 @@
 # Accepted physics reconstruction baselines
 
+## Part 16 compiler memory access — 2026-09-03
+
+The [first scalar-memory qualification](2026-09-03-spec16-scalar-memory.md)
+records a 16.814% contact-kernel reduction in a single alternating before/after
+campaign, with correctness retained. Silex still takes 11.7889 times the
+matching-layout Clang time. The full-engine observations are identical, but
+their overlapping timing ranges do not demonstrate an engine speedup.
+This is a validated compiler slice; Part 16 parity remains open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
