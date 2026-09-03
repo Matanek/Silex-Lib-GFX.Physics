@@ -69,6 +69,23 @@ The four-contact kernel still has no SIMD residences despite 2,464 portable
 affinity groups; the scheduling change alone does not solve that bottleneck.
 No RSS measurement or parity acceptance follows from this campaign.
 
+Aggregate SIMD seeds and arithmetic-affinity dependencies (`bd0e76b`) pass
+structural and native regressions, including reversed affinity order. Their
+[before](2026-09-03-spec15-affinity-before.jsonl) and
+[after](2026-09-03-spec15-affinity-after.jsonl) dense series are neutral:
+40.867123 ms versus 40.748820 ms (0.289% lower median, overlapping ranges).
+MAD is 0.311% before, 0.196% after and 0.078% for Box2D. The oracle measures
+4.436960 ms, so parity still fails at 9.183950 times its step time.
+The final four-contact kernel is byte-for-byte identical in disassembly to
+`54f08b3`: these compiler extensions do not yet vectorize that real kernel.
+Do not infer a dense-scene speedup from the isolated SIMD regression tests.
+
+The final [RSS requalification](2026-09-03-spec15-affinity-memory.jsonl) remains
+above budget on `bd0e76b`: seven identical readings per scenario give
+7,684,096 B for the baseline and 23,216,128 B for the dense scene. The
+15,532,032 B increment exceeds the unchanged 14,395,904 B budget by
+1,136,128 B. This is a separate memory series, not a paired timing comparison.
+
 ## Initial reference — 2026-08-23
 
 The initial ARM64 reference was captured on 2026-08-23 while the machine was
