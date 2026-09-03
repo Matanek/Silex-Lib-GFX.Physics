@@ -67,6 +67,11 @@ target_link_libraries(gfx_physics_box2d_joints_oracle PRIVATE box2d)
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME gfx_physics_box2d_comparison_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestCompareCorpus.py
+    )
+    add_test(
         NAME gfx_physics_box2d_completeness
         COMMAND
             ${Python3_EXECUTABLE}

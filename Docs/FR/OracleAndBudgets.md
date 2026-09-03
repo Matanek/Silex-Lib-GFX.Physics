@@ -15,7 +15,39 @@ justifie un confinement, recouvrement, état fini ou déterminisme invalide.
 Le corpus couvre une chute de référence, des scènes clairsemées de 1 000,
 5 000 et 10 000 boîtes, une pile de 1 000 boîtes et des conteneurs de 1 800 et
 5 000 cercles. Chaque scène fixe dimensions, ordre initial, matériaux, gravité
-et pas. L’oracle Box2D reste diagnostique ; Silex n’a pas à reproduire ses bits.
+et pas. Silex n’a pas à reproduire les bits flottants de Box2D.
+
+## Comparer directement les performances à Box2D
+
+Lancer `Corpus2D.sx` avec `--box2d-parity` pour comparer les moteurs.
+Ce mode fixe la gravité à −10 m/s² (zéro dans les scènes clairsemées), la
+raideur de contact à 30 Hz et la masse de chaque corps dynamique à 1 kg.
+Les scènes clairsemées et de cercles désactivent le sommeil du monde et des
+corps. Sans cette option, le corpus conserve ses anciens réglages Silex pour
+les non-régressions historiques ; leurs temps ne sont pas comparables directement.
+
+Après un échauffement de chaque exécutable, alterner sept processus par moteur
+sur la même machine disponible, en Release et avec les mêmes sous-pas et workers.
+Conserver les sorties mesurées, sans l'échauffement, puis exécuter :
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CompareCorpus.py box2d.log silex.log
+```
+
+Ce contrôle exige le marqueur de charge `box2d-3.1.1-v1`, des configurations
+équivalentes, les invariants physiques, le déterminisme de chaque moteur et
+une MAD au plus égale à 5 %. Il rapporte le ratio des médianes Silex/Box2D et
+échoue au-dessus de 1. Des étendues temporelles qui se chevauchent empêchent
+également de conclure positivement : affiner alors la campagne, sans transformer
+le bruit en ralentissement autorisé. Le contrôle compare une configuration par
+scène et par invocation ; il ne remplace ni l'audit des sources et options de
+compilation, ni le corpus différentiel complet.
+
+Cette porte ne prouve que les scènes mesurées. Le benchmark Box2D reste
+mono-worker ; la parité multi-worker n'est pas encore couverte. Atteindre un
+budget absolu ci-dessous ne prouve pas la parité de performance.
+
+## Budgets historiques de non-régression
 
 Sur la machine de référence, les budgets vont de 4 ms par pas pour 1 000 corps
 clairsemés à 33,33 ms pour 10 000 corps ou la pile. Les scènes de cercles visent

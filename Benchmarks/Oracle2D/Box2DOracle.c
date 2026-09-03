@@ -39,6 +39,20 @@ static double now_ms(void)
     return (double)value.tv_sec * 1000.0 + (double)value.tv_nsec / 1000000.0;
 }
 
+static b2WorldDef corpus_world_definition(void)
+{
+    b2WorldDef definition = b2DefaultWorldDef();
+    definition.gravity = (b2Vec2){0.0f, -10.0f};
+    definition.contactHertz = 30.0f;
+    definition.contactDampingRatio = 10.0f;
+    definition.maxContactPushSpeed = 3.0f;
+    definition.maximumLinearSpeed = 400.0f;
+    definition.restitutionThreshold = 1.0f;
+    definition.hitEventThreshold = 1.0f;
+    definition.enableContinuous = true;
+    return definition;
+}
+
 static b2BodyId create_box(
     b2WorldId world,
     bool dynamic,
@@ -165,6 +179,8 @@ static void print_metrics(
         "SILEX_PHYSICS_CORPUS schema=2 engine=box2d-3.1.1 engine_version=3.1.1 "
         "oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 "
         "solver=box2d-soft-step substeps=%d scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
+        "workload=box2d-3.1.1-v1 gravity_y=%.1f contact_hertz=30 contact_damping=10 "
+        "sleep_enabled=%s body_mass=1 "
         "elapsed_ms=%.6f step_ms=%.6f centroid_x=%.9f centroid_y=%.9f max_speed=%.9f min_y=%.9f "
         "max_overlap_mm=%.9f awake=%d contacts=%d state_signature=%.9f memory_bytes=%d\n",
         configured_substeps,
@@ -173,6 +189,8 @@ static void print_metrics(
         body_count,
         step_count,
         time_step,
+        strncmp(scenario, "sparse-", 7) == 0 ? 0.0 : -10.0,
+        strncmp(scenario, "sparse-", 7) == 0 || strncmp(scenario, "circle-", 7) == 0 ? "false" : "true",
         metrics.elapsed_ms,
         metrics.elapsed_ms / step_count,
         metrics.centroid_x,
@@ -198,7 +216,7 @@ static void run_release_parity(void)
 {
     const int step_count = 120;
     const float time_step = 1.0f / 120.0f;
-    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldDef world_definition = corpus_world_definition();
     b2WorldId world = b2CreateWorld(&world_definition);
     create_box(world, false, 8.0f, 1.0f, 0.0f, -0.5f, 0.0f, 0.6f, 0.0f, true, 0.0f, 0.0f);
     b2BodyId body = create_box(world, true, 1.0f, 1.0f, 0.0f, 2.0f, 0.0f, 0.6f, 0.0f, true, 0.0f, 0.0f);
@@ -214,7 +232,7 @@ static void run_sparse(int body_count)
 {
     const int step_count = 120;
     const float time_step = 1.0f / 60.0f;
-    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldDef world_definition = corpus_world_definition();
     world_definition.gravity = (b2Vec2){0.0f, 0.0f};
     world_definition.enableSleep = false;
     b2WorldId world = b2CreateWorld(&world_definition);
@@ -260,7 +278,7 @@ static void run_pile(void)
     const int step_count = 240;
     const int columns = 50;
     const float time_step = 1.0f / 60.0f;
-    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldDef world_definition = corpus_world_definition();
     b2WorldId world = b2CreateWorld(&world_definition);
     create_box(world, false, 24.0f, 1.0f, 0.0f, -0.5f, 0.0f, 0.8f, 0.0f, true, 0.0f, 0.0f);
     b2BodyId* bodies = malloc((size_t)body_count * sizeof(*bodies));
@@ -319,7 +337,7 @@ static void run_circle(int body_count)
     const float width = 9.2f;
     const float height = 6.0f;
     const float half_height = height * 0.5f;
-    b2WorldDef world_definition = b2DefaultWorldDef();
+    b2WorldDef world_definition = corpus_world_definition();
     world_definition.enableSleep = false;
     b2WorldId world = b2CreateWorld(&world_definition);
     create_container(world, width, height);

@@ -43,6 +43,24 @@ func requested_substep_count() int {
     return 4
 }
 
+// Keep the historical workload available for within-Silex regressions. Direct
+// Box2D comparisons opt into its explicit settings and unit body masses.
+func corpus_world(zero_gravity:bool = false, sleep_enabled:bool = true) Physics.World2D {
+    var settings = Physics.World2DSettings()
+    if option_requested("--box2d-parity") {
+        settings.gravity = Math.Vec2(0.0, -10.0)
+        settings.contact_stiffness_hertz = 30.0
+        settings.sleep_enabled = sleep_enabled
+    }
+    if zero_gravity { settings.gravity = Math.Vec2() }
+    return Physics.World2D(settings)
+}
+
+func corpus_body_mass() float {
+    if option_requested("--box2d-parity") { return 1.0 }
+    return 0.0
+}
+
 func create_fixed_box(
     world:&Physics.World2D,
     position:Math.Vec2,
@@ -126,11 +144,18 @@ func measure(
 
     var mode = "release"
     if option_requested("--debug-build") { mode = "debug" }
+    var workload = "legacy-silex"
+    if option_requested("--box2d-parity") { workload = "box2d-3.1.1-v1" }
+    let settings = world.settings()
     print(
         "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current " +
-        "engine_version=gfx-physics-0.5.0 oracle_version=3.1.1 " +
+        "engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 " +
         "oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 " +
         "solver=soft-step substeps=$(substeps) scenario=$(scenario) " +
+        "workload=$(workload) gravity_y=$(settings.gravity.y) " +
+        "contact_hertz=$(settings.contact_stiffness_hertz) " +
+        "contact_damping=$(settings.contact_damping_ratio) " +
+        "sleep_enabled=$(settings.sleep_enabled) body_mass=$(corpus_body_mass()) " +
         "mode=$(mode) workers=$(workers) bodies=$(body_count) steps=$(step_count) dt=$(delta) " +
         "elapsed_ms=$(elapsed_ms) step_ms=$(elapsed_ms / step_count as float) " +
         "centroid_x=$(centroid_x) centroid_y=$(centroid_y) max_speed=$(maximum_speed) min_y=$(minimum_y) " +
@@ -150,11 +175,12 @@ func enable_workers(world:&Physics.World2D, workers:int) {
 }
 
 func run_release_parity(workers:int, substeps:int) {
-    var world = Physics.World2D()
+    var world = corpus_world()
     enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(8.0, 1.0))
     let first_body = world.body_count()
     world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..mass = corpus_body_mass()
         ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
         ..position = Math.Vec2(0.0, 2.0)
     )
@@ -171,7 +197,8 @@ func run_release_parity(workers:int, substeps:int) {
 }
 
 func run_sparse(body_count:int, workers:int, substeps:int) {
-    var world = Physics.World2D(gravity:Math.Vec2())
+    var world = corpus_world(zero_gravity:true, sleep_enabled:false)
+    let mass = corpus_body_mass()
     enable_workers(world, workers)
     let first_body = world.body_count()
     var index = 0
@@ -179,6 +206,7 @@ func run_sparse(body_count:int, workers:int, substeps:int) {
         let column = index % 100
         let row = index / 100
         world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..mass = mass
             ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5)))
             ..position = Math.Vec2(column as float * 1.25, row as float * 1.25)
             ..velocity = Math.Vec2(2.0, 0.25)
@@ -201,7 +229,8 @@ func run_sparse(body_count:int, workers:int, substeps:int) {
 func run_pile(workers:int, substeps:int) {
     let body_count = 1_000
     let columns = 50
-    var world = Physics.World2D()
+    var world = corpus_world()
+    let mass = corpus_body_mass()
     enable_workers(world, workers)
     create_fixed_box(world, Math.Vec2(0.0, -0.5), Math.Vec2(24.0, 1.0), 0.8)
     let first_body = world.body_count()
@@ -210,6 +239,7 @@ func run_pile(workers:int, substeps:int) {
         let column = index % columns
         let row = index / columns
         world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..mass = mass
             ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.4)))
             ..position = Math.Vec2(
                 (column as float - 24.5) * 0.405,
@@ -255,7 +285,8 @@ func run_circle(body_count:int, workers:int, substeps:int) {
     let width = 9.2
     let height = 6.0
     let half_height = height * 0.5
-    var world = Physics.World2D()
+    var world = corpus_world(sleep_enabled:false)
+    let mass = corpus_body_mass()
     enable_workers(world, workers)
     create_container(world, width, height)
     let first_body = world.body_count()
@@ -264,6 +295,7 @@ func run_circle(body_count:int, workers:int, substeps:int) {
         let column = index % columns
         let row = index / columns
         world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..mass = mass
             ..shape = Physics.Shape2D.circle(Physics.Circle2D(radius))
             ..position = Math.Vec2(
                 (column as float - (columns - 1) as float * 0.5) * spacing,

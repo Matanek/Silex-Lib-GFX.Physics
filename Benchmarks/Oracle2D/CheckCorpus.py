@@ -192,6 +192,19 @@ def correction_failures(record: dict[str, str]) -> list[str]:
 
 
 def summarize(records: list[dict[str, str]]) -> tuple[list[str], list[str]]:
+    # Historical and matched-oracle scenes have different masses and tuning.
+    # Never merge them into one timing/signature or incremental-RSS sample.
+    workloads: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for record in records:
+        workloads[record.get("workload", "legacy")].append(record)
+    if len(workloads) > 1:
+        reports: list[str] = []
+        failures: list[str] = []
+        for workload, group in sorted(workloads.items()):
+            group_reports, group_failures = summarize(group)
+            reports.extend(f"workload={workload} {report}" for report in group_reports)
+            failures.extend(f"workload={workload} {failure}" for failure in group_failures)
+        return reports, failures
     reports: list[str] = []
     failures: list[str] = []
     grouped: dict[tuple[str, str, str, str, str], list[dict[str, str]]] = defaultdict(list)

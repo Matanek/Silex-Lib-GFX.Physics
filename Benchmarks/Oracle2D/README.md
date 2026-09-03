@@ -41,7 +41,7 @@ of all public symbols, evidence paths and required tracking or rationale. Its
 final mode also rejects every remaining `partial` or `planned` capability. The
 CMake project registers that final gate as
 `gfx_physics_box2d_completeness` for CTest.
-See [`../../Docs/Completeness.md`](../../Docs/Completeness.md) for the contract
+See [the completeness contract](../../Docs/EN/Completeness.md) for the contract
 boundary and current status.
 
 ## Build and run
@@ -68,9 +68,9 @@ matching scenario in each executable:
 
 ```text
 /tmp/gfx-physics-box2d/gfx_physics_box2d_oracle --release-parity --substeps-8
-/tmp/gfx-physics-silex-corpus --release-parity --substeps-8
+/tmp/gfx-physics-silex-corpus --release-parity --substeps-8 --box2d-parity
 /tmp/gfx-physics-box2d/gfx_physics_box2d_oracle --circle-1800
-/tmp/gfx-physics-silex-corpus --circle-1800
+/tmp/gfx-physics-silex-corpus --circle-1800 --box2d-parity
 ```
 
 The other common options are `--sparse-1000`, `--sparse-5000`,
@@ -79,6 +79,26 @@ accepts `--workers-2` or `--workers-4`; omitting both keeps one worker. Box2D
 remains at one worker until a benchmark-only task adapter is added. Never
 compare its one-worker timing to a multi-worker Silex run without naming that
 distinction.
+
+The Silex `--box2d-parity` option is required for direct timing comparisons:
+it matches gravity, contact stiffness, unit dynamic-body mass and world sleep
+settings. Without it, the historical Silex workload remains available but is
+labelled separately. Neither mode changes the engine's public defaults.
+
+After a warm-up of each binary, alternate seven measured processes per engine
+with identical worker/substep settings. Save their records, then run:
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CompareCorpus.py box2d.log silex.log
+```
+
+The checker rejects unmatched or historical settings, incomplete series,
+invalid physics, nondeterminism, excessive MAD and a Silex/Box2D median ratio
+above 1. Overlapping timing ranges remain inconclusive. It accepts one
+configuration per scene per invocation; it does not audit host/build metadata
+or replace the full differential corpus. Its negative tests run as CTest
+`gfx_physics_box2d_comparison_checks`. See the
+[comparison protocol](../../Docs/EN/OracleAndBudgets.md#direct-box2d-performance-comparison).
 
 The separate geometry witness compares the public Silex algorithms with
 Box2D's pinned collision functions. It covers transformed distance, manifold,
@@ -294,4 +314,4 @@ record.
   Compare their scene invariants and trends, not their raw signatures.
 
 The authoritative scenes, invariants, budgets and sentinel protocol live in
-[`../../Docs/OracleAndBudgets.md`](../../Docs/OracleAndBudgets.md).
+[the corpus and budgets guide](../../Docs/EN/OracleAndBudgets.md).

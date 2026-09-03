@@ -48,8 +48,10 @@ for every timing or FPS series.
 | `circle-1800` | 1,800 non-sleeping circles of radius 0.05 m in the 9.2 m × 6 m graphical container; 300 steps at 60 Hz | No center below `-2.952` m; maximum circle overlap at most `12` mm | `16.67` ms/step |
 | `circle-5000` | Same container with 5,000 non-sleeping circles of radius 0.025 m and 170 columns; 300 steps at 60 Hz | No center below `-2.978` m; maximum circle overlap at most `20` mm | `16.67` ms/step target |
 
-The scene dimensions, initial order, materials, gravity and time step are the
-same in `Benchmarks/Corpus2D.sx` and the Box2D witness. Both witnesses record
+With `--box2d-parity`, the scene dimensions, initial order, materials, gravity,
+body masses and time step match between `Benchmarks/Corpus2D.sx` and the Box2D
+witness. Without it, the Silex corpus retains its historical settings, which
+are not directly comparable to Box2D timings. Both witnesses record
 and exercise one, two, four, or eight substeps through their public step API.
 Their solver identities remain explicit rather than being disguised as the
 same implementation. Any future Silex kernel joins this corpus by emitting the
@@ -60,7 +62,34 @@ overlap, finite-state or same-configuration determinism is rejected. The
 Box2D envelope is diagnostic: a Silex result outside it requires explanation,
 but Silex is not required to reproduce Box2D's exact floating-point state.
 
-## Performance and memory decisions
+## Direct Box2D performance comparison
+
+Run the Silex corpus with `--box2d-parity`. This mode sets gravity to
+−10 m/s² (zero for sparse scenes), contact stiffness to 30 Hz and every
+dynamic body's mass to 1 kg. Sparse and circle scenes disable sleep both on
+the world and on the bodies.
+
+After one warm-up of each executable, alternate seven processes per engine
+on the same available machine, in Release, with identical substeps and worker
+counts. Save measured output without the warm-up, then run:
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CompareCorpus.py box2d.log silex.log
+```
+
+The checker requires the `box2d-3.1.1-v1` workload marker, equivalent
+configurations, physical invariants, per-engine determinism and MAD at most 5%.
+It reports the Silex/Box2D median-time ratio and fails above 1. Overlapping
+observed timing ranges also prevent a positive conclusion: refine the campaign
+instead of treating noise as an allowed slowdown. Compare one configuration per
+scene and invocation. This check does not replace the source/build-option audit
+or the full differential correctness corpus.
+
+This gate proves only the measured scenes. The Box2D benchmark remains
+single-worker; multi-worker parity is not covered yet. Meeting an absolute
+budget below does not prove performance parity.
+
+## Historical performance and memory decisions
 
 The cadence budgets apply only to the macOS ARM64 reference machine. A gate
 passes when the seven-run median is within budget and median absolute deviation

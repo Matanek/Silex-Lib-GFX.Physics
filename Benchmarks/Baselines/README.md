@@ -1,5 +1,27 @@
 # Accepted physics reconstruction baselines
 
+## Matched Box2D diagnostics — 2026-09-03
+
+The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
+and [Soft Step schedule candidate](2026-09-03-spec15-box2d-schedule.jsonl)
+are not accepted parity baselines. Both use the new `--box2d-parity`
+configuration, which aligns gravity, contact stiffness, body masses and sleep.
+Historical Silex settings must not be pooled with this workload.
+
+On macOS 26.6.2 ARM64, one worker, four substeps and 5,000 awake circles,
+the starting observation gives Silex `45.482350 ms` versus Box2D
+`4.392293 ms` per step (`10.355036×`). After aligning the solve/relax
+schedule, a separate paired campaign gives `43.574833 ms` versus
+`4.391180 ms` (`9.923263×`). Each series has seven processes after warm-up
+and MAD below 1%. The two campaigns establish the gap to Box2D; they are not
+an alternating before/after Silex optimization campaign.
+
+Physical invariants and per-engine deterministic signatures pass; the direct
+performance gate correctly fails. Binary hashes, exact configurations and
+the uncommitted engine-candidate status are recorded with the raw data.
+
+## Initial reference — 2026-08-23
+
 The initial ARM64 reference was captured on 2026-08-23 while the machine was
 otherwise idle. Earlier runs made while an interactive game was active and a
 World series made without window focus were discarded; neither appears in the
