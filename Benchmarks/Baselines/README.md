@@ -36,6 +36,10 @@ The [constraint preparation witness](2026-09-03-spec16-preparation.md) completes
 the three-family diagnostic coverage. All prepared fields match Box2D, but the
 same-layout ratio is 25.1739. The compiler parity gate remains open in every case.
 
+The [following math-call residence correction](2026-09-03-spec16-math-calls.md)
+reduces integration time by 32.995% without changing any checked state. Its
+remaining ratio is 29.7626. Contact and preparation binaries are unchanged.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
