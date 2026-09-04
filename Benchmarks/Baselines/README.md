@@ -87,6 +87,14 @@ demonstrate reductions of 10.301% for contact, 7.413% for integration and
 14.0445 respectively. Correctness and optimizer gates pass, but all three Part
 16 parity criteria remain open.
 
+The [ARM64 aggregate-construction affinity](2026-09-04-spec16-arm64-aggregate-construction-affinity.md)
+then coalesces the used leaves of complete aggregate constructors with their
+source leaves. Preparation falls from 3,015.105 to 2,472.506 ms, a demonstrated
+17.996% reduction, and its same-layout ratio falls to 11.2726. Contact and
+integration disassemblies are unchanged at ratios 5.1743 and 27.0362. The
+broader form was narrowed after the full suite caught a live/dead sibling
+residence change; the retained form passes all gates.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
