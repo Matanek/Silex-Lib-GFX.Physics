@@ -1,0 +1,412 @@
+{
+  "schema": 1,
+  "title": "Part 16 direct ARM64 aggregate returns and paired replacement copies",
+  "candidate": {
+    "silex_revision": "de15327b54fd6f8d9efa2dd63836dcbb92acdaae",
+    "physics_revision": "827735f9fbea0fc585b26c7a13de6a3d3b09cbca",
+    "baseline_silex_revision": "0599905ac3c2f5998afdb5259eafe4672aeb0892"
+  },
+  "change": {
+    "scope": "ARM64 aggregate return and list replacement encoding",
+    "behavior": [
+      "write fields of an immediately returned aggregate directly to hidden return storage",
+      "retain materialization when control flow can enter the return independently",
+      "form replacement source address once and use LDP/STP for encodable ordinary slot aggregates",
+      "retain scalar copies for compact float32 and replacements wider than 64 slots"
+    ],
+    "static_instruction_counts": {
+      "preparation_prepare": {
+        "before": 304,
+        "after": 252
+      },
+      "preparation_helper": {
+        "before": 321,
+        "after": 273
+      },
+      "preparation_driver": {
+        "before": 3750,
+        "after": 3725
+      }
+    }
+  },
+  "validation": [
+    "encoder tests require direct resident aggregate return stores and paired replacement transfers",
+    "zig build test -Doptimize=Debug: passed",
+    "zig build check -Doptimize=Debug: passed",
+    "zig build optimizer-gate -Doptimize=ReleaseFast: passed; 10 fixed regressions, 8 generated native scenarios, 128 deterministic programs and 32 LLVM programs",
+    "zig build optimizer-oracle -Doptimize=ReleaseFast -- compare 11: passed",
+    "Physics tests: 176 passed",
+    "preparation short/full Box2D comparisons passed"
+  ],
+  "campaign": {
+    "schema": 1,
+    "stage": "preparation",
+    "captured_at": "2026-09-04T12:44:57.556278+00:00",
+    "host": "macOS-26.6.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "workload": {
+      "count": 8192,
+      "passes": 2048,
+      "workers": 1,
+      "float_bits": 32,
+      "fma": true,
+      "allocation_in_kernel": false,
+      "signature_reduction_in_kernel": true,
+      "input_frames": 16
+    },
+    "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+    "numerical_budgets": {
+      "fields": 26,
+      "exact_fields": [],
+      "weights": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "short_absolute": 2e-06,
+      "short_relative": 2e-06,
+      "full_absolute": 2e-06,
+      "full_relative": 2e-06,
+      "replay": false,
+      "accumulate_passes": true
+    },
+    "correctness": {
+      "silex": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 8.000000040198074e-08
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 2.1999999999522402e-07,
+          "oracle": "every prepared field from identical inputs",
+          "independent_trajectory_max_error": 2.1999999999522402e-07,
+          "independent_trajectory_within_initial_budget": true
+        }
+      },
+      "clang-slots": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 2.299999999344493e-07
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 2.399999998736746e-07,
+          "oracle": "every prepared field from identical inputs",
+          "independent_trajectory_max_error": 2.399999998736746e-07,
+          "independent_trajectory_within_initial_budget": true
+        }
+      },
+      "clang-packed": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 2.299999999344493e-07
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 2.399999998736746e-07,
+          "oracle": "every prepared field from identical inputs",
+          "independent_trajectory_max_error": 2.399999998736746e-07,
+          "independent_trajectory_within_initial_budget": true
+        }
+      },
+      "silex-before": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 8.000000040198074e-08
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 2.1999999999522402e-07,
+          "oracle": "every prepared field from identical inputs",
+          "independent_trajectory_max_error": 2.1999999999522402e-07,
+          "independent_trajectory_within_initial_budget": true
+        }
+      }
+    },
+    "executables": {
+      "silex": {
+        "path": "/private/tmp/spec16-01a06651/preparation-direct-return-paired-replace-final",
+        "sha256": "9bd50627010272d44acd4e27ab268c66ea40f6a0c165eb10e05da7015d093bbf"
+      },
+      "clang-slots": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_slots",
+        "sha256": "2c896f403bd5c3e6f179f52e917d99a6e4f47220b2fdb0051bfb802de8fb413c"
+      },
+      "clang-packed": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_packed",
+        "sha256": "72e283008a053ef7db6bcd076dd0ca2efc6dfe134a883dd1110755a26aa72ff5"
+      },
+      "silex-before": {
+        "path": "/private/tmp/spec16-01a06651/preparation-view-call-residence-final",
+        "sha256": "08d1e9d3b66180536b4f85d6f4170b9b6e54b03a36f8677c3b08ea140b44a78d"
+      },
+      "box2d-check": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_reference",
+        "sha256": "b98fd549259396c6b6bc86e8ecf94aaf015b9291a97bd481a6a72369020e95d1"
+      }
+    },
+    "warmup": {
+      "silex": {
+        "elapsed_ms": 1576.3049,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      "clang-slots": {
+        "elapsed_ms": 228.668000025,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      "clang-packed": {
+        "elapsed_ms": 169.147000008,
+        "signature": 4744923641.0,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      "silex-before": {
+        "elapsed_ms": 1683.181,
+        "signature": 4744923641.0,
+        "engine": "silex",
+        "layout": "slots8"
+      }
+    },
+    "samples": {
+      "silex": [
+        {
+          "elapsed_ms": 1548.4249,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1609.2059,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1608.6891,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1576.0651,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1543.262,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1578.7589,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1577.1069,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      ],
+      "clang-slots": [
+        {
+          "elapsed_ms": 229.664000042,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 230.701000022,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 228.743000014,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 229.739999981,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 230.083999981,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 230.036000023,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 229.60999998,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        }
+      ],
+      "clang-packed": [
+        {
+          "elapsed_ms": 172.798999993,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 167.642999964,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 166.389999969,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 168.745999981,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 169.04399998,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 169.056000013,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 169.032000005,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        }
+      ],
+      "silex-before": [
+        {
+          "elapsed_ms": 1682.9059,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1658.104,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1683.226,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1657.2421,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1633.758,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1697.415,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1698.9729,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      ]
+    },
+    "summary": {
+      "silex": {
+        "median_ms": 1577.1069,
+        "min_ms": 1543.262,
+        "max_ms": 1609.2059,
+        "mad_percent": 1.8186465356279917
+      },
+      "clang-slots": {
+        "median_ms": 229.739999981,
+        "min_ms": 228.743000014,
+        "max_ms": 230.701000022,
+        "mad_percent": 0.12884131715177272
+      },
+      "clang-packed": {
+        "median_ms": 169.032000005,
+        "min_ms": 166.389999969,
+        "max_ms": 172.798999993,
+        "mad_percent": 0.16919874579459215
+      },
+      "silex-before": {
+        "median_ms": 1682.9059,
+        "min_ms": 1633.758,
+        "max_ms": 1698.9729,
+        "mad_percent": 0.9547176701917801
+      }
+    },
+    "silex_over_clang_same_layout": 6.864746670716593,
+    "clang_slots_over_packed": 1.3591509298488114,
+    "timing_admissible": true,
+    "compiler_parity": "missed"
+  },
+  "artifacts": {
+    "temporary_root": "/private/tmp/spec16-01a06651",
+    "candidate_binary": "/private/tmp/spec16-01a06651/preparation-direct-return-paired-replace-final"
+  },
+  "rejected_experiment": "A regional ARM64 allocation prototype reduced the driver but crashed during validation; it was removed in full and is absent from the candidate."
+}
