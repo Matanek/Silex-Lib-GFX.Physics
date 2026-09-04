@@ -95,6 +95,14 @@ integration disassemblies are unchanged at ratios 5.1743 and 27.0362. The
 broader form was narrowed after the full suite caught a live/dead sibling
 residence change; the retained form passes all gates.
 
+The [ARM64 scalar-reference residence](2026-09-04-spec16-arm64-scalar-reference-residence.md)
+then keeps reference parameters and derived references in preserved integer
+registers and addresses direct transfers from those registers. Contact is
+neutral in overlapping ranges. Integration measures 1,279.779 ms against
+1,354.058 ms in the alternating campaign, with a same-layout ratio of 26.3021;
+preparation is byte-for-byte unchanged at 11.2726. Correctness and optimizer
+gates pass, but every Part 16 parity criterion remains open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
