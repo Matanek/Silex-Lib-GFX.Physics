@@ -111,6 +111,14 @@ reduction, and its same-layout ratio falls to 18.3739. Contact and preparation
 disassemblies are unchanged at 5.1996 and 11.2726. Correctness and optimizer
 gates pass; all Part 16 parity criteria remain open.
 
+The [ARM64 resident float materialization](2026-09-04-spec16-arm64-resident-float-materialization.md)
+then encodes eligible constants with scalar `FMOV #imm`, targets other constant
+bit transfers directly, and keeps inline `copysign` values resident. It removes
+5 contact instructions, 32 integration instructions and 70 instructions from
+the two measured preparation functions. All three alternating timing ranges
+overlap, so their median changes remain inconclusive; current same-layout
+ratios are 5.2168, 18.1064 and 11.1240. Correctness and optimizer gates pass.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)

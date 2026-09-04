@@ -1,0 +1,1089 @@
+{
+  "schema": 1,
+  "title": "Part 16 ARM64 resident float materialization",
+  "captured_at": "2026-09-04T03:32:00+02:00",
+  "candidate": {
+    "silex_revision": "d1c446c",
+    "physics_revision": "67ad3d6",
+    "baseline_silex_revision": "fdeca14"
+  },
+  "change": {
+    "scope": "ARM64 scalar floating-point constants and inline copysign values",
+    "behavior": [
+      "emit architecturally representable nonzero float32/float64 constants directly with scalar FMOV immediates",
+      "materialize other float constants directly in their assigned scalar register after exact integer bit construction",
+      "keep inline copysign operands and results in scalar float residences around the exact sign-bit transfer",
+      "retain stack and integer fallback paths for unallocated values and unrepresentable immediates"
+    ],
+    "static": {
+      "contact_function_0": {
+        "bytes_before": 3136,
+        "bytes_after": 3116,
+        "instructions_before": 784,
+        "instructions_after": 779
+      },
+      "integration_velocity": {
+        "bytes_before": 620,
+        "bytes_after": 512,
+        "instructions_before": 155,
+        "instructions_after": 128
+      },
+      "integration_position": {
+        "bytes_before": 316,
+        "bytes_after": 296,
+        "instructions_before": 79,
+        "instructions_after": 74
+      },
+      "preparation_prepare": {
+        "bytes_before": 2960,
+        "bytes_after": 2892,
+        "instructions_before": 740,
+        "instructions_after": 723
+      },
+      "preparation_function_1": {
+        "bytes_before": 1660,
+        "bytes_after": 1448,
+        "instructions_before": 415,
+        "instructions_after": 362
+      }
+    }
+  },
+  "validation": [
+    "zig build test -Doptimize=Debug passed: 158 language cases plus compiler, unit and native tests",
+    "zig build optimizer-gate -Doptimize=ReleaseFast passed: 10 fixed regressions, 8 generated native scenarios, 128 deterministic programs, 32 LLVM differential programs and default comparison",
+    "float immediate encoding tests cover float32/float64 representable values and reject unrepresentable and zero bit patterns",
+    "contact, integration and preparation short/full Box2D comparisons passed"
+  ],
+  "comparisons": {
+    "contact": {
+      "after_over_before": 1.0026124364489637,
+      "median_change_percent": 0.26124364489636953,
+      "ranges_overlap": true,
+      "same_layout_ratio": 5.216810913908601
+    },
+    "integration": {
+      "after_over_before": 0.9444495072264367,
+      "median_change_percent": -5.555049277356328,
+      "ranges_overlap": true,
+      "same_layout_ratio": 18.106354045381508
+    },
+    "preparation": {
+      "after_over_before": 0.9897475415044157,
+      "median_change_percent": -1.0252458495584316,
+      "ranges_overlap": true,
+      "same_layout_ratio": 11.1240496517124
+    }
+  },
+  "campaigns": {
+    "contact": {
+      "schema": 1,
+      "captured_at": "2026-09-04T01:17:56.243482+00:00",
+      "host": "macOS-26.6.2-arm64-arm-64bit",
+      "machine": "arm64",
+      "workload": {
+        "contacts": 2048,
+        "passes": 2048,
+        "workers": 1,
+        "float_bits": 32,
+        "fma": true,
+        "allocation_in_kernel": false
+      },
+      "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+      "correctness": {
+        "silex": {
+          "records": 128,
+          "max_absolute_error": 6.399999996631323e-07
+        },
+        "clang-slots": {
+          "records": 128,
+          "max_absolute_error": 9.500000004436515e-07
+        },
+        "clang-packed": {
+          "records": 128,
+          "max_absolute_error": 9.500000004436515e-07
+        },
+        "silex-before": {
+          "records": 128,
+          "max_absolute_error": 6.399999996631323e-07
+        }
+      },
+      "executables": {
+        "silex": {
+          "path": "/private/tmp/spec16-01a06651/contact-float-immediates",
+          "sha256": "5b372a054f08d0ddcaf9bb6148e60d46f4a7d6f156370bae3a25ba92d85757a8"
+        },
+        "clang-slots": {
+          "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+          "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+        },
+        "clang-packed": {
+          "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+          "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+        },
+        "silex-before": {
+          "path": "/private/tmp/spec16-01a06651/contact-inline-fsqrt",
+          "sha256": "aacc2b608391d8fd7b6543ccb4d3f4820415da4991ff83866fad74ae41f20d67"
+        },
+        "box2d-check": {
+          "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_reference",
+          "sha256": "2bae3d0ebb1cbf382d9216def1cd9375c8510ebe50c32b0f3369efc6ed135572"
+        }
+      },
+      "warmup": {
+        "silex": {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 202.273,
+          "signature": 88453969.40002441
+        },
+        "clang-slots": {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.826999974,
+          "signature": 88453969.40002441
+        },
+        "clang-packed": {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 38.376000011,
+          "signature": 88453969.40002441
+        },
+        "silex-before": {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 203.084,
+          "signature": 88453969.40002441
+        }
+      },
+      "samples": {
+        "silex": [
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 192.276,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.65599,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.668,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 192.71301,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.892,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 204.524,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 205.261,
+            "signature": 88453969.40002441
+          }
+        ],
+        "clang-slots": [
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 36.747000006,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 37.842999969,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 36.787000019,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 36.857000028,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 39.008000051,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 37.76799998,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "slots8",
+            "elapsed_ms": 36.790000042,
+            "signature": 88453969.40002441
+          }
+        ],
+        "clang-packed": [
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 38.430000015,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 36.588000017,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 36.583999987,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 38.554000028,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 36.565999966,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 36.625000008,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "clang",
+            "layout": "packed4",
+            "elapsed_ms": 36.537999986,
+            "signature": 88453969.40002441
+          }
+        ],
+        "silex-before": [
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 204.323,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 203.088,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 202.194,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.644,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.12401,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 190.634,
+            "signature": 88453969.40002441
+          },
+          {
+            "engine": "silex",
+            "layout": "slots8",
+            "elapsed_ms": 191.775,
+            "signature": 88453969.40002441
+          }
+        ]
+      },
+      "summary": {
+        "silex": {
+          "median_ms": 192.276,
+          "min_ms": 191.65599,
+          "max_ms": 205.261,
+          "mad_percent": 0.3162121117560195
+        },
+        "clang-slots": {
+          "median_ms": 36.857000028,
+          "min_ms": 36.747000006,
+          "max_ms": 39.008000051,
+          "mad_percent": 0.29845082865245415
+        },
+        "clang-packed": {
+          "median_ms": 36.588000017,
+          "min_ms": 36.537999986,
+          "max_ms": 38.554000028,
+          "mad_percent": 0.10112602761236039
+        },
+        "silex-before": {
+          "median_ms": 191.775,
+          "min_ms": 190.634,
+          "max_ms": 204.323,
+          "mad_percent": 0.5949680615304495
+        }
+      },
+      "silex_over_clang_same_layout": 5.216810913908601,
+      "clang_slots_over_packed": 1.0073521376100092,
+      "timing_admissible": true,
+      "compiler_parity": "missed",
+      "silex_after_over_before": 1.0026124364489637,
+      "silex_after_over_before_observed_range": [
+        0.9380049725190017,
+        1.0767281807022882
+      ]
+    },
+    "integration": {
+      "schema": 1,
+      "stage": "integration",
+      "captured_at": "2026-09-04T01:18:06.114655+00:00",
+      "host": "macOS-26.6.2-arm64-arm-64bit",
+      "machine": "arm64",
+      "workload": {
+        "count": 8192,
+        "passes": 2048,
+        "workers": 1,
+        "float_bits": 32,
+        "fma": true,
+        "allocation_in_kernel": false,
+        "signature_reduction_in_kernel": false,
+        "input_frames": 1
+      },
+      "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+      "numerical_budgets": {
+        "fields": 8,
+        "exact_fields": [
+          7
+        ],
+        "weights": [
+          1,
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17
+        ],
+        "short_absolute": 2e-05,
+        "short_relative": 2e-06,
+        "full_absolute": 0.002,
+        "full_relative": 0.0002,
+        "replay": true,
+        "accumulate_passes": false
+      },
+      "correctness": {
+        "silex": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 2.4999999993724487e-05
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 1.1400000005323818e-05,
+            "oracle": "every transition from identical candidate inputs",
+            "independent_trajectory_max_error": 0.008434084120000001,
+            "independent_trajectory_within_initial_budget": false
+          }
+        },
+        "clang-slots": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 1.189999999873237e-06
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 9.500000004436515e-07,
+            "oracle": "every transition from identical candidate inputs",
+            "independent_trajectory_max_error": 1.5300000001161607e-05,
+            "independent_trajectory_within_initial_budget": true
+          }
+        },
+        "clang-packed": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 1.189999999873237e-06
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 9.500000004436515e-07,
+            "oracle": "every transition from identical candidate inputs",
+            "independent_trajectory_max_error": 1.5300000001161607e-05,
+            "independent_trajectory_within_initial_budget": true
+          }
+        },
+        "silex-before": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 2.4999999993724487e-05
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 1.1400000005323818e-05,
+            "oracle": "every transition from identical candidate inputs",
+            "independent_trajectory_max_error": 0.008434084120000001,
+            "independent_trajectory_within_initial_budget": false
+          }
+        }
+      },
+      "executables": {
+        "silex": {
+          "path": "/private/tmp/spec16-01a06651/integration-float-immediates",
+          "sha256": "e6221ac622d933b213354dd8a00dc28ffa6d3363ad233280eb167d3cd4f0110b"
+        },
+        "clang-slots": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_slots",
+          "sha256": "44eb27582e0202a2b39bf3eb7dbc948a8a891ac7b4546921391459905dc8db24"
+        },
+        "clang-packed": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_packed",
+          "sha256": "9d93d02e83845e50e7106ada297c12bdff36a9c7d2bf47a33bb3497bb72c3415"
+        },
+        "silex-before": {
+          "path": "/private/tmp/spec16-01a06651/integration-inline-fsqrt",
+          "sha256": "7530ad8470d5ebd0b1e2d2949cdd908ef0118a7172ad1d14ee9470eddab4b261"
+        },
+        "box2d-check": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_reference",
+          "sha256": "4714ca572e293bbc49251614e75c2f4aadbdac33a15273055a9f9abb265d36f3"
+        }
+      },
+      "warmup": {
+        "silex": {
+          "elapsed_ms": 900.828,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        "clang-slots": {
+          "elapsed_ms": 48.176999961,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        "clang-packed": {
+          "elapsed_ms": 48.062999966,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        "silex-before": {
+          "elapsed_ms": 907.607,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      },
+      "samples": {
+        "silex": [
+          {
+            "elapsed_ms": 899.436,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 897.15704,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 900.706,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 900.61005,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 900.198,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 912.696,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 944.609,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          }
+        ],
+        "clang-slots": [
+          {
+            "elapsed_ms": 49.82700001,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 49.069000001,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 48.631000041,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 49.862999993,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 50.374999992,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 48.637999978,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 49.739999988,
+            "signature": -1454797.1943359375,
+            "engine": "clang",
+            "layout": "slots8"
+          }
+        ],
+        "clang-packed": [
+          {
+            "elapsed_ms": 46.600000001,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 47.386999999,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 46.667000046,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 47.279999999,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 46.551000036,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 46.807000006,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 47.594000003,
+            "signature": -1454797.216796875,
+            "engine": "clang",
+            "layout": "packed4"
+          }
+        ],
+        "silex-before": [
+          {
+            "elapsed_ms": 902.539,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 956.342,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 953.582,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 955.821,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 912.073,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 955.302,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 911.169,
+            "signature": -1454735.8291015625,
+            "engine": "silex",
+            "layout": "slots8"
+          }
+        ]
+      },
+      "summary": {
+        "silex": {
+          "median_ms": 900.61005,
+          "min_ms": 897.15704,
+          "max_ms": 944.609,
+          "mad_percent": 0.13036163653736327
+        },
+        "clang-slots": {
+          "median_ms": 49.739999988,
+          "min_ms": 48.631000041,
+          "max_ms": 50.374999992,
+          "mad_percent": 1.276638528655398
+        },
+        "clang-packed": {
+          "median_ms": 46.807000006,
+          "min_ms": 46.551000036,
+          "max_ms": 47.594000003,
+          "mad_percent": 0.5469266775635893
+        },
+        "silex-before": {
+          "median_ms": 953.582,
+          "min_ms": 902.539,
+          "max_ms": 956.342,
+          "mad_percent": 0.2894349935296588
+        }
+      },
+      "silex_over_clang_same_layout": 18.106354045381508,
+      "clang_slots_over_packed": 1.0626615673216406,
+      "timing_admissible": true,
+      "compiler_parity": "missed"
+    },
+    "preparation": {
+      "schema": 1,
+      "stage": "preparation",
+      "captured_at": "2026-09-04T01:18:30.768475+00:00",
+      "host": "macOS-26.6.2-arm64-arm-64bit",
+      "machine": "arm64",
+      "workload": {
+        "count": 8192,
+        "passes": 2048,
+        "workers": 1,
+        "float_bits": 32,
+        "fma": true,
+        "allocation_in_kernel": false,
+        "signature_reduction_in_kernel": true,
+        "input_frames": 16
+      },
+      "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+      "numerical_budgets": {
+        "fields": 26,
+        "exact_fields": [],
+        "weights": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26
+        ],
+        "short_absolute": 2e-06,
+        "short_relative": 2e-06,
+        "full_absolute": 2e-06,
+        "full_relative": 2e-06,
+        "replay": false,
+        "accumulate_passes": true
+      },
+      "correctness": {
+        "silex": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 8.000000040198074e-08
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 2.1999999999522402e-07,
+            "oracle": "every prepared field from identical inputs",
+            "independent_trajectory_max_error": 2.1999999999522402e-07,
+            "independent_trajectory_within_initial_budget": true
+          }
+        },
+        "clang-slots": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 2.299999999344493e-07
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 2.399999998736746e-07,
+            "oracle": "every prepared field from identical inputs",
+            "independent_trajectory_max_error": 2.399999998736746e-07,
+            "independent_trajectory_within_initial_budget": true
+          }
+        },
+        "clang-packed": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 2.299999999344493e-07
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 2.399999998736746e-07,
+            "oracle": "every prepared field from identical inputs",
+            "independent_trajectory_max_error": 2.399999998736746e-07,
+            "independent_trajectory_within_initial_budget": true
+          }
+        },
+        "silex-before": {
+          "short": {
+            "records": 128,
+            "max_absolute_error": 8.000000040198074e-08
+          },
+          "full": {
+            "records": 32768,
+            "max_absolute_error": 2.1999999999522402e-07,
+            "oracle": "every prepared field from identical inputs",
+            "independent_trajectory_max_error": 2.1999999999522402e-07,
+            "independent_trajectory_within_initial_budget": true
+          }
+        }
+      },
+      "executables": {
+        "silex": {
+          "path": "/private/tmp/spec16-01a06651/preparation-float-immediates",
+          "sha256": "f1568f481b7168f1ae712a0271f4c6b2e1674be19b5692b11d2df86f9a3f06ff"
+        },
+        "clang-slots": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_slots",
+          "sha256": "2c896f403bd5c3e6f179f52e917d99a6e4f47220b2fdb0051bfb802de8fb413c"
+        },
+        "clang-packed": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_packed",
+          "sha256": "72e283008a053ef7db6bcd076dd0ca2efc6dfe134a883dd1110755a26aa72ff5"
+        },
+        "silex-before": {
+          "path": "/private/tmp/spec16-01a06651/preparation-inline-fsqrt",
+          "sha256": "fe510550551997a69002d704171a851d559abc109c8f1470ce2f940750009bfc"
+        },
+        "box2d-check": {
+          "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_preparation_kernel_reference",
+          "sha256": "b98fd549259396c6b6bc86e8ecf94aaf015b9291a97bd481a6a72369020e95d1"
+        }
+      },
+      "warmup": {
+        "silex": {
+          "elapsed_ms": 2474.958,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        "clang-slots": {
+          "elapsed_ms": 226.168999972,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        "clang-packed": {
+          "elapsed_ms": 157.154000015,
+          "signature": 4744923641.0,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        "silex-before": {
+          "elapsed_ms": 2394.1072,
+          "signature": 4744923641.0,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      },
+      "samples": {
+        "silex": [
+          {
+            "elapsed_ms": 2453.764,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2377.281,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2457.823,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2386.409,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2400.568,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2376.2551,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2381.9338,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          }
+        ],
+        "clang-slots": [
+          {
+            "elapsed_ms": 214.395999967,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 214.703999984,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 214.007000031,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 227.975999995,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 214.505999989,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 214.527000033,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 228.450000053,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "slots8"
+          }
+        ],
+        "clang-packed": [
+          {
+            "elapsed_ms": 157.364999992,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 157.089999993,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 157.851999975,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 156.986999966,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 166.668999998,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 166.474999976,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          },
+          {
+            "elapsed_ms": 158.075999992,
+            "signature": 4744923641.0,
+            "engine": "clang",
+            "layout": "packed4"
+          }
+        ],
+        "silex-before": [
+          {
+            "elapsed_ms": 2454.71,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2390.551,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2397.622,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2397.817,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2507.763,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2411.129,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          },
+          {
+            "elapsed_ms": 2508.995,
+            "signature": 4744923641.0,
+            "engine": "silex",
+            "layout": "slots8"
+          }
+        ]
+      },
+      "summary": {
+        "silex": {
+          "median_ms": 2386.409,
+          "min_ms": 2376.2551,
+          "max_ms": 2457.823,
+          "mad_percent": 0.4254886735677014
+        },
+        "clang-slots": {
+          "median_ms": 214.527000033,
+          "min_ms": 214.007000031,
+          "max_ms": 228.450000053,
+          "mad_percent": 0.08250707415512815
+        },
+        "clang-packed": {
+          "median_ms": 157.851999975,
+          "min_ms": 156.986999966,
+          "max_ms": 166.668999998,
+          "mad_percent": 0.48273064777177543
+        },
+        "silex-before": {
+          "median_ms": 2411.129,
+          "min_ms": 2390.551,
+          "max_ms": 2508.995,
+          "mad_percent": 0.8534591056720722
+        }
+      },
+      "silex_over_clang_same_layout": 11.1240496517124,
+      "clang_slots_over_packed": 1.3590388469387524,
+      "timing_admissible": true,
+      "compiler_parity": "missed"
+    }
+  }
+}
