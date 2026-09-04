@@ -146,6 +146,16 @@ preparation remain neutral in overlapping ranges at 18.0228 and 11.2025.
 Correctness and optimizer gates pass; cumulative native Linux/Windows
 execution and all three parity criteria remain open.
 
+The [direct indexed mutable-reference correction](2026-09-04-spec16-direct-indexed-mutable-references.md)
+then passes stable collection elements to mutable parameters by address instead
+of copying complete aggregates in and out. The integration driver shrinks from
+1,822 to 293 instructions and its disjoint campaign drops from 945.373 to
+255.368 ms, a demonstrated 72.988% reduction. Contact also falls 14.790% to
+167.072 ms. The resulting same-layout ratios are 4.2691 for contact, 5.1391
+for integration and 10.6273 for preparation. The factor of eighteen is
+removed, but all three parity criteria and cumulative native Linux/Windows
+execution remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
