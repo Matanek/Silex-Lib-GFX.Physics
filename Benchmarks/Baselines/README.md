@@ -128,6 +128,15 @@ same-layout ratio falls to 5.1295. Integration and preparation disassemblies are
 unchanged at 18.1064 and 11.1240. The cumulative native Linux/Windows execution
 and all three parity criteria remain open.
 
+The [direct ARM64 resident float copies](2026-09-04-spec16-arm64-direct-float-copies.md)
+then remove the scratch SIMD move between stack homes and scalar residences.
+They remove 26 contact instructions and 60 instructions from the two measured
+preparation functions without adding loads or stores. Contact, integration and
+the independent preparation confirmation have overlapping before/after timing
+ranges, so no timing change is claimed. Their current same-layout ratios are
+5.1078, 18.6731 and 11.2838. Correctness and optimizer gates pass; cumulative
+native Linux/Windows execution and all three parity criteria remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
