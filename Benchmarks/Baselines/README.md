@@ -79,6 +79,14 @@ contact reduction, from 234.169 to 221.355 ms, for a same-layout ratio of
 The complete optimizer gate rejected an earlier two-slot form; the retained
 value-aggregate scope passes all gates.
 
+The [ARM64 reference-field transfer fusion](2026-09-04-spec16-arm64-reference-field-fusion.md)
+then removes the temporary stack address between a single-use field projection
+and its immediately following load or store. Its disjoint alternating ranges
+demonstrate reductions of 10.301% for contact, 7.413% for integration and
+13.612% for preparation. The same-layout ratios fall to 5.1743, 27.0362 and
+14.0445 respectively. Correctness and optimizer gates pass, but all three Part
+16 parity criteria remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
