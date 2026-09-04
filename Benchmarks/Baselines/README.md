@@ -103,6 +103,14 @@ neutral in overlapping ranges. Integration measures 1,279.779 ms against
 preparation is byte-for-byte unchanged at 11.2726. Correctness and optimizer
 gates pass, but every Part 16 parity criterion remains open.
 
+The [ARM64 scalar square-root lowering](2026-09-04-spec16-arm64-scalar-square-root.md)
+then replaces exact system `sqrtf`/`sqrt` calls with `FSQRT` and releases the
+surrounding floating-point values from call-preserved register pressure.
+Integration falls from 1,284.489 to 902.435 ms, a demonstrated 29.744%
+reduction, and its same-layout ratio falls to 18.3739. Contact and preparation
+disassemblies are unchanged at 5.1996 and 11.2726. Correctness and optimizer
+gates pass; all Part 16 parity criteria remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)

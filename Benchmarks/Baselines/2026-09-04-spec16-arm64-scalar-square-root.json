@@ -1,0 +1,412 @@
+{
+  "schema": 1,
+  "title": "Part 16 ARM64 scalar square root",
+  "captured_at": "2026-09-04T03:12:00+02:00",
+  "candidate": {
+    "silex_revision": "fdeca14",
+    "physics_revision": "d9a17d5",
+    "baseline_silex_revision": "ea38bcc"
+  },
+  "change": {
+    "scope": "exact ARM64 system sqrtf/sqrt external calls",
+    "behavior": [
+      "lower proven scalar system sqrtf and sqrt signatures to ARM64 FSQRT",
+      "allow their operands, results and surrounding values to use ordinary scalar floating-point residences",
+      "retain actual calls for unrelated providers, mismatched signatures, ignored results and all other math operations"
+    ],
+    "static": {
+      "integration_velocity": {
+        "bytes_before": 1056,
+        "bytes_after": 620,
+        "instructions_before": 264,
+        "instructions_after": 155,
+        "loads_before": 73,
+        "loads_after": 22,
+        "stores_before": 63,
+        "stores_after": 13,
+        "external_calls_before": 1,
+        "external_calls_after": 0
+      },
+      "integration_position": {
+        "bytes_before": 448,
+        "bytes_after": 316,
+        "instructions_before": 112,
+        "instructions_after": 79,
+        "loads_before": 22,
+        "loads_after": 11,
+        "stores_before": 23,
+        "stores_after": 13,
+        "external_calls_before": 1,
+        "external_calls_after": 0
+      },
+      "contact_disassembly": "unchanged",
+      "preparation_disassembly": "unchanged"
+    }
+  },
+  "validation": [
+    "zig build test -Doptimize=Debug passed: 158 language cases plus compiler, unit and native tests",
+    "zig build optimizer-gate -Doptimize=ReleaseFast passed: 10 fixed regressions, 8 generated native scenarios, 128 deterministic programs, 32 LLVM differential programs and default comparison",
+    "native float32/float64 tests verify FSQRT opcode, zero external sites, scalar residences and exact results for signed zero, finite values, infinity and quiet NaN",
+    "integration short/full 32768-record Box2D comparisons passed"
+  ],
+  "comparison": {
+    "after_over_before": 0.7025634318394318,
+    "reduction_percent": 29.74365681605682,
+    "ranges_disjoint": true,
+    "same_layout_ratio": 18.3739183541332
+  },
+  "inherited_ratios": {
+    "contact": 5.1996,
+    "preparation": 11.2726
+  },
+  "campaign": {
+    "schema": 1,
+    "stage": "integration",
+    "captured_at": "2026-09-04T01:04:27.754506+00:00",
+    "host": "macOS-26.6.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "workload": {
+      "count": 8192,
+      "passes": 2048,
+      "workers": 1,
+      "float_bits": 32,
+      "fma": true,
+      "allocation_in_kernel": false,
+      "signature_reduction_in_kernel": false,
+      "input_frames": 1
+    },
+    "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+    "numerical_budgets": {
+      "fields": 8,
+      "exact_fields": [
+        7
+      ],
+      "weights": [
+        1,
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17
+      ],
+      "short_absolute": 2e-05,
+      "short_relative": 2e-06,
+      "full_absolute": 0.002,
+      "full_relative": 0.0002,
+      "replay": true,
+      "accumulate_passes": false
+    },
+    "correctness": {
+      "silex": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 2.4999999993724487e-05
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 1.1400000005323818e-05,
+          "oracle": "every transition from identical candidate inputs",
+          "independent_trajectory_max_error": 0.008434084120000001,
+          "independent_trajectory_within_initial_budget": false
+        }
+      },
+      "clang-slots": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 1.189999999873237e-06
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 9.500000004436515e-07,
+          "oracle": "every transition from identical candidate inputs",
+          "independent_trajectory_max_error": 1.5300000001161607e-05,
+          "independent_trajectory_within_initial_budget": true
+        }
+      },
+      "clang-packed": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 1.189999999873237e-06
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 9.500000004436515e-07,
+          "oracle": "every transition from identical candidate inputs",
+          "independent_trajectory_max_error": 1.5300000001161607e-05,
+          "independent_trajectory_within_initial_budget": true
+        }
+      },
+      "silex-before": {
+        "short": {
+          "records": 128,
+          "max_absolute_error": 2.4999999993724487e-05
+        },
+        "full": {
+          "records": 32768,
+          "max_absolute_error": 1.1400000005323818e-05,
+          "oracle": "every transition from identical candidate inputs",
+          "independent_trajectory_max_error": 0.008434084120000001,
+          "independent_trajectory_within_initial_budget": false
+        }
+      }
+    },
+    "executables": {
+      "silex": {
+        "path": "/private/tmp/spec16-01a06651/integration-inline-fsqrt",
+        "sha256": "7530ad8470d5ebd0b1e2d2949cdd908ef0118a7172ad1d14ee9470eddab4b261"
+      },
+      "clang-slots": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_slots",
+        "sha256": "44eb27582e0202a2b39bf3eb7dbc948a8a891ac7b4546921391459905dc8db24"
+      },
+      "clang-packed": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_packed",
+        "sha256": "9d93d02e83845e50e7106ada297c12bdff36a9c7d2bf47a33bb3497bb72c3415"
+      },
+      "silex-before": {
+        "path": "/private/tmp/spec16-01a06651/integration-reference-base-residence",
+        "sha256": "97f473c68ac3cd1d71397e369daec950ccb74b91f9843f90e82d9d96243999ea"
+      },
+      "box2d-check": {
+        "path": "/private/tmp/spec16-01a06651/stage-kernels/gfx_physics_integration_kernel_reference",
+        "sha256": "4714ca572e293bbc49251614e75c2f4aadbdac33a15273055a9f9abb265d36f3"
+      }
+    },
+    "warmup": {
+      "silex": {
+        "elapsed_ms": 895.435,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      },
+      "clang-slots": {
+        "elapsed_ms": 49.748999998,
+        "signature": -1454797.1943359375,
+        "engine": "clang",
+        "layout": "slots8"
+      },
+      "clang-packed": {
+        "elapsed_ms": 45.93600001,
+        "signature": -1454797.216796875,
+        "engine": "clang",
+        "layout": "packed4"
+      },
+      "silex-before": {
+        "elapsed_ms": 1325.175,
+        "signature": -1454735.8291015625,
+        "engine": "silex",
+        "layout": "slots8"
+      }
+    },
+    "samples": {
+      "silex": [
+        {
+          "elapsed_ms": 892.642,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 898.45905,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 952.77295,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 898.867,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 907.104,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 902.435,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 954.567,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      ],
+      "clang-slots": [
+        {
+          "elapsed_ms": 49.096999981,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 50.349000026,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 48.006999947,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 49.332000024,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 49.582000007,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 49.115000002,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 48.423999979,
+          "signature": -1454797.1943359375,
+          "engine": "clang",
+          "layout": "slots8"
+        }
+      ],
+      "clang-packed": [
+        {
+          "elapsed_ms": 47.391999979,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 46.337999986,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 47.33500001,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 46.479000011,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 47.354999988,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 47.663000005,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        },
+        {
+          "elapsed_ms": 47.926000028,
+          "signature": -1454797.216796875,
+          "engine": "clang",
+          "layout": "packed4"
+        }
+      ],
+      "silex-before": [
+        {
+          "elapsed_ms": 1279.625,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1309.0139,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1323.696,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1331.515,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1281.459,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1284.489,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        },
+        {
+          "elapsed_ms": 1279.182,
+          "signature": -1454735.8291015625,
+          "engine": "silex",
+          "layout": "slots8"
+        }
+      ]
+    },
+    "summary": {
+      "silex": {
+        "median_ms": 902.435,
+        "min_ms": 892.642,
+        "max_ms": 954.567,
+        "mad_percent": 0.5173779829018263
+      },
+      "clang-slots": {
+        "median_ms": 49.115000002,
+        "min_ms": 48.006999947,
+        "max_ms": 50.349000026,
+        "mad_percent": 0.950829695573611
+      },
+      "clang-packed": {
+        "median_ms": 47.354999988,
+        "min_ms": 46.337999986,
+        "max_ms": 47.926000028,
+        "mad_percent": 0.6504065401289123
+      },
+      "silex-before": {
+        "median_ms": 1284.489,
+        "min_ms": 1279.182,
+        "max_ms": 1331.515,
+        "mad_percent": 0.4131604085360028
+      }
+    },
+    "silex_over_clang_same_layout": 18.3739183541332,
+    "clang_slots_over_packed": 1.0371660862516312,
+    "timing_admissible": true,
+    "compiler_parity": "missed"
+  }
+}
