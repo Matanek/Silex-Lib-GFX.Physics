@@ -137,6 +137,15 @@ ranges, so no timing change is claimed. Their current same-layout ratios are
 5.1078, 18.6731 and 11.2838. Correctness and optimizer gates pass; cumulative
 native Linux/Windows execution and all three parity criteria remain open.
 
+The [direct ARM64 resident float negation](2026-09-04-spec16-arm64-direct-float-negation.md)
+then emits `FNEG` directly between allocated SIMD operands and results. It
+removes 14 contact instructions, 2 integration instructions and 15 preparation
+instructions. Contact ranges are disjoint and demonstrate a 2.680% reduction,
+bringing its same-layout ratio below five at 4.9641. Integration and
+preparation remain neutral in overlapping ranges at 18.0228 and 11.2025.
+Correctness and optimizer gates pass; cumulative native Linux/Windows
+execution and all three parity criteria remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)
