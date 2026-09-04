@@ -119,6 +119,15 @@ the two measured preparation functions. All three alternating timing ranges
 overlap, so their median changes remain inconclusive; current same-layout
 ratios are 5.2168, 18.1064 and 11.1240. Correctness and optimizer gates pass.
 
+The [dominating mutable-view bounds proof](2026-09-04-spec16-dominating-view-bounds.md)
+then keeps the two destination addresses local while using the matching checked
+entry references to prove their indices. Contact `solve_contact` falls from
+3,116 to 2,620 bytes and from 779 to 655 instructions. Its disjoint alternating
+ranges demonstrate a 1.467% reduction, from 191.476 to 188.668 ms, and the
+same-layout ratio falls to 5.1295. Integration and preparation disassemblies are
+unchanged at 18.1064 and 11.1240. The cumulative native Linux/Windows execution
+and all three parity criteria remain open.
+
 ## Matched Box2D diagnostics — 2026-09-03
 
 The [matched starting observation](2026-09-03-spec15-box2d-matched.jsonl)

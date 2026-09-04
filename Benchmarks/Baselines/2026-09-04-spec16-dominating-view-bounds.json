@@ -1,0 +1,354 @@
+{
+  "schema": 1,
+  "title": "Part 16 dominating mutable-view bounds proof",
+  "captured_at": "2026-09-04T04:18:00+02:00",
+  "candidate": {
+    "silex_revision": "05df115c6b9c0f634a3799bbf8a960762c9274a7",
+    "physics_revision": "2914280",
+    "baseline_silex_revision": "d1c446c"
+  },
+  "change": {
+    "scope": "portable Release proof and ARM64/X64 lowering for repeated mutable-view references",
+    "behavior": [
+      "retain the checked entry reference as the dominating semantic bounds proof",
+      "mark equivalent later view references bounded only when view and index origins remain invariant",
+      "disable the proof around calls, storage replacement, explicit addresses, synchronization and other invalidating effects",
+      "recompute each later address locally and preserve negative-index normalization while omitting only duplicate failure branches"
+    ],
+    "static": {
+      "contact_solve": {
+        "bytes_before": 3116,
+        "bytes_after": 2620,
+        "instructions_before": 779,
+        "instructions_after": 655,
+        "loads_before": 114,
+        "loads_after": 112,
+        "stores_before": 39,
+        "stores_after": 39,
+        "system_calls_before": 12,
+        "system_calls_after": 6,
+        "branches_before": 81,
+        "branches_after": 67,
+        "checked_view_references_before": 4,
+        "checked_view_references_after": 2
+      },
+      "integration": "disassembly unchanged",
+      "preparation": "disassembly unchanged"
+    }
+  },
+  "validation": [
+    "contact comparison passed: 128 records and 1280 scalar comparisons, maximum Silex error 6.4e-7",
+    "zig build test -Doptimize=Debug passed: 158 language cases plus 1136 compiler, unit and native tests",
+    "zig build check -Doptimize=Debug passed",
+    "zig build optimizer-gate -Doptimize=ReleaseFast passed: 10 fixed regressions, 8 generated native scenarios, 128 deterministic programs, 32 LLVM differential programs and default comparison",
+    "the regression preserves both control-flow branches, negative indexing and the original out-of-bounds failure"
+  ],
+  "comparisons": {
+    "contact": {
+      "after_over_before": 0.9853349767072637,
+      "median_change_percent": -1.4665023292736334,
+      "ranges_overlap": false,
+      "same_layout_ratio": 5.129496211046367
+    },
+    "integration": {
+      "same_layout_ratio_inherited": 18.106354045381508
+    },
+    "preparation": {
+      "same_layout_ratio_inherited": 11.1240496517124
+    }
+  },
+  "campaign": {
+    "schema": 1,
+    "captured_at": "2026-09-04T02:12:28.773178+00:00",
+    "host": "macOS-26.6.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "workload": {
+      "contacts": 2048,
+      "passes": 2048,
+      "workers": 1,
+      "float_bits": 32,
+      "fma": true,
+      "allocation_in_kernel": false
+    },
+    "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+    "correctness": {
+      "silex": {
+        "records": 128,
+        "max_absolute_error": 6.399999996631323e-07
+      },
+      "clang-slots": {
+        "records": 128,
+        "max_absolute_error": 9.500000004436515e-07
+      },
+      "clang-packed": {
+        "records": 128,
+        "max_absolute_error": 9.500000004436515e-07
+      },
+      "silex-before": {
+        "records": 128,
+        "max_absolute_error": 6.399999996631323e-07
+      }
+    },
+    "executables": {
+      "silex": {
+        "path": "/private/tmp/spec16-01a06651/contact-dominating-view-bounds",
+        "sha256": "f8e09102c6dc611f53c1d357e6daea239800625f1b7a74229c0898300b58ece8"
+      },
+      "clang-slots": {
+        "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_slots",
+        "sha256": "0505583dc3f14954b858179ad6f732884ad10acd787f49033770210be5a3d80c"
+      },
+      "clang-packed": {
+        "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_packed",
+        "sha256": "c1b1cb56a389b575fc3284c0cc17bef8736cf334bfe460e7888957ce43c9e0cd"
+      },
+      "silex-before": {
+        "path": "/private/tmp/spec16-01a06651/contact-float-immediates",
+        "sha256": "5b372a054f08d0ddcaf9bb6148e60d46f4a7d6f156370bae3a25ba92d85757a8"
+      },
+      "box2d-check": {
+        "path": "/private/tmp/spec15-box2d-parity.MtyPBo/gfx_physics_contact_kernel_reference",
+        "sha256": "2bae3d0ebb1cbf382d9216def1cd9375c8510ebe50c32b0f3369efc6ed135572"
+      }
+    },
+    "warmup": {
+      "silex": {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 189.44,
+        "signature": 88453969.40002441
+      },
+      "clang-slots": {
+        "engine": "clang",
+        "layout": "slots8",
+        "elapsed_ms": 36.736000038,
+        "signature": 88453969.40002441
+      },
+      "clang-packed": {
+        "engine": "clang",
+        "layout": "packed4",
+        "elapsed_ms": 36.485999997,
+        "signature": 88453969.40002441
+      },
+      "silex-before": {
+        "engine": "silex",
+        "layout": "slots8",
+        "elapsed_ms": 191.51901,
+        "signature": 88453969.40002441
+      }
+    },
+    "samples": {
+      "silex": [
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.88199,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.97,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.163,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.76,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.668,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.353,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 188.29399,
+          "signature": 88453969.40002441
+        }
+      ],
+      "clang-slots": [
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.801000009,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 37.899999996,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.729999993,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.724000005,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 37.673000013,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.780999973,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "slots8",
+          "elapsed_ms": 36.749000021,
+          "signature": 88453969.40002441
+        }
+      ],
+      "clang-packed": [
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.518000008,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.736999988,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.534000013,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.528000026,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.886000016,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.786999961,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "clang",
+          "layout": "packed4",
+          "elapsed_ms": 36.512000021,
+          "signature": 88453969.40002441
+        }
+      ],
+      "silex-before": [
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.476,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.358,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.76599,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.524,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.252,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.963,
+          "signature": 88453969.40002441
+        },
+        {
+          "engine": "silex",
+          "layout": "slots8",
+          "elapsed_ms": 191.269,
+          "signature": 88453969.40002441
+        }
+      ]
+    },
+    "summary": {
+      "silex": {
+        "median_ms": 188.668,
+        "min_ms": 188.163,
+        "max_ms": 188.97,
+        "mad_percent": 0.16006954014458863
+      },
+      "clang-slots": {
+        "median_ms": 36.780999973,
+        "min_ms": 36.724000005,
+        "max_ms": 37.899999996,
+        "mad_percent": 0.13865849225806276
+      },
+      "clang-packed": {
+        "median_ms": 36.534000013,
+        "min_ms": 36.512000021,
+        "max_ms": 36.886000016,
+        "mad_percent": 0.06021785731695567
+      },
+      "silex-before": {
+        "median_ms": 191.476,
+        "min_ms": 191.252,
+        "max_ms": 191.963,
+        "mad_percent": 0.1081075435041434
+      }
+    },
+    "silex_over_clang_same_layout": 5.129496211046367,
+    "clang_slots_over_packed": 1.0067608244351045,
+    "timing_admissible": true,
+    "compiler_parity": "missed",
+    "silex_after_over_before": 0.9853349767072637,
+    "silex_after_over_before_observed_range": [
+      0.9802045185791013,
+      0.9880680986342626
+    ]
+  }
+}
