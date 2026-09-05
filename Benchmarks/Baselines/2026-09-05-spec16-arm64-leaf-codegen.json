@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "part": "physics2d-16",
+  "captured_at": "2026-09-05T15:03:55+02:00",
+  "silex_base": "d91342aaf02e4c15fab8296135d63f1fe0aa53cd",
+  "silex_head": "c72eac797a13e2a9fab1a01e6af055f15bded370",
+  "physics_base": "b14c33c3c6f9a56615285a1733f93bb42a819fc7",
+  "commits": [
+    "82dee9c841569aec6cb04cd92d8dfda5f2391a5d",
+    "dbb4f02cd0ebf48cd15a936799f68d4561092dcc",
+    "f9c47602f56b0ef488bd46d9fe334cbd1f03b2e8",
+    "9e83322012c6ae0f181846be29013f6595aaa9eb",
+    "c72eac797a13e2a9fab1a01e6af055f15bded370"
+  ],
+  "validation": {
+    "silex_tests": { "passed": 1192, "failed": 0 },
+    "language_tests": { "passed": 162, "failed": 0 },
+    "optimizer_qualification": {
+      "fixed_regressions": 12,
+      "generated_native_scenarios": 8,
+      "result": "pass"
+    },
+    "box2d": {
+      "contact_scalar_comparisons": 1280,
+      "contact_max_absolute_error": 6.4e-7,
+      "integration_full_records": 32768,
+      "integration_replayed_transition_max_absolute_error": 1.14e-5,
+      "preparation_full_records": 32768,
+      "preparation_max_absolute_error": 2.2e-7
+    }
+  },
+  "machine_structure": {
+    "integration_function_0": {
+      "instructions_before": 108,
+      "instructions_after": 103,
+      "stack_or_frame_references_before": 2,
+      "stack_or_frame_references_after": 0
+    },
+    "integration_function_1": {
+      "instructions_before": 47,
+      "instructions_after": 42,
+      "stack_or_frame_references_before": 2,
+      "stack_or_frame_references_after": 0
+    },
+    "contact_function_0": { "instructions_before": 521, "instructions_after": 521 },
+    "preparation_function_0": { "instructions_before": 253, "instructions_after": 253 }
+  },
+  "campaigns": {
+    "contact": {
+      "candidate_ms": { "median": 98.853, "min": 98.521, "max": 101.732, "mad_percent": 0.2964 },
+      "previous_ms": { "median": 98.625, "min": 98.410, "max": 100.312004, "mad_percent": 0.1693 },
+      "clang_slots8_ms": { "median": 41.590000037, "min": 41.302000056, "max": 43.227000046, "mad_percent": 0.6468 },
+      "silex_over_clang_slots8": 2.3768453934,
+      "candidate_over_previous": 1.0023117871,
+      "conclusion": "inconclusive-overlap"
+    },
+    "integration": {
+      "candidate_ms": { "median": 95.863, "min": 95.42799, "max": 97.305, "mad_percent": 0.4277 },
+      "previous_ms": { "median": 101.172, "min": 100.299995, "max": 102.422, "mad_percent": 0.2728 },
+      "clang_slots8_ms": { "median": 50.845999969, "min": 50.470000017, "max": 51.577999955, "mad_percent": 0.5349 },
+      "silex_over_clang_slots8": 1.8853597148,
+      "candidate_over_previous": 0.9475250069,
+      "median_reduction_percent": 5.2474993081,
+      "conclusion": "demonstrated-disjoint-ranges"
+    },
+    "preparation": {
+      "candidate_ms": { "median": 518.186, "min": 511.832, "max": 519.558, "mad_percent": 0.0293 },
+      "previous_ms": { "median": 511.12698, "min": 485.977, "max": 517.22595, "mad_percent": 1.0729 },
+      "clang_slots8_ms": { "median": 232.152999961, "min": 230.478000012, "max": 233.745999984, "mad_percent": 0.3545 },
+      "silex_over_clang_slots8": 2.2320883214,
+      "candidate_over_previous": 1.0138106973,
+      "conclusion": "inconclusive-overlap"
+    }
+  },
+  "artifacts": {
+    "contact_binary": {
+      "path": "/private/tmp/spec16-01a070df/contact-frameless2",
+      "sha256": "9c8d9144f2230a19569c8b1fbc3077aa97a166858713c93bd7461bebb1e8a1d4"
+    },
+    "integration_binary": {
+      "path": "/private/tmp/spec16-01a070df/integration-frameless2",
+      "sha256": "3b479c4d2061b08f515694ad0108140804da3cbb6c90134a4b24e2ee5257c3e8"
+    },
+    "preparation_binary": {
+      "path": "/private/tmp/spec16-01a070df/preparation-frameless2",
+      "sha256": "3c636cb5c849d516936f34f57c7e7c3283631e26f5e34d9f8ac7f4f393a9d5fa"
+    },
+    "contact_campaign": {
+      "path": "/private/tmp/spec16-01a070df/contact-frameless2.json",
+      "sha256": "29eb33522e659e1e2d0f16090afa5f4b42829c283c2fab012856126245d739a3"
+    },
+    "integration_campaign": {
+      "path": "/private/tmp/spec16-01a070df/integration-frameless2-repeat.json",
+      "sha256": "282ec2971e6c917f58ec60c75a3322cd8bbd38624fc502166e65571f714482c6"
+    },
+    "preparation_campaign": {
+      "path": "/private/tmp/spec16-01a070df/preparation-frameless2.json",
+      "sha256": "22dec7c193f9d16ea72fa2e0c6db4a3269a7f911d3b4adb32472cd5b5a89b27f"
+    }
+  },
+  "part_complete": false,
+  "reason": "all three current ratios remain greater than one"
+}
