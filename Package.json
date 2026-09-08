@@ -1,18 +1,18 @@
 {
   "name": "GFX.Physics",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": {
     "en": "Optional native Silex 2D physics simulation for GFX.",
     "fr": "Simulation physique 2D native Silex et optionnelle pour GFX."
   },
   "authors": ["Matanek"],
-  "requires": { "silex": ">=0.43.0" },
+  "requires": { "silex": ">=0.44.0" },
   "dependencies": {
-    "GFX": "^0.37.0",
+    "GFX": "^0.40.0",
     "GFX.Application": "^0.1.0",
-    "GFX.Canvas": "^0.1.0",
+    "GFX.Canvas": "^0.4.0",
     "GFX.ECS": "^0.2.0",
-    "GFX.Scene2D": "^0.1.0",
-    "STD": "^0.16.0"
+    "GFX.Scene2D": "^0.3.0",
+    "STD": "^0.22.0"
   }
 }
