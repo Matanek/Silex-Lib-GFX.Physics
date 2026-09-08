@@ -1,7 +1,7 @@
 # GFX.Physics
 
-`GFX.Physics` fournit une simulation physique 2D native Silex, optionnelle et
-indépendante des fenêtres, renderers, scènes et mondes ECS.
+`GFX.Physics` provides an optional native Silex 2D physics simulation that is
+independent from windows, renderers, scenes, and ECS worlds.
 
 ```text
 silex install GFX.Physics
@@ -9,7 +9,7 @@ silex install GFX.Physics
 
 ## Documentation
 
-- [Documentation française](Docs/FR/README.md)
+- [French documentation](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
 
-Le package nécessite Silex 0.43.0 ou une version ultérieure.
+The package requires Silex 0.43.0 or newer.
