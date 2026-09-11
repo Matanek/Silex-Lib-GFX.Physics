@@ -70,15 +70,16 @@ le reçoit.
 ## Pause de la simulation
 
 `Plugins.Physics2D` suit la ressource `Application.Simulation` de son contexte.
-Pendant la pause, il ne réconcilie pas les corps ECS et ne fait aucun pas
-physique. Les dernières poses restent disponibles pour le rendu. La durée de
-pause n’entre pas dans l’accumulateur ; à la reprise, seuls le delta courant et
+Pendant la pause, il ne crée pas de nouveaux corps ECS et ne fait aucun pas
+physique. L’activation et le retrait des corps déjà liés restent synchronisés.
+Les dernières poses restent disponibles pour le rendu. La durée de pause n’entre pas dans l’accumulateur ; à la reprise, seuls le delta courant et
 un éventuel reliquat antérieur à la pause sont traités.
 
 `Physics2DFrameEvents` est vidé à chaque `post_update`, y compris en pause :
 les consommateurs qui restent actifs ne reçoivent pas à nouveau les événements
-de la dernière frame simulée. Les créations et destructions ECS faites pendant
-la pause sont réconciliées à la reprise. Les modes synchrone et workers suivent
+de la dernière frame simulée. Les créations ECS faites pendant
+la pause sont réconciliées à la reprise ; les destructions sont prises en compte
+dès le prochain `post_update`. Les modes synchrone et workers suivent
 la même règle, et chaque Bundle possède son état de pause indépendant.
 
 Un appel direct à `World2D.step` reste sous le contrôle de son appelant ; cette
@@ -86,3 +87,18 @@ intégration concerne l’ordonnancement assuré par le plugin.
 
 La preuve isolée est
 [`ApplicationIntegration.sx`](../../Tests/Consumer/Tests/ApplicationIntegration.sx).
+
+## Désactiver une entité
+
+Une entité désactivée par `World.enable(entity, false)` ou par son Node garde
+son `PhysicsBody2D` lié au même corps. Le plugin désactive ce corps à
+`post_update`, même pendant la pause de l’application : il ne bouge plus et ne
+participe plus aux collisions ni aux requêtes spatiales. Sa pose, sa vitesse
+et ses colliders sont conservés ; les forces transitoires sont effacées comme
+avec `RigidBody2D.set_enabled(false)`.
+
+À la réactivation, le plugin restaure le réglage d’activation que le corps
+avait avant sa suspension. Un corps déjà désactivé reste donc désactivé.
+Une entité créée inactive attend son activation pour recevoir un corps.
+Détruire l’entité ou retirer ses composants physiques détruit le corps lié,
+même si l’entité est inactive.

@@ -67,19 +67,35 @@ reconciliation. No `ECS.Query` escapes the system that receives it.
 ## Pause the simulation
 
 `Plugins.Physics2D` follows its context's `Application.Simulation` resource.
-While paused, it neither reconciles ECS bodies nor performs physics steps.
+While paused, it neither creates new ECS bodies nor performs physics steps.
+Activation and removal of existing bound bodies remain synchronized.
 The latest poses remain available for rendering. Paused time does not enter
 the accumulator; resuming processes only the current delta and any backlog
 that existed before the pause.
 
 `Physics2DFrameEvents` clears on every `post_update`, including while paused:
 consumers that remain active do not receive the last simulated frame's events
-again. ECS creations and destructions made while paused are reconciled on
-resume. Synchronous and worker execution follow the same rule, and each Bundle
-has an independent pause state.
+again. ECS creations made while paused are reconciled on resume; destructions
+are handled at the next `post_update`. Synchronous and worker execution follow
+the same rule, and each Bundle has an independent pause state.
 
 A direct `World2D.step` call remains under its caller's control; this integration
 covers scheduling performed by the plugin.
 
 The isolated proof is
 [`ApplicationIntegration.sx`](../../Tests/Consumer/Tests/ApplicationIntegration.sx).
+
+## Disable an entity
+
+An entity disabled through `World.enable(entity, false)` or its Node keeps its
+`PhysicsBody2D` bound to the same body. The plugin disables that body at
+`post_update`, including while the application is paused: it stops moving and
+no longer participates in collisions or spatial queries. Its pose, velocity
+and colliders are preserved; transient forces are cleared as with
+`RigidBody2D.set_enabled(false)`.
+
+When reactivated, the plugin restores the body's enabled setting from before
+suspension. A previously disabled body therefore stays disabled. An entity
+created inactive waits until enabled before receiving a body. Destroying the
+entity or removing its physical components destroys the bound body, even if
+the entity is inactive.

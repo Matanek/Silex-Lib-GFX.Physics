@@ -71,6 +71,62 @@ func required_body(world:@Resources.World, entity:ECS.Entity) Physics.RigidBody2
     panic("expected a bound PhysicsBody2D")
 }
 
+test "inactive ECS bodies keep handles and authored enabled state even during pause" {
+    var application = Application()..add_plugin(Plugins.Physics2D())
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..is_enabled = false)))
+    }
+    set_frame_delta(application, 0.0)
+    run_physics_frame(application)
+    var resources = application.resources()
+    var body = required_body(resources.get<Resources.World>(), entity)
+    assert(!body.is_enabled())
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+    }
+    run_physics_frame(application)
+    assert(body.is_valid() && !body.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, true)
+    }
+    run_physics_frame(application)
+    assert(body.is_valid() && !body.is_enabled())
+    body.set_enabled(true)
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+    }
+    run_physics_frame(application)
+    assert(!body.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, true)
+    }
+    run_physics_frame(application)
+    assert(body.is_valid() && body.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+        world.destroy(entity)
+    }
+    run_physics_frame(application)
+    assert(!body.is_valid())
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
 func physics_entity_count(world:@Resources.World) int {
     var count = 0
     for entity in world.entities() {

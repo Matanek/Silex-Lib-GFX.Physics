@@ -143,6 +143,8 @@ struct Physics2DBinding {
     let entity:Entity
     var body:RigidBody2D
     var seen:bool
+    var suspended:bool
+    var restore_enabled:bool
 }
 
 class Physics2DRuntime {
@@ -184,6 +186,31 @@ class Physics2DRuntime {
             index++
         }
         return -1
+    }
+
+    // Retain body identities while changing the binding array that owns them.
+    func reconcile_activation(world:@ECS.World, physics:&World2D) {
+        var index = self.bindings.count() - 1
+        while index >= 0 {
+            let entity = self.bindings[index].entity
+            var body = self.bindings[index].body
+            if !world.has<PhysicsBody2D>(entity) || !world.has<SceneTransform2D>(entity) ||
+                !world.get<PhysicsBody2D>(entity).is_bound()
+            {
+                self.take_body(index)
+                if body.is_valid() { physics.destroy_rigid_body(body) }
+            } else if !world.is_enabled(entity) {
+                if !self.bindings[index].suspended {
+                    self.bindings[index].restore_enabled = body.is_enabled()
+                    self.bindings[index].suspended = true
+                    body.set_enabled(false)
+                }
+            } else if self.bindings[index].suspended {
+                body.set_enabled(self.bindings[index].restore_enabled)
+                self.bindings[index].suspended = false
+            }
+            index--
+        }
     }
 
     func take_body(index:int) RigidBody2D {
@@ -250,12 +277,18 @@ public struct Plugin:PluginProtocol {
             self.settings.scene_units_per_meter
         ))
         host.add_system(Schedule.post_update, clear_physics_events, process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, reconcile_body_activation, process_mode:GFX.Application.ProcessMode.always)
         host.add_system(Schedule.post_update, update_application_physics)
         host.add_after_system(Schedule.shutdown, stop_application_physics)
     }
 }
 
 func clear_physics_events(events:&Physics2DFrameEvents) { events.begin_frame() }
+
+// Keep activation and removal in sync even while simulation is paused.
+func reconcile_body_activation(world:@ECS.World, physics:&World2D, runtime:&Physics2DRuntime) {
+    runtime.reconcile_activation(world, physics)
+}
 
 func update_application_physics(
     time:@FrameTime,
@@ -286,7 +319,9 @@ func update_application_physics(
             runtime.bindings.append(Physics2DBinding(
                 entity:entity,
                 body:body,
-                seen:true
+                seen:true,
+                suspended:false,
+                restore_enabled:true
             ))
             binding = runtime.bindings.count() - 1
         }
@@ -295,7 +330,7 @@ func update_application_physics(
 
     var index = runtime.bindings.count() - 1
     while index >= 0 {
-        if !runtime.bindings[index].seen {
+        if !runtime.bindings[index].seen && !runtime.bindings[index].suspended {
             var body = runtime.take_body(index)
             if body.is_valid() { physics.destroy_rigid_body(body) }
         }
@@ -309,6 +344,7 @@ func update_application_physics(
     {
         for (_, component, transform) in bodies {
             if let body = component.body() {
+                if !body.is_enabled() { continue }
                 if body.body_type() == BodyType2D.fixed {
                     body.set_position(transform.position.divide(
                         runtime.scene_units_per_meter
