@@ -64,5 +64,22 @@ the following update. Destroying the entity, removing either component, or
 replacing the physics component invalidates its handle exactly once during that
 reconciliation. No `ECS.Query` escapes the system that receives it.
 
+## Pause the simulation
+
+`Plugins.Physics2D` follows its context's `Application.Simulation` resource.
+While paused, it neither reconciles ECS bodies nor performs physics steps.
+The latest poses remain available for rendering. Paused time does not enter
+the accumulator; resuming processes only the current delta and any backlog
+that existed before the pause.
+
+`Physics2DFrameEvents` clears on every `post_update`, including while paused:
+consumers that remain active do not receive the last simulated frame's events
+again. ECS creations and destructions made while paused are reconciled on
+resume. Synchronous and worker execution follow the same rule, and each Bundle
+has an independent pause state.
+
+A direct `World2D.step` call remains under its caller's control; this integration
+covers scheduling performed by the plugin.
+
 The isolated proof is
 [`ApplicationIntegration.sx`](../../Tests/Consumer/Tests/ApplicationIntegration.sx).

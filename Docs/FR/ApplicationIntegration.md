@@ -67,5 +67,22 @@ l’un des deux composants invalide exactement une fois le handle correspondant
 lors de cette même réconciliation. Aucun `ECS.Query` n’échappe au système qui
 le reçoit.
 
+## Pause de la simulation
+
+`Plugins.Physics2D` suit la ressource `Application.Simulation` de son contexte.
+Pendant la pause, il ne réconcilie pas les corps ECS et ne fait aucun pas
+physique. Les dernières poses restent disponibles pour le rendu. La durée de
+pause n’entre pas dans l’accumulateur ; à la reprise, seuls le delta courant et
+un éventuel reliquat antérieur à la pause sont traités.
+
+`Physics2DFrameEvents` est vidé à chaque `post_update`, y compris en pause :
+les consommateurs qui restent actifs ne reçoivent pas à nouveau les événements
+de la dernière frame simulée. Les créations et destructions ECS faites pendant
+la pause sont réconciliées à la reprise. Les modes synchrone et workers suivent
+la même règle, et chaque Bundle possède son état de pause indépendant.
+
+Un appel direct à `World2D.step` reste sous le contrôle de son appelant ; cette
+intégration concerne l’ordonnancement assuré par le plugin.
+
 La preuve isolée est
 [`ApplicationIntegration.sx`](../../Tests/Consumer/Tests/ApplicationIntegration.sx).

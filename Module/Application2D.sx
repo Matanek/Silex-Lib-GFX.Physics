@@ -249,10 +249,13 @@ public struct Plugin:PluginProtocol {
             self.settings.maximum_catch_up_steps,
             self.settings.scene_units_per_meter
         ))
+        host.add_system(Schedule.post_update, clear_physics_events, process_mode:GFX.Application.ProcessMode.always)
         host.add_system(Schedule.post_update, update_application_physics)
         host.add_after_system(Schedule.shutdown, stop_application_physics)
     }
 }
+
+func clear_physics_events(events:&Physics2DFrameEvents) { events.begin_frame() }
 
 func update_application_physics(
     time:@FrameTime,
@@ -261,7 +264,6 @@ func update_application_physics(
     runtime:&Physics2DRuntime,
     bodies:ECS.Query<(Entity, &PhysicsBody2D, &SceneTransform2D)>
 ) {
-    events.begin_frame()
     runtime.begin_reconcile()
     for (entity, component, transform) in bodies {
         var binding = runtime.find(entity)

@@ -17,6 +17,54 @@ func run_physics_frame(application:Application) {
     application.run_schedule(Application.Schedule.post_update)
 }
 
+test "pause application physics without advancing bodies or accumulating catch-up" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..world = (Physics.World2DSettings() ..gravity = Math.Vec2())
+            ..fixed_delta = 0.1
+            ..maximum_catch_up_steps = 2
+        ))
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..velocity = Math.Vec2(1.0, 0.0)
+                ..gravity_scale = 0.0
+                ..allow_sleep = false
+                ..enable_move_events = true)))
+    }
+    set_frame_delta(application, 0.1)
+    run_physics_frame(application)
+    var resources = application.resources()
+    var before = Math.Vec2()
+    {
+        let transform = resources.get<Resources.World>().get<Components.Transform2D>(entity)
+        before = transform.position
+    }
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    set_frame_delta(application, 10.0)
+    for _ in 0...3 { run_physics_frame(application) }
+    assert(resources.get<Resources.World>().get<Components.Transform2D>(entity).position == before)
+    assert(resources.get<Resources.Physics2DFrameEvents>().fixed_step_count() == 0)
+    assert(resources.get<Resources.Physics2DFrameEvents>().body_move_count() == 0)
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.resume()
+    }
+    set_frame_delta(application, 0.1)
+    run_physics_frame(application)
+    assert(resources.get<Resources.Physics2DFrameEvents>().fixed_step_count() == 1)
+    assert(resources.get<Resources.World>().get<Components.Transform2D>(entity).position.x > before.x)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
 func required_body(world:@Resources.World, entity:ECS.Entity) Physics.RigidBody2D {
     let component = world.get<Components.PhysicsBody2D>(entity)
     if let body = component.body() { return body }
