@@ -122,3 +122,11 @@ with failure cases in
 [`Tests/Consumer/check-body-control.sh`](../../Tests/Consumer/check-body-control.sh).
 The Box2D differential witness is documented in
 [`Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
+
+## Compare handles
+
+`body.same_body(other)` compares the body’s world, slot and generation. Two
+distinct wrappers, such as those returned by `collider.body()`, can identify
+the same body. This comparison accepts destroyed handles; a body recreated in
+the same slot has a different generation. Check `is_valid()` before reading
+physical properties from an old handle.

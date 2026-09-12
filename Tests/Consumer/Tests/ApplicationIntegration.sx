@@ -367,3 +367,86 @@ test "preserve the logical sequence across synchronous and worker modes" {
         index++
     }
 }
+
+class StepObserver {
+    var entity:ECS.Entity
+    var phases:int[] = []
+    var positions:float[] = []
+    init(entity:ECS.Entity) { self.entity = entity }
+    func before(application:Application, delta:float) {
+        assert(Math.nearly_equal(delta, 0.1, 0.00001))
+        self.phases.append(0)
+    }
+    func after(application:Application, delta:float) {
+        self.phases.append(1)
+        var world = application.resources().get<Resources.World>()
+        let position = world.get<Components.Transform2D>(self.entity).position
+        var body = world.get<Components.PhysicsBody2D>(self.entity).body()!
+        assert(position.nearly_equal(body.position().multiply(100.0), 0.0001))
+        self.positions.append(position.x)
+    }
+}
+
+struct ObserverPlugin:Application.Plugin {
+    private var observer:StepObserver
+    init(observer:StepObserver) { self.observer = observer }
+    func id() str { return "Test.StepObserver" }
+    func build(application:&Application) {
+        Physics.Physics2DStep.before_step(application, self.observer.before)
+        Physics.Physics2DStep.after_step(application, self.observer.after)
+    }
+}
+
+test "completion callbacks see synchronized poses after every catch-up step and stop during pause" {
+    var application = Application()..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+        ..world = (Physics.World2DSettings()..gravity = Math.Vec2())
+        ..fixed_delta = 0.1
+        ..maximum_catch_up_steps = 3
+        ..scene_units_per_meter = 100.0))
+    var observer = StepObserver(ECS.Entity())
+    application.add_plugin(ObserverPlugin(observer))
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..velocity = Math.Vec2(1.0, 0.0)
+                ..allow_sleep = false)))
+    }
+    observer.entity = entity
+    set_frame_delta(application, 0.21)
+    run_physics_frame(application)
+    assert(observer.phases.count() == 4)
+    assert(observer.phases[0] == 0 && observer.phases[1] == 1)
+    assert(observer.phases[2] == 0 && observer.phases[3] == 1)
+    assert(observer.positions.count() == 2)
+    assert(Math.nearly_equal(observer.positions[0], 10.0, 0.001))
+    assert(Math.nearly_equal(observer.positions[1], 20.0, 0.001))
+    {
+        var resources = application.resources()
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    set_frame_delta(application, 2.0)
+    run_physics_frame(application)
+    assert(observer.positions.count() == 2)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "body identity includes the world and generation and remains comparable after destruction" {
+    var first_world = Physics.World2D()
+    var second_world = Physics.World2D()
+    var first = first_world.create_rigid_body()
+    var second = second_world.create_rigid_body()
+    var colliders:Physics.Collider2D[] = []
+    first.write_colliders(colliders)
+    var alias = colliders[0].body()
+    assert(first.same_body(alias) && !first.same_body(second))
+    first_world.destroy_rigid_body(first)
+    assert(!alias.is_valid() && first.same_body(alias))
+    var replacement = first_world.create_rigid_body()
+    assert(!first.same_body(replacement))
+}

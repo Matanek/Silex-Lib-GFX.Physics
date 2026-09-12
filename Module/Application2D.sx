@@ -30,6 +30,7 @@ public enum Physics2DExecutionMode {
 // Controllers subscribe once and run before each actual simulation step.
 public class Physics2DStep {
     private var callbacks:func(Application, float)[] = []
+    private var completed_callbacks:func(Application, float)[] = []
     private var current_units:float = 1.0
 
     static func before_step(application:Application, callback:func(Application, float)) {
@@ -38,6 +39,24 @@ public class Physics2DStep {
         var resources = host.resources()
         var step = resources.get_mut<Physics2DStep>()
         step.callbacks.append(callback)
+    }
+
+    static func after_step(application:Application, callback:func(Application, float)) {
+        var host = application
+        host.add_plugin(Physics2DStepPlugin())
+        var resources = host.resources()
+        var step = resources.get_mut<Physics2DStep>()
+        step.completed_callbacks.append(callback)
+    }
+
+    package func dispatch_completed(application:Application, delta:float) {
+        let count = self.completed_callbacks.count()
+        var index = 0
+        while index < count {
+            let callback = self.completed_callbacks[index]
+            callback(application, delta)
+            index++
+        }
     }
 
     func scene_units_per_meter() float { return self.current_units }
@@ -407,10 +426,22 @@ func update_application_physics(application:Application) {
         synchronize_physics_targets(world, runtime)
         physics.step(runtime.fixed_delta)
         events.capture(physics)
+        synchronize_physics_results(world, runtime)
+        {
+            var resources = application.resources()
+            var callbacks = resources.get_mut<Physics2DStep>()
+            callbacks.dispatch_completed(application, runtime.fixed_delta)
+        }
+        // Completion callbacks may detach bodies before another catch-up step.
+        runtime.reconcile_activation(application.resources().get<ECS.World>(), physics)
         runtime.accumulator -= runtime.fixed_delta
         step++
     }
 
+    if step == 0 { synchronize_physics_results(world, runtime) }
+}
+
+func synchronize_physics_results(world:&ECS.World, runtime:@Physics2DRuntime) {
     for binding in runtime.bindings {
         var body = binding.body
         if !binding.suspended && body.body_type() == BodyType2D.dynamic {

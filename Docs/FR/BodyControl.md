@@ -125,3 +125,11 @@ et les cas d’échec dans
 [`Tests/Consumer/check-body-control.sh`](../../Tests/Consumer/check-body-control.sh).
 Le témoin différentiel Box2D est documenté dans
 [`Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
+
+## Comparer des handles
+
+`body.same_body(other)` compare le monde, l’emplacement et la génération du
+corps. Deux wrappers distincts, obtenus par exemple via `collider.body()`,
+peuvent donc identifier le même corps. Cette comparaison accepte les handles
+détruits ; un corps recréé au même emplacement possède une autre génération.
+Vérifiez `is_valid()` avant de lire les propriétés physiques d’un ancien handle.

@@ -116,3 +116,15 @@ avait avant sa suspension. Un corps déjà désactivé reste donc désactivé.
 Une entité créée inactive attend son activation pour recevoir un corps.
 Détruire l’entité ou retirer ses composants physiques détruit le corps lié,
 même si l’entité est inactive.
+
+## Observer un pas terminé
+
+`Physics.Physics2DStep.after_step(application, callback)` inscrit un callback
+`func(Application, float)` après chaque pas réel, après la capture des
+événements et la synchronisation des poses dynamiques vers Scene2D. Comme
+`before_step`, il respecte l’ordre d’inscription, le contexte et la pause.
+Inscrivez les callbacks depuis `Plugin.build`. Aucune query ECS ne reste
+active pendant leur exécution. Les retraits et désactivations effectués dans
+ces callbacks sont réconciliés avant un éventuel pas de rattrapage suivant.
+`GFX.Nodes` y actualise ses zones et ses rayons, puis livre les événements
+différés de son arbre.

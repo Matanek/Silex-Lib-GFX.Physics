@@ -1664,7 +1664,7 @@ public class RigidBody2D {
 
     package func body_id() BodyId2D { return self.id }
 
-    package func same_body(other:RigidBody2D) bool {
+    func same_body(other:RigidBody2D) bool {
         return self.store == other.store && self.id.slot == other.id.slot &&
             self.id.generation == other.id.generation
     }

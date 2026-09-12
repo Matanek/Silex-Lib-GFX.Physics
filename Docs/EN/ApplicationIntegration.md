@@ -113,3 +113,14 @@ suspension. A previously disabled body therefore stays disabled. An entity
 created inactive waits until enabled before receiving a body. Destroying the
 entity or removing its physical components destroys the bound body, even if
 the entity is inactive.
+
+## Observe a completed step
+
+`Physics.Physics2DStep.after_step(application, callback)` registers a
+`func(Application, float)` callback after every actual step, after event
+capture and dynamic pose synchronization to Scene2D. Like `before_step`, it
+follows registration order, context boundaries and pause. Register callbacks
+from `Plugin.build`. No ECS query remains active during their execution.
+Removals and deactivations performed in these callbacks are reconciled before
+any following catch-up step. `GFX.Nodes` updates its areas and rays there, then
+delivers its tree’s deferred events.
