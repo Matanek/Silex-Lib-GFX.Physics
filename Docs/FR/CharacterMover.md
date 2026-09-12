@@ -5,6 +5,12 @@ corps dynamique pour le personnage. Le monde reste en lecture seule pendant
 le calcul : le jeu applique ensuite `applied_translation` à son transform ECS
 ou à son propre état de personnage.
 
+Pour un personnage intégré à l'arbre de scène, utiliser
+`GFX.Nodes.CharacterBody2D`. Il possède son collider et applique ce calcul dans
+le cycle physique. Le paramètre optionnel `exclude_body` de `calculate_move` et
+`collect_planes` permet d'ignorer le propre corps d'un contrôleur enregistré
+dans le monde, sans désactiver ses collisions pour les autres participants.
+
 ```silex
 use GFX.Physics
 use STD.Math

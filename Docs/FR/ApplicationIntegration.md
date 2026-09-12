@@ -51,6 +51,20 @@ remplacer le composant recrée explicitement le corps.
 
 ## Cadence et événements
 
+Les extensions qui pilotent un personnage s'inscrivent depuis leur méthode
+`Plugin.build` avec `Physics.Physics2DStep.before_step(application, callback)`.
+Le callback de signature `func(Application, float)` reçoit le contexte et le
+delta fixe, une fois par pas réel, après la liaison des corps et avant `step`.
+La ressource `Physics2DStep.scene_units_per_meter()` fournit l'échelle pendant
+ce callback. Les inscriptions sont locales au contexte et suivent leur ordre
+d'enregistrement. Ne pas inscrire un callback pendant la simulation.
+
+`GFX.Nodes` emploie ce point d'extension pour `on_physics_process`. La liaison
+ECS se termine avant les callbacks : aucune itération de query ne reste active
+pendant une modification de l'arbre. Un retrait ou une désactivation est pris
+en compte avant le pas courant ; une création est liée à la prochaine frame.
+La simulation n'appelle aucun de ces callbacks pendant la pause.
+
 L’accumulateur conserve tout retard qui dépasse `maximum_catch_up_steps` : le
 plugin le traite aux frames suivantes au lieu de supprimer des pas. Chaque pas
 terminé contribue, dans l’ordre, à `Resources.Physics2DFrameEvents`. La

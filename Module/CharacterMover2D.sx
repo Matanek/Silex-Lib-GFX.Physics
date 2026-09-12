@@ -134,7 +134,8 @@ public class CharacterMover2D {
     func collect_planes(
         world:@World2D,
         position:Math.Vec2,
-        output:&CharacterCollisionPlane2D[]
+        output:&CharacterCollisionPlane2D[],
+        exclude_body:RigidBody2D? = null
     ) WorldQueryStatistics2D {
         require_finite_character_vector(
             position,
@@ -150,6 +151,9 @@ public class CharacterMover2D {
         )
         self.overlap_scratch = overlap_scratch
         for collider in overlap_scratch {
+            if let excluded = exclude_body {
+                if collider.body().same_body(excluded) { continue }
+            }
             if collider.is_sensor() && !self.current_settings.include_sensors {
                 continue
             }
@@ -257,7 +261,8 @@ public class CharacterMover2D {
     func calculate_move(
         world:@World2D,
         position:Math.Vec2,
-        target_translation:Math.Vec2
+        target_translation:Math.Vec2,
+        exclude_body:RigidBody2D? = null
     ) CharacterMoveResult2D {
         require_finite_character_vector(
             position,
@@ -279,7 +284,7 @@ public class CharacterMover2D {
             var planes:CharacterCollisionPlane2D[] = []
             for plane in carried_planes { planes.append(plane) }
             var overlaps:CharacterCollisionPlane2D[] = []
-            self.collect_planes(world, current, overlaps)
+            self.collect_planes(world, current, overlaps, exclude_body)
             if iteration == 0 && overlaps.count() > 0 {
                 started_overlapping = true
             }
@@ -302,7 +307,8 @@ public class CharacterMover2D {
             let cast_index = self.closest_blocking_cast(
                 world,
                 current,
-                translation
+                translation,
+                exclude_body
             )
             if cast_index < 0 {
                 current = current.add(translation)
@@ -333,6 +339,14 @@ public class CharacterMover2D {
             }
         }
 
+        // Casts can exclude an impact exactly at fraction 1. Include contacts
+        // at the final pose so a controller can also constrain its next velocity.
+        var final_planes:CharacterCollisionPlane2D[] = []
+        self.collect_planes(world, current, final_planes, exclude_body)
+        for plane in final_planes {
+            append_character_plane(encountered_planes, plane)
+            append_character_collider(encountered_colliders, plane.collider())
+        }
         let applied = current.subtract(position)
         return CharacterMoveResult2D(
             applied,
@@ -355,7 +369,8 @@ public class CharacterMover2D {
     private func closest_blocking_cast(
         world:@World2D,
         position:Math.Vec2,
-        translation:Math.Vec2
+        translation:Math.Vec2,
+        exclude_body:RigidBody2D?
     ) int {
         var cast_scratch = self.cast_scratch
         world.write_shape_casts(
@@ -369,6 +384,12 @@ public class CharacterMover2D {
         var index = 0
         while index < cast_scratch.count() {
             var hit = cast_scratch[index]
+            if let excluded = exclude_body {
+                if hit.collider().body().same_body(excluded) {
+                    index++
+                    continue
+                }
+            }
             if (!hit.collider().is_sensor() ||
                     self.current_settings.include_sensors) &&
                 translation.dot(hit.normal) < -self.current_settings.tolerance &&

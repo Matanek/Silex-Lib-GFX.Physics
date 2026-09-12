@@ -1,6 +1,26 @@
 use GFX.Physics
 use STD.Math
 
+test "exclude only the controller body and retain contacts at the destination" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var self_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.capsule(Physics.CharacterMover2DSettings().capsule))
+    fixed_box(world, Math.Vec2(2.25, 0.0), Math.Vec2(0.5, 5.0))
+    var character = Physics.CharacterMover2D()
+    let result = character.calculate_move(world, Math.Vec2(), Math.Vec2(1.7, 0.0), self_body)
+    assert(!result.started_overlapping)
+    assert(result.colliders().count() == 1)
+    assert(result.planes().count() >= 1)
+    assert(result.applied_translation.nearly_equal(Math.Vec2(1.7, 0.0), 0.001))
+
+    var other_world = Physics.World2D(gravity:Math.Vec2())
+    var unrelated = other_world.create_rigid_body()
+    var planes:Physics.CharacterCollisionPlane2D[] = []
+    character.collect_planes(world, Math.Vec2(), planes, unrelated)
+    assert(planes.count() == 1)
+}
+
 func fixed_box(
     world:Physics.World2D,
     position:Math.Vec2,

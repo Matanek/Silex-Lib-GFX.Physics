@@ -80,6 +80,7 @@ public use GFX.Physics.ContactPolicy2D.ContactPairSnapshot2D
 public use GFX.Physics.ContactPolicy2D.ContactPreSolve2D
 public use GFX.Physics.Application2D.Physics2DExecutionMode
 public use GFX.Physics.Application2D.Physics2DFrameEvents
+public use GFX.Physics.Application2D.Physics2DStep
 public use GFX.Physics.Application2D.PhysicsBody2D
 public use GFX.Physics.Application2D.Plugin as Physics2DPlugin
 

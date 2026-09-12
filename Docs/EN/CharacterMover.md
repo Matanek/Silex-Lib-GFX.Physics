@@ -5,6 +5,12 @@ dynamic body for the character. The world stays read-only during calculation;
 gameplay code then applies `applied_translation` to its ECS transform or other
 character state.
 
+For a character integrated into the scene tree, use
+`GFX.Nodes.CharacterBody2D`. It owns its collider and applies this calculation
+in the physics lifecycle. The optional `exclude_body` parameter of
+`calculate_move` and `collect_planes` excludes a controller's own registered
+body without disabling its collisions for other participants.
+
 ```silex
 use GFX.Physics
 use STD.Math

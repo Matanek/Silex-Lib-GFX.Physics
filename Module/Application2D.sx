@@ -27,6 +27,40 @@ public enum Physics2DExecutionMode {
     workers(int)
 }
 
+// Controllers subscribe once and run before each actual simulation step.
+public class Physics2DStep {
+    private var callbacks:func(Application, float)[] = []
+    private var current_units:float = 1.0
+
+    static func before_step(application:Application, callback:func(Application, float)) {
+        var host = application
+        host.add_plugin(Physics2DStepPlugin())
+        var resources = host.resources()
+        var step = resources.get_mut<Physics2DStep>()
+        step.callbacks.append(callback)
+    }
+
+    func scene_units_per_meter() float { return self.current_units }
+
+    package func dispatch(application:Application, delta:float, units:float) {
+        self.current_units = units
+        let count = self.callbacks.count()
+        var index = 0
+        while index < count {
+            let callback = self.callbacks[index]
+            callback(application, delta)
+            index++
+        }
+    }
+}
+
+struct Physics2DStepPlugin:PluginProtocol {
+    func id() str { return "GFX.Physics.Step2D" }
+    func build(application:&Application) {
+        application.add_resource(Physics2DStep())
+    }
+}
+
 public struct PhysicsBody2D {
     private let creation_settings:RigidBody2DSettings
     private let creation_colliders:Collider2DSettings[]
@@ -271,6 +305,7 @@ public struct Plugin:PluginProtocol {
         }
         host.add_resource(world)
         host.add_resource(Physics2DFrameEvents())
+        host.add_plugin(Physics2DStepPlugin())
         host.add_resource(Physics2DRuntime(
             self.settings.fixed_delta,
             self.settings.maximum_catch_up_steps,
@@ -278,6 +313,7 @@ public struct Plugin:PluginProtocol {
         ))
         host.add_system(Schedule.post_update, clear_physics_events, process_mode:GFX.Application.ProcessMode.always)
         host.add_system(Schedule.post_update, reconcile_body_activation, process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, reconcile_application_bodies)
         host.add_system(Schedule.post_update, update_application_physics)
         host.add_after_system(Schedule.shutdown, stop_application_physics)
     }
@@ -290,10 +326,8 @@ func reconcile_body_activation(world:@ECS.World, physics:&World2D, runtime:&Phys
     runtime.reconcile_activation(world, physics)
 }
 
-func update_application_physics(
-    time:@FrameTime,
+func reconcile_application_bodies(
     physics:&World2D,
-    events:&Physics2DFrameEvents,
     runtime:&Physics2DRuntime,
     bodies:ECS.Query<(Entity, &PhysicsBody2D, &SceneTransform2D)>
 ) {
@@ -336,47 +370,67 @@ func update_application_physics(
         }
         index--
     }
+}
 
-    runtime.accumulator += Math.max(0.0, time.delta)
+// Whole-context callbacks may mutate Nodes and ECS. No query survives this boundary.
+func update_application_physics(application:Application) {
+    var time_resources = application.resources()
+    let delta = time_resources.get<FrameTime>().delta
+    var physics_resources = application.resources()
+    var runtime_resources = application.resources()
+    var event_resources = application.resources()
+    var world_resources = application.resources()
+    var physics = physics_resources.get_mut<World2D>()
+    var runtime = runtime_resources.get_mut<Physics2DRuntime>()
+    var events = event_resources.get_mut<Physics2DFrameEvents>()
+    var world = world_resources.get_mut<ECS.World>()
+    runtime.accumulator += Math.max(0.0, delta)
     var step = 0
     while runtime.accumulator >= runtime.fixed_delta &&
         step < runtime.maximum_catch_up_steps
     {
-        for (_, component, transform) in bodies {
-            if let body = component.body() {
-                if !body.is_enabled() { continue }
-                if body.body_type() == BodyType2D.fixed {
-                    body.set_position(transform.position.divide(
-                        runtime.scene_units_per_meter
-                    ))
-                    body.set_rotation(transform.rotation)
-                } else if body.body_type() == BodyType2D.kinematic {
-                    body.set_target_transform(
-                        PhysicsTransform2D(
-                            position:transform.position.divide(
-                                runtime.scene_units_per_meter
-                            ),
-                            rotation:transform.rotation
-                        ),
-                        runtime.fixed_delta
-                    )
-                }
-            }
+        synchronize_physics_targets(world, runtime)
+        {
+            var resources = application.resources()
+            var callbacks = resources.get_mut<Physics2DStep>()
+            callbacks.dispatch(application, runtime.fixed_delta, runtime.scene_units_per_meter)
         }
+        // Callbacks may remove or disable bodies before this step.
+        runtime.reconcile_activation(application.resources().get<ECS.World>(), physics)
+        synchronize_physics_targets(world, runtime)
         physics.step(runtime.fixed_delta)
         events.capture(physics)
         runtime.accumulator -= runtime.fixed_delta
         step++
     }
 
-    for (_, component, transform) in bodies {
-        if let body = component.body() {
-            if body.body_type() == BodyType2D.dynamic {
-                transform.position = body.position().multiply(
-                    runtime.scene_units_per_meter
-                )
-                transform.rotation = body.rotation()
-            }
+    for binding in runtime.bindings {
+        var body = binding.body
+        if !binding.suspended && body.body_type() == BodyType2D.dynamic {
+            let position = body.position().multiply(runtime.scene_units_per_meter)
+            let rotation = body.rotation()
+            world.update<SceneTransform2D>(binding.entity, func(transform:&SceneTransform2D) {
+                transform.position = position
+                transform.rotation = rotation
+            })
+        }
+    }
+}
+
+func synchronize_physics_targets(world:@ECS.World, runtime:@Physics2DRuntime) {
+    for binding in runtime.bindings {
+        if binding.suspended { continue }
+        var body = binding.body
+        if !body.is_enabled() { continue }
+        let transform = world.get<SceneTransform2D>(binding.entity)
+        if body.body_type() == BodyType2D.fixed {
+            body.set_position(transform.position.divide(runtime.scene_units_per_meter))
+            body.set_rotation(transform.rotation)
+        } else if body.body_type() == BodyType2D.kinematic {
+            body.set_target_transform(PhysicsTransform2D(
+                position:transform.position.divide(runtime.scene_units_per_meter),
+                rotation:transform.rotation
+            ), runtime.fixed_delta)
         }
     }
 }

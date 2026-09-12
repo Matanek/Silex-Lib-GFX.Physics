@@ -49,6 +49,20 @@ explicitly recreates its body.
 
 ## Cadence and events
 
+Extensions driving a character register from their `Plugin.build` method with
+`Physics.Physics2DStep.before_step(application, callback)`. The
+`func(Application, float)` callback receives the context and fixed delta once
+per actual step, after body binding and before `step`. The resource method
+`Physics2DStep.scene_units_per_meter()` provides the scale during this callback.
+Subscriptions are local to their context and run in registration order. Do not
+register callbacks during simulation.
+
+`GFX.Nodes` uses this extension point for `on_physics_process`. ECS binding
+finishes before callbacks: no query iteration remains active during tree
+mutation. Removal or disabling takes effect before the current step; a new
+body is bound on the next frame. The simulation does not invoke these callbacks
+while paused.
+
 The accumulator retains time beyond `maximum_catch_up_steps` and processes it
 on later frames instead of dropping fixed steps. Every completed step appends,
 in order, to `Resources.Physics2DFrameEvents`. This resource publishes the step
