@@ -1,4 +1,5 @@
 use GFX.Physics.Capsule2D.Capsule2D
+use GFX.Physics.CollisionResponse.CollisionResponse
 use GFX.Physics.Geometry2D.Geometry2D
 use GFX.Physics.Geometry2D.ShapePlacement2D
 use GFX.Physics.RigidBody2D.Collider2D
@@ -262,7 +263,8 @@ public class CharacterMover2D {
         world:@World2D,
         position:Math.Vec2,
         target_translation:Math.Vec2,
-        exclude_body:RigidBody2D? = null
+        exclude_body:RigidBody2D? = null,
+        response:CollisionResponse = CollisionResponse.slide
     ) CharacterMoveResult2D {
         require_finite_character_vector(
             position,
@@ -272,6 +274,9 @@ public class CharacterMover2D {
             target_translation,
             "GFX.Physics.CharacterMover2D.calculate_move requires finite motion"
         )
+        if response == CollisionResponse.stop {
+            return self.calculate_stop(world, position, target_translation, exclude_body)
+        }
         let target = position.add(target_translation)
         var current = position
         var carried_planes:CharacterCollisionPlane2D[] = []
@@ -363,6 +368,51 @@ public class CharacterMover2D {
         return ShapePlacement2D(
             Shape2D.capsule(self.current_settings.capsule),
             Transform2D(position:position)
+        )
+    }
+
+    private func calculate_stop(
+        world:@World2D,
+        position:Math.Vec2,
+        translation:Math.Vec2,
+        exclude_body:RigidBody2D?
+    ) CharacterMoveResult2D {
+        var planes:CharacterCollisionPlane2D[] = []
+        var colliders:Collider2D[] = []
+        self.collect_planes(world, position, planes, exclude_body)
+        let overlapping = !planes.is_empty()
+        let recovery = self.solve_planes(Math.Vec2(), planes)
+        var current = position.add(recovery.translation)
+        var blocked = false
+        for plane in planes {
+            append_character_collider(colliders, plane.collider())
+            // Recovery is independent of requested motion. Do not turn an
+            // inward request into tangential movement in stop mode.
+            if translation.dot(plane.normal) < 0.0 { blocked = true }
+        }
+        if !blocked {
+            let index = self.closest_blocking_cast(world, current, translation, exclude_body)
+            if index >= 0 {
+                var hit = self.cast_scratch[index]
+                current = current.add(translation.multiply(hit.fraction))
+                append_character_plane(planes, CharacterCollisionPlane2D(
+                    hit.collider(), hit.normal.normalized(), hit.point, 0.0
+                ))
+                append_character_collider(colliders, hit.collider())
+            } else {
+                current = current.add(translation)
+            }
+        }
+        var final_planes:CharacterCollisionPlane2D[] = []
+        self.collect_planes(world, current, final_planes, exclude_body)
+        for plane in final_planes {
+            append_character_plane(planes, plane)
+            append_character_collider(colliders, plane.collider())
+        }
+        let applied = current.subtract(position)
+        return CharacterMoveResult2D(
+            applied, translation.subtract(applied), 1, recovery.iteration_count,
+            overlapping, planes, colliders
         )
     }
 

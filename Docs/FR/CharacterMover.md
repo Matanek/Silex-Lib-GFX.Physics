@@ -38,6 +38,14 @@ initial. Les capteurs sont ignorés par défaut. `query_filter` restreint les
 catégories considérées ; `include_sensors` permet explicitement de traiter les
 capteurs comme des obstacles.
 
+Le paramètre optionnel `response` de `calculate_move` vaut
+`Physics.CollisionResponse.slide` par défaut. `Physics.CollisionResponse.stop`
+corrige le recouvrement initial puis arrête la translation au premier impact,
+sans consommer le reste du trajet en glissant. Le résultat conserve le même
+contrat, en mètres ; `remaining_translation` vaut la translation demandée moins
+la translation appliquée, correction initiale comprise. Les contacts de fin de
+trajet sont inclus. Le calcul ne modifie ni les corps ni leurs vitesses.
+
 ## Contrôle séparé des plans
 
 `collect_planes` collecte les plans autour de la capsule courante,

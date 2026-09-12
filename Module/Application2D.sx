@@ -42,6 +42,8 @@ public class Physics2DStep {
 
     func scene_units_per_meter() float { return self.current_units }
 
+    module func configure_units(units:float) { self.current_units = units }
+
     package func dispatch(application:Application, delta:float, units:float) {
         self.current_units = units
         let count = self.callbacks.count()
@@ -306,6 +308,11 @@ public struct Plugin:PluginProtocol {
         host.add_resource(world)
         host.add_resource(Physics2DFrameEvents())
         host.add_plugin(Physics2DStepPlugin())
+        {
+            var resources = host.resources()
+            var step = resources.get_mut<Physics2DStep>()
+            step.configure_units(self.settings.scene_units_per_meter)
+        }
         host.add_resource(Physics2DRuntime(
             self.settings.fixed_delta,
             self.settings.maximum_catch_up_steps,

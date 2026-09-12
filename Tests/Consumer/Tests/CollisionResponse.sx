@@ -1,0 +1,58 @@
+use GFX.Physics
+use STD.Math
+
+func obstacle(world:Physics.World2D, x:float) {
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(x, 0.0)
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.5, 20.0))))
+}
+
+test "stop returns the first impact and preserves the remaining diagonal movement" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    // The nearer obstacle must win regardless of insertion order.
+    obstacle(world, 5.25)
+    obstacle(world, 2.25)
+    var mover = Physics.CharacterMover2D()
+    let desired = Math.Vec2(4.0, 2.0)
+    let stopped = mover.calculate_move(world, Math.Vec2(), desired,
+        response:Physics.CollisionResponse.stop)
+    let slid = mover.calculate_move(world, Math.Vec2(), desired)
+    // Shape casts allow the solver's 0.005 metre contact tolerance.
+    assert(stopped.applied_translation.nearly_equal(Math.Vec2(1.7, 0.85), 0.006))
+    assert(stopped.remaining_translation.nearly_equal(Math.Vec2(2.3, 1.15), 0.006))
+    assert(stopped.colliders().count() == 1)
+    assert(stopped.planes()[0].normal.nearly_equal(Math.Vec2(-1.0, 0.0), 0.001))
+    assert(slid.applied_translation.y > 1.99)
+    assert(stopped.applied_translation.add(stopped.remaining_translation).nearly_equal(desired, 0.000001))
+}
+
+test "stop recovers overlap without consuming the remaining translation by sliding" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    obstacle(world, 2.25)
+    var mover = Physics.CharacterMover2D()
+    let result = mover.calculate_move(world, Math.Vec2(1.9, 0.0), Math.Vec2(1.0, 2.0),
+        response:Physics.CollisionResponse.stop)
+    assert(result.started_overlapping)
+    assert(result.applied_translation.x < -0.19)
+    assert(Math.abs(result.applied_translation.y) < 0.001)
+    assert(result.remaining_translation.y == 2.0)
+}
+
+test "stop permits free tangent and departing motion and reports exact endpoint contact" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    obstacle(world, 2.25)
+    var mover = Physics.CharacterMover2D()
+    let arrival = mover.calculate_move(world, Math.Vec2(), Math.Vec2(1.7, 0.0),
+        response:Physics.CollisionResponse.stop)
+    assert(arrival.colliders().count() == 1)
+    let tangent = mover.calculate_move(world, Math.Vec2(1.7, 0.0), Math.Vec2(0.0, 2.0),
+        response:Physics.CollisionResponse.stop)
+    assert(tangent.applied_translation.nearly_equal(Math.Vec2(0.0, 2.0), 0.001))
+    let away = mover.calculate_move(world, Math.Vec2(1.7, 0.0), Math.Vec2(-1.0, 0.0),
+        response:Physics.CollisionResponse.stop)
+    assert(away.applied_translation.nearly_equal(Math.Vec2(-1.0, 0.0), 0.001))
+    let zero = mover.calculate_move(world, Math.Vec2(), Math.Vec2(),
+        response:Physics.CollisionResponse.stop)
+    assert(zero.applied_translation == Math.Vec2() && zero.colliders().is_empty())
+}

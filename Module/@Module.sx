@@ -7,6 +7,7 @@ public use GFX.Physics.Segment2D.Segment2D
 public use GFX.Physics.Shape2D.Shape2D
 public use GFX.Physics.Transform2D.Transform2D
 public use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+public use GFX.Physics.CollisionResponse.CollisionResponse
 public use GFX.Physics.BroadPhase2D.AABB2D
 public use GFX.Physics.Geometry2D.CastResult2D
 public use GFX.Physics.Geometry2D.DistanceResult2D

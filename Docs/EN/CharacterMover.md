@@ -37,6 +37,14 @@ planes, iteration counts, and whether the capsule started overlapped. Sensors
 are ignored by default. `query_filter` limits collision categories;
 `include_sensors` explicitly treats sensors as obstacles.
 
+The optional `response` argument of `calculate_move` defaults to
+`Physics.CollisionResponse.slide`. `Physics.CollisionResponse.stop` recovers
+initial overlap, then stops the translation at its first impact without sliding
+through the remaining path. The result keeps the same contract in meters;
+`remaining_translation` is requested minus applied translation, including initial
+recovery. Endpoint contacts are included. The calculation changes neither bodies
+nor their velocities.
+
 ## Separate plane control
 
 `collect_planes` gathers planes around the current capsule, `solve_planes`
