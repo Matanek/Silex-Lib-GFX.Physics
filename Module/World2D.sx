@@ -5263,6 +5263,12 @@ public class World2D {
                 var color = 0
                 if self.current_warm_start_enabled {
                     while color < 12 {
+                        if self.constraint_color_counts[color] == 0 &&
+                            self.joints.color_count(color) == 0
+                        {
+                            color++
+                            continue
+                        }
                         self.execute_warm_start_color(color)
                         self.execute_warm_start_joint_color(color)
                         color++
@@ -5273,6 +5279,12 @@ public class World2D {
                 // without bias after integration. Both passes solve friction.
                 color = 0
                 while color < 12 {
+                    if self.constraint_color_counts[color] == 0 &&
+                        self.joints.color_count(color) == 0
+                    {
+                        color++
+                        continue
+                    }
                     self.execute_solve_color(
                         color,
                         contact_softness,
@@ -5295,6 +5307,12 @@ public class World2D {
                 self.current_soft_step_stages.append(6)
                 color = 0
                 while color < 12 {
+                    if self.constraint_color_counts[color] == 0 &&
+                        self.joints.color_count(color) == 0
+                    {
+                        color++
+                        continue
+                    }
                     self.execute_solve_color(
                         color,
                         contact_softness,
@@ -5317,6 +5335,10 @@ public class World2D {
             }
             var color = 0
             while color < 12 {
+                if self.constraint_color_counts[color] == 0 {
+                    color++
+                    continue
+                }
                 self.execute_restitution_color(color)
                 color++
             }
