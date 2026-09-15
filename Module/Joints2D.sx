@@ -980,6 +980,7 @@ package class JointStore2D {
             color++
         }
         self.color_offsets[12] = offset
+        if offset == 0 { return }
         index = 0
         while index < offset {
             self.colored_entries.append(0)
