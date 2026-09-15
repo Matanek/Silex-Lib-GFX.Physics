@@ -213,8 +213,9 @@ static double seconds(void)
 
 int main(int argc, char** argv)
 {
-    bool check = argc > 1 && strcmp(argv[1], "--check") == 0;
-    int64_t count = check ? 16 : 2048, passes = check ? 8 : 2048;
+    bool check = argc > 1 && (strcmp(argv[1], "--check") == 0 || strcmp(argv[1], "--check-full") == 0);
+    bool check_full = argc > 1 && strcmp(argv[1], "--check-full") == 0;
+    int64_t count = check ? 16 : 2048, passes = check && !check_full ? 8 : 2048;
     State* states = calloc((size_t)count * 2, sizeof(State));
     Constraint* constraints = calloc((size_t)count, sizeof(Constraint));
     Impulses* impulses = calloc((size_t)count, sizeof(Impulses));

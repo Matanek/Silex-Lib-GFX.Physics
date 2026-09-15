@@ -137,17 +137,22 @@ func run_kernel(states:&State[..], constraints:@Constraint[..], impulses:&Impuls
 
 func main() {
     var check = false
+    var check_full = false
     match Process.arguments() {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {
                 if argument == "--check" { check = true }
+                if argument == "--check-full" { check = true; check_full = true }
             }
         }
     }
     var count = 2048
     var passes = 2048
-    if check { count = 16; passes = 8 }
+    if check {
+        count = 16
+        if !check_full { passes = 8 }
+    }
     var states:State[] = []
     var constraints:Constraint[] = []
     var impulses:Impulses[] = []
