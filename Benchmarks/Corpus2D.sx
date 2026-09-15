@@ -149,7 +149,7 @@ func measure(
     let settings = world.settings()
     print(
         "SILEX_PHYSICS_CORPUS schema=2 engine=silex-current " +
-        "engine_version=gfx-physics-0.5.1 oracle_version=3.1.1 " +
+        "engine_version=gfx-physics-0.6.0 oracle_version=3.1.1 " +
         "oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 " +
         "solver=soft-step substeps=$(substeps) scenario=$(scenario) " +
         "workload=$(workload) gravity_y=$(settings.gravity.y) " +
