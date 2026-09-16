@@ -1,0 +1,37 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func main() {
+    var world = Physics.World2D()
+    var foreign = Physics.World2D()
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    var second = world.create_rigid_body()
+    if selected("body") { foreign.destroy_rigid_body(second) }
+    if selected("collider") { foreign.destroy_collider(world.create_collider(first)) }
+    if selected("chain") {
+        var chain = world.create_collider(first, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0,0.0), Math.Vec2(-1.0,0.0),
+                Math.Vec2(1.0,0.0), Math.Vec2(2.0,0.0)])))
+        foreign.destroy_collider(chain)
+    }
+    if selected("distance") { foreign.destroy_joint(world.create_distance_joint(first, second)) }
+    if selected("filter") { foreign.destroy_joint(world.create_filter_joint(first, second)) }
+    if selected("motor") { foreign.destroy_joint(world.create_motor_joint(first, second)) }
+    if selected("mouse") { foreign.destroy_joint(world.create_mouse_joint(second)) }
+    if selected("prismatic") { foreign.destroy_joint(world.create_prismatic_joint(first, second)) }
+    if selected("revolute") { foreign.destroy_joint(world.create_revolute_joint(first, second)) }
+    if selected("weld") { foreign.destroy_joint(world.create_weld_joint(first, second)) }
+    if selected("wheel") { foreign.destroy_joint(world.create_wheel_joint(first, second)) }
+    panic("foreign world mutation was accepted")
+}

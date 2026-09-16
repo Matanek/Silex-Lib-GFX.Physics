@@ -1,0 +1,121 @@
+use GFX.Physics
+use STD.Math
+
+func spawn_neighbor(world:Physics.World2D, body:Physics.RigidBody2D) Physics.RigidBody2D {
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = body.position().add(Math.Vec2(2.0, 0.0)))
+}
+
+class Playground {
+    var world:Physics.World2D
+    var body:Physics.RigidBody2D
+    init() {
+        self.world = Physics.World2D(gravity:Math.Vec2())
+        self.body = self.world.create_rigid_body()
+    }
+    func duplicate() Physics.RigidBody2D {
+        return spawn_neighbor(self.world, self.body)
+    }
+}
+
+func new_playground() Playground { return Playground() }
+
+test "retain an explicit world context for global operations from a body" {
+    var scene = new_playground()
+    var neighbor = scene.duplicate()
+    assert(scene.world.body_count() == 2)
+    assert(neighbor.position() == Math.Vec2(2.0, 0.0))
+    let hit = scene.world.ray_cast_closest(Physics.Ray2D(
+        Math.Vec2(-2.0, 0.0), Math.Vec2(6.0, 0.0)))
+    assert(hit.hit)
+    assert(hit.collider().body().same_body(scene.body))
+    scene.world.destroy_rigid_body(scene.body)
+    assert(!scene.body.is_valid())
+    assert(neighbor.is_valid())
+    scene.world.destroy_rigid_body(neighbor)
+    assert(!neighbor.is_valid() && scene.world.body_count() == 0)
+}
+
+func replace_collider(world:Physics.World2D, collider:Physics.Collider2D) Physics.Collider2D {
+    var body = collider.body()
+    world.destroy_collider(collider)
+    return world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25)))
+}
+
+test "use the same explicit context for ordinary and chain colliders" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    var circle = world.create_collider(body)
+    var chain = world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+            Math.Vec2(-2.0, 0.0), Math.Vec2(-1.0, 0.0),
+            Math.Vec2(1.0, 0.0), Math.Vec2(2.0, 0.0)])))
+    var replacement_circle = replace_collider(world, circle)
+    var replacement_chain = replace_collider(world, chain)
+    assert(!circle.is_valid() && !chain.is_valid())
+    assert(body.collider_count() == 2)
+    assert(replacement_circle.body().same_body(body))
+    assert(replacement_chain.body().same_body(body))
+    world.destroy_rigid_body(body)
+    assert(!replacement_circle.is_valid() && !replacement_chain.is_valid())
+}
+
+func connected_body(joint:Physics.Joint2D) Physics.RigidBody2D {
+    match joint {
+        distance(value) => { return value.second_body() }
+        filter(value) => { return value.second_body() }
+        motor(value) => { return value.second_body() }
+        mouse(value) => { return value.body() }
+        prismatic(value) => { return value.second_body() }
+        revolute(value) => { return value.second_body() }
+        weld(value) => { return value.second_body() }
+        wheel(value) => { return value.second_body() }
+    }
+}
+
+func valid_joint(joint:Physics.Joint2D) bool {
+    match joint {
+        distance(value) => { return value.is_valid() }
+        filter(value) => { return value.is_valid() }
+        motor(value) => { return value.is_valid() }
+        mouse(value) => { return value.is_valid() }
+        prismatic(value) => { return value.is_valid() }
+        revolute(value) => { return value.is_valid() }
+        weld(value) => { return value.is_valid() }
+        wheel(value) => { return value.is_valid() }
+    }
+}
+
+func replace_joint_body(world:Physics.World2D, joint:Physics.Joint2D) Physics.RigidBody2D {
+    var body = connected_body(joint)
+    let position = body.position().add(Math.Vec2())
+    world.destroy_rigid_body(body)
+    return world.create_rigid_body(Physics.RigidBody2DSettings() ..position = position)
+}
+
+test "receive each joint family with its explicit world for a global replacement" {
+    for family in 0...8 {
+        var world = Physics.World2D(gravity:Math.Vec2())
+        var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed)
+        var second = world.create_rigid_body()
+        if family == 0 { world.create_distance_joint(first, second) }
+        if family == 1 { world.create_filter_joint(first, second) }
+        if family == 2 { world.create_motor_joint(first, second) }
+        if family == 3 { world.create_mouse_joint(second) }
+        if family == 4 { world.create_prismatic_joint(first, second) }
+        if family == 5 { world.create_revolute_joint(first, second) }
+        if family == 6 { world.create_weld_joint(first, second) }
+        if family == 7 { world.create_wheel_joint(first, second) }
+        var joints:Physics.Joint2D[] = []
+        world.write_joints(joints)
+        assert(joints.count() == 1 && valid_joint(joints[0]))
+        var replacement = replace_joint_body(world, joints[0])
+        assert(!valid_joint(joints[0]) && !second.is_valid())
+        assert(replacement.is_valid() && first.is_valid())
+        assert(!replacement.same_body(second))
+        assert(world.body_count() == 2 && world.joint_count() == 0)
+    }
+}

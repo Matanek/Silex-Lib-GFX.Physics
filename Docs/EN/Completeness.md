@@ -24,11 +24,13 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current matrix contains 51 covered, 4 divergent, 5 excluded and one
-partial capability: joint constraint softness tuning. The rigid distance joint
-has a transient comparison; other families and spring/limit combinations remain
-to be qualified. The final gate must remain red while this capability is partial.
-These counts describe the inventory, not a proof of full physical equivalence.
+The current matrix contains 50 covered, 3 divergent, 5 excluded and three
+partial capabilities: motor/mouse transient qualification, owning-world access,
+and global invalidation at the end of world lifetime. Common tuning for the
+five reference families that use it is compared with the reference. The
+[explicit world composition](WorldOwnership.md) usage is tested; its acceptance
+as an adaptation remains open. The final gate stays red until these obligations
+are resolved. These counts describe the inventory, not full physical equivalence.
 
 ## Intentional boundary
 
@@ -42,10 +44,10 @@ scaling.
 
 Allocator hooks, assertion hooks, generic clocks and hashes belong to the
 compiler, STD or host runtime. Raw dynamic-tree proxies, rebuild controls,
-solver test switches and memory dumps remain private. `userData` pointers are
-excluded at world, body, collider and joint levels; typed handles, material
-identifiers, debug labels and application maps cover those intentions without
-untyped lifetime hazards.
+solver test switches and memory dumps remain private. World context uses typed
+application composition. Bodies, colliders and joints
+carry optional application keys; immutable event snapshots retain the keys
+needed for later processing. See [application identity](ApplicationIdentity.md).
 
 Cloth, soft bodies, fluids and 3D are outside this rigid-body 2D contract.
 Box2D remains a benchmark-only oracle and is never linked into a GFX.Physics

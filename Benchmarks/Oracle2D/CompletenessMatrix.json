@@ -252,9 +252,11 @@
       "id": "world-lifecycle",
       "domain": "world",
       "capability": "world creation, validity and destruction",
-      "status": "covered",
+      "status": "partial",
+      "tracking": "Physics-2D-Final-Parity",
       "patterns": ["^b2(?:CreateWorld|DestroyWorld|World_IsValid)$"],
-      "silex_contract": "World2D owns the simulation and invalidates every retained handle on destruction.",
+      "silex_contract": "World2D owns simulation resources. Explicit body/collider/joint destruction invalidates retained aliases; scope exit alone has not established world-wide handle invalidation.",
+      "rationale": "Task-24 addresses the measured retained-handle lifetime gap: a body remains valid and mutable after its local World2D variable leaves scope. The previous global invalidation claim was not tested.",
       "evidence": ["Tests/Consumer/Tests/Lifecycle.sx", "Tests/Consumer/check-stale-handle.sh"]
     },
     {
@@ -388,7 +390,7 @@
       "domain": "body",
       "capability": "body creation, validity, ownership and destruction",
       "status": "covered",
-      "patterns": ["^b2(?:CreateBody|DestroyBody|Body_IsValid|Body_GetWorld)$"],
+      "patterns": ["^b2(?:CreateBody|DestroyBody|Body_IsValid)$"],
       "silex_contract": "World2D owns stable invalidable RigidBody2D handles.",
       "evidence": ["Tests/Consumer/Tests/Lifecycle.sx", "Tests/Consumer/check-stale-handle.sh"]
     },
@@ -505,7 +507,7 @@
       "domain": "shape",
       "capability": "living collider creation, identity, ownership and destruction",
       "status": "covered",
-      "patterns": ["^b2(?:CreateCapsuleShape|CreateCircleShape|CreatePolygonShape|CreateSegmentShape|DestroyShape)$", "^b2Shape_(?:IsValid|GetWorld|GetBody|GetType|GetParentChain)$"],
+      "patterns": ["^b2(?:CreateCapsuleShape|CreateCircleShape|CreatePolygonShape|CreateSegmentShape|DestroyShape)$", "^b2Shape_(?:IsValid|GetBody|GetType|GetParentChain)$"],
       "silex_contract": "World2D owns stable invalidable Collider2D handles distinct from Shape2D geometry values.",
       "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
@@ -570,7 +572,7 @@
       "domain": "shape",
       "capability": "chain collider lifetime, segments and materials",
       "status": "covered",
-      "patterns": ["^b2(?:CreateChain|DestroyChain)$", "^b2Chain_.*$"],
+      "patterns": ["^b2(?:CreateChain|DestroyChain)$", "^b2Chain_(?!GetWorld$).*$"],
       "silex_contract": "Collider2D retains one-sided Chain2D geometry with common or per-segment typed materials.",
       "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
@@ -594,13 +596,14 @@
     },
     {
       "id": "joint-world-back-reference",
-      "domain": "joint",
-      "capability": "recover a world identifier from a joint",
-      "status": "divergent",
-      "patterns": ["^b2Joint_GetWorld$"],
-      "silex_contract": "World2D owns every joint operation and validates handle ownership without retaining a public world back-reference.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx"],
-      "rationale": "A returned world handle would add an ownership cycle without enabling an operation that World2D does not already express."
+      "domain": "world",
+      "capability": "recover the owning world from body, collider, chain and joint handles",
+      "status": "partial",
+      "tracking": "Physics-2D-Final-Parity",
+      "patterns": ["^b2(?:Body|Shape|Chain|Joint)_GetWorld$"],
+      "silex_contract": "Consumers can explicitly retain or pass World2D alongside every handle family for creation, queries and destruction. A bare handle does not recover its world.",
+      "evidence": ["Tests/Consumer/Tests/WorldOwnership.sx", "Docs/FR/WorldOwnership.md", "Docs/EN/WorldOwnership.md"],
+      "rationale": "Task-14 supplies a tested explicit-composition proposal. Acceptance of this facade adaptation remains pending; it is not yet declared equivalent to GetWorld."
     },
     {
       "id": "joint-generic-constraint-tuning",
