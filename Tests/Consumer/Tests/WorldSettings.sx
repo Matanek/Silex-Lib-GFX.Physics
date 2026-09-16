@@ -280,7 +280,7 @@ test "report logical live-world counters" {
         Physics.DistanceJoint2DSettings()
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     let counters = world.counters()
 
     assert(counters.body_count == 2)

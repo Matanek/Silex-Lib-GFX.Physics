@@ -263,8 +263,8 @@
       "capability": "deterministic world stepping",
       "status": "covered",
       "patterns": ["^b2World_Step$"],
-      "silex_contract": "World2D.step runs the native Soft Step graph with four default substeps or an explicit positive count.",
-      "evidence": ["Benchmarks/Corpus2D.sx", "Tests/World2D.sx", "Tests/Consumer/Tests/WorldSettings.sx"]
+      "silex_contract": "World2D.step runs the native Soft Step graph with four default substeps or an explicit positive count. A zero-duration step preserves the last contact state and pending forces; refresh_contacts explicitly updates contacts while paused.",
+      "evidence": ["Benchmarks/Corpus2D.sx", "Tests/World2D.sx", "Tests/Consumer/Tests/WorldSettings.sx", "Benchmarks/ZeroStepOracle2D.sx", "Benchmarks/Oracle2D/CheckZeroStep.py", "Tests/Consumer/Smokes/RefreshContacts.sx"]
     },
     {
       "id": "world-debug-draw",

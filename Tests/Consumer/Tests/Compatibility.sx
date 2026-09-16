@@ -55,6 +55,6 @@ test "preserve physics catalog aliases across the switch" {
     var world = Resources.World2D(gravity:Math.Vec2())
     var body:Components.RigidBody2D = world.create_rigid_body()
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(body.position() == Math.Vec2())
 }

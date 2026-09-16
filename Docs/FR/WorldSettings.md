@@ -79,3 +79,31 @@ Le test consommateur
 [`WorldSettings.sx`](../../Tests/Consumer/Tests/WorldSettings.sx) couvre les
 réglages, leurs effets, les réveils, les sous-pas et les compteurs à travers la
 surface publique du package.
+
+## Pause et rafraîchissement
+
+`step(0.0)` ne recalcule ni contacts ni overlaps et ne consomme pas les forces
+ou couples appliqués. Les snapshots restent ceux de la dernière mise à jour.
+Les événements begin/hit/move sont vidés ; les fins de contact déjà produites
+par destruction sont publiées une fois. Les fins de capteur en attente restent
+différées jusqu’à une mise à jour des overlaps. Le prochain pas positif applique
+les forces conservées. Ce comportement suit le pas nul de Box2D 3.1.1.
+
+Pour prendre en compte des mutations pendant une pause, demander explicitement :
+
+```silex
+body.set_position(Math.Vec2(2.0, 1.0))
+world.refresh_contacts()
+```
+
+`refresh_contacts()` actualise les contacts, les capteurs et leurs événements,
+sans déplacer les corps, modifier leurs vitesses, consommer leurs forces,
+progresser les minuteries de sommeil ni produire d’impact de solveur. Les
+filtres et le pré-solve sont évalués ; les mutations réentrantes restent interdites.
+Les réactions de ce rafraîchissement sans solveur sont nulles. Les changements
+de contact peuvent réveiller les corps pour le prochain pas positif.
+
+Les anciens usages de `step(0.0)` destinés à rafraîchir les contacts doivent
+appeler `refresh_contacts()`. Les [tests publics](../../Tests/Consumer/Smokes/RefreshContacts.sx)
+et le [témoin différentiel](../../Benchmarks/ZeroStepOracle2D.sx) vérifient ces
+intentions séparément.

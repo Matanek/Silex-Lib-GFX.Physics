@@ -56,3 +56,11 @@ changes since 0.4. The package is pure Silex and owns no platform boundary.
 Local macOS execution and public-consumer tests validate the package contract;
 the final release remains separately gated by the workspace portability
 matrix, graphical sentinels, benchmark corpus, and visual ShapeGallery review.
+
+## Refreshing while paused
+
+Replace `world.step(0.0)` with `world.refresh_contacts()` when the intent is to
+reevaluate contacts, sensors, filters and events after a mutation. A zero step
+now retains previous snapshots and preserves applied forces for the next
+positive step, following Box2D. See the
+[pause contract](WorldSettings.md#pause-and-contact-refresh).

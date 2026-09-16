@@ -78,3 +78,30 @@ The consumer test
 [`WorldSettings.sx`](../../Tests/Consumer/Tests/WorldSettings.sx) covers the
 settings, their effects, wake policies, substeps, and counters through the
 package’s public surface.
+
+## Pause and contact refresh
+
+`step(0.0)` neither recomputes contacts or overlaps nor consumes applied forces
+or torques. Snapshots retain the last updated state. Begin/hit/move events are
+cleared; contact ends already produced by destruction are published once.
+Pending sensor ends remain deferred until overlaps are updated. The next
+positive step applies the retained forces. This follows Box2D 3.1.1 zero-step
+behavior.
+
+To account for mutations while paused, request an explicit refresh:
+
+```silex
+body.set_position(Math.Vec2(2.0, 1.0))
+world.refresh_contacts()
+```
+
+`refresh_contacts()` updates contacts, sensors and their events without moving
+bodies, changing velocities, consuming forces, advancing sleep timers or
+producing solver hit events. Filters and pre-solve are evaluated; reentrant
+mutations remain forbidden. Reactions from this refresh without a solve are
+zero. Contact changes can wake bodies for the next positive step.
+
+Existing calls to `step(0.0)` intended to refresh contacts must use
+`refresh_contacts()`. The [public checks](../../Tests/Consumer/Smokes/RefreshContacts.sx)
+and [differential witness](../../Benchmarks/ZeroStepOracle2D.sx) verify the two
+intentions separately.

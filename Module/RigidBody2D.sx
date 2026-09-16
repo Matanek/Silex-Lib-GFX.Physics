@@ -1310,13 +1310,13 @@ package class BodyStore2D {
 
     func require_mutable() {
         if self.world_locked {
-            panic("GFX.Physics.World2D cannot be modified during step")
+            panic("GFX.Physics.World2D cannot be modified during step or refresh_contacts")
         }
     }
 
     func require_queryable() {
         if self.world_locked {
-            panic("GFX.Physics.World2D cannot be queried during step")
+            panic("GFX.Physics.World2D cannot be queried during step or refresh_contacts")
         }
     }
 

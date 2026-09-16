@@ -406,3 +406,14 @@ Build target: `gfx_physics_box2d_distance_tuning_oracle`. Run the Silex source
 from the workspace or Spec group root in both LLVM Debug and Release. The
 zero-frequency case checks velocity relaxation without position bias; high
 frequency checks the substep-dependent cap. Spring settings are independent.
+
+## Zero-duration steps and explicit refresh
+
+`ZeroStepOracle.c` and `../ZeroStepOracle2D.sx` compare 19 observations around
+creation, zero and positive steps, teleportation, destruction and applied forces.
+Build target: `gfx_physics_box2d_zero_step_oracle`.
+`CheckZeroStep.py BOX2D_RECORDS SILEX_RECORDS` requires exact contact/sensor/event
+counts and finite force-case position/velocity within 0.000001 absolute error.
+The public `Tests/Consumer/Smokes/RefreshContacts.sx` separately checks explicit
+refresh, unchanged transforms and velocities, retained forces, and no hit event
+without a solve. Run both Silex witnesses in LLVM Debug and Release.

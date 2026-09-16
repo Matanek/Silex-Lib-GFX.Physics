@@ -78,22 +78,22 @@ test "retain and remove persistent candidate pairs" {
         ..position = Math.Vec2(0.0, 0.5)
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 1)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 1)
 
     box.set_position(Math.Vec2(8.0, 0.5))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 0)
 
     var cycle = 0
     while cycle < 32 {
         box.set_position(Math.Vec2(0.0, 0.5))
-        world.step(0.0)
+        world.refresh_contacts()
         assert(world.candidate_pair_count() == 1)
         box.set_position(Math.Vec2(8.0, 0.5))
-        world.step(0.0)
+        world.refresh_contacts()
         assert(world.candidate_pair_count() == 0)
         cycle++
     }
@@ -122,19 +122,19 @@ test "reuse a persistent general contact slot after separation" {
         ..allow_sleep = false
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.persistent_pair_count() == 1)
     assert(world.candidate_pair_slot_count() == 1)
     assert(world.contact_count() == 1)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_slot_count() == 1)
 
     capsule.set_position(Math.Vec2(0.0, 2.0))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.persistent_pair_count() == 0)
     assert(world.candidate_pair_slot_count() == 1)
     capsule.set_position(Math.Vec2(0.0, 0.35))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.persistent_pair_count() == 1)
     assert(world.candidate_pair_slot_count() == 1)
     assert(world.contact_count() == 1)
@@ -169,7 +169,7 @@ test "pack one general contact island and remove it from the active path" {
         index++
     }
     for body in bodies { assert(!body.is_awake()) }
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.active_body_count() == 0)
     assert(world.active_island_count() == 0)
     assert(world.active_island_body_count() == 0)
@@ -376,8 +376,8 @@ test "return a fast body from a deep container boundary" {
     )
 
     world.step(0.1)
-    world.step(0.0)
-    world.step(0.0)
+    world.refresh_contacts()
+    world.refresh_contacts()
 
     assert(box.position().x >= -0.801)
     assert(box.velocity().x >= 0.0)
@@ -397,9 +397,9 @@ test "return a fast circle through its entry face" {
     )
 
     world.step(0.1)
-    world.step(0.0)
-    world.step(0.0)
-    world.step(0.0)
+    world.refresh_contacts()
+    world.refresh_contacts()
+    world.refresh_contacts()
 
     assert(circle.position().x <= 0.806)
     assert(circle.velocity().x <= 0.0)
@@ -602,7 +602,7 @@ test "keep rotating circle broad phase bounds independent of rotation" {
         ..rotation = -Math.pi() * 0.25
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
 
     assert(world.candidate_pair_count() == 0)
     assert(world.contact_count() == 0)

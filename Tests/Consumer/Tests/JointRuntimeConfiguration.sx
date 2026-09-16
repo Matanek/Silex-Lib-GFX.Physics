@@ -220,10 +220,10 @@ test "connected collision toggles and reactions describe completed steps" {
         Physics.DistanceJoint2DSettings()..length = 0.5)
 
     assert(joint.constraint_force().length() == 0.0)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 0)
     joint.set_collide_connected(true)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 1)
     world.step(1.0 / 60.0)
     assert(joint.constraint_force().length() == joint.constraint_force().length())

@@ -1,0 +1,126 @@
+use GFX.Physics
+use STD.Math
+
+func force_case(refresh:bool) {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..mass = 1.0
+        ..allow_sleep = false
+        ..create_implicit_collider = false)
+    body.set_mass_properties(Physics.MassProperties2D(1.0, 1.0))
+    body.apply_force_to_center(Math.Vec2(60.0, 0.0))
+    body.apply_torque(30.0)
+    if refresh { world.refresh_contacts() } else { world.step(0.0) }
+    assert(body.position() == Math.Vec2())
+    assert(body.velocity() == Math.Vec2())
+    assert(body.rotation() == 0.0 && body.angular_velocity() == 0.0)
+    world.step(1.0 / 60.0, 1)
+    assert(Math.abs(body.velocity().x - 1.0) < 0.000001)
+    assert(Math.abs(body.angular_velocity() - 0.5) < 0.000001)
+    world.step(1.0 / 60.0, 1)
+    assert(Math.abs(body.velocity().x - 1.0) < 0.000001)
+    assert(Math.abs(body.angular_velocity() - 0.5) < 0.000001)
+}
+
+func contact_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..enable_contact_events = true
+        ..enable_hit_events = true)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.9, 0.0)
+        ..velocity = Math.Vec2(-10.0, 0.0)
+        ..angular_velocity = 3.0
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..allow_sleep = false)
+    let position = body.position()
+    let velocity = body.velocity()
+    let rotation = body.rotation()
+    let angular_velocity = body.angular_velocity()
+    world.step(0.0)
+    assert(world.contact_count() == 0)
+    world.refresh_contacts()
+    assert(world.contact_count() == 1)
+    assert(body.position() == position)
+    assert(body.velocity() == velocity)
+    assert(body.rotation() == rotation)
+    assert(body.angular_velocity() == angular_velocity)
+    var hits:Physics.ContactHitEvent2D[] = []
+    world.write_contact_hit_events(hits)
+    assert(hits.count() == 0)
+    var began:Physics.ContactBeginEvent2D[] = []
+    world.write_contact_begin_events(began)
+    assert(began.count() == 1)
+    world.refresh_contacts()
+    world.write_contact_begin_events(began)
+    assert(began.count() == 0)
+    body.set_position(Math.Vec2(4.0, 0.0))
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    world.refresh_contacts()
+    assert(world.contact_count() == 0)
+    assert(body.position() == Math.Vec2(4.0, 0.0))
+    var ended:Physics.ContactEndEvent2D[] = []
+    world.write_contact_end_events(ended)
+    assert(ended.count() == 1)
+}
+
+func sensor_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..is_sensor = true
+        ..enable_sensor_events = true)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.9, 0.0)
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..allow_sleep = false)
+    world.refresh_contacts()
+    var overlaps:Physics.SensorOverlap2D[] = []
+    var began:Physics.SensorBeginEvent2D[] = []
+    var ended:Physics.SensorEndEvent2D[] = []
+    world.write_sensor_overlaps(overlaps)
+    world.write_sensor_begin_events(began)
+    assert(overlaps.count() == 1)
+    assert(began.count() == 1)
+    body.set_position(Math.Vec2(4.0, 0.0))
+    world.step(0.0)
+    world.write_sensor_overlaps(overlaps)
+    assert(overlaps.count() == 1)
+    world.refresh_contacts()
+    world.write_sensor_overlaps(overlaps)
+    world.write_sensor_end_events(ended)
+    assert(overlaps.count() == 0)
+    assert(ended.count() == 1)
+}
+
+func sleep_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings())
+    world.step(0.25)
+    assert(body.is_awake())
+    var iteration = 0
+    while iteration < 32 {
+        world.refresh_contacts()
+        assert(body.is_awake())
+        assert(world.counters().active_island_count == 1)
+        iteration++
+    }
+    world.step(0.25)
+    assert(!body.is_awake())
+    world.refresh_contacts()
+    assert(!body.is_awake())
+    assert(world.counters().active_island_count == 0)
+}
+
+func main() {
+    force_case(false)
+    force_case(true)
+    contact_case()
+    sensor_case()
+    sleep_case()
+    print("zero-step-and-refresh-ok")
+}

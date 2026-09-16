@@ -2835,6 +2835,24 @@ public class World2D {
             panic("GFX.Physics.World2D.step requires a positive substep count")
         }
         self.store.require_mutable()
+        if delta == 0.0 {
+            self.clear_step_events(false)
+            self.current_step_profile = World2DStepProfile()
+            self.current_soft_step_stages.clear()
+            self.current_soft_step_parallel_dispatch_count = 0
+            self.current_ccd_body_count = 0
+            self.current_ccd_pair_test_count = 0
+            return
+        }
+        self.update_physics(delta, substeps)
+    }
+
+    func refresh_contacts() {
+        self.store.require_mutable()
+        self.update_physics(0.0, 1)
+    }
+
+    private func update_physics(delta:float, substeps:int) {
         self.begin_step_events()
         if self.store.topology_dirty {
             self.rebuild_after_body_destruction()
@@ -2889,7 +2907,7 @@ public class World2D {
             self.store.dirty_transforms[index] = false
             index++
         }
-        if self.current_continuous_collision_enabled &&
+        if delta > 0.0 && self.current_continuous_collision_enabled &&
             self.dynamic_grid_active &&
             self.maximum_dynamic_circle_radius > 0.0
         {
@@ -2934,7 +2952,7 @@ public class World2D {
                 self.current_pair_filter_ms
         }
         self.solve_collisions(self.active_pairs, delta, substeps)
-        if self.current_continuous_collision_enabled {
+        if delta > 0.0 && self.current_continuous_collision_enabled {
             self.solve_continuous_motion()
         }
         if self.profiling_enabled {
@@ -2952,11 +2970,11 @@ public class World2D {
                 self.current_step_profile.solve_ms +
                 self.current_step_profile.sleep_ms
         }
-        self.store.clear_forces()
+        if delta > 0.0 { self.store.clear_forces() }
         self.store.world_locked = false
     }
 
-    private func begin_step_events() {
+    private func clear_step_events(publish_sensor_ends:bool) {
         self.body_move_events.clear()
         self.contact_begin_events.clear()
         self.contact_end_events.clear()
@@ -2967,13 +2985,21 @@ public class World2D {
             self.contact_end_events.append(ContactEndEvent2D(snapshot))
         }
         self.pending_contact_ends.clear()
-        for overlap in self.pending_sensor_ends {
-            self.sensor_end_events.append(SensorEndEvent2D(
-                overlap.sensor(),
-                overlap.visitor()
-            ))
+        // Sensor removal events are consumed when overlaps are processed;
+        // a zero-duration step only publishes already queued contact ends.
+        if publish_sensor_ends {
+            for overlap in self.pending_sensor_ends {
+                self.sensor_end_events.append(SensorEndEvent2D(
+                    overlap.sensor(),
+                    overlap.visitor()
+                ))
+            }
+            self.pending_sensor_ends.clear()
         }
-        self.pending_sensor_ends.clear()
+    }
+
+    private func begin_step_events() {
+        self.clear_step_events(true)
         self.previous_sensor_overlaps.clear()
         for overlap in self.published_sensor_overlaps {
             self.previous_sensor_overlaps.append(overlap)
@@ -3934,49 +3960,51 @@ public class World2D {
             }
             candidate_index++
         }
-        index = 0
-        while index < self.store.count() {
-            if self.store.enabled[index] &&
-                self.store.body_types[index] == BodyType2D.dynamic
-            {
-                if !self.store.allow_sleep[index] {
-                    self.store.sleep_times[index] = 0.0
-                    self.store.awake[index] = true
-                } else if self.store.awake[index] {
-                    let linear_speed_squared =
-                        self.store.velocities_x[index] *
-                            self.store.velocities_x[index] +
-                        self.store.velocities_y[index] *
-                            self.store.velocities_y[index]
-                    let sweep_radius_squared =
-                        self.store.sweep_radii_squared[index]
-                    let angular_speed = self.store.angular_velocities[index]
-                    let surface_motion_squared = linear_speed_squared +
-                        angular_speed * angular_speed * sweep_radius_squared
-                    let rest_threshold = self.store.sleep_thresholds[index]
-                    let rest_motion_threshold_squared =
-                        rest_threshold * rest_threshold
-                    let significant_threshold = rest_threshold * 2.0
-                    let significant_motion_threshold_squared =
-                        significant_threshold * significant_threshold
-                    self.sleep_motion_squared[index] = surface_motion_squared
-                    if surface_motion_squared > significant_motion_threshold_squared {
+        if delta > 0.0 {
+            index = 0
+            while index < self.store.count() {
+                if self.store.enabled[index] &&
+                    self.store.body_types[index] == BodyType2D.dynamic
+                {
+                    if !self.store.allow_sleep[index] {
                         self.store.sleep_times[index] = 0.0
-                    } else if surface_motion_squared > rest_motion_threshold_squared {
-                        self.store.sleep_times[index] = Math.max(
-                            0.0,
-                            self.store.sleep_times[index] - delta * 0.25
-                        )
-                    } else {
-                        self.store.sleep_times[index] += delta
-                        self.sleep_eligible[index] = true
+                        self.store.awake[index] = true
+                    } else if self.store.awake[index] {
+                        let linear_speed_squared =
+                            self.store.velocities_x[index] *
+                                self.store.velocities_x[index] +
+                            self.store.velocities_y[index] *
+                                self.store.velocities_y[index]
+                        let sweep_radius_squared =
+                            self.store.sweep_radii_squared[index]
+                        let angular_speed = self.store.angular_velocities[index]
+                        let surface_motion_squared = linear_speed_squared +
+                            angular_speed * angular_speed * sweep_radius_squared
+                        let rest_threshold = self.store.sleep_thresholds[index]
+                        let rest_motion_threshold_squared =
+                            rest_threshold * rest_threshold
+                        let significant_threshold = rest_threshold * 2.0
+                        let significant_motion_threshold_squared =
+                            significant_threshold * significant_threshold
+                        self.sleep_motion_squared[index] = surface_motion_squared
+                        if surface_motion_squared > significant_motion_threshold_squared {
+                            self.store.sleep_times[index] = 0.0
+                        } else if surface_motion_squared > rest_motion_threshold_squared {
+                            self.store.sleep_times[index] = Math.max(
+                                0.0,
+                                self.store.sleep_times[index] - delta * 0.25
+                            )
+                        } else {
+                            self.store.sleep_times[index] += delta
+                            self.sleep_eligible[index] = true
+                        }
                     }
                 }
+                index++
             }
-            index++
         }
-        if self.dynamic_grid_active && self.dynamic_grid_eligible &&
-            self.maximum_dynamic_circle_radius > 0.0
+        if delta > 0.0 && self.dynamic_grid_active &&
+            self.dynamic_grid_eligible && self.maximum_dynamic_circle_radius > 0.0
         {
             var requires_sleep_audit = false
             index = 0
@@ -4024,6 +4052,7 @@ public class World2D {
             index++
         }
         self.build_active_island_layout()
+        if delta == 0.0 { return }
         var island = 0
         while island < self.active_island_roots.count() {
             let root = self.active_island_roots[island]
@@ -5239,7 +5268,7 @@ public class World2D {
         if self.profiling_enabled {
             self.current_collision_build_ms = profile_clock.tick() * 1000.0
         }
-        self.collect_discrete_hit_events()
+        if delta > 0.0 { self.collect_discrete_hit_events() }
         self.build_constraint_colors()
         self.current_soft_step_stages.append(1)
         self.execute_begin_soft_step_bodies()

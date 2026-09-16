@@ -1,0 +1,19 @@
+contact-created 0 0 0 0 0 0 0
+contact-zero 0 0 0 0 0 0 0
+contact-positive 1 0 1 0 1 0 0
+contact-paused 1 0 0 0 0 0 0
+contact-moved-zero 1 0 0 0 0 0 0
+contact-moved-positive 0 0 0 1 0 0 0
+contact-destroyed-zero 1 0
+contact-destroyed-twice 0 0
+sensor-created 0 0 0 0 0 0 0
+sensor-zero 0 0 0 0 0 0 0
+sensor-positive 0 1 0 0 0 1 0
+sensor-paused 0 1 0 0 0 0 0
+sensor-moved-zero 0 1 0 0 0 0 0
+sensor-moved-positive 0 0 0 0 0 0 1
+sensor-destroyed-zero 0 0
+sensor-destroyed-twice 0 0
+force-zero 0.000000000 0.000000000
+force-positive 0.016666668 1.000000000
+force-next 0.033333335 1.000000000

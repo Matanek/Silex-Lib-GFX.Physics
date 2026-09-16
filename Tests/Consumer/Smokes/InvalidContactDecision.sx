@@ -27,5 +27,5 @@ func main() {
     world.create_rigid_body(Physics.RigidBody2DSettings()
         ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
     )
-    world.step(0.0)
+    world.refresh_contacts()
 }

@@ -1,0 +1,89 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func snapshot(name:str, phase:str, world:Physics.World2D) {
+    var contacts:Physics.Contact2D[] = []
+    var overlaps:Physics.SensorOverlap2D[] = []
+    var began:Physics.ContactBeginEvent2D[] = []
+    var ended:Physics.ContactEndEvent2D[] = []
+    var hit:Physics.ContactHitEvent2D[] = []
+    var sensor_began:Physics.SensorBeginEvent2D[] = []
+    var sensor_ended:Physics.SensorEndEvent2D[] = []
+    world.write_contacts(contacts)
+    world.write_sensor_overlaps(overlaps)
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    world.write_contact_hit_events(hit)
+    world.write_sensor_begin_events(sensor_began)
+    world.write_sensor_end_events(sensor_ended)
+    print("$(name)-$(phase) $(contacts.count()) $(overlaps.count()) $(began.count()) $(ended.count()) $(hit.count()) $(sensor_began.count()) $(sensor_ended.count())")
+}
+
+func destruction_snapshot(name:str, phase:str, world:Physics.World2D) {
+    var ended:Physics.ContactEndEvent2D[] = []
+    var sensor_ended:Physics.SensorEndEvent2D[] = []
+    world.write_contact_end_events(ended)
+    world.write_sensor_end_events(sensor_ended)
+    print("$(name)-$(phase) $(ended.count()) $(sensor_ended.count())")
+}
+
+func collision_case(sensor:bool, name:str) {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(0.9, 0.0)
+        ..velocity = Math.Vec2(-5.0, 0.0)
+        ..allow_sleep = false
+        ..create_implicit_collider = false)
+    var settings = Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..enable_contact_events = true
+        ..enable_hit_events = true
+        ..enable_sensor_events = true
+    settings.is_sensor = sensor
+    world.create_collider(ground, settings)
+    settings.is_sensor = false
+    world.create_collider(body, settings)
+    snapshot(name, "created", world)
+    world.step(0.0, 1)
+    snapshot(name, "zero", world)
+    world.step(1.0 / 60.0, 1)
+    snapshot(name, "positive", world)
+    world.step(0.0, 1)
+    snapshot(name, "paused", world)
+    body.set_position(Math.Vec2(4.0, 0.0))
+    world.step(0.0, 1)
+    snapshot(name, "moved-zero", world)
+    world.step(1.0 / 60.0, 1)
+    snapshot(name, "moved-positive", world)
+    body.set_position(Math.Vec2(0.9, 0.0))
+    world.step(1.0 / 60.0, 1)
+    world.destroy_rigid_body(body)
+    world.step(0.0, 1)
+    destruction_snapshot(name, "destroyed-zero", world)
+    world.step(0.0, 1)
+    destruction_snapshot(name, "destroyed-twice", world)
+}
+
+func force_case() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..mass = 1.0
+        ..allow_sleep = false
+        ..create_implicit_collider = false)
+    body.apply_force_to_center(Math.Vec2(60.0, 0.0))
+    world.step(0.0, 1)
+    print("force-zero $(body.position().x) $(body.velocity().x)")
+    world.step(1.0 / 60.0, 1)
+    print("force-positive $(body.position().x) $(body.velocity().x)")
+    world.step(1.0 / 60.0, 1)
+    print("force-next $(body.position().x) $(body.velocity().x)")
+}
+
+func main() {
+    collision_case(false, "contact")
+    collision_case(true, "sensor")
+    force_case()
+}

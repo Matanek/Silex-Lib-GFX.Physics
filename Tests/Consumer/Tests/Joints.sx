@@ -40,15 +40,15 @@ test "disable connected collisions with a filter joint" {
     var first = world.create_rigid_body(Physics.RigidBody2DSettings())
     var second = world.create_rigid_body(Physics.RigidBody2DSettings())
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 1)
     var joint = world.create_filter_joint(first, second)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(joint.is_valid())
     assert(world.candidate_pair_count() == 0)
 
     world.destroy_joint(joint)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(!joint.is_valid())
     assert(world.candidate_pair_count() == 1)
 }

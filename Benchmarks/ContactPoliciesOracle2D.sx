@@ -105,7 +105,7 @@ func material_case() {
         ..restitution_combine = Physics.MaterialCombineMode2D.average
     add_circle(world, true, Math.Vec2(), first, false, true)
     add_circle(world, false, Math.Vec2(1.5, 0.0), second)
-    world.step(0.0)
+    world.refresh_contacts()
 }
 
 func normal_case() {

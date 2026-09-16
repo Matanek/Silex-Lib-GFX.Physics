@@ -28,7 +28,7 @@ func sensor_trace(worker_count:int) float[] {
         ..position = Math.Vec2(2.0, 0.0)
         ..allow_sleep = false
     )
-    world.step(0.0)
+    world.refresh_contacts()
     var events:Physics.SensorBeginEvent2D[] = []
     world.write_sensor_begin_events(events)
     var trace:float[] = []
@@ -54,7 +54,7 @@ test "report deterministic sensor begin and end transitions without response" {
     var began:Physics.SensorBeginEvent2D[] = []
     var ended:Physics.SensorEndEvent2D[] = []
 
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     world.write_sensor_end_events(ended)
     assert(began.count() == 1)
@@ -70,14 +70,14 @@ test "report deterministic sensor begin and end transitions without response" {
     ))
     assert(world.contact_count() == 0)
 
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     world.write_sensor_end_events(ended)
     assert(began.count() == 0)
     assert(ended.count() == 0)
 
     visitor.set_position(Math.Vec2(4.0, 0.0))
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     world.write_sensor_end_events(ended)
     assert(began.count() == 0)
@@ -105,7 +105,7 @@ test "apply collision filters to sensors" {
         )
     )
     var began:Physics.SensorBeginEvent2D[] = []
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     assert(began.count() == 0)
 }
@@ -169,19 +169,26 @@ test "report contact begin hit and end transitions" {
     var ended:Physics.ContactEndEvent2D[] = []
     var hits:Physics.ContactHitEvent2D[] = []
 
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_contact_begin_events(began)
     world.write_contact_end_events(ended)
     world.write_contact_hit_events(hits)
     assert(began.count() == 1)
     assert(began[0].manifold().point_count() == 1)
     assert(ended.count() == 0)
+    assert(hits.count() == 0)
+    assert(moving.velocity() == Math.Vec2(-5.0, 0.0))
+
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(began)
+    world.write_contact_hit_events(hits)
+    assert(began.count() == 0)
     assert(hits.count() == 1)
     assert(hits[0].approach_speed() >= 4.9)
 
     moving.set_position(Math.Vec2(3.0, 0.0))
     moving.set_velocity(Math.Vec2())
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_contact_begin_events(began)
     world.write_contact_end_events(ended)
     world.write_contact_hit_events(hits)

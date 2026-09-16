@@ -168,7 +168,7 @@ test "keep fixed rotation and remove disabled bodies from contacts" {
     assert(body.angular_velocity() == 0.0)
     assert(body.has_fixed_rotation())
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
     assert(world.candidate_pair_count() == 1)
     body.set_enabled(false)
@@ -176,11 +176,11 @@ test "keep fixed rotation and remove disabled bodies from contacts" {
     assert(!body.is_enabled())
     assert(world.contact_count() == 0)
     assert(world.candidate_pair_count() == 0)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 0)
 
     body.set_enabled(true)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(body.is_enabled())
     assert(world.contact_count() == 1)
 }

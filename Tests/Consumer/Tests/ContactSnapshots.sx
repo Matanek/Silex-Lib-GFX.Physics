@@ -65,7 +65,7 @@ test "identify selected colliders and retain autonomous event values" {
         ..material = material(3)
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     var contacts:Physics.Contact2D[] = []
     world.write_contacts(contacts)
     assert(contacts.count() == 1)
@@ -96,7 +96,7 @@ test "identify selected colliders and retain autonomous event values" {
     world.destroy_collider(outer)
     assert(!saved.first_collider().is_valid())
     assert(saved.pair().first().material.application_id.value() == 2)
-    world.step(0.0)
+    world.refresh_contacts()
     var ended:Physics.ContactEndEvent2D[] = []
     world.write_contact_end_events(ended)
     assert(ended.count() == 1)
@@ -170,7 +170,7 @@ test "enumerate multiple sensors and keep option transitions coherent" {
         ..material = material(22)
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     var overlaps:Physics.SensorOverlap2D[] = []
     world.write_sensor_overlaps(overlaps)
     assert(overlaps.count() == 1)
@@ -185,7 +185,7 @@ test "enumerate multiple sensors and keep option transitions coherent" {
     assert(began[0].sensor().material.application_id.value() == 21)
 
     large.set_event_options(false, false, false)
-    world.step(0.0)
+    world.refresh_contacts()
     var ended:Physics.SensorEndEvent2D[] = []
     world.write_sensor_end_events(ended)
     assert(ended.count() == 1)
@@ -193,7 +193,7 @@ test "enumerate multiple sensors and keep option transitions coherent" {
     assert(overlaps.count() == 1)
 
     large.set_event_options(false, false, true)
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     assert(began.count() == 1)
 }
@@ -205,8 +205,8 @@ test "preserve collider snapshot order across worker counts" {
     parallel.enable_parallelism(4)
     populate_snapshot_world(scalar)
     populate_snapshot_world(parallel)
-    scalar.step(0.0)
-    parallel.step(0.0)
+    scalar.refresh_contacts()
+    parallel.refresh_contacts()
     var scalar_contacts:Physics.Contact2D[] = []
     var parallel_contacts:Physics.Contact2D[] = []
     scalar.write_contacts(scalar_contacts)
@@ -240,15 +240,15 @@ test "apply contact event option changes on the next completed step" {
     var began:Physics.ContactBeginEvent2D[] = []
     var ended:Physics.ContactEndEvent2D[] = []
 
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_contact_begin_events(began)
     assert(began.count() == 0)
     surface.set_event_options(true, false, false)
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_contact_begin_events(began)
     assert(began.count() == 1)
     surface.set_event_options(false, false, false)
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_contact_end_events(ended)
     assert(ended.count() == 1)
 }

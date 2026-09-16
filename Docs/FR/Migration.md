@@ -34,3 +34,11 @@ d’événement si le flux est désactivé, et aucun solver alternatif en parall
 Le package est pur Silex et ne possède aucune frontière de plateforme. La
 publication reste conditionnée par la matrice de portabilité, les sentinelles
 graphiques et le corpus de benchmarks.
+
+## Rafraîchir pendant une pause
+
+Remplacer `world.step(0.0)` par `world.refresh_contacts()` lorsque l’objectif
+est de réévaluer contacts, capteurs, filtres et événements après une mutation.
+Le pas nul garde désormais les snapshots précédents et préserve les forces
+appliquées pour le prochain pas positif, conformément à Box2D. Voir
+[le contrat de pause](WorldSettings.md#pause-et-rafraîchissement).

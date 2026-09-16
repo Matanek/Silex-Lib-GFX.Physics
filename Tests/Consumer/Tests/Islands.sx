@@ -31,7 +31,7 @@ func island_transition_signature(worker_count:int) int {
     assert(!third.is_awake())
 
     first.set_velocity(Math.Vec2(1.0, 0.0))
-    world.step(0.0)
+    world.refresh_contacts()
     var signature = 0
     if first.is_awake() { signature += 4 }
     if second.is_awake() { signature += 2 }
@@ -64,13 +64,13 @@ test "preserve sleeping neighbours across creation and deletion" {
     assert(!last.is_awake())
 
     var distant = world.create_rigid_body(capsule_settings(100.0))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(!first.is_awake())
     assert(!middle.is_awake())
     assert(!last.is_awake())
     world.destroy_rigid_body(distant)
     world.destroy_rigid_body(middle)
-    world.step(0.0)
+    world.refresh_contacts()
     assert(!first.is_awake())
     assert(!last.is_awake())
 }

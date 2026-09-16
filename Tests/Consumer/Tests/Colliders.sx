@@ -55,7 +55,7 @@ test "compose a body from stable public colliders" {
     circle.set_density(3.0)
     circle.set_sensor(true)
     circle.set_event_options(false, false, true)
-    world.step(0.0)
+    world.refresh_contacts()
 
     assert(circle.density() == 3.0)
     assert(circle.material().application_id.value() == 7)
@@ -178,7 +178,7 @@ test "apply collider filters and sensor events independently from the body" {
     )
     var began:Physics.SensorBeginEvent2D[] = []
 
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     assert(began.count() == 0)
 
@@ -188,7 +188,7 @@ test "apply collider filters and sensor events independently from the body" {
         category_bits:4,
         mask_bits:2
     ))
-    world.step(0.0)
+    world.refresh_contacts()
     world.write_sensor_begin_events(began)
     assert(began.count() == 1)
 }
@@ -217,6 +217,6 @@ test "discover contact through a secondary collider of a compound body" {
         ..position = Math.Vec2(3.0, 0.0)
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
 }

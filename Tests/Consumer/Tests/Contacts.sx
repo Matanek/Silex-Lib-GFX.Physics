@@ -29,7 +29,7 @@ func general_contact_signature(worker_count:int) float[] {
         )
         index++
     }
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 128)
     var contacts:Physics.Contact2D[] = []
     world.write_contacts(contacts)
@@ -68,7 +68,7 @@ test "track persist and invalidate contacts for general shapes" {
         ..allow_sleep = false
     )
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
     var contacts:Physics.Contact2D[] = []
     world.write_contacts(contacts)
@@ -77,13 +77,13 @@ test "track persist and invalidate contacts for general shapes" {
     assert(contacts[0].second_body().body_type() == Physics.BodyType2D.dynamic)
     assert(contacts[0].manifold().point_count() > 0)
 
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
     capsule.set_position(Math.Vec2(0.0, 2.0))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 0)
     capsule.set_position(Math.Vec2(0.0, 0.35))
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
     assert(floor.is_valid())
 }
@@ -111,7 +111,7 @@ test "apply body filters before persistent contact creation" {
         ..collision_filter = second_filter
         ..gravity_scale = 0.0
     )
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.candidate_pair_count() == 0)
     assert(world.contact_count() == 0)
 }
@@ -152,7 +152,7 @@ test "retain one-sided chain winding inside the world" {
         ..collision_filter = back_filter
         ..gravity_scale = 0.0
     )
-    world.step(0.0)
+    world.refresh_contacts()
     assert(world.contact_count() == 1)
     var contacts:Physics.Contact2D[] = []
     world.write_contacts(contacts)
