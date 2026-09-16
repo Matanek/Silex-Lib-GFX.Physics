@@ -106,7 +106,10 @@ or replace the full differential corpus. Its negative tests run as CTest
 
 The separate geometry witness compares the public Silex algorithms with
 Box2D's pinned collision functions. It covers transformed distance, manifold,
-ray and shape casts, convex and degenerate hulls, and front/back chain winding:
+ray and shape casts, convex and degenerate hulls, and front/back chain winding.
+Three further cases compare segment/circle, capsule/capsule and segment/capsule
+point counts, oriented normals, points and separations. Points are sorted by x
+for comparison; repeated and reversed Silex queries check contact stability:
 
 ```text
 /tmp/gfx-physics-box2d/gfx_physics_box2d_geometry_oracle > /tmp/box2d-geometry.txt
@@ -114,7 +117,7 @@ ray and shape casts, convex and degenerate hulls, and front/back chain winding:
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckGeometry.py /tmp/box2d-geometry.txt /tmp/silex-geometry.txt
 ```
 
-The checker requires identical case and field sets, finite candidate values,
+The checker requires identical case and field sets, finite values in both witnesses,
 and a 0.003 absolute cast tolerance; hull records use 0.0001. The oracle target
 is benchmark-only and is not a package or runtime dependency.
 
@@ -169,7 +172,13 @@ and is deliberately absent.
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckDynamicShapes.py /tmp/box2d-dynamic-shapes.txt /tmp/silex-dynamic-shapes.txt
 ```
 
-The checker requires the same thirteen cases and finite states. Settled position
+Three additional falling pairs (segment/circle, capsule/capsule and
+segment/capsule) use an explicit gravity of -10 m/s², four substeps at 60 Hz,
+and snapshots at steps 30, 60 and 240. Their six state components are compared
+within 0.08; final linear and angular speeds must also be at most 0.05.
+
+The checker requires thirteen original cases and nine pair observations, with
+finite states. Settled position
 and linear velocity use an 0.08 absolute tolerance. The transition case
 compares position and verifies that the circle crossed the internal vertices;
 its instantaneous velocity and every rotation are recorded for diagnosis

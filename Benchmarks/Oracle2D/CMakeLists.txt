@@ -123,6 +123,11 @@ endif()
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME gfx_physics_contact_pair_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestContactPairs.py
+    )
+    add_test(
         NAME gfx_physics_zero_step_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestZeroStep.py

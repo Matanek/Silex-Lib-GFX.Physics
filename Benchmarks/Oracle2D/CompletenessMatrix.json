@@ -219,7 +219,7 @@
       "status": "covered",
       "patterns": ["^b2Collide(?:Circles|CapsuleAndCircle|SegmentAndCircle|PolygonAndCircle|Capsules|SegmentAndCapsule|PolygonAndCapsule|Polygons|SegmentAndPolygon|ChainSegmentAndCircle|ChainSegmentAndCapsule|ChainSegmentAndPolygon)$"],
       "silex_contract": "Geometry2D exposes all geometric manifolds; every valid world pair will join one complete Soft Step response path.",
-      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/Contacts.sx", "Tests/Consumer/Tests/DynamicShapes.sx", "Benchmarks/DynamicShapesOracle2D.sx", "Benchmarks/Oracle2D/DynamicShapesOracle.c"]
+      "evidence": ["Tests/Consumer/Tests/Geometry.sx", "Tests/Consumer/Tests/Contacts.sx", "Tests/Consumer/Tests/DynamicShapes.sx", "Benchmarks/DynamicShapesOracle2D.sx", "Benchmarks/Oracle2D/DynamicShapesOracle.c", "Benchmarks/GeometryOracle2D.sx", "Benchmarks/Oracle2D/GeometryOracle.c", "Benchmarks/Oracle2D/CheckGeometry.py", "Benchmarks/Oracle2D/CheckDynamicShapes.py"]
     },
     {
       "id": "continuous-collision-kernel",

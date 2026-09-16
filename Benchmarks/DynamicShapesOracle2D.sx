@@ -217,7 +217,36 @@ func example_segment_settle() float[] {
     ]
 }
 
+func pair_fall(name:str, capsule_support:bool, circle:bool) {
+    var world = Physics.World2D(gravity:Math.Vec2(0.0, -10.0))
+    var support = Physics.Shape2D.segment(Physics.Segment2D(Math.Vec2(-2.0, 0.0), Math.Vec2(2.0, 0.0)))
+    if capsule_support { support = Physics.Shape2D.capsule(Physics.Capsule2D(Math.Vec2(-2.0, 0.0), Math.Vec2(2.0, 0.0), 0.5)) }
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = support)
+    var shape = Physics.Shape2D.capsule(Physics.Capsule2D(Math.Vec2(-0.5, 0.0), Math.Vec2(0.5, 0.0), 0.25))
+    if circle { shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)) }
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = shape
+        ..position = Math.Vec2(0.0, 3.0)
+        ..mass = 0.0
+        ..allow_sleep = false)
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0, 4)
+        step++
+        if step == 30 || step == 60 || step == 240 {
+            let position = body.position()
+            let velocity = body.velocity()
+            print("pair_$(name)_$(step) $(position.x) $(position.y) $(velocity.x) $(velocity.y) $(body.rotation()) $(body.angular_velocity())")
+        }
+    }
+}
+
 func main() {
+    pair_fall("segment_circle", false, true)
+    pair_fall("capsule_capsule", true, false)
+    pair_fall("segment_capsule", false, false)
     let circle = Physics.Shape2D.circle(Physics.Circle2D(0.5))
     let capsule = Physics.Shape2D.capsule(Physics.Capsule2D(
         Math.Vec2(-0.5, 0.0),

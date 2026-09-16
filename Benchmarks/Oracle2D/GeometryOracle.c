@@ -20,6 +20,23 @@ static float polygon_area_twice(const b2Hull* hull)
     return area;
 }
 
+static void print_pair(const char* name, b2Manifold manifold)
+{
+    if (manifold.pointCount == 2 && manifold.points[0].point.x > manifold.points[1].point.x)
+    {
+        b2ManifoldPoint temporary = manifold.points[0];
+        manifold.points[0] = manifold.points[1];
+        manifold.points[1] = temporary;
+    }
+    printf("%s %d %.9g %.9g", name, manifold.pointCount, manifold.normal.x, manifold.normal.y);
+    for (int index = 0; index < manifold.pointCount; ++index)
+    {
+        b2ManifoldPoint point = manifold.points[index];
+        printf(" %.9g %.9g %.9g", point.point.x, point.point.y, point.separation);
+    }
+    printf("\n");
+}
+
 int main(void)
 {
     const b2Transform identity = b2Transform_identity;
@@ -51,6 +68,16 @@ int main(void)
            manifold.pointCount, manifold.normal.x, manifold.normal.y,
            manifold.points[0].point.x, manifold.points[0].point.y,
            manifold.points[0].separation);
+
+    b2Segment segment = {{-2.0f, 0.0f}, {2.0f, 0.0f}};
+    b2Circle pair_circle = {{0.0f, 0.0f}, 0.5f};
+    b2Capsule pair_capsule = {{-0.75f, 0.0f}, {0.75f, 0.0f}, 0.25f};
+    b2Capsule segment_capsule = {{-0.5f, 0.0f}, {0.5f, 0.0f}, 0.5f};
+    b2Transform low = {{0.0f, 0.4f}, b2Rot_identity};
+    b2Transform high = {{0.0f, 0.6f}, b2Rot_identity};
+    print_pair("segment_circle", b2CollideSegmentAndCircle(&segment, identity, &pair_circle, low));
+    print_pair("capsule_capsule", b2CollideCapsules(&capsule, identity, &pair_capsule, high));
+    print_pair("segment_capsule", b2CollideSegmentAndCapsule(&segment, identity, &segment_capsule, low));
 
     b2RayCastInput ray = {{-3.0f, 0.0f}, {6.0f, 0.0f}, 1.0f};
     b2CastOutput ray_output = b2RayCastPolygon(&ray, &box_shape);

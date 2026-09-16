@@ -1,6 +1,41 @@
 use GFX.Physics
 use STD.Math
 
+func print_pair(name:str, first:Physics.ShapePlacement2D, second:Physics.ShapePlacement2D, count:int) {
+    let manifold = Physics.Geometry2D.manifold(first, second)
+    let repeated = Physics.Geometry2D.manifold(first, second)
+    let reversed = Physics.Geometry2D.manifold(second, first)
+    assert(manifold.point_count() == count)
+    assert(repeated.point_count() == count && reversed.point_count() == count)
+    assert(manifold.normal.nearly_equal(Math.Vec2.up(), 0.0001))
+    assert(reversed.normal.nearly_equal(Math.Vec2.down(), 0.0001))
+    var index = 0
+    while index < count {
+        let point = manifold.points[index]
+        assert(point.separation < 0.0)
+        assert(point.point.nearly_equal(repeated.points[index].point, 0.0001))
+        var found = false
+        for other in reversed.points {
+            if point.point.nearly_equal(other.point, 0.0001) && Math.nearly_equal(point.separation, other.separation, 0.0001) { found = true }
+        }
+        assert(found)
+        index++
+    }
+    var first_index = 0
+    var second_index = count - 1
+    if manifold.points[first_index].point.x > manifold.points[second_index].point.x {
+        first_index = count - 1
+        second_index = 0
+    }
+    let left = manifold.points[first_index]
+    if count == 1 {
+        print("$(name) $(count) $(manifold.normal.x) $(manifold.normal.y) $(left.point.x) $(left.point.y) $(left.separation)")
+    } else {
+        let right = manifold.points[second_index]
+        print("$(name) $(count) $(manifold.normal.x) $(manifold.normal.y) $(left.point.x) $(left.point.y) $(left.separation) $(right.point.x) $(right.point.y) $(right.separation)")
+    }
+}
+
 func main() {
 let circle = Physics.ShapePlacement2D(
     Physics.Shape2D.circle(Physics.Circle2D(1.0))
@@ -25,6 +60,21 @@ let manifold_circle = Physics.ShapePlacement2D(
 )
 let manifold = Physics.Geometry2D.manifold(capsule, manifold_circle)
 print("manifold $(manifold.point_count()) $(manifold.normal.x) $(manifold.normal.y) $(manifold.points[0].point.x) $(manifold.points[0].point.y) $(manifold.points[0].separation)")
+
+let segment = Physics.ShapePlacement2D(Physics.Shape2D.segment(Physics.Segment2D(
+    Math.Vec2(-2.0, 0.0), Math.Vec2(2.0, 0.0)
+)))
+let pair_circle = Physics.ShapePlacement2D(Physics.Shape2D.circle(Physics.Circle2D(0.5)),
+    Physics.Transform2D(position:Math.Vec2(0.0, 0.4)))
+let pair_capsule = Physics.ShapePlacement2D(Physics.Shape2D.capsule(Physics.Capsule2D(
+    Math.Vec2(-0.75, 0.0), Math.Vec2(0.75, 0.0), 0.25
+)), Physics.Transform2D(position:Math.Vec2(0.0, 0.6)))
+let segment_capsule = Physics.ShapePlacement2D(Physics.Shape2D.capsule(Physics.Capsule2D(
+    Math.Vec2(-0.5, 0.0), Math.Vec2(0.5, 0.0), 0.5
+)), Physics.Transform2D(position:Math.Vec2(0.0, 0.4)))
+print_pair("segment_circle", segment, pair_circle, 1)
+print_pair("capsule_capsule", capsule, pair_capsule, 2)
+print_pair("segment_capsule", segment, segment_capsule, 2)
 
 let ray = Physics.Geometry2D.ray_cast(
     Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2(6.0, 0.0)),

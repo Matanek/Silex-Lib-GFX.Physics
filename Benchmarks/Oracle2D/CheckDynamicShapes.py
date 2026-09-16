@@ -13,6 +13,8 @@ def read_records(path: pathlib.Path) -> dict[str, list[float]]:
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         fields = raw_line.split()
         if fields:
+            if fields[0] in records:
+                raise ValueError(f"duplicate dynamic case: {fields[0]}")
             records[fields[0]] = [float(field) for field in fields[1:]]
     return records
 
@@ -48,11 +50,13 @@ def main() -> int:
         if len(expected) != 6 or len(actual) != 6:
             print(f"{name}: expected six state fields", file=sys.stderr)
             return 1
-        if not all(math.isfinite(value) for value in actual):
+        if not all(math.isfinite(value) for value in expected + actual):
             print(f"{name}: Silex emitted a non-finite state", file=sys.stderr)
             return 1
         compared_fields = 2 if name == "chain_transition" else 4
-        if name.startswith("example_"):
+        if name.startswith("pair_"):
+            compared_fields = 6
+        elif name.startswith("example_"):
             compared_fields = 0
         elif name.startswith("conveyor_"):
             compared_fields = 6
@@ -64,7 +68,11 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 1
-        if name == "example_capsule_impact":
+        if name.startswith("pair_"):
+            if name.endswith("_240") and any(abs(actual[index]) > 0.05 for index in (2, 3, 5)):
+                print(f"{name}: pair did not settle", file=sys.stderr)
+                return 1
+        elif name == "example_capsule_impact":
             for index in range(2):
                 if abs(expected[index] - actual[index]) > 0.02:
                     print(
@@ -112,8 +120,10 @@ def main() -> int:
         elif abs(actual[3]) > 0.05:
             print(f"{name}: vertical speed did not settle", file=sys.stderr)
             return 1
-    if len(reference) != 13:
-        print(f"expected thirteen dynamic-shape cases, got {len(reference)}", file=sys.stderr)
+    required = {f"pair_{family}_{step}" for family in
+                ("segment_circle", "capsule_capsule", "segment_capsule") for step in (30, 60, 240)}
+    if len(reference) != 22 or not required <= reference.keys():
+        print(f"expected twenty-two dynamic-shape observations, got {len(reference)}", file=sys.stderr)
         return 1
     print(f"dynamic-shape oracle matched {len(reference)} cases")
     return 0

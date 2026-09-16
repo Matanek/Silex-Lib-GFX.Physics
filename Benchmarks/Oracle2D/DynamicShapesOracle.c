@@ -332,8 +332,50 @@ static void print_example_segment_settle(void)
     b2DestroyWorld(world);
 }
 
+static void print_pair_fall(const char* name, bool capsule_support, ShapeKind kind)
+{
+    b2WorldDef world_definition = b2DefaultWorldDef();
+    world_definition.gravity = (b2Vec2){0.0f, -10.0f};
+    b2WorldId world = b2CreateWorld(&world_definition);
+    b2BodyDef support_definition = b2DefaultBodyDef();
+    b2BodyId support = b2CreateBody(world, &support_definition);
+    b2ShapeDef shape_definition = b2DefaultShapeDef();
+    if (capsule_support)
+    {
+        b2Capsule capsule = {{-2.0f, 0.0f}, {2.0f, 0.0f}, 0.5f};
+        b2CreateCapsuleShape(support, &shape_definition, &capsule);
+    }
+    else
+    {
+        b2Segment segment = {{-2.0f, 0.0f}, {2.0f, 0.0f}};
+        b2CreateSegmentShape(support, &shape_definition, &segment);
+    }
+    b2BodyDef definition = b2DefaultBodyDef();
+    definition.type = b2_dynamicBody;
+    definition.position = (b2Vec2){0.0f, 3.0f};
+    definition.enableSleep = false;
+    b2BodyId body = b2CreateBody(world, &definition);
+    create_dynamic_shape(body, kind);
+    for (int step = 1; step <= 240; ++step)
+    {
+        b2World_Step(world, 1.0f / 60.0f, 4);
+        if (step == 30 || step == 60 || step == 240)
+        {
+            b2Vec2 position = b2Body_GetPosition(body);
+            b2Vec2 velocity = b2Body_GetLinearVelocity(body);
+            printf("pair_%s_%d %.9g %.9g %.9g %.9g %.9g %.9g\n", name, step,
+                position.x, position.y, velocity.x, velocity.y,
+                b2Rot_GetAngle(b2Body_GetRotation(body)), b2Body_GetAngularVelocity(body));
+        }
+    }
+    b2DestroyWorld(world);
+}
+
 int main(void)
 {
+    print_pair_fall("segment_circle", false, shape_circle);
+    print_pair_fall("capsule_capsule", true, shape_capsule);
+    print_pair_fall("segment_capsule", false, shape_capsule);
     print_case("floor_circle", shape_circle, false);
     print_case("floor_capsule", shape_capsule, false);
     print_case("floor_segment", shape_segment, false);
