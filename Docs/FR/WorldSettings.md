@@ -1,5 +1,7 @@
 # Régler un monde 2D
 
+Voir aussi : [Utiliser des pixels ou des centimètres](Units.md).
+
 `World2DSettings` regroupe les choix qui déterminent le comportement initial
 d’un monde. Les valeurs par défaut conviennent à une simulation exprimée en
 mètres et secondes et conservent quatre sous-pas par appel à `step`.

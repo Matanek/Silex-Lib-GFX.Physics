@@ -1,5 +1,7 @@
 # Configure a 2D world
 
+See also: [Use pixels or centimeters](Units.md).
+
 `World2DSettings` groups the choices that determine a world’s initial
 behavior. The defaults suit a simulation expressed in meters and seconds and
 preserve four substeps per `step` call.

@@ -426,3 +426,22 @@ counts and finite force-case position/velocity within 0.000001 absolute error.
 The public `Tests/Consumer/Smokes/RefreshContacts.sx` separately checks explicit
 refresh, unchanged transforms and velocities, retained forces, and no hit event
 without a solve. Run both Silex witnesses in LLVM Debug and Release.
+
+## Application length units
+
+`UnitsOracle.c` compares Box2D at 1 and 100 length units per meter with
+`UnitsOracle2D.sx`, whose application inputs are converted into Physics meters.
+The eighteen records cover rest, ray/shape casts, CCD placement, restitution,
+hit events, sleep thresholds and the speed cap. Gravity and contact stiffness
+are explicitly matched. `CheckUnits.py` first checks each engine's normalized
+scale invariance within 1e-4, then its per-field differential thresholds.
+It preserves the separate CCD oracle's classified post-placement velocity
+difference. `TestUnits.py` exercises negative controls.
+
+```text
+/tmp/gfx-physics-box2d/gfx_physics_box2d_units_oracle > /tmp/box2d-units.txt
+silex run Packages/GFX.Physics/Benchmarks/UnitsOracle2D.sx --backend llvm --release > /tmp/silex-units.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckUnits.py /tmp/box2d-units.txt /tmp/silex-units.txt
+```
+
+See [application units](../../Docs/EN/Units.md) for conversions and limits.

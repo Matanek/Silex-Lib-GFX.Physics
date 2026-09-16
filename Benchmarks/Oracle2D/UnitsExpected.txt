@@ -1,0 +1,18 @@
+meter_rest 0.499928743 0 0
+meter_ray 0.487500012 -0.0499999523
+meter_cast 0.463750035 -0.0500000007
+meter_ccd -0.1450001 300
+meter_low 1.16415322e-09 0
+meter_high 2 1
+meter_sleep_low 0
+meter_sleep_high 1
+meter_limits 400 1 1 3 0.0500000007
+centimeter_rest 0.499928743 0 0
+centimeter_ray 0.487500012 -0.0500000007
+centimeter_cast 0.463750005 -0.0500000007
+centimeter_ccd -0.144999921 300
+centimeter_low 7.45058043e-11 0
+centimeter_high 2 1
+centimeter_sleep_low 0
+centimeter_sleep_high 1
+centimeter_limits 400 1 1 3 0.0500000007

@@ -63,8 +63,8 @@
       "status": "divergent",
       "patterns": ["^b2(?:SetLengthUnitsPerMeter|GetLengthUnitsPerMeter)$"],
       "silex_contract": "GFX.Physics worlds use meters, seconds and kilograms without mutable process-global scaling.",
-      "evidence": ["Docs/FR/OracleAndBudgets.md", "Docs/EN/OracleAndBudgets.md", "Tests/Consumer/Tests/Compatibility.sx"],
-      "rationale": "A fixed unit contract is safer and at least as expressive because applications convert at their boundary without shared global state."
+      "evidence": ["Docs/FR/Units.md", "Docs/EN/Units.md", "Tests/Consumer/Smokes/ApplicationUnits.sx", "Benchmarks/UnitsOracle2D.sx", "Benchmarks/Oracle2D/UnitsOracle.c", "Benchmarks/Oracle2D/CheckUnits.py"],
+      "rationale": "Boundary conversion preserves normalized physical observations at 1 and 100 application units per meter in the paired witness. Worlds retain meter-based tolerances; arbitrary-scale equivalence and mutable process-global units are not claimed."
     },
     {
       "id": "validated-values",

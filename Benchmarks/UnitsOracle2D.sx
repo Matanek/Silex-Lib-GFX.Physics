@@ -1,0 +1,104 @@
+use GFX.Physics
+use STD.Math
+
+// Application coordinates are converted before entering the meter-based world.
+struct ApplicationUnits {
+    let per_meter:float
+    func length(value:float) float { return value / self.per_meter }
+    func position(value:Math.Vec2) Math.Vec2 { return value.divide(self.per_meter) }
+    func application_length(value:float) float { return value * self.per_meter }
+}
+
+func unit_world(gravity:float) Physics.World2D {
+    return Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2(0.0, gravity)
+        ..contact_stiffness_hertz = 30.0)
+}
+
+func rest_case(name:str, units:ApplicationUnits) {
+    let u = units.per_meter
+    var world = unit_world(units.length(-10.0 * u))
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.box(Physics.Box2D(units.position(Math.Vec2(10.0 * u, u))))
+        ..position = units.position(Math.Vec2(0.0, -0.5 * u)))
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(units.length(0.5 * u)))
+        ..position = units.position(Math.Vec2(0.0, 3.0 * u)))
+    var step = 0
+    while step < 240 { world.step(1.0 / 60.0, 4); step++ }
+    let application_y = units.application_length(body.position().y)
+    print("$(name)_rest $(application_y / u) $(body.velocity().y) $(body.is_awake())")
+}
+
+func casts_case(name:str, units:ApplicationUnits) {
+    let u = units.per_meter
+    var world = unit_world(0.0)
+    let wall_shape = Physics.Shape2D.box(Physics.Box2D(units.position(Math.Vec2(0.1 * u, 2.0 * u))))
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..shape = wall_shape)
+    let hit = world.ray_cast_closest(Physics.Ray2D(
+        units.position(Math.Vec2(-2.0 * u, 0.0)),
+        units.position(Math.Vec2(4.0 * u, 0.0))))
+    assert(hit.hit)
+    print("$(name)_ray $(hit.fraction) $(hit.point.x)")
+    let cast = Physics.Geometry2D.shape_cast(
+        Physics.ShapePlacement2D(Physics.Shape2D.circle(Physics.Circle2D(units.length(0.1 * u))),
+            Physics.Transform2D(position:units.position(Math.Vec2(-2.0 * u, 0.0)))),
+        units.position(Math.Vec2(4.0 * u, 0.0)), Physics.ShapePlacement2D(wall_shape))
+    assert(cast.hit)
+    print("$(name)_cast $(cast.fraction) $(cast.point.x)")
+    var mover = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(units.length(0.1 * u)))
+        ..position = units.position(Math.Vec2(-2.0 * u, 0.0))
+        ..velocity = units.position(Math.Vec2(300.0 * u, 0.0))
+        ..allow_sleep = false)
+    world.step(1.0 / 60.0, 4)
+    print("$(name)_ccd $(mover.position().x) $(mover.velocity().x)")
+}
+
+func threshold_case(name:str, units:ApplicationUnits, speed:float) {
+    let u = units.per_meter
+    var world = unit_world(0.0)
+    let shape = Physics.Shape2D.circle(Physics.Circle2D(units.length(0.5 * u)))
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..shape = shape ..restitution = 1.0)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = shape ..position = units.position(Math.Vec2(u, 0.0))
+        ..velocity = units.position(Math.Vec2(-speed * u, 0.0))
+        ..restitution = 1.0 ..allow_sleep = false ..enable_hit_events = true)
+    world.step(1.0 / 60.0, 4)
+    var hits:Physics.ContactHitEvent2D[] = []
+    world.write_contact_hit_events(hits)
+    print("$(name) $(body.velocity().x) $(hits.count())")
+}
+
+func sleep_case(name:str, units:ApplicationUnits, speed:float) {
+    var world = unit_world(0.0)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..velocity = units.position(Math.Vec2(speed * units.per_meter, 0.0)))
+    var step = 0
+    while step < 90 { world.step(1.0 / 60.0, 4); step++ }
+    print("$(name) $(body.is_awake())")
+}
+
+func scale_case(name:str, units:ApplicationUnits) {
+    rest_case(name, units)
+    casts_case(name, units)
+    threshold_case("$(name)_low", units, 0.5)
+    threshold_case("$(name)_high", units, 2.0)
+    sleep_case("$(name)_sleep_low", units, 0.04)
+    sleep_case("$(name)_sleep_high", units, 0.06)
+    var world = unit_world(0.0)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..velocity = units.position(Math.Vec2(500.0 * units.per_meter, 0.0)))
+    world.step(1.0 / 60.0, 4)
+    let settings = world.settings()
+    let defaults = Physics.RigidBody2DSettings()
+    print("$(name)_limits $(body.velocity().x) $(settings.restitution_threshold) $(settings.hit_event_threshold) $(settings.maximum_correction_speed) $(defaults.sleep_threshold)")
+}
+
+func main() {
+    scale_case("meter", ApplicationUnits(per_meter:1.0))
+    scale_case("centimeter", ApplicationUnits(per_meter:100.0))
+}

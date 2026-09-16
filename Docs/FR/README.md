@@ -112,6 +112,7 @@ Les seuils ne modifient que la répartition du même travail.
 - [Joints, moteurs et ressorts](Joints.md)
 - [Mouvement cinématique de personnage](CharacterMover.md)
 - [Réglages et compteurs du monde](WorldSettings.md)
+- [Utiliser des pixels ou des centimètres](Units.md)
 - [Migration de 0.4 vers 0.5](Migration.md)
 - [Corpus oracle et budgets](OracleAndBudgets.md)
 - [Contrat de performance](Performance.md)

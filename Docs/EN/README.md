@@ -28,6 +28,7 @@ assert(!body.is_valid())
 ```
 
 [`World settings and counters`](WorldSettings.md) documents creation choices,
+- [Use pixels or centimeters](Units.md)
 runtime tuning, explicit substeps, wake policies, and logical scene counters.
 
 `World2D` owns every body. Destroying a body invalidates every copy of its

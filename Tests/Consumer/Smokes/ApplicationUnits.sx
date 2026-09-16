@@ -1,0 +1,17 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let units_per_meter = 100.0
+    var world = Physics.World2D(gravity:Math.Vec2(0.0, -981.0).divide(units_per_meter))
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(25.0 / units_per_meter))
+        ..position = Math.Vec2(0.0, 300.0).divide(units_per_meter)
+        ..velocity = Math.Vec2(100.0, 0.0).divide(units_per_meter)
+        ..allow_sleep = false)
+    world.step(1.0 / 60.0)
+    let application_position = body.position().multiply(units_per_meter)
+    assert(application_position.x > 0.0)
+    assert(application_position.y < 300.0)
+    print("application-units-ok")
+}

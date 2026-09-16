@@ -24,6 +24,10 @@ add_executable(gfx_physics_box2d_oracle Box2DOracle.c)
 target_compile_features(gfx_physics_box2d_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_oracle PRIVATE box2d)
 
+add_executable(gfx_physics_box2d_units_oracle UnitsOracle.c)
+target_compile_features(gfx_physics_box2d_units_oracle PRIVATE c_std_17)
+target_link_libraries(gfx_physics_box2d_units_oracle PRIVATE box2d)
+
 add_executable(gfx_physics_box2d_geometry_oracle GeometryOracle.c)
 target_compile_features(gfx_physics_box2d_geometry_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_geometry_oracle PRIVATE box2d)
@@ -123,6 +127,11 @@ endif()
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME gfx_physics_units_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestUnits.py
+    )
+    add_test(
         NAME gfx_physics_contact_pair_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestContactPairs.py
@@ -164,6 +173,7 @@ endif()
 
 if(MSVC)
     target_compile_options(gfx_physics_box2d_oracle PRIVATE /W4)
+    target_compile_options(gfx_physics_box2d_units_oracle PRIVATE /W4)
     target_compile_options(gfx_physics_box2d_geometry_oracle PRIVATE /W4)
     target_compile_options(gfx_physics_box2d_body_control_oracle PRIVATE /W4)
     target_compile_options(gfx_physics_box2d_dynamic_shapes_oracle PRIVATE /W4)
@@ -178,6 +188,7 @@ if(MSVC)
     target_compile_options(gfx_physics_box2d_zero_step_oracle PRIVATE /W4)
 else()
     target_compile_options(gfx_physics_box2d_oracle PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(gfx_physics_box2d_units_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_geometry_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_body_control_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_dynamic_shapes_oracle PRIVATE -Wall -Wextra -Wpedantic)
