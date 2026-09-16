@@ -16,11 +16,21 @@ public struct AABB2D {
         {
             panic("GFX.Physics.AABB2D requires finite values and non-negative half extents")
         }
-        self.lower = center.subtract(half_size)
-        self.upper = center.add(half_size)
+        let lower = center.subtract(half_size)
+        let upper = center.add(half_size)
+        if !finite_aabb_point(lower) || !finite_aabb_point(upper) {
+            panic("GFX.Physics.AABB2D requires finite resulting bounds")
+        }
+        self.lower = lower
+        self.upper = upper
     }
 
     package init(lower:Math.Vec2, upper:Math.Vec2, bounds:bool) {
+        if !finite_aabb_point(lower) || !finite_aabb_point(upper) ||
+            lower.x > upper.x || lower.y > upper.y
+        {
+            panic("GFX.Physics.AABB2D requires finite ordered bounds")
+        }
         self.lower = lower
         self.upper = upper
     }
@@ -30,9 +40,9 @@ public struct AABB2D {
             self.upper.x >= other.upper.x && self.upper.y >= other.upper.y
     }
 
-    func center() Math.Vec2 { return self.lower.add(self.upper).multiply(0.5) }
+    func center() Math.Vec2 { return self.lower.multiply(0.5).add(self.upper.multiply(0.5)) }
     func half_size() Math.Vec2 {
-        return self.upper.subtract(self.lower).multiply(0.5)
+        return self.upper.multiply(0.5).subtract(self.lower.multiply(0.5))
     }
 
     func overlaps(other:AABB2D) bool {
@@ -46,6 +56,9 @@ public struct AABB2D {
     }
 
     func fattened(displacement:Math.Vec2) AABB2D {
+        if !finite_aabb_point(displacement) {
+            panic("GFX.Physics.AABB2D.fattened requires finite displacement")
+        }
         let margin = Math.Vec2(0.04)
         var lower = self.lower.subtract(margin)
         var upper = self.upper.add(margin)

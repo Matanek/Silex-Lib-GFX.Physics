@@ -1,9 +1,8 @@
 # Geometry and collision queries
 
-`GFX.Physics` exposes a stateless 2D geometry layer independently from
-`World2D`. It covers boxes with an optional rounded radius, circles, capsules,
-convex polygons with up to eight input points, segments, and open or closed
-chains.
+`Physics.Geometry2D` provides AABBs, point tests and closest points, distance,
+overlap, manifolds, ray casts and shape casts over transformed, filtered
+`ShapePlacement2D` values.
 
 ```silex
 use GFX.Physics
@@ -32,74 +31,73 @@ let hit = Physics.Geometry2D.shape_cast(
 )
 ```
 
-`aabb` returns exact transformed bounds, `test_point` checks containment, and
-`closest_point` projects a finite point onto the nearest surface. `distance`
-returns the closest surface points, the normal from the first shape
-to the second, and a non-negative separation. `overlaps` applies both placement
-filters and reports whether that separation is zero. `manifold` additionally
-returns a normal and up to two geometric contact points. These points have no
-persistent identity or accumulated impulse in this reconstruction step.
+Dimensions and radii must be finite; circle and capsule radii must be positive,
+and endpoints must be distinct. A polygon accepts three to eight points,
+welds nearby points, builds their counter-clockwise convex hull, and rejects
+a collinear result. A chain requires four points, and its solid side lies to
+the right of its path. In an open chain, the first and final segments provide
+ghost geometry for endpoint normals: only the segments between them collide.
+Supply a ghost point before and after the intended collision path.
 
-`ray_cast` and `shape_cast` return the earliest hit within `max_fraction`.
-Initial overlap is normally reported at fraction zero. On a shape cast,
-`can_encroach` may continue from a shallow initial separation while still
-rejecting deep initial overlap. A failed cast has `hit == false`; its other
-fields are neutral values and must not be interpreted as a contact.
+Filters use 64-bit categories and masks. Equal positive groups force contact;
+equal negative groups prevent it. Distance remains purely geometric; other
+queries apply filters.
 
-All operations are pure read queries over value-like placements. They do not
-touch a world, keep a cache, or share scratch memory, so independent calls can
-run concurrently outside `World2D.step`.
+Each call owns its scratch storage and can run concurrently with other calls.
+The algorithms are native Silex adaptations of Box2D 3.1.1 hull, GJK, manifold
+and cast algorithms. Box2D is used only as a differential oracle.
 
-## Validity and winding
+## Valid values and degenerate motion
 
-Invalid public geometry fails immediately with a diagnostic:
+Positions, translations and angles must be finite. `Transform2D` represents
+rotation by an angle in radians: consumers do not supply a cosine/sine pair
+to normalize. `AABB2D(center, half_size)` accepts zero half extents, rejects
+negative components, and verifies that the resulting bounds remain finite.
+Its center/half-size accessors avoid intermediate overflow when the bounds
+are representable.
 
-- dimensions and radii must be finite, with positive circle and capsule radii;
-- capsule and segment endpoints must be distinct;
-- a polygon accepts three to eight finite input points, welds points nearer
-  than the geometry tolerance, builds their convex hull, and rejects a
-  collinear result;
-- a rounded box or polygon radius must fit inside its convex core;
-- a chain needs at least four points and rejects consecutive duplicates;
-- rays need finite, non-zero translation and positive `max_fraction`.
+`Ray2D` accepts zero or very short translation. Its maximum fraction must be
+finite and in `[0, 100000)`. A zero fraction is valid. The queried segment
+runs from `origin` to `origin + translation * max_fraction`.
+`Geometry2D.shape_cast` and corresponding world queries also accept zero
+motion and a finite, non-negative maximum fraction.
 
-Polygon input order is intentionally irrelevant because `Polygon2D` computes a
-counter-clockwise convex hull. Chain order is meaningful: as in Box2D 3, the
-solid front is the right side while looking from one point to the next. Open
-chains use their first and final segments as ghost geometry for endpoint
-normals; only the segments between those ghosts collide. Supply one ghost point
-before and after the intended collision path. Looped chains instead close the
-last point to the first implicitly, so callers must not repeat the first point.
+A valid ray does not guarantee a hit. Starting strictly inside a circle or
+capsule returns a hit at fraction zero, at the ray origin, with a zero normal.
+An unrounded polygon also accepts its boundaries at fraction zero. For a
+circle or capsule, a zero ray exactly on the boundary misses; an entering ray
+can return a surface normal there. A ray parallel to a segment misses it.
+Chains retain their solid side. Rounded polygons use a shape cast with its
+contact tolerance.
 
-`CollisionFilter2D` uses 64-bit category and mask bits. Both masks must accept
-the other category. Equal non-zero positive group indices force a match, while
-equal negative indices reject one. Distance is a purely geometric measurement
-and therefore does not apply collision filters; overlap, manifold, ray, and
-shape casts do.
+An initially overlapping shape cast returns a zero fraction and normal, with
+a common point between the shape witnesses. `can_encroach` allows advancement
+from some shallow overlaps; it does not discard deep initial hits. A zero
+normal therefore signals initial overlap without a determined entry
+direction: do not use it as a unit surface normal. When `hit` is `false`, the
+other fields are neutral and do not describe a contact.
 
-## Origin and verification
+Planes from `CharacterMover2D` are collision results:
+`CharacterCollisionPlane2D` exposes a normalized normal, a point and a
+separation for reading. There is no public general-plane constructor.
+The package validates values at constructor and operation boundaries; it does
+not duplicate Box2D's six boolean validation helpers. Invalid arguments
+produce an immediate diagnostic.
 
-The convex-hull, GJK distance, conservative advancement, manifold, and cast
-designs are native Silex adaptations of the public collision geometry in
-Box2D `v3.1.1`, commit
-`8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`, principally `src/hull.c`,
-`src/distance.c`, `src/geometry.c`, and `src/manifold.c`. Box2D is Copyright
-(c) 2022 Erin Catto and distributed under the MIT License. Its code is neither
-linked into nor shipped by this package; the pinned build is only a
-differential benchmark oracle.
+`GeometryValuesOracle2D.sx` is paired with
+`Oracle2D/GeometryValuesOracle.c`: 360 ray and shape-cast results covering
+zero translation, zero fraction, small translation, boundaries, initial
+overlaps, capsule caps and shifted shapes. The comparator requires exact hit
+flags and compares fractions, points and normals with absolute tolerance
+`2e-5` and relative tolerance `2e-6`; initial-overlap zeros are exact.
+`GeometricValidityOracle.c` and `check-geometric-values.py` distinguish raw
+Box2D representations from public Silex inputs. Consumer tests also verify
+rotations, produced planes and world queries.
 
-The Release witness compares transformed distance, capsule-circle manifold,
-polygon ray cast, fast shape cast, convex and degenerate hulls, and both sides
-of a one-sided chain segment. Consumer tests add rounded shapes, two-point face
-manifolds, filter groups, coincident centers, crossing segments, invalid public
-inputs, transformations, and parallel read queries.
+## Provenance
 
-The GJK simplex deliberately stores mutable vertices in reference-backed
-private objects. Mutable structs reached through a collection currently lose
-some nested writes in the Silex Release backend even though Debug preserves
-them. This internal workaround can be removed when that compiler discrepancy
-is fixed; no reference identity leaks into the public geometry API.
-
-`World2D` attaches every public shape and retains their geometric contacts.
-Its existing regression solver still applies dynamic response only to
-unrounded boxes and circles; see [`Contacts.md`](Contacts.md) for that boundary.
+The adaptations originate primarily from `src/hull.c`, `src/distance.c`,
+`src/geometry.c` and `src/manifold.c` at commit
+`8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`. Erin Catto's copyright notices
+and the MIT license are retained in `Box2D-NOTICE.txt` at the package root.
+No Box2D binary enters the production runtime.

@@ -1,0 +1,65 @@
+use GFX.Physics
+use STD.Math
+
+func record(kind:str, shift:int, test_index:int, shape:int, hit:Physics.CastResult2D) {
+    var found = 0
+    if hit.hit { found = 1 }
+    print("$(kind)_$(shift)_$(test_index)_$(shape) $(found) $(hit.fraction) $(hit.point.x) $(hit.point.y) $(hit.normal.x) $(hit.normal.y)")
+}
+
+func main() {
+    let rays:Physics.Ray2D[] = [
+        Physics.Ray2D(Math.Vec2(-3.0, 0.2), Math.Vec2(0.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(0.2, 0.1), Math.Vec2(0.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-1.0, 0.0), Math.Vec2(0.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-3.0, 0.2), Math.Vec2(4.0, 0.0), 0.0),
+        Physics.Ray2D(Math.Vec2(0.2, 0.1), Math.Vec2(4.0, 0.0), 0.0),
+        Physics.Ray2D(Math.Vec2(-1.0, 0.0), Math.Vec2(4.0, 0.0), 0.0),
+        Physics.Ray2D(Math.Vec2(-1.01, 0.0), Math.Vec2(1e-06, 0.0), 99999.0),
+        Physics.Ray2D(Math.Vec2(-3.0, 0.2), Math.Vec2(4.0, 0.0), 99999.0),
+        Physics.Ray2D(Math.Vec2(0.2, 0.1), Math.Vec2(4.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-3.0, 1.0), Math.Vec2(6.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-3.0, 3.0), Math.Vec2(6.0, 0.0), 1.0),
+        Physics.Ray2D(Math.Vec2(0.0, -3.0), Math.Vec2(0.0, 6.0), 1.0),
+        Physics.Ray2D(Math.Vec2(0.0, 3.0), Math.Vec2(0.0, -6.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-1.0, -3.0), Math.Vec2(0.0, 3.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-3.0, 0.2), Math.Vec2(4.0, 0.0), 0.1),
+        Physics.Ray2D(Math.Vec2(0.0, 3.0), Math.Vec2(0.0, -6.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-3.0, -3.0), Math.Vec2(6.0, 6.0), 1.0),
+        Physics.Ray2D(Math.Vec2(-1.0, 0.0), Math.Vec2(-4.0, 0.0), 1.0)
+    ]
+    let shapes:Physics.Shape2D[] = [
+        Physics.Shape2D.circle(Physics.Circle2D(1.0)),
+        Physics.Shape2D.capsule(Physics.Capsule2D(Math.Vec2(0.0, -0.5), Math.Vec2(0.0, 0.5), 1.0)),
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))),
+        Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(-0.75, -0.75), Math.Vec2(0.75, -0.75),
+            Math.Vec2(0.75, 0.75), Math.Vec2(-0.75, 0.75)
+        ], 0.25)),
+        Physics.Shape2D.segment(Physics.Segment2D(Math.Vec2(-1.0, 0.0), Math.Vec2(1.0, 0.0)))
+    ]
+    var shift = 0
+    while shift < 2 {
+        var offset = Math.Vec2()
+        if shift == 1 { offset = Math.Vec2(6.0, -2.0) }
+        var test_index = 0
+        for input in rays {
+            let ray = Physics.Ray2D(input.origin.add(offset), input.translation, input.max_fraction)
+            let moving = Physics.ShapePlacement2D(
+                Physics.Shape2D.circle(Physics.Circle2D(0.1)),
+                Physics.Transform2D(position:ray.origin)
+            )
+            var shape = 0
+            for value in shapes {
+                let target = Physics.ShapePlacement2D(value, Physics.Transform2D(position:offset))
+                record("ray", shift, test_index, shape, Physics.Geometry2D.ray_cast(ray, target))
+                record("cast", shift, test_index, shape, Physics.Geometry2D.shape_cast(
+                    moving, ray.translation, target, ray.max_fraction
+                ))
+                shape++
+            }
+            test_index++
+        }
+        shift++
+    }
+}

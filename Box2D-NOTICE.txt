@@ -1,11 +1,15 @@
 The rigid distance constraint softness formulas in Module/Joints2D.sx are
 adapted from Box2D 3.1.1 src/solver.h (b2MakeSoft) and src/distance_joint.c
 (b2SolveDistanceJoint), commit 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3.
+Geometry in Module/Geometry2D.sx is adapted from src/geometry.c,
+src/distance.c, src/hull.c and src/manifold.c at the same pinned revision.
+This includes analytic ray intersections and initial-overlap shape casts.
 Box2D is not linked into the Silex runtime.
 
 MIT License
 
 Copyright (c) 2022 Erin Catto
+Copyright (c) 2023 Erin Catto
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -1,0 +1,98 @@
+use GFX.Physics
+use STD.Math
+
+test "keep point AABBs finite at representable extremes" {
+    let point = Physics.AABB2D(Math.Vec2(3.4028235e38), Math.Vec2())
+    assert(point.center() == point.lower)
+    assert(point.half_size() == Math.Vec2())
+    let wide = Physics.AABB2D(Math.Vec2(), Math.Vec2(3.4028235e38))
+    assert(wide.center() == Math.Vec2())
+    assert(wide.half_size() == Math.Vec2(3.4028235e38))
+    assert(wide.contains(point) && point.overlaps(wide))
+}
+
+test "preserve unit rotations and inverse point transforms" {
+    let angles:float[] = [0.0, 0.3, -2.0, 1000.0, 3.4028235e38]
+    for angle in angles {
+        let transform = Physics.Transform2D(Math.Vec2(2.0, -1.0), angle)
+        let unit = transform.vector(Math.Vec2(0.6, 0.8))
+        assert(Math.nearly_equal(unit.length_squared(), 1.0, 0.00001))
+        let local_value = Math.Vec2(-3.0, 4.0)
+        assert(transform.inverse_point(transform.point(local_value)).nearly_equal(local_value, 0.00001))
+    }
+}
+
+test "query zero and tiny rays through collider and world boundaries" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(2.0, 1.0)
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+    )
+    var colliders:Physics.Collider2D[] = []
+    body.write_colliders(colliders)
+    let origin = Math.Vec2(2.2, 1.1)
+    var hits:Physics.WorldCastResult2D[] = []
+    let rays:Physics.Ray2D[] = [Physics.Ray2D(origin, Math.Vec2()), Physics.Ray2D(origin, Math.Vec2(1.0, 0.0), 0.0)]
+    for ray in rays {
+        let stats = world.write_ray_casts(ray, hits)
+        assert(stats.hit_count == 1 && hits.count() == 1)
+        assert(hits[0].point == origin && hits[0].normal == Math.Vec2() && hits[0].fraction == 0.0)
+        assert(world.ray_cast_any(ray))
+        assert(world.ray_cast_closest(ray).collider().body().same_body(body))
+    }
+    let local_value = colliders[0].ray_cast_local(Physics.Ray2D(Math.Vec2(), Math.Vec2()))
+    assert(local_value.hit && local_value.point == Math.Vec2() && local_value.normal == Math.Vec2())
+    assert(!world.ray_cast_any(Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2())))
+    let short = world.ray_cast_closest(Physics.Ray2D(Math.Vec2(0.99, 1.0), Math.Vec2(0.000001, 0.0), 99999.0))
+    assert(short.hit && short.point.nearly_equal(Math.Vec2(1.0, 1.0), 0.00001))
+    assert(short.normal.nearly_equal(Math.Vec2.left(), 0.00001))
+    var overlaps:Physics.Collider2D[] = []
+    world.write_aabb_overlaps(Physics.AABB2D(origin, Math.Vec2()), overlaps)
+    assert(overlaps.count() == 1)
+    let moving = Physics.ShapePlacement2D(
+        Physics.Shape2D.circle(Physics.Circle2D(0.1)), Physics.Transform2D(position:origin)
+    )
+    assert(world.write_shape_casts(moving, Math.Vec2(), hits, max_fraction:0.0).hit_count == 1)
+    assert(world.shape_cast_any(moving, Math.Vec2(), max_fraction:0.0))
+    let cast = world.shape_cast_closest(moving, Math.Vec2(), max_fraction:0.0)
+    assert(cast.hit && cast.fraction == 0.0 && cast.normal == Math.Vec2())
+}
+
+test "produce finite normalized collision planes for consumers" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..position = Math.Vec2(0.0, -0.25)
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(8.0, 0.5)))
+    )
+    var character = Physics.CharacterMover2D()
+    var planes:Physics.CharacterCollisionPlane2D[] = []
+    character.collect_planes(world, Math.Vec2(0.0, 0.7), planes)
+    assert(planes.count() == 1)
+    for plane in planes {
+        assert(Math.nearly_equal(plane.normal.length_squared(), 1.0, 0.00001))
+        assert(Math.is_finite(plane.point.x) && Math.is_finite(plane.point.y))
+        assert(Math.is_finite(plane.normal.dot(plane.point)))
+        assert(Math.is_finite(plane.separation))
+    }
+}
+
+
+test "rotate analytic ray queries with their placements" {
+    let transform = Physics.Transform2D(Math.Vec2(2.0, -1.0), 0.4)
+    let shapes:Physics.Shape2D[] = [
+        Physics.Shape2D.circle(Physics.Circle2D(1.0)),
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(2.0))),
+        Physics.Shape2D.capsule(Physics.Capsule2D(Math.Vec2(0.0, -0.5), Math.Vec2(0.0, 0.5), 1.0))
+    ]
+    for shape in shapes {
+        let hit = Physics.Geometry2D.ray_cast(
+            Physics.Ray2D(transform.point(Math.Vec2(-3.0, 0.0)), transform.vector(Math.Vec2(6.0, 0.0))),
+            Physics.ShapePlacement2D(shape, transform)
+        )
+        assert(hit.hit && Math.nearly_equal(hit.fraction, 1.0 / 3.0, 0.00002))
+        assert(hit.point.nearly_equal(transform.point(Math.Vec2(-1.0, 0.0)), 0.00002))
+        assert(hit.normal.nearly_equal(transform.vector(Math.Vec2.left()), 0.00002))
+    }
+}

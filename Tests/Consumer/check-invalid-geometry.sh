@@ -26,6 +26,6 @@ check_failure InvalidPolygon.sx \
 check_failure InvalidChain.sx \
     "GFX.Physics.Chain2D rejects consecutive duplicate points"
 check_failure InvalidRay.sx \
-    "GFX.Physics.Ray2D requires a non-zero translation"
+    "GFX.Physics.Ray2D requires finite values and a maximum fraction in [0, 100000)"
 check_failure InvalidDynamicChain.sx \
     "GFX.Physics.World2D requires chain body shapes to be fixed"

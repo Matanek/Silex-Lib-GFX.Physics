@@ -6098,10 +6098,18 @@ func continuous_pair_hit_for_shapes(
             target_placement
         )
         if cast.hit {
+            var normal = cast.normal
+            if cast.fraction == 0.0 && normal.length_squared() == 0.0 {
+                // Query results have no entry normal for initial overlap in
+                // the cast tolerance band. CCD still needs a constraint
+                // direction to remove approaching velocity. Actual geometric
+                // overlaps were excluded above, so use the separation normal.
+                normal = Geometry2D.distance(target_placement, mover_placement).normal
+            }
             return ContinuousHit2D(
                 cast.fraction,
                 cast.point.add(target_motion.multiply(cast.fraction)),
-                cast.normal
+                normal
             )
         }
         return ContinuousHit2D()
@@ -6342,9 +6350,9 @@ func shape_cast_query_bounds(
 ) AABB2D {
     if !finite_world_value(translation.x) ||
         !finite_world_value(translation.y) ||
-        !finite_world_value(max_fraction) || max_fraction <= 0.0
+        !finite_world_value(max_fraction) || max_fraction < 0.0
     {
-        panic("GFX.Physics.World2D shape cast requires finite motion and a positive maximum fraction")
+        panic("GFX.Physics.World2D shape cast requires finite motion and a non-negative maximum fraction")
     }
     let start = Geometry2D.aabb(moving)
     let displacement = translation.multiply(max_fraction)

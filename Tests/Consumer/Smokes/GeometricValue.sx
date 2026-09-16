@@ -1,0 +1,62 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+    }
+    return false
+}
+
+func main() {
+    var value = 1.0
+    if option("zero") { value = 0.0 }
+    if option("negative") { value = -1.0 }
+    if option("near") { value = 99999.0 }
+    if option("upper") { value = 100000.0 }
+    if option("huge") { value = 3.4028235e38 }
+    if option("inf") || option("nan") || option("negative-inf") {
+        var maximum = 3.4028235e38
+        value = maximum * 2.0
+        if option("nan") { value = value - value }
+        if option("negative-inf") { value = -value }
+    }
+    if option("scalar") || option("rotation") {
+        let transform = Physics.Transform2D(rotation:value)
+        let unit = transform.vector(Math.Vec2.right())
+        assert(Math.nearly_equal(unit.length_squared(), 1.0, 0.00001))
+    } else if option("vector") {
+        print(Physics.Transform2D(position:Math.Vec2(value, value)).position.x)
+    } else if option("aabb") {
+        let bounds = Physics.AABB2D(Math.Vec2(), Math.Vec2(value))
+        assert(bounds.half_size() == Math.Vec2(value))
+        assert(bounds.center() == Math.Vec2())
+    } else if option("aabb-overflow") {
+        print(Physics.AABB2D(Math.Vec2(value), Math.Vec2(value)).upper.x)
+    } else if option("aabb-position") {
+        let bounds = Physics.AABB2D(Math.Vec2(value), Math.Vec2())
+        assert(bounds.center() == Math.Vec2(value))
+        assert(bounds.half_size() == Math.Vec2())
+    } else if option("ray-origin") {
+        print(Physics.Ray2D(Math.Vec2(value), Math.Vec2()).origin.x)
+    } else if option("ray-motion") {
+        print(Physics.Ray2D(Math.Vec2(), Math.Vec2(value)).translation.x)
+    } else if option("ray-fraction") {
+        print(Physics.Ray2D(Math.Vec2(), Math.Vec2(), value).max_fraction)
+    } else if option("shape-fraction") {
+        let shape = Physics.ShapePlacement2D(Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+        let hit = Physics.Geometry2D.shape_cast(shape, Math.Vec2(), shape, value)
+        assert(hit.hit && hit.fraction == 0.0 && hit.normal == Math.Vec2())
+    } else if option("world-fraction") {
+        var world = Physics.World2D()
+        let shape = Physics.ShapePlacement2D(Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+        assert(!world.shape_cast_any(shape, Math.Vec2(), max_fraction:value))
+    } else {
+        panic("unknown geometric value family")
+    }
+    print("accepted")
+}

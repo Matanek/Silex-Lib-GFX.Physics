@@ -213,3 +213,34 @@ test "preserve general CCD results across worker counts" {
         index++
     }
 }
+
+test "resolve a zero-radius body's approach inside the cast tolerance band" {
+    let segment = Physics.Shape2D.segment(Physics.Segment2D(
+        Math.Vec2(-0.5, 0.0), Math.Vec2(0.5, 0.0)
+    ))
+    let floor = Physics.ShapePlacement2D(
+        Physics.Shape2D.box(Physics.Box2D(Math.Vec2(10.0, 1.0))),
+        Physics.Transform2D(position:Math.Vec2(0.0, -0.5))
+    )
+    let nearby = Physics.ShapePlacement2D(segment, Physics.Transform2D(position:Math.Vec2(0.0, 0.003)))
+    assert(!Physics.Geometry2D.overlaps(floor, nearby))
+    let query = Physics.Geometry2D.shape_cast(nearby, Math.Vec2(0.0, -1.0), floor)
+    assert(query.hit && query.fraction == 0.0 && query.normal == Math.Vec2())
+
+    var world = Physics.World2D()
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..shape = floor.shape()
+        ..position = floor.transform().position
+    )
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = segment
+        ..mass = 1.0
+        ..position = Math.Vec2(0.0, 3.0)
+        ..allow_sleep = false
+    )
+    var step = 0
+    while step < 240 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(body.position().y) < 0.01)
+    assert(Math.abs(body.velocity().y) < 0.05)
+}

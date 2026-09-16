@@ -73,8 +73,8 @@
       "status": "divergent",
       "patterns": ["^b2IsValid(?:Float|Vec2|Rotation|AABB|Plane|Ray)$"],
       "silex_contract": "Constructors and public operations reject invalid values directly instead of requiring validation helper calls.",
-      "evidence": ["Tests/Consumer/check-invalid-geometry.sh", "Tests/Consumer/Tests/Geometry.sx"],
-      "rationale": "Validity is enforced at the intention boundary and does not need a parallel boolean-helper API."
+      "evidence": ["Docs/FR/Geometry.md", "Docs/EN/Geometry.md", "Tests/Consumer/Tests/GeometricValues.sx", "Tests/Consumer/Smokes/GeometricValue.sx", "Tests/Consumer/check-geometric-values.py", "Benchmarks/GeometryValuesOracle2D.sx", "Benchmarks/Oracle2D/GeometryValuesOracle.c", "Benchmarks/Oracle2D/GeometricValidityOracle.c", "Benchmarks/Oracle2D/CheckGeometryValues.py"],
+      "rationale": "Finite scalars/vectors, angle-derived rotations, ordered/degenerate AABBs and zero-motion/zero-fraction rays are qualified at public boundaries. Raw cosine/sine rotations are replaced by angles; planes are normalized collision results without a public general-plane constructor. The paired witnesses separate those representations and compare actual ray and shape-cast results; they do not claim a general boolean validation API."
     },
     {
       "id": "default-world-settings",

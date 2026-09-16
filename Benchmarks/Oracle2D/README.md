@@ -445,3 +445,25 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckUnits.py /tmp/box2d-units.
 ```
 
 See [application units](../../Docs/EN/Units.md) for conversions and limits.
+
+## Geometric validity and degenerate queries
+
+Build `gfx_physics_box2d_geometry_values_oracle` and
+`gfx_physics_box2d_geometric_validity_oracle`. The first emits 360 ray/shape-cast
+records paired with `../GeometryValuesOracle2D.sx`: five shapes, eighteen
+motions and two placements. `CheckGeometryValues.py BOX2D_RECORDS SILEX_RECORDS`
+checks exact hit flags and initial-overlap zeros, with fixed absolute `2e-5`
+and relative `2e-6` tolerances elsewhere. `TestGeometryValues.py` rejects
+missing hits, wrong overlap normals, missing records and nonfinite outputs.
+
+The validity oracle emits 82 predicates. Compile
+`Tests/Consumer/Smokes/GeometricValue.sx` in LLVM Debug and Release, then run
+`Tests/Consumer/check-geometric-values.py BOX2D_RECORDS DEBUG_BINARY RELEASE_BINARY`
+from the package path or with explicit paths. It pairs 72 cases per binary
+with Silex constructors and checks 16 additional shape/world fraction cases.
+Ten raw Box2D rotation/plane cases are reported separately: Silex takes an
+angle and exposes collision planes as produced, read-only results.
+`Tests/Consumer/Tests/GeometricValues.sx` verifies these invariants and actual
+world queries. Run Silex compilation commands from the workspace or Spec
+worktree group root. These witnesses do not prove all arbitrary magnitudes or
+all floating-point inputs.

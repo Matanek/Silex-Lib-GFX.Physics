@@ -44,12 +44,10 @@ public struct Ray2D {
         max_fraction:float = 1.0
     ) {
         if !finite(origin) || !finite(translation) ||
-            !finite_scalar(max_fraction) || max_fraction <= 0.0
+            !finite_scalar(max_fraction) || max_fraction < 0.0 ||
+            max_fraction >= 100000.0
         {
-            panic("GFX.Physics.Ray2D requires finite values and a positive maximum fraction")
-        }
-        if translation.length_squared() <= 0.000000000001 {
-            panic("GFX.Physics.Ray2D requires a non-zero translation")
+            panic("GFX.Physics.Ray2D requires finite values and a maximum fraction in [0, 100000)")
         }
         self.origin = origin
         self.translation = translation
@@ -228,19 +226,9 @@ public struct Geometry2D {
         filter:CollisionFilter2D = CollisionFilter2D()
     ) CastResult2D {
         if !filter.allows(target.filter()) { return CastResult2D() }
-        var moving_points:Math.Vec2[] = []
-        moving_points.append(ray.origin)
-        var moving = ConvexProxy2D(moving_points, 0.0)
         var best = CastResult2D()
         for target_proxy in shape_proxies(target.shape(), target.transform()) {
-            if !proxy_front_allows(target_proxy, moving) { continue }
-            let result = convex_cast(
-                target_proxy,
-                moving,
-                ray.translation,
-                ray.max_fraction,
-                false
-            )
+            let result = ray_cast_proxy(ray, target_proxy)
             if result.hit && (!best.hit || result.fraction < best.fraction) {
                 best = result
             }
@@ -256,14 +244,11 @@ public struct Geometry2D {
         can_encroach:bool = false
     ) CastResult2D {
         if !finite(translation) || !finite_scalar(max_fraction) ||
-            max_fraction <= 0.0
+            max_fraction < 0.0
         {
-            panic("GFX.Physics.Geometry2D.shape_cast requires finite motion and a positive maximum fraction")
+            panic("GFX.Physics.Geometry2D.shape_cast requires finite motion and a non-negative maximum fraction")
         }
         if !moving.filter().allows(target.filter()) { return CastResult2D() }
-        if translation.length_squared() <= 0.000000000001 {
-            return CastResult2D()
-        }
         var best = CastResult2D()
         for target_proxy in shape_proxies(target.shape(), target.transform()) {
             for moving_proxy in shape_proxies(moving.shape(), moving.transform()) {
@@ -682,6 +667,147 @@ func support_index(proxy:ConvexProxy2D, direction:Math.Vec2) int {
     return selected
 }
 
+// Analytic ray intersections follow Box2D v3.1.1 src/geometry.c at 8c661469.
+// A ray is not a rounded shape cast: entry boundaries and initial overlaps
+// have distinct observable points, normals and inclusive fraction limits.
+func ray_cast_proxy(ray:Ray2D, target:ConvexProxy2D) CastResult2D {
+    if target.points.count() == 1 {
+        return ray_cast_circle(ray, target.points[0], target.radius)
+    }
+    if target.points.count() == 2 {
+        if target.radius > 0.0 { return ray_cast_capsule(ray, target) }
+        return ray_cast_segment(ray, target)
+    }
+    if target.radius > 0.0 {
+        return convex_cast(
+            target, ConvexProxy2D([ray.origin], 0.0),
+            ray.translation, ray.max_fraction, false
+        )
+    }
+    var lower = 0.0
+    var upper = ray.max_fraction
+    var entry_normal = Math.Vec2()
+    var index = 0
+    while index < target.points.count() {
+        let vertex = target.points[index]
+        let edge = target.points[(index + 1) % target.points.count()].subtract(vertex)
+        let normal = Math.Vec2(edge.y, -edge.x).normalized()
+        let numerator = normal.dot(vertex.subtract(ray.origin))
+        let denominator = normal.dot(ray.translation)
+        if denominator == 0.0 {
+            if numerator < 0.0 { return CastResult2D() }
+        } else if denominator < 0.0 && numerator < lower * denominator {
+            lower = numerator / denominator
+            entry_normal = normal
+        } else if denominator > 0.0 && numerator < upper * denominator {
+            upper = numerator / denominator
+        }
+        if upper < lower { return CastResult2D() }
+        index++
+    }
+    return CastResult2D(
+        ray.origin.add(ray.translation.multiply(lower)), entry_normal, lower
+    )
+}
+
+func ray_cast_circle(ray:Ray2D, center:Math.Vec2, radius:float) CastResult2D {
+    let offset = ray.origin.subtract(center)
+    let radius_squared = radius * radius
+    let length = ray.translation.length()
+    if length == 0.0 {
+        if offset.length_squared() < radius_squared {
+            return CastResult2D(ray.origin, Math.Vec2(), 0.0)
+        }
+        return CastResult2D()
+    }
+    let direction = ray.translation.divide(length)
+    let projection = -offset.dot(direction)
+    let closest = offset.add(direction.multiply(projection))
+    let squared_distance = closest.length_squared()
+    if squared_distance > radius_squared { return CastResult2D() }
+    let entry = projection - Math.sqrt(radius_squared - squared_distance)
+    if entry < 0.0 || ray.max_fraction * length < entry {
+        if offset.length_squared() < radius_squared {
+            return CastResult2D(ray.origin, Math.Vec2(), 0.0)
+        }
+        return CastResult2D()
+    }
+    let normal = offset.add(direction.multiply(entry)).normalized()
+    return CastResult2D(center.add(normal.multiply(radius)), normal, entry / length)
+}
+
+func ray_cast_capsule(ray:Ray2D, target:ConvexProxy2D) CastResult2D {
+    let first = target.points[0]
+    let second = target.points[1]
+    let edge = second.subtract(first)
+    let length = edge.length()
+    if length < 0.00000011920929 {
+        return ray_cast_circle(ray, first, target.radius)
+    }
+    let axis = edge.divide(length)
+    let offset = ray.origin.subtract(first)
+    let along = offset.dot(axis)
+    let perpendicular = offset.subtract(axis.multiply(along))
+    if perpendicular.length_squared() < target.radius * target.radius {
+        if along < 0.0 { return ray_cast_circle(ray, first, target.radius) }
+        if along > length { return ray_cast_circle(ray, second, target.radius) }
+        return CastResult2D(ray.origin, Math.Vec2(), 0.0)
+    }
+    let ray_length = ray.translation.length()
+    if ray_length == 0.0 { return CastResult2D() }
+    let direction = ray.translation.divide(ray_length)
+    let denominator = direction.x * axis.y - axis.x * direction.y
+    if Math.abs(denominator) < 0.00000011920929 { return CastResult2D() }
+    var normal = Math.Vec2(axis.y, -axis.x)
+    let positive = offset.subtract(normal.multiply(target.radius))
+    let negative = offset.add(normal.multiply(target.radius))
+    let inverse = 1.0 / denominator
+    let positive_entry = (axis.x * positive.y - positive.x * axis.y) * inverse
+    let negative_entry = (axis.x * negative.y - negative.x * axis.y) * inverse
+    var entry = positive_entry
+    var side_offset = positive
+    if positive_entry >= negative_entry {
+        entry = negative_entry
+        side_offset = negative
+        normal = normal.negated()
+    }
+    if entry < 0.0 || ray.max_fraction * ray_length < entry {
+        return CastResult2D()
+    }
+    let side = (direction.x * side_offset.y - side_offset.x * direction.y) * inverse
+    if side < 0.0 { return ray_cast_circle(ray, first, target.radius) }
+    if side > length { return ray_cast_circle(ray, second, target.radius) }
+    return CastResult2D(
+        first.lerp(second, side / length).add(normal.multiply(target.radius)),
+        normal, entry / ray_length
+    )
+}
+
+func ray_cast_segment(ray:Ray2D, target:ConvexProxy2D) CastResult2D {
+    let first = target.points[0]
+    let edge = target.points[1].subtract(first)
+    if target.one_sided {
+        let offset = ray.origin.subtract(first)
+        if offset.x * edge.y - offset.y * edge.x < 0.0 {
+            return CastResult2D()
+        }
+    }
+    let length = edge.length()
+    if length == 0.0 { return CastResult2D() }
+    let direction = edge.divide(length)
+    var normal = Math.Vec2(direction.y, -direction.x)
+    let numerator = normal.dot(first.subtract(ray.origin))
+    let denominator = normal.dot(ray.translation)
+    if denominator == 0.0 { return CastResult2D() }
+    let fraction = numerator / denominator
+    if fraction < 0.0 || ray.max_fraction < fraction { return CastResult2D() }
+    let point = ray.origin.add(ray.translation.multiply(fraction))
+    let along = point.subtract(first).dot(direction)
+    if along < 0.0 || along > length { return CastResult2D() }
+    if numerator > 0.0 { normal = normal.negated() }
+    return CastResult2D(point, normal, fraction)
+}
+
 func convex_cast(
     target_proxy:ConvexProxy2D,
     moving_proxy:ConvexProxy2D,
@@ -703,17 +829,14 @@ func convex_cast(
                 if can_encroach && distance.distance > 2.0 * linear_slop {
                     target_distance = distance.distance - linear_slop
                 } else {
-                    var normal = distance.normal
-                    if normal.length_squared() < 0.000000000001 {
-                        normal = translation.negated().normalized()
-                    }
+                    let normal = distance.normal
                     let first = distance.first_point.add(
                         normal.multiply(target_proxy.radius)
                     )
                     let second = distance.second_point.subtract(
                         normal.multiply(moving_proxy.radius)
                     )
-                    return CastResult2D(first.lerp(second, 0.5), normal, 0.0)
+                    return CastResult2D(first.lerp(second, 0.5), Math.Vec2(), 0.0)
                 }
             } else {
                 let point = distance.first_point.add(
