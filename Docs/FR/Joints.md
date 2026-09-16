@@ -52,3 +52,40 @@ contacts et participent aux îlots de sommeil.
 Les preuves exécutables sont
 [`Joints.sx`](../../Tests/Consumer/Tests/Joints.sx) et
 [`JointRuntimeConfiguration.sx`](../../Tests/Consumer/Tests/JointRuntimeConfiguration.sx).
+
+## Souplesse de la distance rigide
+
+Sans ressort ni limite, `DistanceJoint2D` utilise `constraint_hertz` (60 Hz
+par défaut) et `constraint_damping_ratio` (2 par défaut) pour corriger l’écart
+à la longueur cible. Les réglages sont indépendants de `spring_hertz` et de
+`spring_damping_ratio`. La fréquence effective est plafonnée à un quart de
+l’inverse de la durée d’un sous-pas ; les accesseurs conservent la valeur
+configurée. Une fréquence nulle supprime la correction de position, mais la
+relaxation continue de contraindre la vitesse relative.
+
+```silex
+var tether = world.create_distance_joint(chassis, arm,
+    Physics.DistanceJoint2DSettings()
+        ..first_anchor = Math.Vec2()
+        ..second_anchor = Math.Vec2(2.0, 0.0)
+        ..length = 1.0
+        ..constraint_hertz = 5.0
+        ..constraint_damping_ratio = 2.0)
+tether.set_constraint_tuning(8.0, 3.0)
+assert(tether.constraint_hertz() == 8.0)
+assert(tether.constraint_damping_ratio() == 3.0)
+```
+
+Fréquence et amortissement doivent être finis et positifs ou nuls, à la
+création comme à la mutation. La mutation réveille les corps et annule les
+impulsions précédentes ; elle conserve ressort, limites et moteur. Ces réglages
+ne s’appliquent actuellement qu’au parcours de distance rigide sans limite.
+L’équivalence des combinaisons ressort/limites et celle des autres familles
+restent à qualifier dans la matrice de complétude.
+
+Les forces et couples annoncés utilisent la durée d’un sous-pas, correspondant
+à l’impulsion conservée par Soft Step. Les
+[tests publics](../../Tests/Consumer/Tests/DistanceConstraintTuning.sx) vérifient
+l’API, le réveil et l’unité de force. Le
+[témoin différentiel](../../Benchmarks/DistanceTuningOracle2D.sx) compare
+224 observations transitoires à Box2D pour 1, 2, 4 et 8 sous-pas.

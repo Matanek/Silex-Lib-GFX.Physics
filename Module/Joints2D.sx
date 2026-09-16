@@ -8,6 +8,8 @@ public struct DistanceJoint2DSettings {
     var first_anchor:Math.Vec2
     var second_anchor:Math.Vec2
     var length:float
+    var constraint_hertz:float
+    var constraint_damping_ratio:float
     var spring_hertz:float
     var spring_damping_ratio:float
     var minimum_length:float
@@ -23,6 +25,8 @@ public struct DistanceJoint2DSettings {
         self.first_anchor = Math.Vec2()
         self.second_anchor = Math.Vec2()
         self.length = -1.0
+        self.constraint_hertz = 60.0
+        self.constraint_damping_ratio = 2.0
         self.spring_hertz = 0.0
         self.spring_damping_ratio = 0.0
         self.minimum_length = 0.0
@@ -209,6 +213,9 @@ package struct JointId2D {
 }
 
 package struct JointConstraint2D {
+    var constraint_bias_rate:float
+    var constraint_mass_scale:float
+    var constraint_impulse_scale:float
     var stable_order:int
     var kind:JointKind2D
     var first_body:BodyId2D
@@ -221,6 +228,8 @@ package struct JointConstraint2D {
     var scalar_target:float
     var minimum:float
     var maximum:float
+    var constraint_hertz:float
+    var constraint_damping_ratio:float
     var spring_hertz:float
     var spring_damping_ratio:float
     var angular_hertz:float
@@ -248,6 +257,9 @@ package struct JointConstraint2D {
     var current_motor_torque:float
 
     init(kind:JointKind2D, first_body:BodyId2D, second_body:BodyId2D) {
+        self.constraint_bias_rate = 0.0
+        self.constraint_mass_scale = 0.0
+        self.constraint_impulse_scale = 0.0
         self.stable_order = -1
         self.kind = kind
         self.first_body = first_body
@@ -260,6 +272,8 @@ package struct JointConstraint2D {
         self.scalar_target = 0.0
         self.minimum = 0.0
         self.maximum = 0.0
+        self.constraint_hertz = 60.0
+        self.constraint_damping_ratio = 2.0
         self.spring_hertz = 0.0
         self.spring_damping_ratio = 0.0
         self.angular_hertz = 0.0
@@ -561,6 +575,28 @@ package class JointStore2D {
 
     func maximum(id:JointId2D) float {
         return self.joints[self.require(id)].maximum
+    }
+
+    func constraint_hertz(id:JointId2D) float {
+        return self.joints[self.require(id)].constraint_hertz
+    }
+
+    func constraint_damping_ratio(id:JointId2D) float {
+        return self.joints[self.require(id)].constraint_damping_ratio
+    }
+
+    func set_constraint_tuning(id:JointId2D, hertz:float, damping_ratio:float) {
+        self.bodies.require_mutable()
+        if !finite_joint_value(hertz) || !finite_joint_value(damping_ratio) ||
+            hertz < 0.0 || damping_ratio < 0.0
+        {
+            panic("GFX.Physics joint constraint tuning is invalid")
+        }
+        let index = self.require(id)
+        self.joints[index].constraint_hertz = hertz
+        self.joints[index].constraint_damping_ratio = damping_ratio
+        self.reset_impulses(index)
+        self.wake_joint(index)
     }
 
     func spring_hertz(id:JointId2D) float {
@@ -1021,6 +1057,35 @@ package class JointStore2D {
     func color_count(color:int) int { return self.color_counts[color] }
     func color_offset(color:int) int { return self.color_offsets[color] }
 
+    // Box2D 3.1.1 b2MakeSoft / b2SolveDistanceJoint; see Box2D-NOTICE.txt.
+    // Coefficients depend on the substep duration and settings, not on a
+    // solver pass. Prepare once per step before any parallel color dispatch.
+    func prepare_distance_constraints(delta:float, inverse_delta:float) {
+        var index = 0
+        while index < self.joints.count() {
+            if self.joints[index].kind == JointKind2D.distance {
+                let hertz = Math.min(self.joints[index].constraint_hertz,
+                    0.25 * inverse_delta)
+                var bias_rate = 0.0
+                var mass_scale = 0.0
+                var impulse_scale = 0.0
+                if hertz > 0.0 {
+                    let omega = 2.0 * 3.141592653589793 * hertz
+                    let a1 = 2.0 * self.joints[index].constraint_damping_ratio +
+                        delta * omega
+                    let a2 = delta * omega * a1
+                    impulse_scale = 1.0 / (1.0 + a2)
+                    bias_rate = omega / a1
+                    mass_scale = a2 * impulse_scale
+                }
+                self.joints[index].constraint_bias_rate = bias_rate
+                self.joints[index].constraint_mass_scale = mass_scale
+                self.joints[index].constraint_impulse_scale = impulse_scale
+            }
+            index++
+        }
+    }
+
     func finish_step(inverse_delta:float) {
         var index = 0
         while index < self.joints.count() {
@@ -1391,7 +1456,10 @@ func solve_joint_axis(
     hertz:float,
     damping_ratio:float,
     inverse_delta:float,
-    use_bias:bool
+    use_bias:bool,
+    bias_rate:float = -1.0,
+    mass_scale:float = 1.0,
+    impulse_scale:float = 0.0
 ) float {
     let inverse_mass = joint_inverse_mass_on_axis(
         bodies,
@@ -1414,13 +1482,18 @@ func solve_joint_axis(
         first,
         first_point
     )).dot(axis)
-    let bias = joint_bias_rate(
-        hertz,
-        damping_ratio,
-        inverse_delta,
-        use_bias
-    ) * error
-    let increment = (target_speed - relative_velocity - bias) / inverse_mass
+    var rate = bias_rate
+    if rate < 0.0 {
+        rate = joint_bias_rate(
+            hertz,
+            damping_ratio,
+            inverse_delta,
+            use_bias
+        )
+    }
+    let bias = rate * error
+    let increment = mass_scale * (target_speed - relative_velocity - bias) /
+        inverse_mass - impulse_scale * previous
     let accumulated = Math.max(minimum, Math.min(previous + increment, maximum))
     apply_joint_pair_impulse(
         bodies,
@@ -1594,6 +1667,17 @@ func solve_joint(
             }
         }
         if constrained {
+            var bias_rate = -1.0
+            var mass_scale = 1.0
+            var impulse_scale = 0.0
+            if !joint.spring_enabled && !joint.limit_enabled {
+                bias_rate = 0.0
+                if use_bias {
+                    bias_rate = joint.constraint_bias_rate
+                    mass_scale = joint.constraint_mass_scale
+                    impulse_scale = joint.constraint_impulse_scale
+                }
+            }
             joint.axial_impulse = solve_joint_axis(
                 bodies,
                 first,
@@ -1609,7 +1693,10 @@ func solve_joint(
                 hertz,
                 damping,
                 inverse_delta,
-                use_bias
+                use_bias,
+                bias_rate,
+                mass_scale,
+                impulse_scale
             )
         }
         if joint.motor_enabled {
@@ -1927,6 +2014,13 @@ public class DistanceJoint2D {
     func separation() Math.Vec2 { return self.store.separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
+    }
+    func constraint_hertz() float { return self.store.constraint_hertz(self.id) }
+    func constraint_damping_ratio() float {
+        return self.store.constraint_damping_ratio(self.id)
+    }
+    func set_constraint_tuning(hertz:float, damping_ratio:float) {
+        self.store.set_constraint_tuning(self.id, hertz, damping_ratio)
     }
     func current_length() float { return self.store.current_translation(self.id) }
     func length() float { return self.store.scalar_target(self.id) }

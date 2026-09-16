@@ -25,7 +25,8 @@
     "Physique 2D complète 10 — Événements et introspection des contacts",
     "Physique 2D complète 11 — Mouvement cinématique de personnage",
     "Physique 2D complète 12 — Explosions et forces radiales",
-    "Physique 2D complète 13 — Debug draw physique"
+    "Physique 2D complète 13 — Debug draw physique",
+    "Physics-2D-Final-Parity"
   ],
   "capabilities": [
     {
@@ -560,11 +561,12 @@
       "id": "joint-generic-constraint-tuning",
       "domain": "joint",
       "capability": "generic solver constraint tuning",
-      "status": "divergent",
+      "status": "partial",
+      "tracking": "Physics-2D-Final-Parity",
       "patterns": ["^b2Joint_(?:GetConstraintTuning|SetConstraintTuning)$"],
-      "silex_contract": "Typed family APIs expose only the applicable spring hertz and damping intentions.",
-      "evidence": ["Tests/Consumer/Tests/JointRuntimeConfiguration.sx"],
-      "rationale": "A generic solver-tuning pair would erase family semantics and expose an advanced implementation control rather than a gameplay intention."
+      "silex_contract": "Distance joints expose constraint hertz and damping independently of the spring. The rigid distance transient is compared with Box2D at 1/2/4/8 substeps.",
+      "evidence": ["Tests/Consumer/Tests/DistanceConstraintTuning.sx", "Benchmarks/DistanceTuningOracle2D.sx", "Benchmarks/Oracle2D/DistanceTuningOracle.c", "Benchmarks/Oracle2D/CheckDistanceTuning.py"],
+      "rationale": "The tuning is a physical capability, not equivalent to spring tuning. Other joint families and the distance spring/limit combination still require qualification."
     },
     {
       "id": "joint-family-configuration",

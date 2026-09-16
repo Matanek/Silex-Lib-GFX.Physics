@@ -390,3 +390,19 @@ python3 -B -m unittest discover -s Packages/GFX.Physics/Benchmarks/Oracle2D -p T
 
 The authoritative scenes, invariants, budgets and sentinel protocol live in
 [the corpus and budgets guide](../../Docs/EN/OracleAndBudgets.md).
+
+## Rigid distance constraint tuning
+
+`DistanceTuningOracle.c` and `../DistanceTuningOracle2D.sx` use a fixed body,
+a one-kilogram dynamic body, central anchors, a 1 m target and a 2 m initial
+length, with horizontal gravity 2 m/s². They record the first eight 1/60 s steps
+at 1/2/4/8 substeps for six frequency/damping pairs and a mid-run mutation.
+`CheckDistanceTuning.py BOX2D_RECORDS SILEX_RECORDS` requires all 224 samples
+and finite length, position, velocity and reaction. Absolute tolerances are
+0.0001 m, 0.0001 m, 0.001 m/s and 0.002 N respectively, fixed before the solver
+correction. This proves the reduced rigid path, not all joint combinations.
+
+Build target: `gfx_physics_box2d_distance_tuning_oracle`. Run the Silex source
+from the workspace or Spec group root in both LLVM Debug and Release. The
+zero-frequency case checks velocity relaxation without position bias; high
+frequency checks the substep-dependent cap. Spring settings are independent.

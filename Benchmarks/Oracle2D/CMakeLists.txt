@@ -60,6 +60,10 @@ add_executable(gfx_physics_box2d_explosion_oracle ExplosionOracle.c)
 target_compile_features(gfx_physics_box2d_explosion_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_explosion_oracle PRIVATE box2d)
 
+add_executable(gfx_physics_box2d_distance_tuning_oracle DistanceTuningOracle.c)
+target_compile_features(gfx_physics_box2d_distance_tuning_oracle PRIVATE c_std_17)
+target_link_libraries(gfx_physics_box2d_distance_tuning_oracle PRIVATE box2d)
+
 add_executable(gfx_physics_box2d_joints_oracle JointsOracle.c)
 target_compile_features(gfx_physics_box2d_joints_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_joints_oracle PRIVATE box2d)
@@ -115,6 +119,11 @@ endif()
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME gfx_physics_distance_tuning_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestDistanceTuning.py
+    )
+    add_test(
         NAME gfx_physics_stage_kernel_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestStageKernels.py
@@ -151,6 +160,7 @@ if(MSVC)
     target_compile_options(gfx_physics_box2d_character_mover_oracle PRIVATE /W4)
     target_compile_options(gfx_physics_box2d_explosion_oracle PRIVATE /W4)
     target_compile_options(gfx_physics_box2d_joints_oracle PRIVATE /W4)
+    target_compile_options(gfx_physics_box2d_distance_tuning_oracle PRIVATE /W4)
 else()
     target_compile_options(gfx_physics_box2d_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_geometry_oracle PRIVATE -Wall -Wextra -Wpedantic)
@@ -163,4 +173,5 @@ else()
     target_compile_options(gfx_physics_box2d_character_mover_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_explosion_oracle PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(gfx_physics_box2d_joints_oracle PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(gfx_physics_box2d_distance_tuning_oracle PRIVATE -Wall -Wextra -Wpedantic)
 endif()

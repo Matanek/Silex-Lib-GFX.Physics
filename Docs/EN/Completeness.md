@@ -24,11 +24,11 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The final contract contains 47 covered, 6 divergent and 8 excluded capability
-rows, with no partial or planned gameplay capability. These counts describe
-groups of related behavior, not percentages of engine completeness. The final
-gate rejects any future reintroduction of an unexplained partial or promise;
-it does not promote a capability by counting C wrappers.
+The current matrix contains 47 covered, 5 divergent, 8 excluded and one
+partial capability: joint constraint softness tuning. The rigid distance joint
+has a transient comparison; other families and spring/limit combinations remain
+to be qualified. The final gate must remain red while this capability is partial.
+These counts describe the inventory, not a proof of full physical equivalence.
 
 ## Intentional boundary
 

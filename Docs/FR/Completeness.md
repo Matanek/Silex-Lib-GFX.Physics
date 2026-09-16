@@ -15,11 +15,12 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-Le contrat final compte 47 capacités couvertes, 6 divergentes et 8 exclues,
-sans aucune capacité de gameplay partielle ou planifiée. Ces nombres comptent
-des groupes de comportements, pas un pourcentage de complétude du moteur. La
-porte finale refuse toute réintroduction future d’une capacité partielle ou
-promise sans explication.
+La matrice courante compte 47 capacités couvertes, 5 divergentes, 8 exclues
+et une partielle : le réglage de souplesse des contraintes de joints. Le joint
+de distance rigide possède une preuve transitoire ; les autres familles et
+les combinaisons ressort/limites restent à qualifier. La porte finale doit
+rester rouge tant que cette capacité est partielle. Ces nombres décrivent
+l’inventaire, pas une preuve globale d’équivalence physique.
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \

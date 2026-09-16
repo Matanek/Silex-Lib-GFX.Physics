@@ -1,0 +1,47 @@
+use GFX.Physics as Physics
+use STD.Math
+
+func run_case(tuning:int) {
+    let frequencies:float[] = [0.0, 5.0, 5.0, 60.0, 10_000.0, 5.0, 60.0]
+    let damping:float[] = [0.0, 0.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+    var substeps = 1
+    while substeps <= 8 {
+        var world = Physics.World2D(gravity:Math.Vec2(2.0, 0.0))
+        var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed)
+        var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(2.0, 0.0)
+            ..mass = 1.0
+            ..allow_sleep = false)
+        var settings = Physics.DistanceJoint2DSettings()
+            ..second_anchor = Math.Vec2(2.0, 0.0)
+            ..length = 1.0
+        if tuning != 3 && tuning != 6 {
+            settings.constraint_hertz = frequencies[tuning]
+            settings.constraint_damping_ratio = damping[tuning]
+        }
+        var joint = world.create_distance_joint(ground, body, settings)
+        assert(joint.constraint_hertz() == frequencies[tuning])
+        assert(joint.constraint_damping_ratio() == damping[tuning])
+        var step = 0
+        while step < 8 {
+            if tuning == 6 && step == 3 {
+                joint.set_constraint_tuning(5.0, 4.0)
+                assert(joint.constraint_hertz() == 5.0)
+                assert(joint.constraint_damping_ratio() == 4.0)
+            }
+            world.step(1.0 / 60.0, substeps)
+            print("distance-$(tuning)-$(substeps)-$(step) $(joint.current_length()) $(body.position().x) $(body.velocity().x) $(joint.constraint_force().x)")
+            step++
+        }
+        substeps *= 2
+    }
+}
+
+func main() {
+    var tuning = 0
+    while tuning < 7 {
+        run_case(tuning)
+        tuning++
+    }
+}

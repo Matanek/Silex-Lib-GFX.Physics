@@ -1,0 +1,43 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == expected { return true }
+            }
+        }
+    }
+    return false
+}
+
+func main() {
+    var value = -1.0
+    if option("infinite") {
+        var maximum = 3.4028235e38
+        value = maximum * 2.0
+    }
+    if option("nan") {
+        var zero = 0.0
+        value = zero / zero
+    }
+    var hertz = 5.0
+    var damping = 2.0
+    if option("damping") { damping = value } else { hertz = value }
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body()
+    var second = world.create_rigid_body()
+    if option("create") {
+        world.create_distance_joint(first, second,
+            Physics.DistanceJoint2DSettings()
+                ..constraint_hertz = hertz
+                ..constraint_damping_ratio = damping)
+    } else {
+        var joint = world.create_distance_joint(first, second)
+        joint.set_constraint_tuning(hertz, damping)
+    }
+    panic("invalid constraint tuning was accepted")
+}

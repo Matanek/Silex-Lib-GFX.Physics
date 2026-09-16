@@ -2271,12 +2271,16 @@ public class World2D {
             !finite_world_value(settings.length) ||
             !finite_world_value(settings.minimum_length) ||
             !finite_world_value(settings.maximum_length) ||
+            !finite_world_value(settings.constraint_hertz) ||
+            !finite_world_value(settings.constraint_damping_ratio) ||
             !finite_world_value(settings.spring_hertz) ||
             !finite_world_value(settings.spring_damping_ratio) ||
             !finite_world_value(settings.motor_speed) ||
             !finite_world_value(settings.maximum_motor_force) ||
             settings.length < -1.0 || settings.minimum_length < 0.0 ||
             settings.maximum_length < settings.minimum_length ||
+            settings.constraint_hertz < 0.0 ||
+            settings.constraint_damping_ratio < 0.0 ||
             settings.spring_hertz < 0.0 ||
             settings.spring_damping_ratio < 0.0 ||
             settings.maximum_motor_force < 0.0
@@ -2307,6 +2311,8 @@ public class World2D {
         joint.scalar_target = length
         joint.minimum = settings.minimum_length
         joint.maximum = settings.maximum_length
+        joint.constraint_hertz = settings.constraint_hertz
+        joint.constraint_damping_ratio = settings.constraint_damping_ratio
         joint.spring_hertz = settings.spring_hertz
         joint.spring_damping_ratio = settings.spring_damping_ratio
         joint.motor_speed = settings.motor_speed
@@ -5256,6 +5262,10 @@ public class World2D {
                 inverse_substep_delta,
                 self.current_maximum_correction_speed
             )
+            self.joints.prepare_distance_constraints(
+                substep_delta,
+                inverse_substep_delta
+            )
             var substep = 0
             while substep < substep_count {
                 self.execute_integrate_soft_step_velocities(substep_delta)
@@ -5344,7 +5354,7 @@ public class World2D {
             }
             self.current_soft_step_stages.append(8)
             self.current_soft_step_stages.append(9)
-            self.joints.finish_step(1.0 / delta)
+            self.joints.finish_step(inverse_substep_delta)
         } else {
             self.joints.finish_step(0.0)
         }

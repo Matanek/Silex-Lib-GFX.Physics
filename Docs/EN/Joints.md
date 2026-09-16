@@ -98,3 +98,39 @@ are the public executable proofs. They cover every family, runtime properties,
 enumeration, reactions, collision suppression and handle invalidation;
 internal tests add deterministic worker-count equivalence and a 4,096-joint
 parallel color.
+
+## Rigid distance softness
+
+With the spring and limits disabled, `DistanceJoint2D` uses `constraint_hertz`
+(default 60 Hz) and `constraint_damping_ratio` (default 2) to correct the error
+from the target length. These settings are independent of `spring_hertz` and
+`spring_damping_ratio`. The effective frequency is capped at one quarter of
+the inverse substep duration; getters retain the configured value. A zero
+frequency disables position correction, while relaxation still constrains
+relative velocity.
+
+```silex
+var tether = world.create_distance_joint(chassis, arm,
+    Physics.DistanceJoint2DSettings()
+        ..first_anchor = Math.Vec2()
+        ..second_anchor = Math.Vec2(2.0, 0.0)
+        ..length = 1.0
+        ..constraint_hertz = 5.0
+        ..constraint_damping_ratio = 2.0)
+tether.set_constraint_tuning(8.0, 3.0)
+assert(tether.constraint_hertz() == 8.0)
+assert(tether.constraint_damping_ratio() == 3.0)
+```
+
+Frequency and damping must be finite and nonnegative at creation and mutation.
+Mutation wakes the bodies and clears previous impulses; it preserves the spring,
+limits and motor. These settings currently apply only to the rigid distance
+path without limits. Spring/limit combinations and the other joint families
+remain subject to qualification in the completeness matrix.
+
+Reported forces and torques use the substep duration, corresponding to the
+impulse retained by Soft Step. The
+[public tests](../../Tests/Consumer/Tests/DistanceConstraintTuning.sx) check the
+API, wake-up and force units. The
+[differential witness](../../Benchmarks/DistanceTuningOracle2D.sx) compares
+224 transient observations with Box2D at 1, 2, 4 and 8 substeps.
