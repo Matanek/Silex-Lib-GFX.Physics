@@ -1,0 +1,115 @@
+use GFX.Physics
+use STD.Math
+
+func add_surface(world:Physics.World2D, body:Physics.RigidBody2D, x:float, id:uint64) Physics.Collider2D {
+    return world.create_collider(body, Physics.Collider2DSettings()
+        ..application_id=id
+        ..enable_contact_events=true ..enable_custom_filter=true ..enable_pre_solve=true
+        ..shape=Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(x-0.5,-0.5), Math.Vec2(x+0.5,-0.5),
+            Math.Vec2(x+0.5,0.5), Math.Vec2(x-0.5,0.5)])))
+}
+func create_support(world:Physics.World2D) Physics.RigidBody2D {
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.fixed ..create_implicit_collider=false)
+    add_surface(world,fixed,-2.0,10)
+    add_surface(world,fixed,2.0,20)
+    return fixed
+}
+func create_visitor(world:Physics.World2D) Physics.RigidBody2D {
+    return world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position=Math.Vec2(0.0,0.9) ..allow_sleep=false ..fixed_rotation=true
+        ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0))))
+}
+func keep_right(pair:Physics.ContactPairSnapshot2D) bool {
+    if let id=pair.first().application_id { return id==20 }
+    return false
+}
+func solve_right(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+    return Physics.ContactDecision2D() ..enabled=keep_right(input.pair())
+}
+
+test "filter each collider pair on the same bodies independently" {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    create_support(world)
+    create_visitor(world)
+    world.set_custom_filter(keep_right)
+    world.step(0.001,4)
+    var contacts:Physics.Contact2D[]=[]
+    world.write_contacts(contacts)
+    assert(contacts.count()==1)
+    assert(keep_right(contacts[0].pair()))
+}
+
+test "apply pre solve to each compound contact independently" {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    create_support(world)
+    create_visitor(world)
+    world.set_pre_solve(solve_right)
+    world.step(0.001,4)
+    var contacts:Physics.Contact2D[]=[]
+    world.write_contacts(contacts)
+    assert(contacts.count()==1)
+    assert(keep_right(contacts[0].pair()))
+}
+
+test "filter joints invalidate and restore every compound contact" {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    var support=create_support(world)
+    var visitor=create_visitor(world)
+    world.step(0.001,4)
+    assert(world.contact_count()==2)
+    var filter=world.create_filter_joint(support,visitor)
+    world.step(0.001,4)
+    assert(world.contact_count()==0)
+    var ended:Physics.ContactEndEvent2D[]=[]
+    world.write_contact_end_events(ended)
+    assert(ended.count()==2)
+    world.destroy_joint(filter)
+    world.step(0.001,4)
+    assert(world.contact_count()==2)
+}
+
+test "removing one surface preserves the other contact and its snapshot" {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    var support=create_support(world)
+    var visitor=create_visitor(world)
+    world.step(0.001,4)
+    var contacts:Physics.Contact2D[]=[]
+    world.write_contacts(visitor,contacts)
+    assert(contacts.count()==2)
+    var shapes:Physics.Collider2D[]=[]
+    support.write_colliders(shapes)
+    for shape in shapes {
+        if let id=shape.application_id() { if id==10 { world.destroy_collider(shape) } }
+    }
+    world.step(0.001,4)
+    var ended:Physics.ContactEndEvent2D[]=[]
+    world.write_contact_end_events(ended)
+    assert(ended.count()==1)
+    world.write_contacts(contacts)
+    assert(contacts.count()==1)
+    assert(keep_right(contacts[0].pair()))
+}
+
+test "refresh compound contact bounds after kinematic integration" {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    world.set_continuous_collision_enabled(false)
+    var support=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.kinematic ..create_implicit_collider=false
+        ..position=Math.Vec2(-10.0,0.0) ..velocity=Math.Vec2(100.0,0.0))
+    var x = -2.0
+    while x < 3.0 {
+        world.create_collider(support,Physics.Collider2DSettings()
+            ..shape=Physics.Shape2D.polygon(Physics.Polygon2D([
+                Math.Vec2(x-0.5,-0.5),Math.Vec2(x+0.5,-0.5),
+                Math.Vec2(x+0.5,0.5),Math.Vec2(x-0.5,0.5)])))
+        x+=4.0
+    }
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position=Math.Vec2(0.0,0.9) ..allow_sleep=false ..fixed_rotation=true
+        ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0))))
+    world.step(0.1,4)
+    assert(world.contact_count()==2)
+    assert(Math.nearly_equal(support.position().x,0.0,0.00001))
+}

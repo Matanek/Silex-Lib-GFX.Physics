@@ -494,6 +494,17 @@ configuration-invariant output; it does not establish that parallel work was
 dispatched. `BodyEvents.sx` tests sleeping bodies, move flags, filter options and
 collider replacement; `check-body-events.py` checks stale/locked mutations.
 
-The current body-pair contact cache retains only one collider pair when several
-surfaces on the same two bodies touch simultaneously. This scenario is outside
-this ten-stage witness and remains a discrete-contact parity gap.
+`CompoundContactsOracle.c` and `CompoundContactsOracle2D.sx` additionally cover
+two surfaces on the same body against one visitor: twenty-four event stages across
+both creation orders, partial separation, destruction/recreation, a distance joint
+that disables collisions, hits, and four
+option changes before touching. All counts and surface identities must match
+exactly. A free rectangle resting on both surfaces must retain two contacts,
+each carrying a positive normal impulse after 120 steps. The paired position,
+angle and velocity tolerances are 0.015 m, 0.002 rad and 0.02 m/s, fixed before
+the comparison (position allows three Box2D linear slops).
+
+Build `gfx_physics_box2d_compound_contacts_oracle`, run the Silex witness in
+Debug/Release at 1/2/4 workers, and compare their output with
+`CheckCompoundContacts.py`. `CompoundContacts.sx` also checks independent custom
+filters/pre-solve decisions and invalidation of every contact by a filter joint.

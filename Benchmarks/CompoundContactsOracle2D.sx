@@ -1,0 +1,154 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func pair_mask(pair:Physics.ContactPairSnapshot2D) int {
+    if let id = pair.first().application_id {
+        if id == 10 { return 1 }
+        if id == 20 { return 2 }
+        if id == 30 { return 4 }
+    }
+    panic("unknown event surface")
+}
+func record(world:Physics.World2D, stage:int) {
+    var began:Physics.ContactBeginEvent2D[] = []
+    var ended:Physics.ContactEndEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+    var contacts:Physics.Contact2D[] = []
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    world.write_contact_hit_events(hits)
+    world.write_contacts(contacts)
+    var bm=0; var em=0; var hm=0; var cm=0
+    for e in began { bm += pair_mask(e.pair()) }
+    for e in ended { em += pair_mask(e.pair()) }
+    for e in hits { hm += pair_mask(e.pair()) }
+    for c in contacts { cm += pair_mask(c.pair()) }
+    print("stage_$(stage) $(began.count()) $(bm) $(ended.count()) $(em) $(hits.count()) $(hm) $(contacts.count()) $(cm)")
+}
+func collider(world:Physics.World2D, body:Physics.RigidBody2D, x:float, id:uint64, events:bool, sensors:bool) Physics.Collider2D {
+    return world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(x - 0.5, -0.5), Math.Vec2(x + 0.5, -0.5),
+            Math.Vec2(x + 0.5, 0.5), Math.Vec2(x - 0.5, 0.5)
+        ]))
+        ..application_id = id
+        ..enable_contact_events = events
+        ..enable_sensor_events = sensors
+        ..enable_hit_events = true
+    )
+}
+func configure(world:Physics.World2D) {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == "2" { world.enable_parallelism(2) }
+                if argument == "4" { world.enable_parallelism(4) }
+            }
+        }
+    }
+}
+func scenario(reverse:bool) {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    configure(world)
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.fixed ..create_implicit_collider=false)
+    var surfaces:Physics.Collider2D[]=[]
+    if reverse {
+        surfaces.append(collider(world,fixed,2.0,20,true,false))
+        surfaces.append(collider(world,fixed,-2.0,10,true,false))
+        surfaces.swap(0,1)
+    } else {
+        surfaces.append(collider(world,fixed,-2.0,10,true,false))
+        surfaces.append(collider(world,fixed,2.0,20,true,false))
+    }
+    var first=surfaces[0]
+    var visitor=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0)))
+        ..position=Math.Vec2(0.0,0.9) ..allow_sleep=false ..fixed_rotation=true)
+    var stage=0
+    while stage<10 {
+        if stage==1 { fixed.set_contact_events_enabled(false) }
+        if stage==2 { visitor.set_position(Math.Vec2(4.0,0.9)) }
+        if stage==3 { first.set_event_options(true,true,false) }
+        if stage==4 { visitor.set_position(Math.Vec2(0.0,0.9)) }
+        if stage==5 { world.destroy_collider(first) }
+        if stage==6 { first=collider(world,fixed,-2.0,10,false,false) }
+        if stage==7 { fixed.set_contact_events_enabled(true) }
+        if stage==8 { visitor.set_position(Math.Vec2(0.0,3.0)) }
+        if stage==9 { visitor.set_position(Math.Vec2(0.0,0.9)); visitor.set_velocity(Math.Vec2(0.0,-5.0)) }
+        world.step(0.001,4)
+        var index=stage
+        if reverse { index+=10 }
+        record(world,index)
+        stage++
+    }
+}
+func support() {
+    var world=Physics.World2D(gravity:Math.Vec2(0.0,-10.0))
+    configure(world)
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.fixed ..create_implicit_collider=false)
+    collider(world,fixed,-2.0,10,true,false)
+    collider(world,fixed,2.0,20,true,false)
+    var visitor=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0)))
+        ..position=Math.Vec2(0.0,1.02) ..allow_sleep=false)
+    var step=0
+    while step<120 { world.step(1.0/60.0,4); step++ }
+    var contacts:Physics.Contact2D[]=[]
+    world.write_contacts(contacts)
+    var supported=0
+    for contact in contacts {
+        var impulse=0.0
+        for value in contact.normal_impulses() { impulse+=value }
+        assert(impulse>0.0)
+        supported+=pair_mask(contact.pair())
+    }
+    let p=visitor.position(); let v=visitor.velocity()
+    print("support $(contacts.count()) $(supported) $(p.x) $(p.y) $(visitor.rotation()) $(v.x) $(v.y)")
+}
+func before_touch() {
+ var world=Physics.World2D(gravity:Math.Vec2())
+ configure(world)
+ var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+  ..body_type=Physics.BodyType2D.fixed ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0))))
+ var visitor=world.create_rigid_body(Physics.RigidBody2DSettings()
+  ..position=Math.Vec2(0.0,1.05) ..allow_sleep=false ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0))))
+ var i=0
+ while i<4 {
+  if i==1 { fixed.set_contact_events_enabled(true); visitor.set_position(Math.Vec2(0.0,0.9)) }
+  if i==2 { fixed.set_contact_events_enabled(false); visitor.set_position(Math.Vec2(0.0,1.05)) }
+  if i==3 { visitor.set_position(Math.Vec2(0.0,0.9)) }
+  visitor.set_velocity(Math.Vec2())
+  world.step(0.001,4)
+  var began:Physics.ContactBeginEvent2D[]=[]
+  var ended:Physics.ContactEndEvent2D[]=[]
+  world.write_contact_begin_events(began)
+  world.write_contact_end_events(ended)
+  print("precontact_$(i) $(began.count()) $(ended.count())")
+  i++
+ }
+}
+
+func connected_joint_case() {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    configure(world)
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.fixed ..create_implicit_collider=false)
+    collider(world,fixed,-2.0,10,true,false)
+    collider(world,fixed,2.0,20,true,false)
+    var visitor=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape=Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0)))
+        ..position=Math.Vec2(0.0,0.9) ..allow_sleep=false ..fixed_rotation=true)
+    world.step(0.001,4); record(world,20)
+    var joint=world.create_distance_joint(fixed,visitor)
+    world.step(0.001,4); record(world,21)
+    world.destroy_joint(joint)
+    visitor.set_position(Math.Vec2(0.0,3.0))
+    world.step(0.001,4); record(world,22)
+    visitor.set_position(Math.Vec2(0.0,0.9))
+    world.step(0.001,4); record(world,23)
+}
+func main() { scenario(false); scenario(true); support(); before_touch(); connected_joint_case() }

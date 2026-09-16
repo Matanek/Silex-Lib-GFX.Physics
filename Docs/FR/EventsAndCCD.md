@@ -66,11 +66,12 @@ Le [scénario exécutable des options](../../Benchmarks/BodyEventsOracle2D.sx)
 montre dix étapes, dont l’ajout d’un collider après mutation et les identités
 des surfaces dans les événements.
 
-Les bullets balaient chaque paire de colliders autorisée, et pas seulement la
-forme primaire de chaque corps. Un corps composé ou un conteneur cinématique
-conserve donc ses parois secondaires dans le CCD. Le premier impact de toutes
-les paires admissibles est retenu, y compris avec raffinement rotationnel, et
-une même paire de corps ne peut occuper qu’une entrée du cache de contacts.
+Chaque paire de colliders solides possède son contact. Deux surfaces d’un même
+corps peuvent toucher simultanément un autre corps, recevoir des décisions de
+filtre ou de pre-solve distinctes et produire leurs propres événements. La
+destruction d’une surface conserve les contacts des autres surfaces. Les
+options begin/end sont capturées dès la création du contact potentiel, avant
+le premier toucher visible.
 
 Tout collider convexe dynamique assez rapide balaie les formes fixes et
 cinématiques autorisées. Une cible cinématique fournit son mouvement relatif
@@ -80,13 +81,14 @@ complet au sweep au lieu d’être traitée comme une téléportation. `is_bulle
 Le CCD évalue chaque paire de colliders, et pas seulement la forme primaire de
 chaque corps. Le premier impact admissible est retenu, y compris avec
 raffinement rotationnel, puis reçoit la réponse et les événements ordinaires.
-Une même paire de corps ne peut occuper qu’une entrée du cache de contacts.
+Le CCD réutilise le contact de la paire de colliders réellement touchée.
 Les capteurs rapides signalent une traversée complète sans réponse physique.
 Filtres, filter joints et côté unilatéral des chaînes restent identiques au
 chemin discret. Les corps lents quittent le chemin avant toute recherche de
 paire, et seules les bullets paient les tests dynamique contre dynamique.
 
 ```text
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/CompoundContacts.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/BodyEvents.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx

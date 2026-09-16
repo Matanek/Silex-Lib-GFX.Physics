@@ -51,6 +51,12 @@ The [executable event-options scenario](../../Benchmarks/BodyEventsOracle2D.sx)
 shows ten stages, including a collider added after a toggle and the surface
 identities reported by events.
 
+Each solid collider pair owns its contact. Two surfaces on the same body can
+touch another body simultaneously, receive independent custom-filter or
+pre-solve decisions and publish their own events. Destroying one surface
+preserves the other contacts. Begin/end options are captured when the potential
+contact is created, before the first visible touch.
+
 ## Read completed-step buffers
 
 ```silex
@@ -105,7 +111,7 @@ applying an impulse.
 CCD evaluates every filter-compatible collider pair, not only each body's
 primary shape. Secondary walls of a compound or kinematic container therefore
 participate in the sweep, and the earliest admissible collider hit wins. A
-continuous hit reuses the owning body pair when it is already cached; it never
+continuous hit reuses the exact collider pair when it is already cached; it never
 adds duplicate constraints for the same two bodies.
 
 The CCD path preserves collision filters, filter-joint exclusions, disabled
@@ -122,6 +128,8 @@ and [`../Tests/Consumer/Tests/Events.sx`](../../Tests/Consumer/Tests/Events.sx):
 
 ```text
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContinuousCollision.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/CompoundContacts.sx
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/BodyEvents.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 ```
