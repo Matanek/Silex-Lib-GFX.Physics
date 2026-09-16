@@ -29,13 +29,27 @@ keeps its overlap filtering. The retained body-level fields configure the
 implicit compatibility collider. `enable_sensor_events` belongs to the sensor;
 an ordinary visitor does not need
 to opt in. When two enabled sensors overlap, each receives its own event role.
-Contact and hit events are enabled when either solid collider requests that stream.
+New contacts subscribe to begin/end events when either solid collider requests
+that stream. Hits use the current options of either solid collider.
 
-`Collider2D.set_event_options(contact, hit, sensor)` may change those flags
-between steps. Enabling a stream while a pair is already touching produces its
-begin event on the next completed step; disabling it produces the matching end
-event. Disabled streams do not build payloads, and a world without bullets does
-not enter the dynamic-target CCD path.
+`RigidBody2D.set_contact_events_enabled(enabled)` and
+`set_hit_events_enabled(enabled)` configure contact and hit events,
+respectively, on every collider already attached to the body. Each collider
+keeps its sensor, custom-filter and pre-solve options. These mutations do not
+wake the body or change its move events. Colliders added later retain their
+own creation settings.
+
+`Collider2D.set_event_options(contact, hit, sensor)` configures one collider
+between steps. An existing contact retains its begin/end subscription for
+its lifetime: changing the option does not manufacture a transition. New
+contacts use the current options; hits read them on each step. Sensor events
+retain their own semantics: enabling the stream during an overlap produces a
+begin on the next step, and disabling it produces an end. These mutations
+reject stale handles and worlds locked during a step or callback.
+
+The [executable event-options scenario](../../Benchmarks/BodyEventsOracle2D.sx)
+shows ten stages, including a collider added after a toggle and the surface
+identities reported by events.
 
 ## Read completed-step buffers
 

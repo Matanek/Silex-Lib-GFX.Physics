@@ -270,6 +270,8 @@ struct CompletedContactPair2D {
     var friction:float
     var restitution:float
     var events_published:bool
+    var event_options_initialized:bool
+    var contact_events_enabled:bool
     var swapped:bool
 
     init() {
@@ -284,6 +286,8 @@ struct CompletedContactPair2D {
         self.friction = 0.0
         self.restitution = 0.0
         self.events_published = false
+        self.event_options_initialized = false
+        self.contact_events_enabled = false
         self.swapped = false
     }
 }
@@ -655,6 +659,7 @@ public class World2D {
     private var candidate_pre_solve_allowed:bool[]
     private var candidate_pairs:ContactPair2D[]
     private var completed_candidate_pairs:CompletedContactPair2D[]
+    private var retained_contact_options:CompletedContactPair2D[]
     private var candidate_pair_keys:PairSet2D
     private var free_candidate_slots:int[]
     private var free_candidate_count:int
@@ -782,6 +787,7 @@ public class World2D {
         self.candidate_pre_solve_allowed = []
         self.candidate_pairs = []
         self.completed_candidate_pairs = []
+        self.retained_contact_options = []
         self.candidate_pair_keys = PairSet2D()
         self.free_candidate_slots = []
         self.free_candidate_count = 0
@@ -2865,6 +2871,7 @@ public class World2D {
         if self.store.topology_dirty {
             self.rebuild_after_body_destruction()
         }
+        if self.store.event_options_dirty { self.refresh_event_body_counts() }
         self.store.world_locked = true
         var profile_clock = Clock()
         if self.profiling_enabled { profile_clock.tick() }
@@ -2968,6 +2975,7 @@ public class World2D {
         }
         self.update_sleep(delta)
         self.collect_contact_events()
+        self.retained_contact_options.clear()
         self.collect_sensor_events()
         self.collect_body_move_events()
         if self.profiling_enabled {
@@ -3388,11 +3396,6 @@ public class World2D {
     }
 
     private func collect_contact_events() {
-        if self.contact_event_body_count == 0 &&
-            self.previous_touching_snapshots.is_empty()
-        {
-            return
-        }
         var index = 0
         while index < self.candidate_pairs.count() {
             self.completed_candidate_pairs[index].events_published = false
@@ -3403,7 +3406,7 @@ public class World2D {
                 continue
             }
             let completed = self.completed_candidate_pairs[index]
-            if !completed_contact_events_enabled(self.store, completed) {
+            if !completed.contact_events_enabled {
                 index++
                 continue
             }
@@ -3728,7 +3731,37 @@ public class World2D {
         self.island_write_offsets.take_last()
     }
 
+    private func refresh_event_body_counts() {
+        self.contact_event_body_count = 0
+        self.hit_event_body_count = 0
+        self.sensor_event_body_count = 0
+        var index = 0
+        while index < self.store.count() {
+            if self.store.enabled[index] {
+                let flags = self.store.behavior_flags[index]
+                if (flags & 8) != 0 { self.contact_event_body_count++ }
+                if (flags & 16) != 0 { self.hit_event_body_count++ }
+                if (flags & 2) != 0 && (flags & 32) != 0 { self.sensor_event_body_count++ }
+            }
+            index++
+        }
+        self.store.event_options_dirty = false
+    }
+
     private func rebuild_after_body_destruction() {
+        // A topology rebuild must not re-register an existing contact with
+        // the latest shape options. Its begin/end subscription is latched.
+        var candidate = 0
+        while candidate < self.completed_candidate_pairs.count() {
+            let completed = self.completed_candidate_pairs[candidate]
+            if self.candidate_enabled[candidate] && completed.event_options_initialized &&
+                self.store.shape_store.contains(completed.first_collider) &&
+                self.store.shape_store.contains(completed.second_collider)
+            {
+                self.retained_contact_options.append(completed)
+            }
+            candidate++
+        }
         self.broad_phase = BroadPhase2D()
         var non_dynamic_bodies = self.non_dynamic_bodies
         non_dynamic_bodies.values.clear()
@@ -5514,8 +5547,24 @@ public class World2D {
             second = colliders.first
             completed_normal = normal.negated()
         }
-        completed.first_collider = collider_id_at(self.store, first)
-        completed.second_collider = collider_id_at(self.store, second)
+        let first_id = collider_id_at(self.store, first)
+        let second_id = collider_id_at(self.store, second)
+        if !completed.event_options_initialized ||
+            !same_shape_pair(completed.first_collider, completed.second_collider, first_id, second_id)
+        {
+            completed.contact_events_enabled =
+                (self.store.shape_store.behavior_flags[first] & 2) != 0 ||
+                (self.store.shape_store.behavior_flags[second] & 2) != 0
+            for retained in self.retained_contact_options {
+                if same_shape_pair(retained.first_collider, retained.second_collider, first_id, second_id) {
+                    completed.contact_events_enabled = retained.contact_events_enabled
+                    break
+                }
+            }
+            completed.event_options_initialized = true
+        }
+        completed.first_collider = first_id
+        completed.second_collider = second_id
         completed.normal = completed_normal
         completed.first_point = first_point
         completed.second_point = second_point
@@ -5897,21 +5946,6 @@ func pair_contact_events_enabled(
 ) bool {
     return (store.behavior_flags[pair.first] & 8) != 0 ||
         (store.behavior_flags[pair.second] & 8) != 0
-}
-
-func completed_contact_events_enabled(
-    store:BodyStore2D,
-    contact:CompletedContactPair2D
-) bool {
-    if !store.shape_store.contains(contact.first_collider) ||
-        !store.shape_store.contains(contact.second_collider)
-    {
-        return false
-    }
-    let first = store.shape_store.require(contact.first_collider)
-    let second = store.shape_store.require(contact.second_collider)
-    return (store.shape_store.behavior_flags[first] & 2) != 0 ||
-        (store.shape_store.behavior_flags[second] & 2) != 0
 }
 
 func same_shape_id(first:ShapeId2D, second:ShapeId2D) bool {

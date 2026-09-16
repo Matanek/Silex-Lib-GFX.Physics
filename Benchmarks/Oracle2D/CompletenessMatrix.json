@@ -440,13 +440,21 @@
     {
       "id": "body-event-options",
       "domain": "event",
-      "capability": "legacy body-wide contact and hit event toggles",
-      "status": "divergent",
-      "patterns": ["^b2Body_Enable(?:Contact|Hit)Events$"],
-      "silex_contract": "Event options belong to each Collider2D so distinct surfaces on one body remain identifiable.",
-      "evidence": ["Tests/Consumer/Tests/Events.sx"],
-      "rationale": "Collider granularity is more expressive than a body-wide toggle and remains source-compatible through the implicit collider.",
-      "tracking": "Physique 2D complète 10 — Événements et introspection des contacts"
+      "capability": "body-wide contact and hit event toggles",
+      "status": "covered",
+      "patterns": [
+        "^b2Body_Enable(?:Contact|Hit)Events$"
+      ],
+      "silex_contract": "RigidBody2D toggles contact or hit events on all existing colliders, preserving independent flags and later creation settings. Simultaneous contacts between several colliders on the same two bodies remain limited by the body-pair contact cache.",
+      "evidence": [
+        "Tests/Consumer/Tests/BodyEvents.sx",
+        "Tests/Consumer/Tests/ContactSnapshots.sx",
+        "Tests/Consumer/Smokes/InvalidBodyEvents.sx",
+        "Tests/Consumer/check-body-events.py",
+        "Benchmarks/BodyEventsOracle2D.sx",
+        "Benchmarks/Oracle2D/BodyEventsOracle.c",
+        "Benchmarks/Oracle2D/CheckBodyEvents.py"
+      ]
     },
     {
       "id": "body-label",

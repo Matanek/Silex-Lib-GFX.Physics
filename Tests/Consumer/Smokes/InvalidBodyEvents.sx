@@ -1,0 +1,42 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+    }
+    return false
+}
+class LockedEvents {
+    var body:Physics.RigidBody2D
+    let hit:bool
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        if self.hit { self.body.set_hit_events_enabled(true) }
+        else { self.body.set_contact_events_enabled(true) }
+        return Physics.ContactDecision2D()
+    }
+}
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false ..body_type = Physics.BodyType2D.fixed)
+    if option("locked") {
+        world.create_collider(body, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0)) ..enable_pre_solve = true)
+        world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)) ..position = Math.Vec2(1.4, 0.0))
+        var policy = LockedEvents(body:body, hit:option("hit"))
+        world.set_pre_solve(policy.apply)
+        world.step(0.001)
+    } else {
+        world.destroy_rigid_body(body)
+        world.create_rigid_body()
+        if option("hit") { body.set_hit_events_enabled(true) }
+        else { body.set_contact_events_enabled(true) }
+    }
+    panic("invalid event mutation was accepted")
+}

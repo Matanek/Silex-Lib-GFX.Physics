@@ -1,0 +1,101 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func pair_mask(pair:Physics.ContactPairSnapshot2D) int {
+    if let id = pair.first().application_id {
+        if id == 10 { return 1 }
+        if id == 20 { return 2 }
+        if id == 30 { return 4 }
+    }
+    panic("unknown event surface")
+}
+func record(world:Physics.World2D, stage:int, colliders:Physics.Collider2D[]) {
+    var began:Physics.ContactBeginEvent2D[] = []
+    var ended:Physics.ContactEndEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    world.write_contact_hit_events(hits)
+    var bm = 0
+    var em = 0
+    var hm = 0
+    for e in began { bm += pair_mask(e.pair()) }
+    for e in ended { em += pair_mask(e.pair()) }
+    for e in hits { hm += pair_mask(e.pair()); assert(e.approach_speed() > 4.9) }
+    var cm = 0
+    var im = 0
+    var sm = 0
+    var bit = 1
+    for c in colliders {
+        if c.contact_events_enabled() { cm += bit }
+        if c.hit_events_enabled() { im += bit }
+        if c.sensor_events_enabled() { sm += bit }
+        bit *= 2
+    }
+    print("stage_$(stage) $(began.count()) $(bm) $(ended.count()) $(em) $(hits.count()) $(hm) $(cm) $(im) $(sm)")
+}
+func collider(world:Physics.World2D, body:Physics.RigidBody2D, x:float, id:uint64, events:bool, sensors:bool) Physics.Collider2D {
+    return world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+            Math.Vec2(x - 0.5, -0.5), Math.Vec2(x + 0.5, -0.5),
+            Math.Vec2(x + 0.5, 0.5), Math.Vec2(x - 0.5, 0.5)
+        ]))
+        ..application_id = id
+        ..enable_contact_events = events
+        ..enable_sensor_events = sensors
+    )
+}
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2(), hit_event_threshold:1.0)
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                if argument == "2" { world.enable_parallelism(2) }
+                if argument == "4" { world.enable_parallelism(4) }
+            }
+        }
+    }
+    var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false)
+    var colliders:Physics.Collider2D[] = [
+        collider(world, fixed, -2.0, 10, true, true), collider(world, fixed, 2.0, 20, false, false)
+    ]
+    var visitors:Physics.RigidBody2D[] = []
+    var i = 0
+    while i < 2 {
+        visitors.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+            ..position = Math.Vec2(-2.0 + 4.0 * i as float, 0.9)
+            ..allow_sleep = false
+            ..enable_move_events = true
+        ))
+        i++
+    }
+    var stage = 0
+    while stage < 10 {
+        if stage == 1 || stage == 4 || stage == 8 { fixed.set_contact_events_enabled(true) }
+        if stage == 2 { fixed.set_contact_events_enabled(false) }
+        if stage == 5 { colliders[0].set_event_options(false, false, true) }
+        if stage == 6 { fixed.set_hit_events_enabled(true) }
+        if stage == 7 { fixed.set_hit_events_enabled(false) }
+        if stage == 3 || stage == 4 || stage == 6 || stage == 7 || stage == 9 {
+            i = 0
+            while i < 2 {
+                var y = 0.9
+                if stage == 3 || stage == 9 { y = 3.0 }
+                var speed = 0.0
+                if stage == 6 || stage == 7 { speed = -5.0 }
+                visitors[i].set_position(Math.Vec2(-2.0 + 4.0 * i as float, y))
+                visitors[i].set_velocity(Math.Vec2(0.0, speed))
+                i++
+            }
+        }
+        if stage == 8 { colliders.append(collider(world, fixed, 6.0, 30, false, false)) }
+        world.step(0.001, 4)
+        record(world, stage, colliders)
+        stage++
+    }
+}

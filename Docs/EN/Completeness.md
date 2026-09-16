@@ -24,7 +24,7 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current matrix contains 50 covered, 5 divergent, 5 excluded and one
+The current matrix contains 51 covered, 4 divergent, 5 excluded and one
 partial capability: joint constraint softness tuning. The rigid distance joint
 has a transient comparison; other families and spring/limit combinations remain
 to be qualified. The final gate must remain red while this capability is partial.

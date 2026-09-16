@@ -225,7 +225,7 @@ test "preserve collider snapshot order across worker counts" {
     }
 }
 
-test "apply contact event option changes on the next completed step" {
+test "retain contact subscriptions until separation after option changes" {
     var world = Physics.World2D(gravity:Math.Vec2())
     var fixed = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
@@ -234,7 +234,7 @@ test "apply contact event option changes on the next completed step" {
     var surface = world.create_collider(fixed, Physics.Collider2DSettings()
         ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
     )
-    world.create_rigid_body(Physics.RigidBody2DSettings()
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
         ..position = Math.Vec2(1.5, 0.0)
     )
     var began:Physics.ContactBeginEvent2D[] = []
@@ -246,8 +246,18 @@ test "apply contact event option changes on the next completed step" {
     surface.set_event_options(true, false, false)
     world.refresh_contacts()
     world.write_contact_begin_events(began)
+    assert(began.count() == 0)
+    visitor.set_position(Math.Vec2(5.0, 0.0))
+    world.refresh_contacts()
+    visitor.set_position(Math.Vec2(1.5, 0.0))
+    world.refresh_contacts()
+    world.write_contact_begin_events(began)
     assert(began.count() == 1)
     surface.set_event_options(false, false, false)
+    world.refresh_contacts()
+    world.write_contact_end_events(ended)
+    assert(ended.count() == 0)
+    visitor.set_position(Math.Vec2(5.0, 0.0))
     world.refresh_contacts()
     world.write_contact_end_events(ended)
     assert(ended.count() == 1)

@@ -708,6 +708,7 @@ package class BodyStore2D {
     var dirty_transforms:bool[]
     var world_locked:bool
     var topology_dirty:bool
+    var event_options_dirty:bool
 
     init() {
         self.slot_generations = []
@@ -768,6 +769,7 @@ package class BodyStore2D {
         self.dirty_transforms = []
         self.world_locked = false
         self.topology_dirty = false
+        self.event_options_dirty = false
     }
 
     func count() int { return self.positions_x.count() }
@@ -1223,7 +1225,24 @@ package class BodyStore2D {
         self.shape_store.behavior_flags[dense] = flags
         let body = self.slot_dense_indices[self.shape_store.body_slots[dense]]
         self.refresh_collider_flags(body)
-        self.topology_dirty = true
+        self.event_options_dirty = true
+    }
+
+    func set_body_event_option(id:BodyId2D, mask:uint8, enabled:bool) {
+        let body = self.require(id)
+        var slot = self.first_shape_slots[body]
+        while slot >= 0 {
+            let dense = self.shape_store.slot_dense_indices[slot]
+            let flags = self.shape_store.behavior_flags[dense]
+            if enabled && (flags & mask) == 0 {
+                self.shape_store.behavior_flags[dense] = flags + mask
+            } else if !enabled && (flags & mask) != 0 {
+                self.shape_store.behavior_flags[dense] = flags - mask
+            }
+            slot = self.shape_store.next_body_shape_slots[dense]
+        }
+        self.refresh_collider_flags(body)
+        self.event_options_dirty = true
     }
 
     func set_collider_segment_materials(
@@ -1765,6 +1784,16 @@ public class RigidBody2D {
             slot = self.store.shape_store.next_body_shape_slots[dense]
         }
         return AABB2D(lower, upper, true)
+    }
+
+    func set_contact_events_enabled(enabled:bool) {
+        self.store.require_mutable()
+        self.store.set_body_event_option(self.id, 2, enabled)
+    }
+
+    func set_hit_events_enabled(enabled:bool) {
+        self.store.require_mutable()
+        self.store.set_body_event_option(self.id, 4, enabled)
     }
 
     func write_colliders(output:&Collider2D[]) {

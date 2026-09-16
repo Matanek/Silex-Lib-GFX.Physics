@@ -1,0 +1,57 @@
+use GFX.Physics
+use STD.Math
+
+test "change every existing collider while preserving independent flags" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false ..enable_move_events = true)
+    body.set_contact_events_enabled(true)
+    body.set_hit_events_enabled(true)
+    var first = world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+        ..enable_sensor_events = true ..enable_custom_filter = true ..enable_pre_solve = true)
+    var second = world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.75)) ..is_sensor = true)
+    assert(!first.contact_events_enabled() && !first.hit_events_enabled())
+    body.set_contact_events_enabled(true)
+    assert(first.contact_events_enabled() && second.contact_events_enabled())
+    assert(!first.hit_events_enabled() && !second.hit_events_enabled())
+    body.set_hit_events_enabled(true)
+    body.set_contact_events_enabled(false)
+    assert(!first.contact_events_enabled() && !second.contact_events_enabled())
+    assert(first.hit_events_enabled() && second.hit_events_enabled())
+    assert(first.sensor_events_enabled() && !second.sensor_events_enabled())
+    assert(first.custom_filter_enabled() && first.pre_solve_enabled())
+    assert(second.is_sensor() && !first.is_sensor())
+    world.destroy_collider(second)
+    var replacement = world.create_collider(body, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.3)))
+    assert(!replacement.hit_events_enabled())
+    body.set_hit_events_enabled(false)
+    assert(!first.hit_events_enabled() && !replacement.hit_events_enabled())
+    body.set_velocity(Math.Vec2(1.0, 0.0))
+    world.step(0.01)
+    var moves:Physics.BodyMoveEvent2D[] = []
+    world.write_body_move_events(moves)
+    assert(moves.count() == 1)
+    assert(moves[0].body().same_body(body))
+}
+
+test "event toggles do not wake sleeping bodies or enable move reporting" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings())
+    var step = 0
+    while step < 40 {
+        world.step(1.0 / 60.0)
+        step += 1
+    }
+    assert(!body.is_awake())
+    body.set_contact_events_enabled(true)
+    body.set_hit_events_enabled(true)
+    assert(!body.is_awake())
+    body.set_velocity(Math.Vec2(1.0, 0.0))
+    world.step(0.01)
+    var moves:Physics.BodyMoveEvent2D[] = []
+    world.write_body_move_events(moves)
+    assert(moves.count() == 0)
+}

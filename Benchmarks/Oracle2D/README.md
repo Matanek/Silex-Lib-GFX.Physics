@@ -467,3 +467,33 @@ angle and exposes collision planes as produced, read-only results.
 world queries. Run Silex compilation commands from the workspace or Spec
 worktree group root. These witnesses do not prove all arbitrary magnitudes or
 all floating-point inputs.
+
+## Body-wide event options
+
+`BodyEventsOracle.c` and `BodyEventsOracle2D.sx` compare ten positive steps:
+independent initial options on two colliders, uniform contact/hit toggles,
+separation and re-entry, impact identities, and a third collider added after a
+toggle. Each original collider touches a distinct dynamic body. A toggle only
+changes existing colliders, preserves their sensor flags and does not create
+contact begin/end transitions. Existing contacts retain their subscription;
+hit events use current options.
+
+From the workspace root (or the Spec worktree group), using the matching
+compiler and the local Physics package link:
+
+```sh
+cmake --build /tmp/physics-final-parity-oracle --target gfx_physics_box2d_body_events_oracle -- -j1
+/tmp/physics-final-parity-oracle/gfx_physics_box2d_body_events_oracle > /tmp/body-events-box2d.txt
+silex compile Packages/GFX.Physics/Benchmarks/BodyEventsOracle2D.sx --backend llvm --debug -o /tmp/body-events-silex
+/tmp/body-events-silex 1 > /tmp/body-events-silex.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckBodyEvents.py /tmp/body-events-box2d.txt /tmp/body-events-silex.txt
+```
+
+Repeat in Release and with arguments `2` and `4`. This small witness checks
+configuration-invariant output; it does not establish that parallel work was
+dispatched. `BodyEvents.sx` tests sleeping bodies, move flags, filter options and
+collider replacement; `check-body-events.py` checks stale/locked mutations.
+
+The current body-pair contact cache retains only one collider pair when several
+surfaces on the same two bodies touch simultaneously. This scenario is outside
+this ten-stage witness and remains a discrete-contact parity gap.

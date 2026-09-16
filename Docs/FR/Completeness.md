@@ -15,7 +15,7 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-La matrice courante compte 50 capacités couvertes, 5 divergentes, 5 exclues
+La matrice courante compte 51 capacités couvertes, 4 divergentes, 5 exclues
 et une partielle : le réglage de souplesse des contraintes de joints. Le joint
 de distance rigide possède une preuve transitoire ; les autres familles et
 les combinaisons ressort/limites restent à qualifier. La porte finale doit

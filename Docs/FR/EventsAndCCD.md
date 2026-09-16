@@ -46,9 +46,25 @@ Leur géométrie, matériau et identifiant applicatif sont des valeurs autonomes
 ils restent lisibles après destruction, tandis que le handle incorporé devient
 invalide et refuse toute mutation.
 
-`Collider2D.set_event_options(contact, hit, sensor)` modifie les flux entre
-deux pas. Activer un flux sur une paire déjà présente produit un begin au pas
-suivant ; le désactiver produit le end correspondant.
+`RigidBody2D.set_contact_events_enabled(enabled)` et
+`set_hit_events_enabled(enabled)` règlent respectivement les contacts et les
+impacts sur tous les colliders déjà attachés au corps. Les options capteur,
+filtre personnalisé et pre-solve restent propres à chaque collider. Ces
+mutations ne réveillent pas le corps et ne changent pas ses événements de
+mouvement. Un collider ajouté ensuite conserve ses réglages de création.
+
+`Collider2D.set_event_options(contact, hit, sensor)` permet un réglage
+individuel entre deux pas. L’abonnement begin/end d’un contact existant est
+conservé pendant la durée de vie du contact : activer ou désactiver l’option ne fabrique pas
+de transition. Les nouveaux contacts prennent les options courantes ; les
+impacts les relisent à chaque pas. Le flux capteur conserve sa sémantique
+propre : l’activation sur un chevauchement présent produit un begin au pas
+suivant, la désactivation son end. Toutes ces mutations refusent un handle
+périmé ou un monde verrouillé pendant un pas ou un callback.
+
+Le [scénario exécutable des options](../../Benchmarks/BodyEventsOracle2D.sx)
+montre dix étapes, dont l’ajout d’un collider après mutation et les identités
+des surfaces dans les événements.
 
 Les bullets balaient chaque paire de colliders autorisée, et pas seulement la
 forme primaire de chaque corps. Un corps composé ou un conteneur cinématique
@@ -71,6 +87,7 @@ chemin discret. Les corps lents quittent le chemin avant toute recherche de
 paire, et seules les bullets paient les tests dynamique contre dynamique.
 
 ```text
+silex test Packages/GFX.Physics/Tests/Consumer/Tests/BodyEvents.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/Events.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContinuousCollision.sx
