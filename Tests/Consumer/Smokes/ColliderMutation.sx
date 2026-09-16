@@ -1,0 +1,71 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var compound = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false
+    )
+    var sensor = world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..is_sensor = true
+        ..collision_filter = Physics.CollisionFilter2D(category_bits:2, mask_bits:0)
+    )
+    var retained_sensor = sensor
+    var other = world.create_collider(compound, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.1))
+        ..is_sensor = true
+    )
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.25))
+        ..position = Math.Vec2(0.75, 0.0)
+        ..collision_filter = Physics.CollisionFilter2D(category_bits:4, mask_bits:2)
+        ..allow_sleep = false
+    )
+    var began:Physics.SensorBeginEvent2D[] = []
+    var ended:Physics.SensorEndEvent2D[] = []
+    world.step(1.0 / 60.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 0)
+
+    sensor.set_shape(Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+    sensor.set_material(Physics.PhysicsMaterial2D()
+        ..friction = 0.25
+        ..application_id = Physics.PhysicsMaterialId2D(42)
+    )
+    sensor.set_event_options(false, false, true)
+    sensor.set_collision_filter(Physics.CollisionFilter2D(category_bits:2, mask_bits:4))
+    world.step(1.0 / 60.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 1)
+    assert(began[0].sensor_body().same_body(compound))
+    assert(began[0].visitor_body().same_body(visitor))
+    assert(began[0].sensor_collider().material().application_id.value() == 42)
+    assert(retained_sensor.is_valid())
+    assert(retained_sensor.sensor_events_enabled())
+    assert(retained_sensor.material().friction == 0.25)
+    assert(!other.sensor_events_enabled())
+    assert(compound.collider_count() == 2)
+    assert(world.contact_count() == 0)
+    assert(visitor.position().nearly_equal(Math.Vec2(0.75, 0.0), 0.000001))
+
+    world.step(1.0 / 60.0)
+    world.write_sensor_begin_events(began)
+    assert(began.count() == 0)
+
+    sensor.set_collision_filter(Physics.CollisionFilter2D(category_bits:2, mask_bits:0))
+    world.step(1.0 / 60.0)
+    world.write_sensor_end_events(ended)
+    assert(ended.count() == 1)
+    assert(ended[0].sensor_body().same_body(compound))
+
+    world.destroy_collider(sensor)
+    assert(!retained_sensor.is_valid())
+    assert(other.is_valid())
+    assert(compound.collider_count() == 1)
+    world.destroy_rigid_body(compound)
+    assert(!other.is_valid())
+    assert(visitor.is_valid())
+    print("collider-mutation-ok")
+}

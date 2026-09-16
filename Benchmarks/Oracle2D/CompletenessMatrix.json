@@ -481,7 +481,7 @@
       "status": "covered",
       "patterns": ["^b2Shape_(?:GetCapsule|GetChainSegment|GetCircle|GetPolygon|GetSegment|SetCapsule|SetCircle|SetPolygon|SetSegment)$"],
       "silex_contract": "Collider2D reads and replaces validated Shape2D values while retaining its living identity.",
-      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
+      "evidence": ["Tests/Consumer/Smokes/ColliderMutation.sx", "Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/check-invalid-collider.sh"]
     },
     {
       "id": "collider-material-and-filter",
@@ -490,7 +490,7 @@
       "status": "covered",
       "patterns": ["^b2Shape_(?:GetDensity|GetFilter|GetFriction|GetMassData|GetMaterial|GetRestitution|GetSurfaceMaterial|IsSensor|SetDensity|SetFilter|SetFriction|SetMaterial|SetRestitution|SetSurfaceMaterial)$"],
       "silex_contract": "Collider2DSettings and PhysicsMaterial2D own every surface and mass property per collider.",
-      "evidence": ["Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/Tests/BodyControl.sx"]
+      "evidence": ["Tests/Consumer/Smokes/ColliderMutation.sx", "Tests/Consumer/Tests/Colliders.sx", "Tests/Consumer/Tests/BodyControl.sx"]
     },
     {
       "id": "collider-local-queries",
@@ -508,7 +508,7 @@
       "status": "covered",
       "patterns": ["^b2Shape_(?:AreContactEventsEnabled|AreHitEventsEnabled|ArePreSolveEventsEnabled|AreSensorEventsEnabled|EnableContactEvents|EnableHitEvents|EnablePreSolveEvents|EnableSensorEvents|GetContactCapacity|GetContactData|GetSensorCapacity|GetSensorOverlaps)$"],
       "silex_contract": "Collider2D owns contact, hit, sensor and pre-solve opt-ins; completed events, contacts and sensor overlaps retain deterministic collider identities.",
-      "evidence": ["Tests/Consumer/Tests/ContactPolicies.sx", "Tests/Consumer/Tests/Events.sx", "Tests/Consumer/Tests/ContactSnapshots.sx", "Benchmarks/ContactSnapshotsOracle2D.sx"]
+      "evidence": ["Tests/Consumer/Smokes/ColliderMutation.sx", "Tests/Consumer/Tests/ContactPolicies.sx", "Tests/Consumer/Tests/Events.sx", "Tests/Consumer/Tests/ContactSnapshots.sx", "Benchmarks/ContactSnapshotsOracle2D.sx"]
     },
     {
       "id": "collider-user-data",
