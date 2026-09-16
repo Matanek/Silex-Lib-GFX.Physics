@@ -63,9 +63,9 @@ impulse. Runtime `set_collide_connected` changes the same policy for every
 other two-body family.
 
 Distance and prismatic handles report current translation, speed where
-relevant, total constraint force, and motor force. Revolute and wheel handles
-report angle or translation, total constraint force and torque, and motor
-torque. Mouse, motor, and weld handles expose their pertinent total reactions.
+relevant, constraint force, and motor force. Revolute and wheel handles
+report angle or translation, constraint force and torque, and motor
+torque. Mouse, motor, and weld handles expose their pertinent reactions.
 These reactions describe the most recently completed `step`; they are zero
 before a positive-duration step. Mouse targets and supported motor speeds can
 be changed through their typed handles, which wakes the connected bodies.
@@ -99,15 +99,23 @@ enumeration, reactions, collision suppression and handle invalidation;
 internal tests add deterministic worker-count equivalence and a 4,096-joint
 parallel color.
 
-## Rigid distance softness
+## Common constraint tuning and springs
 
-With the spring and limits disabled, `DistanceJoint2D` uses `constraint_hertz`
-(default 60 Hz) and `constraint_damping_ratio` (default 2) to correct the error
-from the target length. These settings are independent of `spring_hertz` and
-`spring_damping_ratio`. The effective frequency is capped at one quarter of
+Distance, prismatic, revolute, weld, and wheel expose `constraint_hertz`
+(default 60 Hz), `constraint_damping_ratio` (default 2), and
+`set_constraint_tuning(hertz, damping_ratio)`. Common tuning is independent
+of springs and motors. Its effective frequency is capped at one quarter of
 the inverse substep duration; getters retain the configured value. A zero
-frequency disables position correction, while relaxation still constrains
-relative velocity.
+frequency disables position correction while relaxation retains the velocity
+constraint.
+
+| Joint | Constraints using common tuning |
+|---|---|
+| Distance | Rigid length; length limits while the spring is enabled |
+| Prismatic | Perpendicular translation and relative angle; translation limits |
+| Revolute | Coincident anchors; angular limits |
+| Weld | Linear constraint when `linear_hertz` is zero and angular constraint when `angular_hertz` is zero |
+| Wheel | Perpendicular translation; translation limits |
 
 ```silex
 var tether = world.create_distance_joint(chassis, arm,
@@ -123,14 +131,32 @@ assert(tether.constraint_damping_ratio() == 3.0)
 ```
 
 Frequency and damping must be finite and nonnegative at creation and mutation.
-Mutation wakes the bodies and clears previous impulses; it preserves the spring,
-limits and motor. These settings currently apply only to the rigid distance
-path without limits. Spring/limit combinations and the other joint families
-remain subject to qualification in the completeness matrix.
+Mutation wakes the bodies, retains accumulated impulses, and preserves spring,
+limit, and motor settings. A destroyed handle or mutation during `step` fails
+explicitly.
 
-Reported forces and torques use the substep duration, corresponding to the
-impulse retained by Soft Step. The
-[public tests](../../Tests/Consumer/Tests/DistanceConstraintTuning.sx) check the
-API, wake-up and force units. The
-[differential witness](../../Benchmarks/DistanceTuningOracle2D.sx) compares
-224 transient observations with Box2D at 1, 2, 4 and 8 substeps.
+Springs retain their own frequency and damping. They also act during
+relaxation, without the common tuning frequency cap. Their impulses remain
+independent from limit and motor impulses. For distance, enable the spring to
+combine the length range and motor. With the spring disabled, or enabled
+limits of equal length, the joint retains `length`: the motor and range do
+not replace that rigid length. For weld, a positive family frequency replaces
+common tuning only for its linear or angular component.
+
+## Reactions and differential evidence
+
+Reported forces and torques use the substep duration. They follow the pinned
+Box2D 3.1.1 conventions: prismatic force and revolute torque exclude their
+spring impulse; distance, wheel, and weld reactions include it. Wheel force
+uses the axis retained at the beginning of the most recent step, even when
+the body rotated during that step.
+
+The [distance tests](../../Tests/Consumer/Tests/DistanceConstraintTuning.sx)
+and [other four family tests](../../Tests/Consumer/Tests/JointConstraintTuning.sx)
+cover creation, getters, mutation, independent settings, and wake-up.
+The [tuning](../../Benchmarks/JointConstraintTuningOracle2D.sx) and
+[combination](../../Benchmarks/JointCombinationsOracle2D.sx) oracles compare
+2,688 and 3,840 samples respectively: 1/2/4/8 substeps, central or offset
+anchors, a fixed body or two moving bodies, and an oblique axis. Fixed
+tolerances cover positions, angles, velocities, forces, and torques; these
+corpora do not guarantee every possible physics scene.

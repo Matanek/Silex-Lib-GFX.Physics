@@ -30,14 +30,46 @@ func main() {
     var world = Physics.World2D(gravity:Math.Vec2())
     var first = world.create_rigid_body()
     var second = world.create_rigid_body()
-    if option("create") {
-        world.create_distance_joint(first, second,
-            Physics.DistanceJoint2DSettings()
-                ..constraint_hertz = hertz
-                ..constraint_damping_ratio = damping)
-    } else {
-        var joint = world.create_distance_joint(first, second)
-        joint.set_constraint_tuning(hertz, damping)
+    if option("prismatic") {
+        if option("create") {
+            world.create_prismatic_joint(first,second,Physics.PrismaticJoint2DSettings()
+                ..constraint_hertz=hertz ..constraint_damping_ratio=damping)
+        } else {
+            var joint=world.create_prismatic_joint(first,second)
+            joint.set_constraint_tuning(hertz,damping)
+        }
+    }     else if option("revolute") {
+        if option("create") {
+            world.create_revolute_joint(first,second,Physics.RevoluteJoint2DSettings()
+                ..constraint_hertz=hertz ..constraint_damping_ratio=damping)
+        } else {
+            var joint=world.create_revolute_joint(first,second)
+            joint.set_constraint_tuning(hertz,damping)
+        }
+    }     else if option("weld") {
+        if option("create") {
+            world.create_weld_joint(first,second,Physics.WeldJoint2DSettings()
+                ..constraint_hertz=hertz ..constraint_damping_ratio=damping)
+        } else {
+            var joint=world.create_weld_joint(first,second)
+            joint.set_constraint_tuning(hertz,damping)
+        }
+    }     else if option("wheel") {
+        if option("create") {
+            world.create_wheel_joint(first,second,Physics.WheelJoint2DSettings()
+                ..constraint_hertz=hertz ..constraint_damping_ratio=damping)
+        } else {
+            var joint=world.create_wheel_joint(first,second)
+            joint.set_constraint_tuning(hertz,damping)
+        }
+    }     else {
+        if option("create") {
+            world.create_distance_joint(first,second,Physics.DistanceJoint2DSettings()
+                ..constraint_hertz=hertz ..constraint_damping_ratio=damping)
+        } else {
+            var joint=world.create_distance_joint(first,second)
+            joint.set_constraint_tuning(hertz,damping)
+        }
     }
     panic("invalid constraint tuning was accepted")
 }

@@ -675,6 +675,14 @@ package class BodyStore2D {
     var previous_positions_x:float[]
     var previous_positions_y:float[]
     var previous_rotations:float[]
+    var step_rotation_cosines:float[]
+    var step_rotation_sines:float[]
+    var step_start_cosines:float[]
+    var step_start_sines:float[]
+    var step_centers_x:float[]
+    var step_centers_y:float[]
+    var step_displacements_x:float[]
+    var step_displacements_y:float[]
     var velocities_x:float[]
     var velocities_y:float[]
     var rotations:float[]
@@ -736,6 +744,14 @@ package class BodyStore2D {
         self.previous_positions_x = []
         self.previous_positions_y = []
         self.previous_rotations = []
+        self.step_rotation_cosines = []
+        self.step_rotation_sines = []
+        self.step_start_cosines = []
+        self.step_start_sines = []
+        self.step_centers_x = []
+        self.step_centers_y = []
+        self.step_displacements_x = []
+        self.step_displacements_y = []
         self.velocities_x = []
         self.velocities_y = []
         self.rotations = []
@@ -842,6 +858,14 @@ package class BodyStore2D {
         self.previous_positions_x.append(settings.position.x)
         self.previous_positions_y.append(settings.position.y)
         self.previous_rotations.append(settings.rotation)
+        self.step_rotation_cosines.append(1.0)
+        self.step_rotation_sines.append(0.0)
+        self.step_start_cosines.append(1.0)
+        self.step_start_sines.append(0.0)
+        self.step_centers_x.append(0.0)
+        self.step_centers_y.append(0.0)
+        self.step_displacements_x.append(0.0)
+        self.step_displacements_y.append(0.0)
         self.velocities_x.append(settings.velocity.x)
         self.velocities_y.append(settings.velocity.y)
         self.rotations.append(settings.rotation)
@@ -1388,6 +1412,14 @@ package class BodyStore2D {
         self.previous_positions_x.swap(first, second)
         self.previous_positions_y.swap(first, second)
         self.previous_rotations.swap(first, second)
+        self.step_rotation_cosines.swap(first, second)
+        self.step_rotation_sines.swap(first, second)
+        self.step_start_cosines.swap(first, second)
+        self.step_start_sines.swap(first, second)
+        self.step_centers_x.swap(first, second)
+        self.step_centers_y.swap(first, second)
+        self.step_displacements_x.swap(first, second)
+        self.step_displacements_y.swap(first, second)
         self.velocities_x.swap(first, second)
         self.velocities_y.swap(first, second)
         self.rotations.swap(first, second)
@@ -1443,6 +1475,14 @@ package class BodyStore2D {
         self.previous_positions_x.take_last()
         self.previous_positions_y.take_last()
         self.previous_rotations.take_last()
+        self.step_rotation_cosines.take_last()
+        self.step_rotation_sines.take_last()
+        self.step_start_cosines.take_last()
+        self.step_start_sines.take_last()
+        self.step_centers_x.take_last()
+        self.step_centers_y.take_last()
+        self.step_displacements_x.take_last()
+        self.step_displacements_y.take_last()
         self.velocities_x.take_last()
         self.velocities_y.take_last()
         self.rotations.take_last()

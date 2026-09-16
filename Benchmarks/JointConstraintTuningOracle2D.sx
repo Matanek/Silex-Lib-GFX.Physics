@@ -1,0 +1,95 @@
+use GFX.Physics
+use STD.Math
+func record(family:int, tuning:int, substeps:int, step:int, geometry:int, body:Physics.RigidBody2D, force:Math.Vec2, torque:float) {
+    let p=body.position()
+    let v=body.velocity()
+    print("rigid_$(family)_$(tuning)_$(substeps)_$(step)_$(geometry) $(p.x) $(p.y) $(body.rotation()) $(v.x) $(v.y) $(body.angular_velocity()) $(force.x) $(force.y) $(torque)")
+}
+func tune(joint:Physics.Joint2D, hertz:float, damping:float, write:bool) {
+    match joint {
+        prismatic(value) => {
+            if write { value.set_constraint_tuning(hertz,damping) }
+            assert(value.constraint_hertz()==hertz)
+            assert(value.constraint_damping_ratio()==damping)
+        }
+        revolute(value) => {
+            if write { value.set_constraint_tuning(hertz,damping) }
+            assert(value.constraint_hertz()==hertz)
+            assert(value.constraint_damping_ratio()==damping)
+        }
+        weld(value) => {
+            if write { value.set_constraint_tuning(hertz,damping) }
+            assert(value.constraint_hertz()==hertz)
+            assert(value.constraint_damping_ratio()==damping)
+        }
+        wheel(value) => {
+            if write { value.set_constraint_tuning(hertz,damping) }
+            assert(value.constraint_hertz()==hertz)
+            assert(value.constraint_damping_ratio()==damping)
+        }
+        distance(value) => { panic("unexpected distance") }
+        filter(value) => { panic("unexpected filter") }
+        motor(value) => { panic("unexpected motor") }
+        mouse(value) => { panic("unexpected mouse") }
+    }
+}
+func run_case(family:int, tuning:int, substeps:int, geometry:int) {
+    var world=Physics.World2D(gravity:Math.Vec2(2.0,-3.0))
+    var first_type=Physics.BodyType2D.fixed
+    var anchor=Math.Vec2()
+    var axis=Math.Vec2(1.0,0.0)
+    if geometry>0 { anchor=Math.Vec2(0.2,0.3) }
+    if geometry==2 {
+        first_type=Physics.BodyType2D.dynamic
+        axis=Math.Vec2(0.6,0.8)
+    }
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=first_type ..allow_sleep=false ..create_implicit_collider=false)
+    var body=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider=false ..allow_sleep=false)
+    if geometry==2 { fixed.set_mass_properties(Physics.MassProperties2D(1.0,1.0)) }
+    body.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+    if family==0 { world.create_prismatic_joint(fixed,body,Physics.PrismaticJoint2DSettings() ..anchor=anchor ..axis=axis) }
+    if family==1 { world.create_revolute_joint(fixed,body,Physics.RevoluteJoint2DSettings() ..anchor=anchor) }
+    if family==2 { world.create_weld_joint(fixed,body,Physics.WeldJoint2DSettings() ..anchor=anchor) }
+    if family==3 { world.create_wheel_joint(fixed,body,Physics.WheelJoint2DSettings() ..anchor=anchor ..axis=axis ..spring_enabled=false) }
+    body.set_position(Math.Vec2(0.7,0.9))
+    body.set_rotation(0.25)
+    var joints:Physics.Joint2D[]=[]
+    world.write_joints(joints)
+    let frequencies:float[]=[0.0,5.0,5.0,60.0,10000.0,5.0,60.0]
+    let damping:float[]=[0.0,0.0,2.0,2.0,2.0,4.0,2.0]
+    tune(joints[0],frequencies[tuning],damping[tuning],tuning!=3 && tuning!=6)
+    var step=0
+    while step<8 {
+        if tuning==6 && step==3 { tune(joints[0],5.0,4.0,true) }
+        world.step(1.0/60.0,substeps)
+        match joints[0] {
+            prismatic(joint) => { record(family,tuning,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            revolute(joint) => { record(family,tuning,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            weld(joint) => { record(family,tuning,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            wheel(joint) => { record(family,tuning,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            distance(joint) => { panic("unexpected distance") }
+            filter(joint) => { panic("unexpected filter") }
+            motor(joint) => { panic("unexpected motor") }
+            mouse(joint) => { panic("unexpected mouse") }
+        }
+        step++
+    }
+}
+func main() {
+    var geometry=0
+    while geometry<3 {
+    var family=0
+    while family<4 {
+        var tuning=0
+        while tuning<7 {
+            var substeps=1
+            while substeps<=8 { run_case(family,tuning,substeps,geometry); substeps*=2 }
+            tuning++
+        }
+        family++
+    }
+    geometry++
+    }
+}

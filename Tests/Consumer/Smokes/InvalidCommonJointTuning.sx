@@ -1,0 +1,54 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+    }
+    return false
+}
+func mutate(value:Physics.Joint2D) {
+    match value {
+        prismatic(joint) => { joint.set_constraint_tuning(5.0,2.0) }
+        revolute(joint) => { joint.set_constraint_tuning(5.0,2.0) }
+        weld(joint) => { joint.set_constraint_tuning(5.0,2.0) }
+        wheel(joint) => { joint.set_constraint_tuning(5.0,2.0) }
+        distance(joint) => { panic("unexpected family") }
+        filter(joint) => { panic("unexpected family") }
+        motor(joint) => { panic("unexpected family") }
+        mouse(joint) => { panic("unexpected family") }
+    }
+}
+class LockedTuning {
+    let joint:Physics.Joint2D
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        mutate(self.joint)
+        return Physics.ContactDecision2D()
+    }
+}
+func main() {
+    var world=Physics.World2D(gravity:Math.Vec2())
+    var first=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=Physics.BodyType2D.fixed ..create_implicit_collider=false)
+    var second=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape=Physics.Shape2D.circle(Physics.Circle2D(0.5)) ..position=Math.Vec2(1.4,0.0))
+    world.create_collider(first,Physics.Collider2DSettings()
+        ..shape=Physics.Shape2D.circle(Physics.Circle2D(1.0)) ..enable_pre_solve=true)
+    if option("prismatic") { world.create_prismatic_joint(first,second,Physics.PrismaticJoint2DSettings() ..collide_connected=true) }
+    if option("revolute") { world.create_revolute_joint(first,second,Physics.RevoluteJoint2DSettings() ..collide_connected=true) }
+    if option("weld") { world.create_weld_joint(first,second,Physics.WeldJoint2DSettings() ..collide_connected=true) }
+    if option("wheel") { world.create_wheel_joint(first,second,Physics.WheelJoint2DSettings() ..collide_connected=true) }
+    var joints:Physics.Joint2D[]=[]
+    world.write_joints(joints)
+    if option("locked") {
+        var policy=LockedTuning(joint:joints[0])
+        world.set_pre_solve(policy.apply)
+        world.step(0.001)
+    } else {
+        world.destroy_rigid_body(second)
+        world.create_rigid_body()
+        mutate(joints[0])
+    }
+    panic("invalid joint mutation was accepted")
+}

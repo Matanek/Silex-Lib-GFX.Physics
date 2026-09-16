@@ -3,7 +3,7 @@ use GFX.Physics
 use GFX.Resources
 use STD.Math
 
-test "preserve the complete 0.4 world and body intent" {
+test "preserve world and body intent with normalized angular integration" {
     var world = Physics.World2D(gravity:Math.Vec2())
     world.enable_parallelism(4)
     world.set_profiling_enabled(true)
@@ -21,14 +21,14 @@ test "preserve the complete 0.4 world and body intent" {
         ..allow_sleep = false
     )
 
-    world.step(0.5)
+    world.step(0.5, 4)
 
     assert(world.body_count() == 1)
     assert(world.candidate_pair_count() == 0)
     assert(body.body_type() == Physics.BodyType2D.dynamic)
     assert(body.position().nearly_equal(Math.Vec2(2.0, 1.5), 0.000001))
     assert(body.velocity().nearly_equal(Math.Vec2(2.0, -1.0), 0.000001))
-    assert(Math.nearly_equal(body.rotation(), 0.4, 0.000001))
+    assert(Math.nearly_equal(body.rotation(), 0.39967525, 0.000001))
     assert(Math.nearly_equal(body.angular_velocity(), 0.5, 0.000001))
     assert(Math.nearly_equal(body.gravity_scale(), 0.75, 0.000001))
     assert(body.is_awake())

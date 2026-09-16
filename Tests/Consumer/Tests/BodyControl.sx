@@ -345,8 +345,8 @@ test "retain bullet cargo inside a moving compound container" {
         }
         let local_position = platform.local_point(cargo.position())
         assert(
-            world.candidate_pair_count() <= 1,
-            "duplicate cargo contacts at step $(step): $(world.candidate_pair_count())"
+            world.candidate_pair_count() <= 4,
+            "more candidates than the four container colliders at step $(step): $(world.candidate_pair_count())"
         )
         assert(
             Math.abs(local_position.x) < 1.2 &&

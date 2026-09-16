@@ -1,0 +1,82 @@
+use GFX.Physics
+use STD.Math
+func record(family:int, variant:int, substeps:int, step:int, geometry:int, body:Physics.RigidBody2D, force:Math.Vec2, torque:float) {
+    let p=body.position()
+    let v=body.velocity()
+    print("combination_$(family)_$(variant)_$(substeps)_$(step)_$(geometry) $(p.x) $(p.y) $(body.rotation()) $(v.x) $(v.y) $(body.angular_velocity()) $(force.x) $(force.y) $(torque)")
+}
+func run_case(family:int, variant:int, substeps:int, geometry:int) {
+    var world=Physics.World2D(gravity:Math.Vec2(2.0,-3.0))
+    var first_type=Physics.BodyType2D.fixed
+    var anchor=Math.Vec2()
+    var axis=Math.Vec2(1.0,0.0)
+    if geometry>0 { anchor=Math.Vec2(0.2,0.3) }
+    if geometry==2 {
+        first_type=Physics.BodyType2D.dynamic
+        axis=Math.Vec2(0.6,0.8)
+    }
+    var fixed=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type=first_type ..allow_sleep=false ..create_implicit_collider=false)
+    var body=world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider=false ..allow_sleep=false)
+    if geometry==2 { fixed.set_mass_properties(Physics.MassProperties2D(1.0,1.0)) }
+    body.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+    let spring=variant==0 || variant==2 || variant==4 || variant==6 || variant==7
+    let limit=variant!=0 && variant!=3
+    let motor=variant==3 || variant==4 || variant==5
+    var hertz=5.0
+    if variant==6 { hertz=0.0 }
+    var lower=0.1
+    var upper=0.2
+    if variant==7 { lower=0.15
+        upper=0.15 }
+    if family==0 { world.create_prismatic_joint(fixed,body,Physics.PrismaticJoint2DSettings() ..anchor=anchor ..axis=axis
+        ..spring_enabled=spring ..limit_enabled=limit ..motor_enabled=motor ..spring_hertz=hertz ..spring_damping_ratio=0.7 ..motor_speed=1.5 ..lower_translation=lower ..upper_translation=upper ..target_translation=0.05 ..maximum_motor_force=3.0) }
+    if family==1 { world.create_revolute_joint(fixed,body,Physics.RevoluteJoint2DSettings() ..anchor=anchor
+        ..spring_enabled=spring ..limit_enabled=limit ..motor_enabled=motor ..spring_hertz=hertz ..spring_damping_ratio=0.7 ..motor_speed=1.5 ..lower_angle=lower ..upper_angle=upper ..target_angle=0.05 ..maximum_motor_torque=3.0) }
+    var linear_hertz=0.0
+    var angular_hertz=0.0
+    if variant%2==1 { linear_hertz=5.0 }
+    if variant%4>=2 { angular_hertz=5.0 }
+    if family==2 { world.create_weld_joint(fixed,body,Physics.WeldJoint2DSettings() ..anchor=anchor
+        ..linear_hertz=linear_hertz ..angular_hertz=angular_hertz ..linear_damping_ratio=0.7 ..angular_damping_ratio=0.7) }
+    if family==3 { world.create_wheel_joint(fixed,body,Physics.WheelJoint2DSettings() ..anchor=anchor ..axis=axis
+        ..spring_enabled=spring ..limit_enabled=limit ..motor_enabled=motor ..spring_hertz=hertz ..spring_damping_ratio=0.7 ..motor_speed=1.5 ..lower_translation=lower ..upper_translation=upper ..maximum_motor_torque=3.0) }
+    if family==4 { world.create_distance_joint(fixed,body,Physics.DistanceJoint2DSettings() ..first_anchor=anchor ..second_anchor=anchor
+        ..spring_enabled=spring ..limit_enabled=limit ..motor_enabled=motor ..spring_hertz=hertz ..spring_damping_ratio=0.7 ..motor_speed=1.5 ..maximum_motor_force=3.0 ..length=0.8 ..minimum_length=lower+0.5 ..maximum_length=upper+0.5) }
+    body.set_position(Math.Vec2(0.7,0.9))
+    body.set_rotation(0.25)
+    var joints:Physics.Joint2D[]=[]
+    world.write_joints(joints)
+    var step=0
+    while step<8 {
+        world.step(1.0/60.0,substeps)
+        match joints[0] {
+            prismatic(joint) => { record(family,variant,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            revolute(joint) => { record(family,variant,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            weld(joint) => { record(family,variant,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            wheel(joint) => { record(family,variant,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            distance(joint) => { record(family,variant,substeps,step,geometry,body,joint.constraint_force(),joint.constraint_torque()) }
+            filter(joint) => { panic("unexpected filter") }
+            motor(joint) => { panic("unexpected motor") }
+            mouse(joint) => { panic("unexpected mouse") }
+        }
+        step++
+    }
+}
+func main() {
+    var geometry=0
+    while geometry<3 {
+    var family=0
+    while family<5 {
+        var variant=0
+        while variant<8 {
+            var substeps=1
+            while substeps<=8 { run_case(family,variant,substeps,geometry); substeps*=2 }
+            variant++
+        }
+        family++
+    }
+    geometry++
+    }
+}

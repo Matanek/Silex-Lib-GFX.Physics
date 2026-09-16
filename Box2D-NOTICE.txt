@@ -1,6 +1,9 @@
-The rigid distance constraint softness formulas in Module/Joints2D.sx are
-adapted from Box2D 3.1.1 src/solver.h (b2MakeSoft) and src/distance_joint.c
-(b2SolveDistanceJoint), commit 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3.
+Joint constraints in Module/Joints2D.sx are adapted from Box2D 3.1.1
+src/solver.h, src/{distance,prismatic,revolute,weld,wheel}_joint.c,
+src/math_functions.c and include/box2d/math_functions.h, commit
+8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3. Step-relative displacement and
+normalized rotation integration in Module/World2D.sx follow src/solver.c
+and include/box2d/math_functions.h at the same revision.
 Geometry in Module/Geometry2D.sx is adapted from src/geometry.c,
 src/distance.c, src/hull.c and src/manifold.c at the same pinned revision.
 This includes analytic ray intersections and initial-overlap shape casts.

@@ -606,21 +606,22 @@
       "id": "joint-generic-constraint-tuning",
       "domain": "joint",
       "capability": "generic solver constraint tuning",
-      "status": "partial",
-      "tracking": "Physics-2D-Final-Parity",
+      "status": "covered",
       "patterns": ["^b2Joint_(?:GetConstraintTuning|SetConstraintTuning)$"],
-      "silex_contract": "Distance joints expose constraint hertz and damping independently of the spring. The rigid distance transient is compared with Box2D at 1/2/4/8 substeps.",
-      "evidence": ["Tests/Consumer/Tests/DistanceConstraintTuning.sx", "Benchmarks/DistanceTuningOracle2D.sx", "Benchmarks/Oracle2D/DistanceTuningOracle.c", "Benchmarks/Oracle2D/CheckDistanceTuning.py"],
-      "rationale": "The tuning is a physical capability, not equivalent to spring tuning. Other joint families and the distance spring/limit combination still require qualification."
+      "silex_contract": "Distance, prismatic, revolute, weld and wheel expose common constraint hertz and damping independently of their springs and motors. Defaults, mutation, limits and fallback paths are compared at 1/2/4/8 substeps with central/offset anchors and one/two moving bodies.",
+      "evidence": ["Tests/Consumer/Tests/DistanceConstraintTuning.sx", "Benchmarks/DistanceTuningOracle2D.sx", "Benchmarks/Oracle2D/DistanceTuningOracle.c", "Benchmarks/Oracle2D/CheckDistanceTuning.py", "Tests/Consumer/Tests/JointConstraintTuning.sx", "Tests/Consumer/Smokes/InvalidCommonJointTuning.sx", "Benchmarks/JointConstraintTuningOracle2D.sx", "Benchmarks/JointCombinationsOracle2D.sx", "Benchmarks/Oracle2D/JointConstraintTuningOracle.c", "Benchmarks/Oracle2D/JointCombinationsOracle.c", "Benchmarks/Oracle2D/CheckJointConstraints.py", "Benchmarks/Oracle2D/TestJointConstraints.py"],
+      "rationale": "The tuning is consumed by these five reference joint families. Motor, mouse and filter do not use it in their solver. The typed facade omits their ineffective generic setting; their independent behavior has separate coverage."
     },
     {
       "id": "joint-family-configuration",
       "domain": "joint",
       "capability": "complete runtime configuration for all eight joint families",
-      "status": "covered",
+      "status": "partial",
+      "tracking": "Physics-2D-Final-Parity",
       "patterns": ["^b2(?:Distance|Motor|Mouse|Prismatic|Revolute|Weld|Wheel)Joint_.*$"],
       "silex_contract": "Each typed joint exposes its relevant limits, motors, springs, offsets, targets, maxima and measurements for validated runtime mutation.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"]
+      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"],
+      "rationale": "Typed runtime controls are exercised, but motor/mouse transient response still needs the dedicated differential qualification tracked by Task-23; the historical four-case oracle does not contain these two families."
     },
     {
       "id": "joint-user-data",

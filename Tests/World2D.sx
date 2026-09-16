@@ -439,9 +439,9 @@ test "integrate the rotation of a dynamic body" {
         ..angular_velocity = 2.0
     )
 
-    world.step(0.5)
+    world.step(0.5, 4)
 
-    assert(Math.nearly_equal(box.rotation(), 1.25, 0.000001))
+    assert(Math.nearly_equal(box.rotation(), 1.2299147, 0.000001))
     assert(Math.nearly_equal(box.angular_velocity(), 2.0, 0.000001))
 }
 

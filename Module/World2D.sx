@@ -996,8 +996,8 @@ public class World2D {
             contacts,
             joints,
             islands,
-            bodies * 224 + colliders * 192 + contacts * 224 +
-                joints * 272 + islands * 24
+            bodies * 256 + colliders * 192 + contacts * 224 +
+                joints * 352 + islands * 24
         )
     }
     func write_dynamic_body_transforms(output:&BodyTransform2D[]) {
@@ -2435,6 +2435,7 @@ public class World2D {
         second:RigidBody2D,
         settings:PrismaticJoint2DSettings = PrismaticJoint2DSettings()
     ) PrismaticJoint2D {
+        validate_constraint_tuning(settings.constraint_hertz, settings.constraint_damping_ratio)
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
@@ -2487,6 +2488,8 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.constraint_hertz = settings.constraint_hertz
+        joint.constraint_damping_ratio = settings.constraint_damping_ratio
         joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
@@ -2498,6 +2501,7 @@ public class World2D {
         second:RigidBody2D,
         settings:RevoluteJoint2DSettings = RevoluteJoint2DSettings()
     ) RevoluteJoint2D {
+        validate_constraint_tuning(settings.constraint_hertz, settings.constraint_damping_ratio)
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
@@ -2544,6 +2548,8 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.constraint_hertz = settings.constraint_hertz
+        joint.constraint_damping_ratio = settings.constraint_damping_ratio
         joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
@@ -2555,6 +2561,7 @@ public class World2D {
         second:RigidBody2D,
         settings:WeldJoint2DSettings = WeldJoint2DSettings()
     ) WeldJoint2D {
+        validate_constraint_tuning(settings.constraint_hertz, settings.constraint_damping_ratio)
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
@@ -2594,6 +2601,8 @@ public class World2D {
         joint.spring_enabled = settings.linear_hertz > 0.0 ||
             settings.angular_hertz > 0.0
         joint.collide_connected = settings.collide_connected
+        joint.constraint_hertz = settings.constraint_hertz
+        joint.constraint_damping_ratio = settings.constraint_damping_ratio
         joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
@@ -2605,6 +2614,7 @@ public class World2D {
         second:RigidBody2D,
         settings:WheelJoint2DSettings = WheelJoint2DSettings()
     ) WheelJoint2D {
+        validate_constraint_tuning(settings.constraint_hertz, settings.constraint_damping_ratio)
         let first_index = self.require_joint_body(first)
         let second_index = self.require_joint_body(second)
         self.require_distinct_joint_bodies(first, second)
@@ -2653,6 +2663,8 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.constraint_hertz = settings.constraint_hertz
+        joint.constraint_damping_ratio = settings.constraint_damping_ratio
         joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
@@ -5052,6 +5064,25 @@ public class World2D {
         job.execute(0, count)
     }
 
+    private func execute_finalize_soft_step_bodies() {
+        let count = self.active_bodies.count()
+        var job = FinalizeSoftStepBodies2D(
+            store:self.store,
+            active_bodies:self.active_bodies
+        )
+        if self.parallel_enabled &&
+            count >= soft_step_body_parallel_threshold()
+        {
+            if var executor = self.parallel_executor {
+                var shared = executor
+                shared.submit_parallel(count, job).complete()
+                self.current_soft_step_parallel_dispatch_count++
+                return
+            }
+        }
+        job.execute(0, count)
+    }
+
     private func execute_integrate_soft_step_velocities(
         delta:float
     ) {
@@ -5380,7 +5411,7 @@ public class World2D {
                 inverse_substep_delta,
                 self.current_maximum_correction_speed
             )
-            self.joints.prepare_distance_constraints(
+            self.joints.prepare_constraints(
                 substep_delta,
                 inverse_substep_delta
             )
@@ -5472,6 +5503,7 @@ public class World2D {
             }
             self.current_soft_step_stages.append(8)
             self.current_soft_step_stages.append(9)
+            self.execute_finalize_soft_step_bodies()
             self.joints.finish_step(inverse_substep_delta)
         } else {
             self.joints.finish_step(0.0)
@@ -6304,6 +6336,15 @@ func begin_soft_step_motion(store:BodyStore2D, index:int) {
     store.previous_positions_x[index] = store.positions_x[index]
     store.previous_positions_y[index] = store.positions_y[index]
     store.previous_rotations[index] = store.rotations[index]
+    store.step_start_cosines[index] = store.rotation_cosines[index]
+    store.step_start_sines[index] = store.rotation_sines[index]
+    store.step_rotation_cosines[index] = 1.0
+    store.step_rotation_sines[index] = 0.0
+    let center = store.world_center_at(index)
+    store.step_centers_x[index] = center.x
+    store.step_centers_y[index] = center.y
+    store.step_displacements_x[index] = 0.0
+    store.step_displacements_y[index] = 0.0
 }
 
 func integrate_body_velocity(
@@ -6442,11 +6483,38 @@ func integrate_body_position(
     delta:float
 ) {
     var center = store.world_center_at(index)
-    center.x += store.velocities_x[index] * delta
-    center.y += store.velocities_y[index] * delta
+    if store.body_types[index] == BodyType2D.dynamic {
+        store.step_displacements_x[index] += store.velocities_x[index] * delta
+        store.step_displacements_y[index] += store.velocities_y[index] * delta
+        center.x = store.step_centers_x[index] + store.step_displacements_x[index]
+        center.y = store.step_centers_y[index] + store.step_displacements_y[index]
+    } else {
+        center.x += store.velocities_x[index] * delta
+        center.y += store.velocities_y[index] * delta
+    }
     if store.angular_velocities[index] != 0.0 {
-        store.rotations[index] += store.angular_velocities[index] * delta
-        store.cache_rotation(index)
+        let angle_delta = store.angular_velocities[index] * delta
+        if store.body_types[index] == BodyType2D.dynamic {
+            // Normalize the rotation delta, then compose with the step origin.
+            let cosine = store.step_rotation_cosines[index] -
+                angle_delta * store.step_rotation_sines[index]
+            let sine = store.step_rotation_sines[index] +
+                angle_delta * store.step_rotation_cosines[index]
+            let inverse_length = 1.0 / Math.sqrt(cosine * cosine + sine * sine)
+            let normalized_cosine = cosine * inverse_length
+            let normalized_sine = sine * inverse_length
+            store.step_rotation_cosines[index] = normalized_cosine
+            store.step_rotation_sines[index] = normalized_sine
+            store.rotations[index] += Math.atan(angle_delta)
+            store.rotation_cosines[index] = normalized_cosine * store.step_start_cosines[index] -
+                normalized_sine * store.step_start_sines[index]
+            store.rotation_sines[index] = normalized_sine * store.step_start_cosines[index] +
+                normalized_cosine * store.step_start_sines[index]
+        } else {
+            // Kinematic targets retain their prescribed displacement.
+            store.rotations[index] += angle_delta
+            store.cache_rotation(index)
+        }
     }
     let cosine = store.rotation_cosines[index]
     let sine = store.rotation_sines[index]
@@ -7878,6 +7946,40 @@ struct BeginSoftStepBodies2D:Threading.ParallelJob {
                 store,
                 active_bodies.body_at(item)
             )
+            item++
+        }
+    }
+}
+
+// Once per active body at the end of the step. The normalized final rotation
+// becomes the next step's origin; substep constraints keep their prepared frame.
+struct FinalizeSoftStepBodies2D:Threading.ParallelJob {
+    var store:BodyStore2D
+    var active_bodies:ActiveBodySet2D
+
+    func execute(start:int, end:int) {
+        var item = start
+        while item < end {
+            let index = self.active_bodies.body_at(item)
+            let cosine = self.store.rotation_cosines[index] + 0.0
+            let sine = self.store.rotation_sines[index] + 0.0
+            let inverse_length = 1.0 / Math.sqrt(cosine * cosine + sine * sine)
+            let normalized_cosine = cosine * inverse_length
+            let normalized_sine = sine * inverse_length
+            self.store.rotation_cosines[index] = normalized_cosine
+            self.store.rotation_sines[index] = normalized_sine
+            let center_x = self.store.step_centers_x[index] + self.store.step_displacements_x[index]
+            let center_y = self.store.step_centers_y[index] + self.store.step_displacements_y[index]
+            self.store.positions_x[index] = center_x -
+                (normalized_cosine * self.store.local_centers_x[index] -
+                    normalized_sine * self.store.local_centers_y[index])
+            self.store.positions_y[index] = center_y -
+                (normalized_sine * self.store.local_centers_x[index] +
+                    normalized_cosine * self.store.local_centers_y[index])
+            self.store.step_rotation_cosines[index] = 1.0
+            self.store.step_rotation_sines[index] = 0.0
+            self.store.step_displacements_x[index] = 0.0
+            self.store.step_displacements_y[index] = 0.0
             item++
         }
     }
@@ -10365,4 +10467,10 @@ func stable_collider_pair_snapshot(store:BodyStore2D, pair:BodyPair2D, colliders
 
 func expanded_contact_bounds(bounds:AABB2D, margin:float) AABB2D {
     return AABB2D(bounds.lower.subtract(Math.Vec2(margin)), bounds.upper.add(Math.Vec2(margin)), true)
+}
+
+func validate_constraint_tuning(hertz:float, damping_ratio:float) {
+    if !finite_world_value(hertz) || !finite_world_value(damping_ratio) || hertz < 0.0 || damping_ratio < 0.0 {
+        panic("GFX.Physics joint constraint tuning requires finite non-negative hertz and damping ratio")
+    }
 }
