@@ -1,0 +1,67 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+    }
+    return false
+}
+
+class LockedIdentityMutation {
+    var body:Physics.RigidBody2D
+    var collider:Physics.Collider2D
+    var joint:Physics.DistanceJoint2D
+    let target:int
+
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        if self.target == 0 { self.body.set_application_id(1 as uint64) }
+        if self.target == 1 { self.collider.set_application_id(1 as uint64) }
+        if self.target == 2 { self.joint.set_application_id(1 as uint64) }
+        return Physics.ContactDecision2D()
+    }
+}
+
+func main() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    var collider = world.create_collider(first, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0)) ..enable_pre_solve = true)
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)) ..position = Math.Vec2(1.4, 0.0))
+    var third = world.create_rigid_body(Physics.RigidBody2DSettings()..position = Math.Vec2(10.0, 0.0))
+    var joint = world.create_distance_joint(first, third)
+    if option("locked") {
+        var target = 0
+        if option("collider") { target = 1 }
+        if option("joint") { target = 2 }
+        var policy = LockedIdentityMutation(body:first, collider:collider, joint:joint, target:target)
+        world.set_pre_solve(policy.apply)
+        world.refresh_contacts()
+    } else {
+        if option("body") {
+            world.destroy_rigid_body(second)
+            world.create_rigid_body(Physics.RigidBody2DSettings()..application_id = 999 as uint64)
+            if option("read") { let value = second.application_id() }
+            else { second.set_application_id(1 as uint64) }
+        }
+        if option("collider") {
+            world.destroy_collider(collider)
+            world.create_collider(first, Physics.Collider2DSettings()..application_id = 999 as uint64)
+            if option("read") { let value = collider.application_id() }
+            else { collider.set_application_id(1 as uint64) }
+        }
+        if option("joint") {
+            world.destroy_joint(joint)
+            world.create_distance_joint(first, third, Physics.DistanceJoint2DSettings()..application_id = 999 as uint64)
+            if option("read") { let value = joint.application_id() }
+            else { joint.set_application_id(1 as uint64) }
+        }
+    }
+    panic("invalid application identity operation was accepted")
+}

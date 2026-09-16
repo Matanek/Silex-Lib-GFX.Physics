@@ -5,6 +5,7 @@ use STD.Math
 use STD.Threading
 
 public struct DistanceJoint2DSettings {
+    var application_id:uint64?
     var first_anchor:Math.Vec2
     var second_anchor:Math.Vec2
     var length:float
@@ -22,6 +23,7 @@ public struct DistanceJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.first_anchor = Math.Vec2()
         self.second_anchor = Math.Vec2()
         self.length = -1.0
@@ -41,6 +43,7 @@ public struct DistanceJoint2DSettings {
 }
 
 public struct MotorJoint2DSettings {
+    var application_id:uint64?
     var linear_offset:Math.Vec2
     var angular_offset:float
     var maximum_force:float
@@ -49,6 +52,7 @@ public struct MotorJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.linear_offset = Math.Vec2()
         self.angular_offset = 0.0
         self.maximum_force = 1.0
@@ -59,12 +63,14 @@ public struct MotorJoint2DSettings {
 }
 
 public struct MouseJoint2DSettings {
+    var application_id:uint64?
     var target:Math.Vec2
     var spring_hertz:float
     var spring_damping_ratio:float
     var maximum_force:float
 
     init() {
+        self.application_id = null
         self.target = Math.Vec2()
         self.spring_hertz = 5.0
         self.spring_damping_ratio = 0.7
@@ -73,10 +79,12 @@ public struct MouseJoint2DSettings {
 }
 
 public struct FilterJoint2DSettings {
-    init() {}
+    var application_id:uint64?
+    init() { self.application_id = null }
 }
 
 public struct PrismaticJoint2DSettings {
+    var application_id:uint64?
     var anchor:Math.Vec2
     var axis:Math.Vec2
     var target_translation:float
@@ -92,6 +100,7 @@ public struct PrismaticJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.anchor = Math.Vec2()
         self.axis = Math.Vec2(1.0, 0.0)
         self.target_translation = 0.0
@@ -109,6 +118,7 @@ public struct PrismaticJoint2DSettings {
 }
 
 public struct RevoluteJoint2DSettings {
+    var application_id:uint64?
     var anchor:Math.Vec2
     var target_angle:float
     var spring_hertz:float
@@ -123,6 +133,7 @@ public struct RevoluteJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.anchor = Math.Vec2()
         self.target_angle = 0.0
         self.spring_hertz = 0.0
@@ -139,6 +150,7 @@ public struct RevoluteJoint2DSettings {
 }
 
 public struct WeldJoint2DSettings {
+    var application_id:uint64?
     var anchor:Math.Vec2
     var linear_hertz:float
     var linear_damping_ratio:float
@@ -147,6 +159,7 @@ public struct WeldJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.anchor = Math.Vec2()
         self.linear_hertz = 0.0
         self.linear_damping_ratio = 1.0
@@ -157,6 +170,7 @@ public struct WeldJoint2DSettings {
 }
 
 public struct WheelJoint2DSettings {
+    var application_id:uint64?
     var anchor:Math.Vec2
     var axis:Math.Vec2
     var spring_hertz:float
@@ -171,6 +185,7 @@ public struct WheelJoint2DSettings {
     var collide_connected:bool
 
     init() {
+        self.application_id = null
         self.anchor = Math.Vec2()
         self.axis = Math.Vec2(0.0, 1.0)
         self.spring_hertz = 1.0
@@ -213,6 +228,7 @@ package struct JointId2D {
 }
 
 package struct JointConstraint2D {
+    var application_id:uint64?
     var constraint_bias_rate:float
     var constraint_mass_scale:float
     var constraint_impulse_scale:float
@@ -257,6 +273,7 @@ package struct JointConstraint2D {
     var current_motor_torque:float
 
     init(kind:JointKind2D, first_body:BodyId2D, second_body:BodyId2D) {
+        self.application_id = null
         self.constraint_bias_rate = 0.0
         self.constraint_mass_scale = 0.0
         self.constraint_impulse_scale = 0.0
@@ -535,6 +552,15 @@ package class JointStore2D {
 
     func kind(id:JointId2D) JointKind2D {
         return self.joints[self.require(id)].kind
+    }
+
+    func application_id(id:JointId2D) uint64? {
+        return self.joints[self.require(id)].application_id
+    }
+
+    func set_application_id(id:JointId2D, value:uint64?) {
+        self.bodies.require_mutable()
+        self.joints[self.require(id)].application_id = value
     }
 
     func first_body_handle(id:JointId2D) RigidBody2D {
@@ -1996,6 +2022,10 @@ public class DistanceJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2064,6 +2094,10 @@ public class MotorJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2110,6 +2144,10 @@ public class MouseJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func local_anchor() Math.Vec2 { return self.store.first_anchor(self.id) }
@@ -2147,6 +2185,10 @@ public class FilterJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2171,6 +2213,10 @@ public class PrismaticJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2241,6 +2287,10 @@ public class RevoluteJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2306,6 +2356,10 @@ public class WeldJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }
@@ -2356,6 +2410,10 @@ public class WheelJoint2D {
         self.id = id
     }
 
+    func application_id() uint64? { return self.store.application_id(self.id) }
+    func set_application_id(value:uint64?) {
+        self.store.set_application_id(self.id, value)
+    }
     func is_valid() bool { return self.store.contains(self.id) }
     func first_body() RigidBody2D { return self.store.first_body_handle(self.id) }
     func second_body() RigidBody2D { return self.store.second_body_handle(self.id) }

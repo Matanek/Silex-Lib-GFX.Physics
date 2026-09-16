@@ -11,6 +11,7 @@ use STD.Math
 public struct BodyMoveEvent2D {
     private var store:BodyStore2D
     private var body_id:BodyId2D
+    private var current_application_id:uint64?
     private var current_transform:Transform2D
     private var current_fell_asleep:bool
 
@@ -22,10 +23,12 @@ public struct BodyMoveEvent2D {
     ) {
         self.store = store
         self.body_id = body_id
+        self.current_application_id = store.application_ids[store.require(body_id)]
         self.current_transform = transform
         self.current_fell_asleep = fell_asleep
     }
 
+    func application_id() uint64? { return self.current_application_id }
     func body() RigidBody2D { return RigidBody2D(self.store, self.body_id) }
     func transform() Transform2D { return self.current_transform }
     func fell_asleep() bool { return self.current_fell_asleep }

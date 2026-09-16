@@ -986,8 +986,8 @@ public class World2D {
             contacts,
             joints,
             islands,
-            bodies * 192 + colliders * 160 + contacts * 128 +
-                joints * 256 + islands * 24
+            bodies * 208 + colliders * 176 + contacts * 192 +
+                joints * 272 + islands * 24
         )
     }
     func write_dynamic_body_transforms(output:&BodyTransform2D[]) {
@@ -2321,6 +2321,7 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return DistanceJoint2D(self.joints, id)
@@ -2340,6 +2341,7 @@ public class World2D {
             second.body_id()
         )
         joint.collide_connected = false
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return FilterJoint2D(self.joints, id)
@@ -2375,6 +2377,7 @@ public class World2D {
         joint.maximum_motor_torque = settings.maximum_torque
         joint.correction_factor = settings.correction_factor
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return MotorJoint2D(self.joints, id)
@@ -2410,6 +2413,7 @@ public class World2D {
         joint.spring_damping_ratio = settings.spring_damping_ratio
         joint.maximum_motor_force = settings.maximum_force
         joint.spring_enabled = true
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(body_index, body_index, joint)
         return MouseJoint2D(self.joints, id)
@@ -2472,6 +2476,7 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return PrismaticJoint2D(self.joints, id)
@@ -2528,6 +2533,7 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return RevoluteJoint2D(self.joints, id)
@@ -2577,6 +2583,7 @@ public class World2D {
         joint.spring_enabled = settings.linear_hertz > 0.0 ||
             settings.angular_hertz > 0.0
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return WeldJoint2D(self.joints, id)
@@ -2635,6 +2642,7 @@ public class World2D {
         joint.limit_enabled = settings.limit_enabled
         joint.motor_enabled = settings.motor_enabled
         joint.collide_connected = settings.collide_connected
+        joint.application_id = settings.application_id
         let id = self.joints.append(joint)
         self.finish_joint_creation(first_index, second_index, joint)
         return WheelJoint2D(self.joints, id)

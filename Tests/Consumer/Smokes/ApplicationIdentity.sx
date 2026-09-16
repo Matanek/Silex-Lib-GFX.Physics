@@ -1,0 +1,246 @@
+use GFX.Physics
+use STD.Math
+use STD.Collections
+
+func expect_id(value:uint64?, expected:uint64) {
+    if let actual = value { assert(actual == expected) }
+    else { panic("expected application identity") }
+}
+
+func body_and_collider_identity() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()..application_id = 0 as uint64)
+    var last = world.create_rigid_body(Physics.RigidBody2DSettings()..application_id = 9007199254740993 as uint64)
+    expect_id(first.application_id(), 0 as uint64)
+    expect_id(last.application_id(), 9007199254740993 as uint64)
+    var colliders:Physics.Collider2D[] = []
+    first.write_colliders(colliders)
+    assert(colliders[0].application_id() == null)
+    var extra = world.create_collider(first, Physics.Collider2DSettings()..application_id = 300 as uint64)
+    var surviving = world.create_collider(last, Physics.Collider2DSettings()..application_id = 301 as uint64)
+    world.destroy_collider(extra)
+    expect_id(surviving.application_id(), 301 as uint64)
+    var replacement = world.create_collider(first, Physics.Collider2DSettings())
+    assert(replacement.application_id() == null && !extra.is_valid())
+    replacement.set_application_id(0 as uint64)
+    expect_id(replacement.application_id(), 0 as uint64)
+    replacement.set_application_id(null)
+    assert(replacement.application_id() == null)
+    world.destroy_rigid_body(first)
+    expect_id(last.application_id(), 9007199254740993 as uint64)
+    expect_id(surviving.application_id(), 301 as uint64)
+    assert(!replacement.is_valid())
+    var recreated = world.create_rigid_body(Physics.RigidBody2DSettings())
+    assert(recreated.application_id() == null && !first.is_valid())
+    var other = Physics.World2D()
+    var same_key = other.create_rigid_body(Physics.RigidBody2DSettings()..application_id = 301 as uint64)
+    expect_id(same_key.application_id(), 301 as uint64)
+    last.set_application_id(301 as uint64)
+    var names = Collections.Dictionary<uint64, str>()
+    names.set(301 as uint64, "player")
+    if let id = last.application_id() {
+        assert(names.get(id) == "player")
+    } else { panic("missing key") }
+    last.set_position(Math.Vec2(10.0, 0.0))
+    world.step(1.0)
+    assert(!last.is_awake())
+    last.set_application_id(302 as uint64)
+    assert(!last.is_awake())
+    last.set_application_id(null)
+    assert(last.application_id() == null)
+}
+
+func contact_identity() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = 10 as uint64 ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false)
+    var outer = world.create_collider(first, Physics.Collider2DSettings()
+        ..application_id = 100 as uint64 ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0))
+        ..enable_contact_events = true ..enable_hit_events = true)
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = 20 as uint64 ..position = Math.Vec2(1.4, 0.0)
+        ..velocity = Math.Vec2(-5.0, 0.0) ..create_implicit_collider = false)
+    var visitor = world.create_collider(second, Physics.Collider2DSettings()
+        ..application_id = 200 as uint64 ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)))
+    world.step(1.0 / 60.0)
+    var began:Physics.ContactBeginEvent2D[] = []
+    var hits:Physics.ContactHitEvent2D[] = []
+    world.write_contact_begin_events(began)
+    world.write_contact_hit_events(hits)
+    assert(began.count() == 1 && hits.count() == 1)
+    let saved = began[0].pair().second()
+    expect_id(saved.application_id, 200 as uint64)
+    expect_id(saved.body_application_id, 20 as uint64)
+    expect_id(hits[0].pair().first().application_id, 100 as uint64)
+    let query = world.ray_cast_closest(Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2(6.0, 0.0)))
+    assert(query.hit)
+    expect_id(query.collider().application_id(), 100 as uint64)
+    second.set_application_id(21 as uint64)
+    visitor.set_application_id(201 as uint64)
+    expect_id(saved.application_id, 200 as uint64)
+    expect_id(saved.body_application_id, 20 as uint64)
+    world.destroy_rigid_body(second)
+    var recreated = world.create_rigid_body(Physics.RigidBody2DSettings()..application_id = 30 as uint64)
+    assert(!saved.body().is_valid() && !saved.collider().is_valid())
+    expect_id(saved.application_id, 200 as uint64)
+    expect_id(saved.body_application_id, 20 as uint64)
+    world.step(0.0)
+    var ended:Physics.ContactEndEvent2D[] = []
+    world.write_contact_end_events(ended)
+    assert(ended.count() == 1)
+    expect_id(ended[0].pair().second().application_id, 201 as uint64)
+    expect_id(ended[0].pair().second().body_application_id, 21 as uint64)
+    expect_id(recreated.application_id(), 30 as uint64)
+}
+
+func sensor_and_move_identity() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var sensor_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = 40 as uint64 ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false)
+    var sensor = world.create_collider(sensor_body, Physics.Collider2DSettings()
+        ..application_id = 400 as uint64 ..shape = Physics.Shape2D.circle(Physics.Circle2D(2.0))
+        ..is_sensor = true ..enable_sensor_events = true)
+    var visitor = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = 50 as uint64 ..velocity = Math.Vec2(0.1, 0.0) ..enable_move_events = true)
+    world.step(1.0 / 60.0)
+    var overlaps:Physics.SensorOverlap2D[] = []
+    var began:Physics.SensorBeginEvent2D[] = []
+    var moves:Physics.BodyMoveEvent2D[] = []
+    world.write_sensor_overlaps(overlaps)
+    world.write_sensor_begin_events(began)
+    world.write_body_move_events(moves)
+    assert(overlaps.count() == 1 && began.count() == 1 && moves.count() == 1)
+    expect_id(overlaps[0].sensor().application_id, 400 as uint64)
+    expect_id(began[0].visitor().body_application_id, 50 as uint64)
+    expect_id(moves[0].application_id(), 50 as uint64)
+    let saved_move = moves[0]
+    let saved_sensor = began[0]
+    visitor.set_application_id(51 as uint64)
+    expect_id(saved_move.application_id(), 50 as uint64)
+    world.destroy_rigid_body(visitor)
+    world.refresh_contacts()
+    var ended:Physics.SensorEndEvent2D[] = []
+    world.write_sensor_end_events(ended)
+    assert(ended.count() == 1)
+    assert(!saved_move.body().is_valid())
+    expect_id(saved_move.application_id(), 50 as uint64)
+    expect_id(saved_sensor.visitor().body_application_id, 50 as uint64)
+    // Sensor ends retain the last overlap snapshot, as do their shape values.
+    expect_id(ended[0].visitor().body_application_id, 50 as uint64)
+}
+
+func joint_id(joint:Physics.Joint2D) uint64? {
+    match joint {
+        distance(value) => { return value.application_id() }
+        filter(value) => { return value.application_id() }
+        motor(value) => { return value.application_id() }
+        mouse(value) => { return value.application_id() }
+        prismatic(value) => { return value.application_id() }
+        revolute(value) => { return value.application_id() }
+        weld(value) => { return value.application_id() }
+        wheel(value) => { return value.application_id() }
+    }
+}
+
+func replace_joint_id(joint:Physics.Joint2D, id:uint64?) {
+    match joint {
+        distance(value) => { value.set_application_id(id) }
+        filter(value) => { value.set_application_id(id) }
+        motor(value) => { value.set_application_id(id) }
+        mouse(value) => { value.set_application_id(id) }
+        prismatic(value) => { value.set_application_id(id) }
+        revolute(value) => { value.set_application_id(id) }
+        weld(value) => { value.set_application_id(id) }
+        wheel(value) => { value.set_application_id(id) }
+    }
+}
+
+func joint_identity() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed)
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()..position = Math.Vec2(2.0, 0.0))
+    var distance = world.create_distance_joint(first, second, Physics.DistanceJoint2DSettings()..application_id = 1 as uint64)
+    var filter = world.create_filter_joint(first, second, Physics.FilterJoint2DSettings()..application_id = 2 as uint64)
+    var motor = world.create_motor_joint(first, second, Physics.MotorJoint2DSettings()..application_id = 3 as uint64)
+    var mouse = world.create_mouse_joint(second, Physics.MouseJoint2DSettings()..application_id = 4 as uint64)
+    var prismatic = world.create_prismatic_joint(first, second, Physics.PrismaticJoint2DSettings()..application_id = 5 as uint64)
+    var revolute = world.create_revolute_joint(first, second, Physics.RevoluteJoint2DSettings()..application_id = 6 as uint64)
+    var weld = world.create_weld_joint(first, second, Physics.WeldJoint2DSettings()..application_id = 7 as uint64)
+    var wheel = world.create_wheel_joint(first, second, Physics.WheelJoint2DSettings()..application_id = 8 as uint64)
+    world.step(1.0 / 60.0)
+    var all:Physics.Joint2D[] = []
+    world.write_joints(all)
+    assert(all.count() == 8)
+    var index = 0
+    while index < all.count() {
+        expect_id(joint_id(all[index]), (index + 1) as uint64)
+        replace_joint_id(all[index], (index + 100) as uint64)
+        expect_id(joint_id(all[index]), (index + 100) as uint64)
+        replace_joint_id(all[index], null)
+        assert(joint_id(all[index]) == null)
+        index++
+    }
+    wheel.set_application_id(808 as uint64)
+    world.destroy_joint(distance)
+    expect_id(wheel.application_id(), 808 as uint64)
+    var new_distance = world.create_distance_joint(first, second)
+    assert(new_distance.application_id() == null && !distance.is_valid())
+    new_distance.set_application_id(0 as uint64)
+    expect_id(new_distance.application_id(), 0 as uint64)
+    world.destroy_rigid_body(second)
+    assert(!new_distance.is_valid() && !wheel.is_valid() && !mouse.is_valid())
+    var quiet = Physics.World2D(gravity:Math.Vec2())
+    var anchor = quiet.create_rigid_body(Physics.RigidBody2DSettings()..body_type = Physics.BodyType2D.fixed)
+    var resting = quiet.create_rigid_body(Physics.RigidBody2DSettings()..position = Math.Vec2(2.0, 0.0))
+    var quiet_joint = quiet.create_filter_joint(anchor, resting)
+    quiet.step(1.0)
+    assert(!resting.is_awake())
+    quiet_joint.set_application_id(88 as uint64)
+    assert(!resting.is_awake())
+}
+
+class ReadIdentityPolicy {
+    var visits:int = 0
+
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        let first = input.pair().first()
+        expect_id(first.application_id, 411 as uint64)
+        expect_id(first.body_application_id, 41 as uint64)
+        expect_id(first.collider().application_id(), 411 as uint64)
+        self.visits++
+        return Physics.ContactDecision2D()
+    }
+}
+
+func callback_identity() {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = 41 as uint64 ..body_type = Physics.BodyType2D.fixed
+        ..create_implicit_collider = false)
+    world.create_collider(first, Physics.Collider2DSettings()
+        ..application_id = 411 as uint64 ..enable_pre_solve = true
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+    world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..position = Math.Vec2(1.4, 0.0)
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)))
+    var policy = ReadIdentityPolicy()
+    world.set_pre_solve(policy.apply)
+    world.refresh_contacts()
+    assert(policy.visits > 0)
+    let previous = policy.visits
+    world.clear_pre_solve()
+    world.refresh_contacts()
+    assert(policy.visits == previous)
+}
+
+func main() {
+    body_and_collider_identity()
+    contact_identity()
+    sensor_and_move_identity()
+    joint_identity()
+    callback_identity()
+    print("application-identity-ok")
+}

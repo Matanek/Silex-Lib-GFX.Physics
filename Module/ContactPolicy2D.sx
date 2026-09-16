@@ -9,6 +9,8 @@ use GFX.Physics.Shape2D.Shape2D
 public struct ColliderSnapshot2D {
     private var current_collider:Collider2D
     private var current_body:RigidBody2D
+    let application_id:uint64?
+    let body_application_id:uint64?
     let shape:Shape2D
     let material:PhysicsMaterial2D
     let collision_filter:CollisionFilter2D
@@ -22,6 +24,8 @@ public struct ColliderSnapshot2D {
         collision_filter:CollisionFilter2D,
         is_sensor:bool
     ) {
+        self.application_id = collider.application_id()
+        self.body_application_id = body.application_id()
         self.current_collider = collider
         self.current_body = body
         self.shape = shape

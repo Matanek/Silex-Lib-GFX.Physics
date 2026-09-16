@@ -75,6 +75,7 @@ public struct MassProperties2D {
 }
 
 public struct Collider2DSettings {
+    var application_id:uint64?
     var shape:Shape2D?
     var density:float
     var material:PhysicsMaterial2D
@@ -88,6 +89,7 @@ public struct Collider2DSettings {
     var enable_pre_solve:bool
 
     init() {
+        self.application_id = null
         self.shape = null
         self.density = 1.0
         self.material = PhysicsMaterial2D()
@@ -103,6 +105,7 @@ public struct Collider2DSettings {
 }
 
 public struct RigidBody2DSettings {
+    var application_id:uint64?
     var body_type:BodyType2D
     var shape:Shape2D?
     var position:Math.Vec2
@@ -130,6 +133,7 @@ public struct RigidBody2DSettings {
     var create_implicit_collider:bool
 
     init() {
+        self.application_id = null
         self.body_type = BodyType2D.dynamic
         self.shape = null
         self.position = Math.Vec2()
@@ -193,6 +197,7 @@ package class ShapeStore2D {
     var slot_dense_indices:int[]
     var dense_slots:int[]
     var free_slots:int[]
+    var application_ids:uint64?[]
     var body_slots:int[]
     var shapes:Shape2D[]
     var next_body_shape_slots:int[]
@@ -211,6 +216,7 @@ package class ShapeStore2D {
         self.slot_dense_indices = []
         self.dense_slots = []
         self.free_slots = []
+        self.application_ids = []
         self.body_slots = []
         self.shapes = []
         self.next_body_shape_slots = []
@@ -242,6 +248,7 @@ package class ShapeStore2D {
         let dense_index = self.count()
         self.slot_dense_indices[slot] = dense_index
         self.dense_slots.append(slot)
+        self.application_ids.append(settings.application_id)
         self.body_slots.append(body_slot)
         self.shapes.append(collider_settings_shape(settings))
         self.next_body_shape_slots.append(next_slot)
@@ -294,6 +301,7 @@ package class ShapeStore2D {
         let last = self.count() - 1
         if dense_index != last {
             self.dense_slots.swap(dense_index, last)
+            self.application_ids.swap(dense_index, last)
             self.body_slots.swap(dense_index, last)
             self.shapes.swap(dense_index, last)
             self.next_body_shape_slots.swap(dense_index, last)
@@ -307,6 +315,7 @@ package class ShapeStore2D {
             self.slot_dense_indices[self.dense_slots[dense_index]] = dense_index
         }
         self.dense_slots.take_last()
+        self.application_ids.take_last()
         self.body_slots.take_last()
         self.shapes.take_last()
         self.next_body_shape_slots.take_last()
@@ -690,6 +699,7 @@ package class BodyStore2D {
     var allow_sleep:bool[]
     var fixed_rotations:bool[]
     var enabled:bool[]
+    var application_ids:uint64?[]
     var debug_labels:str[]
     var mass_overridden:bool[]
     var behavior_flags:uint8[]
@@ -749,6 +759,7 @@ package class BodyStore2D {
         self.allow_sleep = []
         self.fixed_rotations = []
         self.enabled = []
+        self.application_ids = []
         self.debug_labels = []
         self.mass_overridden = []
         self.behavior_flags = []
@@ -857,6 +868,7 @@ package class BodyStore2D {
         self.allow_sleep.append(settings.allow_sleep)
         self.fixed_rotations.append(settings.fixed_rotation)
         self.enabled.append(settings.is_enabled)
+        self.application_ids.append(settings.application_id)
         self.debug_labels.append(settings.debug_label)
         self.mass_overridden.append(false)
         var behavior_flags:uint8 = 0
@@ -1381,6 +1393,7 @@ package class BodyStore2D {
         self.allow_sleep.swap(first, second)
         self.fixed_rotations.swap(first, second)
         self.enabled.swap(first, second)
+        self.application_ids.swap(first, second)
         self.debug_labels.swap(first, second)
         self.mass_overridden.swap(first, second)
         self.behavior_flags.swap(first, second)
@@ -1435,6 +1448,7 @@ package class BodyStore2D {
         self.allow_sleep.take_last()
         self.fixed_rotations.take_last()
         self.enabled.take_last()
+        self.application_ids.take_last()
         self.debug_labels.take_last()
         self.mass_overridden.take_last()
         self.behavior_flags.take_last()
@@ -1454,6 +1468,15 @@ public class Collider2D {
     }
 
     func is_valid() bool { return self.store.shape_store.contains(self.id) }
+
+    func application_id() uint64? {
+        return self.store.shape_store.application_ids[self.store.shape_store.require(self.id)]
+    }
+
+    func set_application_id(value:uint64?) {
+        self.store.require_mutable()
+        self.store.shape_store.application_ids[self.store.shape_store.require(self.id)] = value
+    }
 
     package func belongs_to(store:BodyStore2D) bool {
         return self.store == store
@@ -1657,6 +1680,15 @@ public class RigidBody2D {
     }
 
     func is_valid() bool { return self.store.contains(self.id) }
+
+    func application_id() uint64? {
+        return self.store.application_ids[self.store.require(self.id)]
+    }
+
+    func set_application_id(value:uint64?) {
+        self.store.require_mutable()
+        self.store.application_ids[self.store.require(self.id)] = value
+    }
 
     package func belongs_to(store:BodyStore2D) bool {
         return self.store == store

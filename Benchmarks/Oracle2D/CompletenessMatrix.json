@@ -461,10 +461,10 @@
       "id": "body-user-data",
       "domain": "integration",
       "capability": "untyped body user pointer",
-      "status": "excluded",
+      "status": "covered",
       "patterns": ["^b2Body_(?:SetUserData|GetUserData)$"],
-      "silex_contract": "Typed body handles and application maps carry gameplay identity.",
-      "rationale": "Untyped C pointers are explicitly outside the public contract."
+      "silex_contract": "RigidBody2D carries an optional uint64 application key, with immutable event snapshots and generation-safe invalidation.",
+      "evidence": ["Docs/FR/ApplicationIdentity.md", "Docs/EN/ApplicationIdentity.md", "Tests/Consumer/Smokes/ApplicationIdentity.sx", "Tests/Consumer/Smokes/InvalidApplicationIdentity.sx", "Tests/Consumer/check-application-identity.py"]
     },
     {
       "id": "collider-lifecycle",
@@ -515,10 +515,10 @@
       "id": "collider-user-data",
       "domain": "integration",
       "capability": "untyped collider user pointer",
-      "status": "excluded",
+      "status": "covered",
       "patterns": ["^b2Shape_(?:SetUserData|GetUserData)$"],
-      "silex_contract": "Typed Collider2D handles and material identifiers carry application identity.",
-      "rationale": "Untyped C pointers are explicitly outside the public contract."
+      "silex_contract": "Collider2D carries its own optional uint64 application key independently of its body and material; snapshots preserve both object keys.",
+      "evidence": ["Docs/FR/ApplicationIdentity.md", "Docs/EN/ApplicationIdentity.md", "Tests/Consumer/Smokes/ApplicationIdentity.sx", "Tests/Consumer/Smokes/InvalidApplicationIdentity.sx", "Tests/Consumer/check-application-identity.py"]
     },
     {
       "id": "chain-colliders",
@@ -581,10 +581,10 @@
       "id": "joint-user-data",
       "domain": "integration",
       "capability": "untyped joint user pointer",
-      "status": "excluded",
+      "status": "covered",
       "patterns": ["^b2Joint_(?:SetUserData|GetUserData)$"],
-      "silex_contract": "Typed joint handles and application maps carry gameplay identity.",
-      "rationale": "Untyped C pointers are explicitly outside the public contract."
+      "silex_contract": "All eight typed joint families carry optional uint64 application keys through creation, mutation, enumeration and destruction.",
+      "evidence": ["Docs/FR/ApplicationIdentity.md", "Docs/EN/ApplicationIdentity.md", "Tests/Consumer/Smokes/ApplicationIdentity.sx", "Tests/Consumer/Smokes/InvalidApplicationIdentity.sx", "Tests/Consumer/check-application-identity.py"]
     }
   ]
 }

@@ -1,0 +1,17 @@
+use GFX.Physics
+use STD.Collections
+
+func main() {
+    let player_id:uint64 = 42
+    var names = Collections.Dictionary<uint64, str>()
+    names.set(player_id, "player")
+    var world = Physics.World2D()
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..application_id = player_id)
+    if let id = body.application_id() {
+        assert(names.get(id) == "player")
+    } else { panic("missing application identity") }
+    body.set_application_id(null)
+    assert(body.application_id() == null)
+    print("application-identity-guide-ok")
+}
