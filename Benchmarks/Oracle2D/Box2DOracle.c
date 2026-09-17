@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <box2d/box2d.h>
+#include "TaskSystem.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -11,6 +12,8 @@
 
 static const float pi = 3.14159265358979323846f;
 static int configured_substeps = 4;
+static int configured_workers = 1;
+static OracleTaskSystem* task_system;
 
 #if defined(NDEBUG)
 static const char* build_mode = "release";
@@ -50,6 +53,7 @@ static b2WorldDef corpus_world_definition(void)
     definition.restitutionThreshold = 1.0f;
     definition.hitEventThreshold = 1.0f;
     definition.enableContinuous = true;
+    oracle_tasks_configure(task_system, &definition);
     return definition;
 }
 
@@ -178,7 +182,7 @@ static void print_metrics(
     printf(
         "SILEX_PHYSICS_CORPUS schema=2 engine=box2d-3.1.1 engine_version=3.1.1 "
         "oracle_version=3.1.1 oracle_revision=8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3 "
-        "solver=box2d-soft-step substeps=%d scenario=%s mode=%s workers=1 bodies=%d steps=%d dt=%.9f "
+        "solver=box2d-soft-step substeps=%d scenario=%s mode=%s workers=%d bodies=%d steps=%d dt=%.9f "
         "workload=box2d-3.1.1-v1 gravity_y=%.1f contact_hertz=30 contact_damping=10 "
         "sleep_enabled=%s body_mass=1 "
         "elapsed_ms=%.6f step_ms=%.6f centroid_x=%.9f centroid_y=%.9f max_speed=%.9f min_y=%.9f "
@@ -186,6 +190,7 @@ static void print_metrics(
         configured_substeps,
         scenario,
         build_mode,
+        configured_workers,
         body_count,
         step_count,
         time_step,
@@ -376,43 +381,38 @@ static void print_usage(const char* executable)
 {
     fprintf(
         stderr,
-        "usage: %s --release-parity|--sparse-1000|--sparse-5000|--sparse-10000|--pile-1000|--circle-1800|--circle-5000|--all [--substeps-1|--substeps-2|--substeps-4|--substeps-8]\n",
+        "usage: %s --release-parity|--sparse-1000|--sparse-5000|--sparse-10000|--pile-1000|--circle-1800|--circle-5000|--all [--substeps-1|--substeps-2|--substeps-4|--substeps-8] [--workers-1|--workers-2|--workers-4] [--task-stats]\n",
         executable);
 }
 
 int main(int argument_count, char** arguments)
 {
-    if (argument_count < 2 || argument_count > 3)
+    if (argument_count < 2 || argument_count > 5)
     {
         print_usage(arguments[0]);
         return 2;
     }
     const char* scenario = arguments[1];
-    if (argument_count == 3)
+    bool substeps_seen = false, workers_seen = false, show_stats = false;
+    for (int i = 2; i < argument_count; ++i)
     {
-        const char* substeps = arguments[2];
-        if (strcmp(substeps, "--substeps-1") == 0)
-        {
-            configured_substeps = 1;
-        }
-        else if (strcmp(substeps, "--substeps-2") == 0)
-        {
-            configured_substeps = 2;
-        }
-        else if (strcmp(substeps, "--substeps-4") == 0)
-        {
-            configured_substeps = 4;
-        }
-        else if (strcmp(substeps, "--substeps-8") == 0)
-        {
-            configured_substeps = 8;
-        }
-        else
-        {
-            print_usage(arguments[0]);
-            return 2;
-        }
+        const char* option = arguments[i];
+        if (strcmp(option, "--task-stats") == 0 && !show_stats) { show_stats = true; continue; }
+        int value = 0;
+        if (strcmp(option, "--substeps-1") == 0) value = 1;
+        if (strcmp(option, "--substeps-2") == 0) value = 2;
+        if (strcmp(option, "--substeps-4") == 0) value = 4;
+        if (strcmp(option, "--substeps-8") == 0) value = 8;
+        if (value != 0 && !substeps_seen) { configured_substeps = value; substeps_seen = true; continue; }
+        value = 0;
+        if (strcmp(option, "--workers-1") == 0) value = 1;
+        if (strcmp(option, "--workers-2") == 0) value = 2;
+        if (strcmp(option, "--workers-4") == 0) value = 4;
+        if (value != 0 && !workers_seen) { configured_workers = value; workers_seen = true; continue; }
+        print_usage(arguments[0]);
+        return 2;
     }
+    task_system = oracle_tasks_create(configured_workers);
     if (strcmp(scenario, "--release-parity") == 0 || strcmp(scenario, "--all") == 0)
     {
         run_release_parity();
@@ -449,7 +449,13 @@ int main(int argument_count, char** arguments)
         strcmp(scenario, "--circle-5000") != 0 && strcmp(scenario, "--all") != 0)
     {
         print_usage(arguments[0]);
+        oracle_tasks_destroy(task_system);
         return 2;
     }
+    OracleTaskStats stats = oracle_tasks_stats(task_system);
+    if (show_stats) fprintf(stderr, "ORACLE_TASKS workers=%d groups=%llu finished=%llu items=%llu completed=%llu mask=%u\n",
+        configured_workers, (unsigned long long)stats.enqueued_groups, (unsigned long long)stats.finished_groups,
+        (unsigned long long)stats.submitted_items, (unsigned long long)stats.completed_items, stats.worker_mask);
+    oracle_tasks_destroy(task_system);
     return 0;
 }

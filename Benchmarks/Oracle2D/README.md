@@ -602,3 +602,25 @@ output against the Silex witness in Debug and Release. CTest includes the
 comparator's malformed-data and fixed-tolerance checks. From the workspace
 root, `python3 Packages/GFX.Physics/Tests/Consumer/check-joint-observations.py
 --mode debug` verifies 22 stale reads; repeat with `--mode release`.
+
+## Oracle task adapter
+
+The full-world oracle accepts `--workers-1`, `--workers-2`, or `--workers-4`
+in addition to its substep option. `--task-stats` writes completed task groups,
+item counts and the observed worker mask to stderr. State rows identify the
+actual configured worker count.
+
+`TaskSystem.c` is a benchmark-only persistent POSIX pool: the caller owns
+worker index zero and the remaining threads have distinct indices. Enqueue
+partitions disjoint ranges according to Box2D's minimum range; finishing helps
+execute queued work and waits for every callback in the requested group. All
+worlds finish before pool destruction. Empty ranges invoke no callback.
+Task storage is bounded at 256 simultaneously pending groups and four workers;
+exhaustion fails explicitly. Group/chunk partition counts may differ across
+worker configurations; they are not counts of physical solver operations.
+
+CTest checks simultaneous contexts, reverse completion order, barrier
+participation by every worker, exact range coverage, pool reuse, and repeated
+real-world state equality at 1/2/4 workers. The adapter is exercised on macOS;
+these tests make no Windows or performance claim. The runtime Physics package
+has no Box2D or POSIX task-adapter dependency.

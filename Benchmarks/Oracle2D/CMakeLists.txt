@@ -20,9 +20,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(box2d)
 
+find_package(Threads REQUIRED)
+add_library(gfx_physics_oracle_tasks STATIC TaskSystem.c)
+target_compile_features(gfx_physics_oracle_tasks PRIVATE c_std_17)
+target_link_libraries(gfx_physics_oracle_tasks PUBLIC box2d Threads::Threads)
+add_executable(gfx_physics_oracle_tasks_test TestTaskSystem.c)
+target_link_libraries(gfx_physics_oracle_tasks_test PRIVATE gfx_physics_oracle_tasks)
+add_test(NAME gfx_physics_oracle_tasks COMMAND gfx_physics_oracle_tasks_test)
+
 add_executable(gfx_physics_box2d_oracle Box2DOracle.c)
 target_compile_features(gfx_physics_box2d_oracle PRIVATE c_std_17)
-target_link_libraries(gfx_physics_box2d_oracle PRIVATE box2d)
+target_link_libraries(gfx_physics_box2d_oracle PRIVATE gfx_physics_oracle_tasks)
 
 add_executable(gfx_physics_box2d_units_oracle UnitsOracle.c)
 target_compile_features(gfx_physics_box2d_units_oracle PRIVATE c_std_17)
@@ -170,6 +178,11 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME gfx_physics_oracle_worker_world
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/CheckTaskSystem.py
+            $<TARGET_FILE:gfx_physics_box2d_oracle>
+    )
     add_test(
         NAME gfx_physics_compound_contacts_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
