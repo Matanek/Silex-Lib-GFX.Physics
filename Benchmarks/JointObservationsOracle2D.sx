@@ -1,0 +1,164 @@
+use GFX.Physics
+use STD.Math
+
+func configure(joint:Physics.Joint2D, variant:int, stage:int) {
+    var spring = variant % 2 == 1
+    let limit = variant >= 2
+    var lower = -0.25
+    var upper = 0.4
+    if stage == 6 { spring = !spring
+ lower = -2.8
+ upper = 2.8 }
+    match joint {
+        distance(j) => {
+            j.set_length(1.2)
+            j.set_spring(spring, 3.0, 0.7)
+            if stage == 6 { j.set_limits(limit, 0.01, 10.0) }
+            else { j.set_limits(limit, 0.5, 0.9) }
+        }
+        filter(j) => {}
+        motor(j) => { j.set_offsets(Math.Vec2(0.3,-0.1),0.2) }
+        mouse(j) => { j.set_target(Math.Vec2(0.8,-0.4)) }
+        prismatic(j) => {
+            j.set_spring(spring,3.0,0.7)
+            j.set_limits(limit,lower,upper)
+            j.set_target_translation(0.2)
+        }
+        revolute(j) => { j.set_limits(limit,lower,upper) }
+        weld(j) => {
+            var linear = 0.0
+ var angular = 0.0
+            if spring { linear = 3.0 }
+ if limit { angular = 3.0 }
+            j.set_linear_spring(linear,1.0)
+ j.set_angular_spring(angular,1.0)
+        }
+        wheel(j) => { j.set_spring(spring,3.0,0.7)
+ j.set_limits(limit,lower,upper) }
+    }
+}
+func mutate(joint:Physics.Joint2D) {
+    let first = Math.Vec2(0.4,0.1)
+    let second = Math.Vec2(-0.2,0.3)
+    match joint {
+        distance(j) => { j.set_local_anchors(first,second) }
+        filter(j) => {}
+        motor(j) => { j.set_local_anchors(first,second) }
+        mouse(j) => { j.set_local_anchor(second) }
+        prismatic(j) => { j.set_local_anchors(first,second)
+ j.set_local_axis(Math.Vec2(-0.8,0.6))
+ j.set_reference_angle(0.25) }
+        revolute(j) => { j.set_local_anchors(first,second)
+ j.set_reference_angle(0.25) }
+        weld(j) => { j.set_local_anchors(first,second)
+ j.set_reference_angle(0.25) }
+        wheel(j) => { j.set_local_anchors(first,second)
+ j.set_local_axis(Math.Vec2(-0.8,0.6)) }
+    }
+}
+func record(f:int,g:int,v:int,s:int,joint:Physics.Joint2D) {
+    var measure = 0.0
+ var speed = 0.0
+ var linear = 0.0
+ var angular = 0.0
+    var dp = Math.Vec2()
+    match joint {
+        distance(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+            measure = j.current_length()
+        }
+        filter(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+        }
+        motor(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+        }
+        mouse(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+        }
+        prismatic(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+            measure = j.translation()
+ speed = j.speed()
+        }
+        revolute(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+            measure = j.angle()
+        }
+        weld(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+        }
+        wheel(j) => {
+            dp = j.separation()
+ linear = j.linear_separation()
+ angular = j.angular_separation()
+            measure = j.translation()
+ speed = j.speed()
+        }
+    }
+    print("observe_$(f)_$(g)_$(v)_$(s) $(measure) $(speed) $(linear) $(angular) $(dp.x) $(dp.y)")
+}
+func run_case(f:int,g:int,v:int) {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var kind = Physics.BodyType2D.fixed
+    if g == 1 { kind = Physics.BodyType2D.dynamic }
+    var a = world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type=kind ..create_implicit_collider=false)
+    var b = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider=false)
+    if g == 1 {
+        a.set_mass_properties(Physics.MassProperties2D(2.0,3.0,Math.Vec2(0.1,-0.2)))
+        a.set_velocity(Math.Vec2(0.3,-0.2))
+ a.set_angular_velocity(0.2)
+    }
+    b.set_mass_properties(Physics.MassProperties2D(2.0,3.0,Math.Vec2(0.1,-0.2)))
+    b.set_velocity(Math.Vec2(-0.4,0.7))
+ b.set_angular_velocity(-0.3)
+    if f == 0 { world.create_distance_joint(a,b, Physics.DistanceJoint2DSettings() ..first_anchor=Math.Vec2(-0.2,0.1) ..second_anchor=Math.Vec2(0.3,-0.4) ..length=1.2) }
+    if f == 1 { world.create_filter_joint(a,b) }
+    if f == 2 { world.create_motor_joint(a,b) }
+    if f == 3 { world.create_mouse_joint(b, Physics.MouseJoint2DSettings() ..target=Math.Vec2(0.2,0.3)) }
+    if f == 4 { world.create_prismatic_joint(a,b, Physics.PrismaticJoint2DSettings() ..anchor=Math.Vec2(0.2,0.3) ..axis=Math.Vec2(0.6,0.8)) }
+    if f == 5 { world.create_revolute_joint(a,b, Physics.RevoluteJoint2DSettings() ..anchor=Math.Vec2(0.2,0.3)) }
+    if f == 6 { world.create_weld_joint(a,b, Physics.WeldJoint2DSettings() ..anchor=Math.Vec2(0.2,0.3)) }
+    if f == 7 { world.create_wheel_joint(a,b, Physics.WheelJoint2DSettings() ..anchor=Math.Vec2(0.2,0.3) ..axis=Math.Vec2(0.6,0.8)) }
+    var joints:Physics.Joint2D[] = []
+    world.write_joints(joints)
+    let joint = joints[0]
+    configure(joint,v,0)
+    for stage in 0...8 {
+        if stage == 1 { a.set_position(Math.Vec2(0.2,0.1))
+ a.set_rotation(0.4)
+ b.set_position(Math.Vec2(1.3,-0.8))
+ b.set_rotation(-0.7) }
+        if stage == 2 { mutate(joint)
+ configure(joint,v,2) }
+        if stage == 3 { world.step(0.0,4) }
+        if stage == 4 { world.step(1.0/60.0,4) }
+        if stage == 5 { a.set_position(Math.Vec2(-0.4,0.2))
+ a.set_rotation(-2.8)
+ b.set_position(Math.Vec2(-1.5,0.9))
+ b.set_rotation(3.0) }
+        if stage == 6 { configure(joint,v,6) }
+        if stage == 7 { if g == 1 { a.set_velocity(Math.Vec2())
+ a.set_angular_velocity(0.0) }
+ b.set_velocity(Math.Vec2())
+ b.set_angular_velocity(0.0) }
+        record(f,g,v,stage,joint)
+    }
+}
+func main() {
+    for f in 0...8 { for g in 0...2 { for v in 0...4 { run_case(f,g,v) } } }
+}

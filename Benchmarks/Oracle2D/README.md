@@ -579,3 +579,26 @@ From the workspace root, `python3 Packages/GFX.Physics/Tests/Consumer/check-worl
 accesses; repeat with `--mode release`. The consumer lifetime and Application
 integration tests additionally exercise aliases, callbacks, cycles, snapshots,
 independent worlds and resource finalization.
+
+## Current joint observations
+
+`JointObservationsOracle.c` and `../JointObservationsOracle2D.sx` compare 512
+rows of current measurements, scalar constraint errors and anchor vectors.
+`CheckJointObservations.py` requires every row and finite values, with absolute
+tolerances of 1e-4 for geometry/angles and 1e-3 for speed. The eight families
+cover one or two moving bodies, offset centers, four spring/limit combinations,
+and eight stages: creation, teleportation, frame/target mutation, zero step,
+positive step, angle wrapping, configuration changes and velocity changes.
+
+The reference receives unit rotations built with `cosf`/`sinf`, matching the
+Silex radian inputs; the approximation in `b2MakeRot` would supply different
+physical poses. Weld damping is explicitly equal on both sides. Wheel has no
+translation/speed getters in Box2D 3.1.1; these two fields use public body
+kinematics, while the other joint measurements use the corresponding getters.
+`separation()` is the raw anchor vector, distinct from scalar constraint error.
+
+Build `gfx_physics_box2d_joint_observations_oracle`, run it, and compare its
+output against the Silex witness in Debug and Release. CTest includes the
+comparator's malformed-data and fixed-tolerance checks. From the workspace
+root, `python3 Packages/GFX.Physics/Tests/Consumer/check-joint-observations.py
+--mode debug` verifies 22 stale reads; repeat with `--mode release`.

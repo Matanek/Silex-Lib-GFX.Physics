@@ -35,9 +35,9 @@ hinge.set_motor(3.0, 60.0)
 
 La collision connectée est désactivée par défaut et peut être modifiée à
 l’exécution, sauf pour `FilterJoint2D` dont l’intention reste toujours la
-suppression. Les réactions et mesures décrivent le dernier `step` terminé et
-valent zéro auparavant. `separation()` calcule la séparation courante des
-repères sans exposer les lignes ni les impulsions du solveur.
+suppression. Les réactions décrivent le dernier `step` terminé et valent zéro auparavant.
+Les mesures géométriques lisent les corps dans leur état présent, y compris
+avant le premier pas et après une téléportation ou une mutation des repères.
 
 `world.write_joints(buffer)` énumère tous les joints dans leur ordre stable de
 création. La surcharge `world.write_joints(body, buffer)` ne conserve que ceux
@@ -142,3 +142,43 @@ masse décalé, deux corps mobiles pour motor, forces saturées ou nulles,
 mutation de cible, rotation fixée et warm start désactivé. Il mesure les
 deux corps et les réactions. Les [tests consommateurs](../../Tests/Consumer/Tests/MotorMouse.sx)
 vérifient aussi le réveil et l’invalidation.
+
+## Mesures instantanées et séparation des contraintes
+
+`DistanceJoint2D.current_length()` mesure la distance actuelle entre les ancres.
+`translation()` et `speed()` de prismatic et wheel mesurent le déplacement
+et sa dérivée sur l’axe actuel du premier corps. Cette vitesse inclut les
+vitesses angulaires et la rotation de l’axe lui-même. `RevoluteJoint2D.angle()`
+donne l’angle relatif actuel, après soustraction de la référence et repli
+dans l’intervalle de −π à π. Un pas artificiel n’est pas nécessaire pour
+actualiser ces lectures.
+
+Les huit familles proposent trois observations complémentaires :
+
+- `separation()` donne le vecteur monde de la première ancre vers la seconde ;
+  pour mouse, il va de l’ancre du corps vers la cible.
+- `linear_separation()` donne l’écart scalaire à la contrainte rigide en mètres.
+- `angular_separation()` donne l’écart angulaire à la contrainte en radians.
+
+| Famille | Écart linéaire | Écart angulaire |
+|---|---|---|
+| Distance | Écart absolu à `length` sans ressort ; avec ressort, dépassement des limites actives, sinon zéro | Zéro |
+| Prismatic | Norme combinant écart perpendiculaire et dépassement des limites actives | Angle relatif moins référence, replié |
+| Revolute | Distance entre ancres | Dépassement des limites actives, sinon zéro |
+| Weld | Distance entre ancres si `linear_hertz` vaut zéro, sinon zéro | Angle relatif moins référence si `angular_hertz` vaut zéro, sinon zéro |
+| Wheel | Même mesure linéaire que prismatic | Zéro |
+| Motor, mouse, filter | Zéro | Zéro |
+
+Modifier une pose actualise ces observations sans réécrire les forces ou
+couples du dernier pas. Toute lecture de ces mesures sur un joint détruit, y compris une
+mesure habituellement nulle, échoue avec le diagnostic de handle périmé.
+
+Le [témoin des observations](../../Benchmarks/JointObservationsOracle2D.sx)
+compare 512 lignes en Debug et Release : huit familles, corps fixe ou mobile,
+centres de masse décalés, ancres et axes obliques, limites et ressorts, mutations,
+pas nul et positif, puis rotations autour de la coupure angulaire.
+Les seuils absolus sont 1e-4 m/rad et 1e-3 m/s. Box2D 3.1.1 ne fournit pas
+d’accesseurs translation/vitesse pour wheel : leur référence est calculée
+avec les transformations et vitesses publiques de ses corps.
+Voir aussi les [tests consommateurs](../../Tests/Consumer/Tests/JointObservations.sx)
+et les [accès périmés](../../Tests/Consumer/check-joint-observations.py).

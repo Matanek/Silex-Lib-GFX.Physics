@@ -1,0 +1,68 @@
+use GFX.Physics
+use STD.Math
+
+test "distance observations follow bodies before the first step and after mutation" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var a = world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type=Physics.BodyType2D.fixed)
+    var b = world.create_rigid_body(Physics.RigidBody2DSettings() ..position=Math.Vec2(3.0,0.0))
+    var joint = world.create_distance_joint(a,b,Physics.DistanceJoint2DSettings()
+        ..second_anchor=Math.Vec2(3.0,0.0) ..length=2.0)
+    assert(Math.abs(joint.current_length()-3.0)<0.0001)
+    assert(Math.abs(joint.linear_separation()-1.0)<0.0001)
+    assert(joint.angular_separation()==0.0)
+    b.set_position(Math.Vec2(5.0,0.0))
+    assert(Math.abs(joint.current_length()-5.0)<0.0001)
+    joint.set_spring(true,3.0,0.7)
+    assert(joint.linear_separation()==0.0)
+    joint.set_limits(true,1.0,4.0)
+    assert(Math.abs(joint.linear_separation()-1.0)<0.0001)
+    world.step(0.0)
+    assert(Math.abs(joint.current_length()-5.0)<0.0001)
+}
+
+test "axis speed includes the rotation of its reference frame" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var a = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider=false)
+    var b = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider=false)
+    a.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+    b.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+    var joint = world.create_prismatic_joint(a,b)
+    b.set_position(Math.Vec2(2.0,3.0))
+    a.set_angular_velocity(2.0)
+    b.set_velocity(Math.Vec2(4.0,0.0))
+    assert(Math.abs(joint.translation()-2.0)<0.0001)
+    assert(Math.abs(joint.speed()-10.0)<0.0001)
+    assert(Math.abs(joint.linear_separation()-3.0)<0.0001)
+    joint.set_limits(true,-1.0,1.0)
+    assert(Math.abs(joint.linear_separation()-Math.sqrt(10.0))<0.0001)
+}
+
+test "revolute angle is current while angular separation measures the limit violation" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var a = world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type=Physics.BodyType2D.fixed)
+    var b = world.create_rigid_body()
+    var joint = world.create_revolute_joint(a,b)
+    b.set_rotation(0.75)
+    let angle = joint.angle()+0.0
+    assert(Math.abs(angle-0.75)<0.001)
+    assert(joint.angular_separation()==0.0)
+    joint.set_limits(true,-0.25,0.25)
+    assert(Math.abs(joint.angular_separation()-(angle-0.25))<0.0001)
+    joint.set_reference_angle(0.25)
+    assert(Math.abs(joint.angle()-(angle-0.25))<0.0001)
+}
+
+test "current geometry does not overwrite the reaction of the completed step" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var a = world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type=Physics.BodyType2D.fixed)
+    var b = world.create_rigid_body(Physics.RigidBody2DSettings() ..position=Math.Vec2(2.0,0.0))
+    var joint = world.create_distance_joint(a,b,Physics.DistanceJoint2DSettings()
+        ..second_anchor=Math.Vec2(2.0,0.0) ..length=1.0)
+    assert(joint.constraint_force().length()==0.0)
+    world.step(1.0/60.0)
+    let force = joint.constraint_force().x+0.0
+    assert(Math.abs(force)>0.0)
+    b.set_position(Math.Vec2(4.0,0.0))
+    assert(Math.abs(joint.current_length()-4.0)<0.0001)
+    assert(joint.constraint_force().x==force)
+}

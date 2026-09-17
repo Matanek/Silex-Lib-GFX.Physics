@@ -69,8 +69,8 @@ torque. Mouse, motor, and weld handles expose their pertinent reactions.
 These reactions describe the most recently completed `step`; they are zero
 before a positive-duration step. Mouse targets and supported motor speeds can
 be changed through their typed handles, which wakes the connected bodies.
-`separation()` reports the current anchor separation without exposing solver
-rows or accumulated impulses.
+Geometric measurements read the current body state, including before the
+first step and after teleportation or local-frame mutation.
 
 `world.write_joints(buffer)` enumerates all joints in stable creation order;
 the `world.write_joints(body, buffer)` overload retains only joints attached to
@@ -186,3 +186,41 @@ mass, two moving bodies for motor, saturated or zero forces, target mutation,
 fixed rotation and disabled warm start. It measures both bodies and joint
 reactions. [Consumer tests](../../Tests/Consumer/Tests/MotorMouse.sx) also check
 waking and invalidation.
+
+## Current measurements and constraint separation
+
+`DistanceJoint2D.current_length()` measures the current anchor distance.
+Prismatic and wheel `translation()` and `speed()` measure displacement and its
+derivative along the first body's current axis. This speed includes angular
+velocities and the rotation of the axis itself. `RevoluteJoint2D.angle()` gives
+the current relative angle minus its reference, wrapped between −π and π.
+No artificial step is needed to update these readings.
+
+All eight families provide three complementary observations:
+
+- `separation()` gives the world vector from the first anchor to the second;
+  for mouse, it points from the body's anchor to the target.
+- `linear_separation()` gives the scalar rigid-constraint error in meters.
+- `angular_separation()` gives the angular constraint error in radians.
+
+| Family | Linear error | Angular error |
+|---|---|---|
+| Distance | Absolute error from `length` without a spring; with a spring, active limit violation, otherwise zero | Zero |
+| Prismatic | Magnitude combining perpendicular error and active limit violation | Wrapped relative angle minus reference |
+| Revolute | Anchor distance | Active limit violation, otherwise zero |
+| Weld | Anchor distance when `linear_hertz` is zero, otherwise zero | Relative angle minus reference when `angular_hertz` is zero, otherwise zero |
+| Wheel | Same linear measurement as prismatic | Zero |
+| Motor, mouse, filter | Zero | Zero |
+
+Changing a pose updates these observations without rewriting the previous
+step's forces or torques. Every measurement read on a destroyed joint fails with the stale
+handle diagnostic, including measurements that normally return zero.
+
+The [observation witness](../../Benchmarks/JointObservationsOracle2D.sx) compares
+512 rows in Debug and Release: eight families, fixed or moving first bodies,
+offset centers of mass, oblique anchors and axes, limits and springs, mutations,
+zero and positive steps, and rotations across the angle wrap boundary.
+Absolute tolerances are 1e-4 m/rad and 1e-3 m/s. Box2D 3.1.1 has no wheel
+translation/speed getters: their reference uses public body transformations
+and velocities. See the [consumer tests](../../Tests/Consumer/Tests/JointObservations.sx)
+and [stale reads](../../Tests/Consumer/check-joint-observations.py).

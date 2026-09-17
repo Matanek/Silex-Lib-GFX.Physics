@@ -607,16 +607,48 @@ package class JointStore2D {
         return self.joints[self.require(id)].reaction_torque
     }
 
+    // Geometric observations use the current bodies, independently of step history.
     func current_translation(id:JointId2D) float {
-        return self.joints[self.require(id)].current_translation
+        let joint = self.joints[self.require(id)]
+        let delta = self.separation(id)
+        if joint.kind == JointKind2D.distance { return delta.length() }
+        let first = self.bodies.require(joint.first_body)
+        return delta.dot(joint_world_vector(self.bodies, first, joint.local_axis))
     }
 
     func current_speed(id:JointId2D) float {
-        return self.joints[self.require(id)].current_speed
+        let joint = self.joints[self.require(id)]
+        let first = self.bodies.require(joint.first_body)
+        let second = self.bodies.require(joint.second_body)
+        let axis = joint_world_vector(self.bodies, first, joint.local_axis)
+        let first_radius = joint_world_vector(self.bodies, first,
+            joint.first_anchor.subtract(Math.Vec2(self.bodies.local_centers_x[first], self.bodies.local_centers_y[first])))
+        let second_radius = joint_world_vector(self.bodies, second,
+            joint.second_anchor.subtract(Math.Vec2(self.bodies.local_centers_x[second], self.bodies.local_centers_y[second])))
+        var first_velocity = Math.Vec2()
+        var second_velocity = Math.Vec2()
+        var angular_velocity = 0.0
+        if self.bodies.awake[first] {
+            first_velocity = joint_velocity_on_radius(self.bodies, first, first_radius)
+            angular_velocity = self.bodies.angular_velocities[first]
+        }
+        if self.bodies.awake[second] {
+            second_velocity = joint_velocity_on_radius(self.bodies, second, second_radius)
+        }
+        return self.separation(id).dot(Math.Vec2(-angular_velocity * axis.y, angular_velocity * axis.x)) +
+            axis.dot(second_velocity.subtract(first_velocity))
     }
 
     func current_angle(id:JointId2D) float {
-        return self.joints[self.require(id)].current_angle
+        let joint = self.joints[self.require(id)]
+        let first = self.bodies.require(joint.first_body)
+        let second = self.bodies.require(joint.second_body)
+        let relative = joint_solver_atan(
+            self.bodies.rotation_sines[second] * self.bodies.rotation_cosines[first] -
+                self.bodies.rotation_cosines[second] * self.bodies.rotation_sines[first],
+            self.bodies.rotation_cosines[second] * self.bodies.rotation_cosines[first] +
+                self.bodies.rotation_sines[second] * self.bodies.rotation_sines[first])
+        return unwind_joint_angle(relative - joint.reference_angle)
     }
 
     func motor_force(id:JointId2D) float {
@@ -769,12 +801,44 @@ package class JointStore2D {
         ).subtract(first_point)
     }
 
+    func linear_separation(id:JointId2D) float {
+        let joint = self.joints[self.require(id)]
+        if joint.kind == JointKind2D.motor || joint.kind == JointKind2D.mouse ||
+            joint.kind == JointKind2D.filter { return 0.0 }
+        let delta = self.separation(id)
+        if joint.kind == JointKind2D.distance {
+            let length = delta.length()
+            if !joint.spring_enabled { return Math.abs(length - joint.scalar_target) }
+            if !joint.limit_enabled { return 0.0 }
+            return Math.max(0.0, Math.max(joint.minimum - length, length - joint.maximum))
+        }
+        if joint.kind == JointKind2D.weld {
+            if joint.spring_hertz > 0.0 { return 0.0 }
+            return delta.length()
+        }
+        if joint.kind == JointKind2D.revolute { return delta.length() }
+        let first = self.bodies.require(joint.first_body)
+        let axis = joint_world_vector(self.bodies, first, joint.local_axis)
+        let perpendicular = delta.dot(Math.Vec2(-axis.y, axis.x))
+        var limit = 0.0
+        if joint.limit_enabled {
+            let translation = delta.dot(axis)
+            limit = Math.max(0.0, Math.max(joint.minimum - translation, translation - joint.maximum))
+        }
+        return Math.sqrt(perpendicular * perpendicular + limit * limit)
+    }
+
     func angular_separation(id:JointId2D) float {
         let joint = self.joints[self.require(id)]
-        let first = self.bodies.require(joint.first_body)
-        let second = self.bodies.require(joint.second_body)
-        return self.bodies.rotations[second] -
-            self.bodies.rotations[first] - joint.reference_angle
+        if joint.kind == JointKind2D.prismatic { return self.current_angle(id) }
+        if joint.kind == JointKind2D.weld && joint.angular_hertz == 0.0 {
+            return self.current_angle(id)
+        }
+        if joint.kind == JointKind2D.revolute && joint.limit_enabled {
+            let angle = self.current_angle(id)
+            return Math.max(0.0, Math.max(joint.minimum - angle, angle - joint.maximum))
+        }
+        return 0.0
     }
 
     func set_target(id:JointId2D, target:Math.Vec2) {
@@ -2228,6 +2292,7 @@ public class DistanceJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2300,6 +2365,7 @@ public class MotorJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2344,7 +2410,8 @@ public class MouseJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
-    func angular_separation() float { return 0.0 }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
+    func angular_separation() float { return self.store.angular_separation(self.id) }
     func target() Math.Vec2 { return self.store.linear_target(self.id) }
     func set_target(target:Math.Vec2) { self.store.set_target(self.id, target) }
     func spring_hertz() float { return self.store.spring_hertz(self.id) }
@@ -2383,6 +2450,7 @@ public class FilterJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2432,6 +2500,7 @@ public class PrismaticJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2511,6 +2580,7 @@ public class RevoluteJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2587,6 +2657,7 @@ public class WeldJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
@@ -2646,6 +2717,7 @@ public class WheelJoint2D {
     func constraint_force() Math.Vec2 { return self.store.reaction_force(self.id) }
     func constraint_torque() float { return self.store.reaction_torque(self.id) }
     func separation() Math.Vec2 { return self.store.separation(self.id) }
+    func linear_separation() float { return self.store.linear_separation(self.id) }
     func angular_separation() float {
         return self.store.angular_separation(self.id)
     }
