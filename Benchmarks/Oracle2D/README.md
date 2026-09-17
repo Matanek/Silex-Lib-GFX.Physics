@@ -530,3 +530,16 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckSpeculativeContacts.py /tm
 
 Repeat with `--release`. The six comparator tests reject missing cases, extra
 cases, duplicates, invalid counts, non-finite values and numerical violations.
+
+## Filter-joint contact lifecycle
+
+`FilterJointOracle.c` preserves raw Box2D behavior by default; `--immediate`
+explicitly applies collision-policy updates through public Box2D calls.
+`../FilterJointOracle2D.sx` exercises the immediate policy implemented by Physics.
+Run both C modes and the Silex witness, then pass the three output files in that
+order to `CheckFilterJoint.py`. It checks 24 stages, exact contact/event identity
+masks and fixed tolerances (1e-4 position, 1e-3 velocity, 2e-3 impulse). It also
+requires the nine known raw-reference differences, including retained physical
+response after filter creation and deferred rediscovery after destruction.
+This is an explicit usage mapping, not raw lifecycle parity. See the
+[filter-joint guide](../../Docs/EN/FilterJoints.md).
