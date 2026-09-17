@@ -8,6 +8,7 @@ import math
 import platform
 from pathlib import Path
 import statistics
+import struct
 import subprocess
 import sys
 
@@ -19,20 +20,65 @@ def execute(binary, *arguments):
     return result.stdout
 
 
-def states(output):
+COUNT, PASSES, PATTERNS = 2048, 2048, 16
+WEIGHTS = (1, 2, 3, 5, 7, 11, 13, 17, 19, 23)
+
+
+def float32(value):
+    if not math.isfinite(value):
+        raise ValueError("non-finite float32 state")
+    try:
+        return struct.unpack("<f", struct.pack("<f", value))[0]
+    except OverflowError as error:
+        raise ValueError("state outside float32 range") from error
+
+
+def states(output, full=False):
     records = {}
     for line in output.splitlines():
         fields = line.split()
         if len(fields) != 13 or fields[0] != "STATE":
             raise ValueError(f"invalid state record: {line}")
         key = (int(fields[1]), int(fields[2]))
-        values = tuple(map(float, fields[3:]))
+        # Both emitters print float32 states, using different decimal formats.
+        # Nine significant C digits and Silex's format round-trip to float32.
+        values = tuple(float32(float(value)) for value in fields[3:])
         if key in records or not all(map(math.isfinite, values)):
             raise ValueError(f"duplicate/non-finite state: {key}")
         records[key] = values
-    if set(records) != {(p, i) for p in range(8) for i in range(16)}:
+    if set(records) != {(p, i) for p in range(PASSES if full else 8) for i in range(PATTERNS)}:
         raise ValueError("incomplete state coverage")
     return records
+
+
+def check_totals(records):
+    for (step, index), values in records.items():
+        previous = 0.0 if step == 0 else records[step - 1, index][8]
+        if values[8] != float32(previous + values[6]):
+            raise ValueError(f"incorrect total impulse recurrence: {(step, index)}")
+
+
+def replay(binary, candidate):
+    rows = ["STATE " + " ".join(map(str, (*key, *values)))
+            for key, values in sorted(candidate.items())]
+    result = subprocess.run([str(binary), "--check-replay"], input="\n".join(rows) + "\n",
+                            capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise ValueError(f"oracle replay exit {result.returncode}: {result.stderr}")
+    return states(result.stdout, full=True)
+
+
+def signature_interval(records):
+    total = magnitude = 0.0
+    for index in range(PATTERNS):
+        terms = [value * weight for value, weight in zip(records[PASSES - 1, index], WEIGHTS, strict=True)]
+        total += sum(terms)
+        magnitude += sum(map(abs, terms))
+    # At most two float32 operations per weighted term. This conservative
+    # bound also covers decimal signature printing, as in RunStageKernels.
+    repeats = COUNT // PATTERNS
+    allowance = (2 * len(WEIGHTS) * 2**-23 * magnitude + 1e-5) * repeats
+    return total * repeats, allowance
 
 
 def compare_states(reference, candidate):
@@ -43,8 +89,8 @@ def compare_states(reference, candidate):
         for field, (expected, actual) in enumerate(zip(reference[key], candidate[key], strict=True)):
             error = abs(actual - expected)
             maximum_error = max(maximum_error, error)
-            # Decimal print rounding plus float32 arithmetic, not a physical
-            # settling tolerance. Check every velocity and impulse every pass.
+            # The original local arithmetic allowance is unchanged. Long
+            # runs use identical-input replay, not a looser settling tolerance.
             if not math.isfinite(actual) or error > 2e-6:
                 raise ValueError(f"{key} field {field}: {actual} != {expected}")
     return maximum_error
@@ -60,6 +106,18 @@ def timing(output):
     if not math.isfinite(elapsed) or elapsed <= 0 or not math.isfinite(signature):
         raise ValueError("invalid timing/signature")
     return {"engine": fields[1], "layout": fields[2], "elapsed_ms": elapsed, "signature": signature}
+
+
+def checked_timing(output, name, signature):
+    record = timing(output)
+    expected_engine = "silex" if name.startswith("silex") else "clang"
+    expected_layout = "packed4" if name == "clang-packed" else "slots8"
+    if (record["engine"], record["layout"]) != (expected_engine, expected_layout):
+        raise ValueError(f"wrong executable metadata for {name}")
+    expected, allowance = signature
+    if abs(record["signature"] - expected) > allowance:
+        raise ValueError(f"timed signature differs from verified final states: {name}")
+    return record
 
 
 def summary(records):
@@ -96,35 +154,50 @@ def main():
     if args.baseline_silex:
         binaries["silex-before"] = args.baseline_silex
     reference = states(execute(args.box2d_check, "--check"))
-    result = {"schema": 1, "captured_at": datetime.now(timezone.utc).isoformat(),
+    full_reference = states(execute(args.box2d_check, "--check-full"), full=True)
+    check_totals(reference)
+    check_totals(full_reference)
+    result = {"schema": 2, "captured_at": datetime.now(timezone.utc).isoformat(),
               "host": platform.platform(), "machine": platform.machine(),
               "workload": {"contacts": 2048, "passes": 2048, "workers": 1,
                            "float_bits": 32, "fma": True, "allocation_in_kernel": False},
               "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
+              "numerical_budgets": {"local_absolute": 2e-6, "state_type": "float32",
+                                    "total_recurrence": "exact float32", "full": "identical-input replay"},
               "correctness": {}, "executables": {}, "warmup": {}, "samples": {}, "summary": {}}
     for name, binary in {**binaries, "box2d-check": args.box2d_check}.items():
         result["executables"][name] = {"path": str(binary), "sha256": hashlib.sha256(binary.read_bytes()).hexdigest()}
+    signatures = {}
     for name, binary in binaries.items():
-        error = compare_states(reference, states(execute(binary, "--check")))
-        result["correctness"][name] = {"records": len(reference), "max_absolute_error": error}
-        print(f"PASS {name}: 128 records / 1280 scalar comparisons, maximum error {error:g}", flush=True)
+        short = states(execute(binary, "--check"))
+        check_totals(short)
+        short_error = compare_states(reference, short)
+        full = states(execute(binary, "--check-full"), full=True)
+        check_totals(full)
+        full_error = compare_states(replay(args.box2d_check, full), full)
+        independent_error = max(abs(a - b) for key in full
+                                for a, b in zip(full[key], full_reference[key], strict=True))
+        signatures[name] = signature_interval(full)
+        result["correctness"][name] = {
+            "short": {"records": len(short), "max_absolute_error": short_error},
+            "full": {"records": len(full), "max_local_error": full_error,
+                     "independent_trajectory_max_error": independent_error,
+                     "oracle": "every transition from identical candidate inputs",
+                     "total_recurrence": "exact float32"},
+            "signature_center": signatures[name][0], "signature_allowance": signatures[name][1]}
+        print(f"PASS {name}: 128 short states and 32768 replayed transitions; local error {full_error:g}", flush=True)
     if not args.check_only:
         # Warm-up excluded. Serial processes, rotating order, no compilation.
         for name, binary in binaries.items():
-            result["warmup"][name] = timing(execute(binary))
+            result["warmup"][name] = checked_timing(execute(binary), name, signatures[name])
             result["samples"][name] = []
         names = list(binaries)
-        signature = result["warmup"]["clang-slots"]["signature"]
         for sample in range(7):
             offset = sample % len(names)
             for name in names[offset:] + names[:offset]:
-                record = timing(execute(binaries[name]))
-                expected_engine = "silex" if name.startswith("silex") else "clang"
-                expected_layout = "packed4" if name == "clang-packed" else "slots8"
-                if (record["engine"], record["layout"]) != (expected_engine, expected_layout):
-                    raise ValueError(f"wrong executable metadata for {name}")
-                if abs(record["signature"] - signature) > 1e-5:
-                    raise ValueError(f"different final signature: {name}: {record['signature']} != {signature}")
+                record = checked_timing(execute(binaries[name]), name, signatures[name])
+                if record["signature"] != result["warmup"][name]["signature"]:
+                    raise ValueError(f"unstable final signature: {name}")
                 result["samples"][name].append(record)
             print(f"sample {sample + 1}/7 complete", flush=True)
         for name in names:

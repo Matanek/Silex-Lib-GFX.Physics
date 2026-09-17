@@ -213,8 +213,12 @@ static double seconds(void)
 
 int main(int argc, char** argv)
 {
-    bool check = argc > 1 && (strcmp(argv[1], "--check") == 0 || strcmp(argv[1], "--check-full") == 0);
-    bool check_full = argc > 1 && strcmp(argv[1], "--check-full") == 0;
+    bool replay = argc > 1 && strcmp(argv[1], "--check-replay") == 0;
+    bool check_full = replay || (argc > 1 && strcmp(argv[1], "--check-full") == 0);
+    bool check = check_full || (argc > 1 && strcmp(argv[1], "--check") == 0);
+#ifdef BOX2D_CHECK
+    if (!check) abort();
+#endif
     int64_t count = check ? 16 : 2048, passes = check && !check_full ? 8 : 2048;
     State* states = calloc((size_t)count * 2, sizeof(State));
     Constraint* constraints = calloc((size_t)count, sizeof(Constraint));
@@ -252,6 +256,28 @@ int main(int argc, char** argv)
                     (long long)pass, (long long)i, a.vx, a.vy, a.w, b.vx, b.vy, b.w,
                     p.normal, p.tangent, p.total, p.rolling);
             }
+            // Reset the recurrence to the candidate's observed state so the
+            // next pass compares arithmetic from identical float32 inputs.
+            if (replay) {
+                for (int64_t i = 0; i < count; ++i) {
+                    long long input_pass, input_index;
+                    State* a = states + i * 2;
+                    State* b = a + 1;
+                    Impulses* p = impulses + i;
+                    if (scanf(" STATE %lld %lld %f %f %f %f %f %f %f %f %f %f",
+                        &input_pass, &input_index, &a->vx, &a->vy, &a->w,
+                        &b->vx, &b->vy, &b->w, &p->normal, &p->tangent, &p->total, &p->rolling) != 12 ||
+                        input_pass != pass || input_index != i ||
+                        !isfinite(a->vx) || !isfinite(a->vy) || !isfinite(a->w) ||
+                        !isfinite(b->vx) || !isfinite(b->vy) || !isfinite(b->w) ||
+                        !isfinite(p->normal) || !isfinite(p->tangent) ||
+                        !isfinite(p->total) || !isfinite(p->rolling)) abort();
+                }
+            }
+        }
+        if (replay) {
+            char extra;
+            if (scanf(" %c", &extra) != EOF) abort();
         }
     } else {
         run_kernel(states, count * 2, constraints, impulses, count, passes);

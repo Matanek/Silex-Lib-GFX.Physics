@@ -50,6 +50,26 @@ trajectories, so the 16-body correctness run covers the timed patterns.
 
 ## Numerical verification
 
+`RunContactKernel.py` checks all ten fields for 128 short states and
+32,768 long transitions through the pinned Box2D contact solver. Text values
+are first read back as float32, so different round-tripping decimal formats
+do not create false errors. The original absolute allowance of `2e-6` applies
+to every field, including the long replay from identical preceding inputs.
+The accumulated total impulse additionally obeys the exact float32 recurrence
+`total[n] = total[n-1] + normal[n]`, starting from zero.
+
+The independent long Contact trajectory remains diagnostic: the C witness
+with contraction can diverge cumulatively while each local transition passes.
+A counterfactual build with `-ffp-contract=off` removes that divergence in the
+fixture; this does not establish identical trajectories for arbitrary worlds.
+Each timed Contact signature is bound to its own binary's 16 verified final
+patterns, repeated 128 times. Its reduction allowance is
+`(2 * 10 * epsilon32 * sum(abs(weighted terms)) + 1e-5) * 128`, covering
+float32 products/sums and decimal output, not a physical-state tolerance.
+The signature must also remain exactly equal across that binary's excluded
+warmup and seven measured processes. A state error fails before any timing;
+a signature error invalidates the campaign.
+
 `RunStageKernels.py` checks every field in the first eight passes, then all
 32,768 transitions of the 16-pattern, 2,048-pass run. For the long run, the
 reference replays each transition from the candidate's preceding state through

@@ -324,8 +324,15 @@ each of eight alternating bias/relaxation passes for sixteen contacts against
 the **actual unmodified Box2D function**. Fixtures include separated and
 penetrating contacts, zero inverse mass/inertia, friction clamps, an offset
 anchor, delta rotation, tangent speed and rolling resistance. The 2e-6
-absolute tolerance covers float32 arithmetic/FMA and decimal output, not
-different physical trajectories. Signed zero is compared numerically.
+absolute tolerance covers local float32 arithmetic/FMA. Text states are
+normalized to float32 before comparison; signed zero compares numerically.
+The long check verifies all 32,768 transitions by replaying actual Box2D from
+the candidate's preceding states, retaining the same `2e-6` allowance. Total
+impulse accumulation is also checked exactly in float32. Independent long
+trajectory differences remain diagnostic. Each timing signature is bound to
+its own fully verified final states and must remain exactly stable between
+processes. See [numerical verification](StageKernels.md#numerical-verification)
+for the reduction bound and the FMA counterfactual.
 
 The timing uses 2,048 independent contacts and 2,048 passes, one worker,
 float32, and no allocation or output inside the measured kernel. The bodies'
