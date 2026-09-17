@@ -78,11 +78,9 @@ matching scenario in each executable:
 ```
 
 The other common options are `--sparse-1000`, `--sparse-5000`,
-`--sparse-10000`, `--pile-1000`, and `--circle-5000`. The Silex witness also
-accepts `--workers-2` or `--workers-4`; omitting both keeps one worker. Box2D
-remains at one worker until a benchmark-only task adapter is added. Never
-compare its one-worker timing to a multi-worker Silex run without naming that
-distinction.
+`--sparse-10000`, `--pile-1000`, and `--circle-5000`. Both corpus witnesses accept `--workers-2` or `--workers-4`; omitting
+both keeps one worker. Box2D uses the benchmark-only persistent task adapter.
+Compare timings only with matching worker counts.
 
 The Silex `--box2d-parity` option is required for direct timing comparisons:
 it matches gravity, contact stiffness, unit dynamic-body mass and world sleep
@@ -655,3 +653,29 @@ python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelThresholds.py -
 Use `--probe` for one threshold case per workload before the full grid.
 These are correctness witnesses, not performance measurements or proof of
 every joint family, CCD, sensors, callback order or lifecycle transitions.
+
+## Parallel lifecycle traces
+
+`ParallelLifecycle2D.sx` compares each body, contact, manifold, impulse and
+ordered event between independent sequential and parallel worlds over 44
+steps. It also compares custom-filter/pre-solve callback order, sensor events,
+CCD work, disabled bodies, retained snapshots after destruction/recreation,
+sleep/wake transitions and a zero-time step. A background of 16384 independent
+bodies keeps integration dispatch active; the contact and joint constraint
+thresholds are exercised separately by `ParallelThresholds2D.sx`.
+
+From the workspace root (or the Spec Worktree group during qualification):
+
+```text
+silex compile Packages/GFX.Physics/Benchmarks/ParallelLifecycle2D.sx --backend llvm --debug -o /private/tmp/physics-lifecycle-debug
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelLifecycle.py --binary /private/tmp/physics-lifecycle-debug --report /private/tmp/physics-lifecycle-debug.json
+silex compile Packages/GFX.Physics/Benchmarks/ParallelLifecycle2D.sx --backend llvm --release -o /private/tmp/physics-lifecycle-release
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelLifecycle.py --binary /private/tmp/physics-lifecycle-release --report /private/tmp/physics-lifecycle-release.json --reference /private/tmp/physics-lifecycle-debug.json
+```
+
+Each checker runs two independent processes at two and four workers. It stores
+compressed full traces and requires identical hashes across workers,
+repetitions and, with `--reference`, builds. Every positive step must dispatch;
+the zero-time step must not. The witness asserts that every named lifecycle
+channel was exercised. These are correctness checks, not timing measurements
+or an inter-engine comparison.

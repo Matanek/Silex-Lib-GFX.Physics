@@ -1,0 +1,320 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(name:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => { for argument in arguments { if argument == name { return true } } }
+    }
+    return false
+}
+class Recorder {
+    var values:float[] = []
+    func pair(channel:float,pair:Physics.ContactPairSnapshot2D) {
+        self.values.append(channel)
+        self.values.append(pair.first().application_id! as float)
+        self.values.append(pair.second().application_id! as float)
+    }
+    func filter(pair:Physics.ContactPairSnapshot2D) bool {
+        self.pair(1.0,pair)
+        return true
+    }
+    func solve(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        self.pair(2.0,input.pair())
+        self.values.append(input.manifold.normal.x)
+        self.values.append(input.manifold.normal.y)
+        self.values.append(input.manifold.point_count() as float)
+        for point in input.manifold.points { self.values.append(point.separation) }
+        return Physics.ContactDecision2D() ..friction = 0.2
+    }
+}
+class Fixture {
+    var world:Physics.World2D
+    var bodies:Physics.RigidBody2D[] = []
+    var recorder:Recorder
+    var sleeper:int = 0
+    var projectile:int = 0
+    var visitor:int = 0
+    var compound:int = 0
+    var filter_joint:Physics.FilterJoint2D? = null
+    var saved_contacts:Physics.ContactBeginEvent2D[] = []
+    var saved_sensors:Physics.SensorBeginEvent2D[] = []
+    var saw_sleep:bool = false
+    var saw_hit:bool = false
+    var saw_sensor_begin:bool = false
+    var saw_sensor_end:bool = false
+    var saw_callback:bool = false
+    var saw_ccd:bool = false
+    init(workers:int) {
+        self.world = Physics.World2D(gravity:Math.Vec2())
+        self.world.enable_parallelism(workers)
+        self.recorder = Recorder()
+        self.world.set_custom_filter(self.recorder.filter)
+        self.world.set_pre_solve(self.recorder.solve)
+        for i in 0...16_384 {
+            self.bodies.append(self.world.create_rigid_body(Physics.RigidBody2DSettings()
+                ..position = Math.Vec2(i as float*4.0,100.0)
+                ..velocity = Math.Vec2(0.1,0.0) ..mass = 1.0
+                ..create_implicit_collider = false ..allow_sleep = false
+                ..application_id = i as uint64))
+        }
+        self.sleeper = self.bodies.count()
+        self.add(-100.0,0.0,false,1000000)
+        self.bodies[self.sleeper].set_sleep_enabled(true)
+        self.add(-40.0,0.0,true,1000001,Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.1,2.0))))
+        self.projectile = self.bodies.count()
+        self.add(-42.0,0.0,false,1000002,Physics.Shape2D.circle(Physics.Circle2D(0.1)))
+        self.bodies[self.projectile].set_velocity(Math.Vec2(300.0,0.0))
+        self.add(-60.0,0.0,true,1000003,Physics.Shape2D.circle(Physics.Circle2D(0.75)),true)
+        self.visitor = self.bodies.count()
+        self.add(-60.0,0.0,false,1000004)
+        var support = self.add(-20.0,0.0,true,1000005,Physics.Shape2D.circle(Physics.Circle2D(0.1)))
+        for side in 0...2 {
+            let x = -2.0+side as float*4.0
+            self.world.create_collider(support,Physics.Collider2DSettings()
+                ..shape = Physics.Shape2D.polygon(Physics.Polygon2D([
+                    Math.Vec2(x-0.5,-0.5),Math.Vec2(x+0.5,-0.5),
+                    Math.Vec2(x+0.5,0.5),Math.Vec2(x-0.5,0.5)]))
+                ..application_id = (2000000+side) as uint64
+                ..enable_contact_events = true ..enable_custom_filter = true ..enable_pre_solve = true)
+        }
+        self.compound = self.bodies.count()
+        self.add(-20.0,0.9,false,1000006,Physics.Shape2D.box(Physics.Box2D(Math.Vec2(6.0,1.0))))
+    }
+    func add(x:float,y:float,fixed:bool,id:uint64,
+        shape:Physics.Shape2D = Physics.Shape2D.circle(Physics.Circle2D(0.5)),sensor:bool = false) Physics.RigidBody2D {
+        var settings = Physics.RigidBody2DSettings() ..position = Math.Vec2(x,y)
+            ..application_id = id ..create_implicit_collider = false
+            ..allow_sleep = false ..enable_move_events = true
+        if fixed { settings.body_type = Physics.BodyType2D.fixed }
+        var body = self.world.create_rigid_body(settings)
+        self.world.create_collider(body,Physics.Collider2DSettings()
+            ..shape = shape ..application_id = id ..is_sensor = sensor
+            ..enable_contact_events = true ..enable_hit_events = true ..enable_sensor_events = true
+            ..enable_custom_filter = true ..enable_pre_solve = true)
+        self.bodies.append(body)
+        return body
+    }
+    func before(step:int) {
+        self.recorder.values.clear()
+        if step == 1 {
+            self.bodies[self.visitor].set_position(Math.Vec2(-65.0,0.0))
+            self.filter_joint = self.world.create_filter_joint(self.bodies[self.compound-1],self.bodies[self.compound])
+        }
+        if step == 2 {
+            self.bodies[self.visitor].set_position(Math.Vec2(-60.0,0.0))
+            self.world.destroy_joint(self.filter_joint!)
+            assert(!self.filter_joint!.is_valid())
+        }
+        if step == 3 { self.bodies[self.visitor].set_enabled(false) }
+        if step == 4 { self.bodies[self.visitor].set_enabled(true) }
+        if step == 5 {
+            self.world.destroy_rigid_body(self.bodies[self.visitor])
+            self.add(-60.0,0.0,false,1000010)
+            assert(!self.bodies[self.visitor].is_valid())
+            assert(self.saved_sensors.count() > 0)
+            assert(!self.saved_sensors[0].visitor_body().is_valid())
+            assert(self.saved_sensors[0].visitor().body_application_id! == 1000004)
+        }
+        if step == 6 {
+            self.world.destroy_rigid_body(self.bodies[self.compound])
+            assert(!self.bodies[self.compound].is_valid())
+            var retained = 0
+            for event in self.saved_contacts {
+                if event.pair().second().body_application_id! == 1000006 {
+                    assert(!event.second_body().is_valid())
+                    retained++
+                }
+            }
+            assert(retained == 2)
+        }
+        if step == 41 {
+            assert(!self.bodies[self.sleeper].is_awake())
+            self.bodies[self.sleeper].set_velocity(Math.Vec2(1.0,0.0))
+            assert(self.bodies[self.sleeper].is_awake())
+        }
+    }
+    func after(step:int) {
+        if step == 0 {
+            assert(self.world.ccd_pair_test_count() > 0)
+            assert(self.bodies[self.projectile].position().x < -40.0)
+            self.world.write_contact_begin_events(self.saved_contacts)
+            self.world.write_sensor_begin_events(self.saved_sensors)
+        }
+        self.saw_ccd = self.saw_ccd || self.world.ccd_pair_test_count() > 0
+        self.saw_callback = self.saw_callback || self.recorder.values.count() > 0
+        var moves:Physics.BodyMoveEvent2D[] = []
+        self.world.write_body_move_events(moves)
+        for event in moves { if event.fell_asleep() { self.saw_sleep = true } }
+        var hits:Physics.ContactHitEvent2D[] = []
+        self.world.write_contact_hit_events(hits)
+        self.saw_hit = self.saw_hit || hits.count() > 0
+        var begins:Physics.SensorBeginEvent2D[] = []
+        var ends:Physics.SensorEndEvent2D[] = []
+        self.world.write_sensor_begin_events(begins)
+        self.world.write_sensor_end_events(ends)
+        self.saw_sensor_begin = self.saw_sensor_begin || begins.count() > 0
+        self.saw_sensor_end = self.saw_sensor_end || ends.count() > 0
+    }
+}
+func same_pair(a:Physics.ContactPairSnapshot2D,b:Physics.ContactPairSnapshot2D) {
+    assert(a.first().application_id == b.first().application_id)
+    assert(a.second().application_id == b.second().application_id)
+    assert(a.first().body_application_id == b.first().body_application_id)
+    assert(a.second().body_application_id == b.second().body_application_id)
+}
+func same_manifold(a:Physics.Manifold2D,b:Physics.Manifold2D,dump:bool = false) {
+    if dump { print("manifold $(a.normal.x) $(a.normal.y) $(a.point_count())") }
+    assert(a.normal == b.normal && a.point_count() == b.point_count())
+    for i in 0...a.point_count() {
+        assert(a.points[i].point == b.points[i].point)
+        assert(a.points[i].separation == b.points[i].separation)
+        if dump { print("point $(a.points[i].point.x) $(a.points[i].point.y) $(a.points[i].separation)") }
+    }
+}
+func compare(a:Fixture,b:Fixture,dump:bool) {
+    assert(a.bodies.count() == b.bodies.count())
+    for i in 0...a.bodies.count() {
+        var first = a.bodies[i]
+        var second = b.bodies[i]
+        assert(first.is_valid() == second.is_valid())
+        if !first.is_valid() {
+            if dump { print("invalid $(i)") }
+            continue
+        }
+        assert(first.position() == second.position())
+        assert(first.velocity() == second.velocity())
+        assert(first.rotation() == second.rotation())
+        assert(first.angular_velocity() == second.angular_velocity())
+        assert(first.is_awake() == second.is_awake())
+        if dump { print("body $(i) $(first.position().x) $(first.position().y) $(first.velocity().x) $(first.velocity().y) $(first.rotation()) $(first.angular_velocity()) $(first.is_awake())") }
+        assert(Math.abs(first.position().x) < 1_000_000.0 && Math.abs(first.position().y) < 1_000_000.0)
+        assert(Math.abs(first.velocity().x) < 1_000_000.0 && Math.abs(first.velocity().y) < 1_000_000.0)
+    }
+    assert(a.world.soft_step_stage_count() == b.world.soft_step_stage_count())
+    for i in 0...a.world.soft_step_stage_count() { assert(a.world.soft_step_stage_at(i) == b.world.soft_step_stage_at(i)) }
+    var ac:Physics.Contact2D[] = []
+    var bc:Physics.Contact2D[] = []
+    a.world.write_contacts(ac)
+    b.world.write_contacts(bc)
+    assert(ac.count() == bc.count())
+    for i in 0...ac.count() {
+        same_pair(ac[i].pair(),bc[i].pair())
+        if dump { print("contact $(ac[i].pair().first().body_application_id!) $(ac[i].pair().second().body_application_id!) $(ac[i].pair().first().application_id!) $(ac[i].pair().second().application_id!)") }
+        same_manifold(ac[i].manifold(),bc[i].manifold(),dump)
+        // Pointwise assertions also identify the impulse channel under test.
+        let an = ac[i].normal_impulses()
+        let bn = bc[i].normal_impulses()
+        let at = ac[i].tangent_impulses()
+        let bt = bc[i].tangent_impulses()
+        assert(an.count() == bn.count() && at.count() == bt.count())
+        for point in 0...an.count() {
+            assert(an[point] == bn[point])
+            if dump { print("normal $(an[point])") }
+        }
+        for point in 0...at.count() {
+            assert(at[point] == bt[point])
+            if dump { print("tangent $(at[point])") }
+        }
+    }
+    var am:Physics.BodyMoveEvent2D[] = []
+    var bm:Physics.BodyMoveEvent2D[] = []
+    a.world.write_body_move_events(am)
+    b.world.write_body_move_events(bm)
+    assert(am.count() == bm.count())
+    for i in 0...am.count() {
+        assert(am[i].application_id() == bm[i].application_id())
+        assert(am[i].transform().position == bm[i].transform().position)
+        assert(am[i].transform().rotation == bm[i].transform().rotation)
+        assert(am[i].fell_asleep() == bm[i].fell_asleep())
+        if dump { print("move $(am[i].application_id()!) $(am[i].transform().position.x) $(am[i].transform().position.y) $(am[i].transform().rotation) $(am[i].fell_asleep())") }
+    }
+    var ab:Physics.ContactBeginEvent2D[] = []
+    var bb:Physics.ContactBeginEvent2D[] = []
+    a.world.write_contact_begin_events(ab)
+    b.world.write_contact_begin_events(bb)
+    assert(ab.count() == bb.count())
+    for i in 0...ab.count() {
+        same_pair(ab[i].pair(),bb[i].pair())
+        if dump { print("begin $(ab[i].pair().first().body_application_id!) $(ab[i].pair().second().body_application_id!) $(ab[i].pair().first().application_id!) $(ab[i].pair().second().application_id!)") }
+        same_manifold(ab[i].manifold(),bb[i].manifold(),dump)
+    }
+    var ae:Physics.ContactEndEvent2D[] = []
+    var be:Physics.ContactEndEvent2D[] = []
+    a.world.write_contact_end_events(ae)
+    b.world.write_contact_end_events(be)
+    assert(ae.count() == be.count())
+    for i in 0...ae.count() {
+        same_pair(ae[i].pair(),be[i].pair())
+        if dump { print("end $(ae[i].pair().first().body_application_id!) $(ae[i].pair().second().body_application_id!) $(ae[i].pair().first().application_id!) $(ae[i].pair().second().application_id!)") }
+    }
+    var ah:Physics.ContactHitEvent2D[] = []
+    var bh:Physics.ContactHitEvent2D[] = []
+    a.world.write_contact_hit_events(ah)
+    b.world.write_contact_hit_events(bh)
+    assert(ah.count() == bh.count())
+    for i in 0...ah.count() {
+        same_pair(ah[i].pair(),bh[i].pair())
+        assert(ah[i].point() == bh[i].point())
+        assert(ah[i].normal() == bh[i].normal())
+        assert(ah[i].approach_speed() == bh[i].approach_speed())
+        if dump { print("hit $(ah[i].pair().first().body_application_id!) $(ah[i].pair().second().body_application_id!) $(ah[i].point().x) $(ah[i].point().y) $(ah[i].normal().x) $(ah[i].normal().y) $(ah[i].approach_speed())") }
+    }
+    if dump { print("events $(ac.count()) $(am.count()) $(ab.count()) $(ae.count()) $(ah.count())") }
+}
+func compare_lifecycle(a:Fixture,b:Fixture,dump:bool) {
+    assert(a.recorder.values.count() == b.recorder.values.count())
+    for i in 0...a.recorder.values.count() {
+        assert(a.recorder.values[i] == b.recorder.values[i])
+        if dump { print("callback $(a.recorder.values[i])") }
+    }
+    var ab:Physics.SensorBeginEvent2D[] = []
+    var bb:Physics.SensorBeginEvent2D[] = []
+    var ae:Physics.SensorEndEvent2D[] = []
+    var be:Physics.SensorEndEvent2D[] = []
+    a.world.write_sensor_begin_events(ab)
+    b.world.write_sensor_begin_events(bb)
+    a.world.write_sensor_end_events(ae)
+    b.world.write_sensor_end_events(be)
+    assert(ab.count() == bb.count() && ae.count() == be.count())
+    for i in 0...ab.count() {
+        assert(ab[i].sensor().application_id == bb[i].sensor().application_id)
+        assert(ab[i].visitor().application_id == bb[i].visitor().application_id)
+        if dump { print("sensor_begin $(ab[i].sensor().application_id!) $(ab[i].visitor().application_id!)") }
+    }
+    for i in 0...ae.count() {
+        assert(ae[i].sensor().application_id == be[i].sensor().application_id)
+        assert(ae[i].visitor().application_id == be[i].visitor().application_id)
+        if dump { print("sensor_end $(ae[i].sensor().application_id!) $(ae[i].visitor().application_id!)") }
+    }
+    assert(a.world.ccd_body_count() == b.world.ccd_body_count())
+    assert(a.world.ccd_pair_test_count() == b.world.ccd_pair_test_count())
+    if dump { print("ccd $(a.world.ccd_body_count()) $(a.world.ccd_pair_test_count())") }
+}
+func main() {
+    var workers = 4
+    if option("--workers-2") { workers = 2 }
+    let dump = option("--dump")
+    var direct = Fixture(1)
+    var parallel = Fixture(workers)
+    for step in 0...44 {
+        direct.before(step)
+        parallel.before(step)
+        var dt = 1.0/60.0
+        if step == 10 { dt = 0.0 }
+        direct.world.step(dt,4)
+        parallel.world.step(dt,4)
+        direct.after(step)
+        parallel.after(step)
+        if dump { print("step $(step)") }
+        compare(direct,parallel,dump)
+        compare_lifecycle(direct,parallel,dump)
+        assert(direct.world.soft_step_parallel_dispatch_count() == 0)
+        if dt > 0.0 { assert(parallel.world.soft_step_parallel_dispatch_count() > 0) }
+        print("lifecycle workers=$(workers) step=$(step) dispatch=$(parallel.world.soft_step_parallel_dispatch_count()) color=$(parallel.world.soft_step_maximum_color_count()) exact=true")
+    }
+    assert(direct.saw_sleep && direct.saw_hit && direct.saw_sensor_begin && direct.saw_sensor_end && direct.saw_callback && direct.saw_ccd)
+    assert(parallel.saw_sleep && parallel.saw_hit && parallel.saw_sensor_begin && parallel.saw_sensor_end && parallel.saw_callback && parallel.saw_ccd)
+    print("completed sleep=true hit=true sensor_begin=true sensor_end=true callback=true ccd=true")
+}
