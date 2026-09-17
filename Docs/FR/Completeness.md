@@ -15,14 +15,23 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-La matrice courante compte 50 capacités couvertes, 4 divergentes, 5 exclues
-et deux partielles : qualification transitoire des joints motor/mouse
-et invalidation globale à la fin de vie du monde.
+La matrice courante compte 49 capacités couvertes, 7 adaptations explicites et
+5 exclusions. Elle ne contient plus de capacité partielle ou planifiée. Les
+réponses transitoires des joints motor/mouse et l’invalidation des handles à
+la fin de vie du monde sont désormais qualifiées par leurs témoins dédiés.
 Le réglage commun des cinq familles qui l’utilisent est comparé à la référence.
-Le parcours de [composition explicite du monde](WorldOwnership.md) est testé
-et accepté comme adaptation uniforme des quatre accès GetWorld. La porte finale reste
-rouge tant que ces obligations ne sont pas closes. Ces nombres décrivent
-l’inventaire, pas une preuve globale d’équivalence physique.
+
+Les adaptations comprennent les unités fixes en mètres, les valeurs géométriques
+validées, la représentation des proxies, la fin de vie du monde, le filtrage et
+les mesures des joints, ainsi que la [composition explicite du monde](WorldOwnership.md).
+Leurs différences avec les appels C bruts sont conservées dans la matrice et
+exercées par les tests consommateurs.
+
+La porte `--final` contrôle cet inventaire et la présence de ses preuves. Elle
+ne remplace ni l’exécution des témoins physiques, ni les comparaisons de
+parallélisme, ni les [budgets temporels et mémoire](OracleAndBudgets.md).
+Ces budgets restent à qualifier ; l’inventaire complet ne prouve pas une parité
+globale de performance ou une équivalence dans toute scène possible.
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckCompleteness.py \

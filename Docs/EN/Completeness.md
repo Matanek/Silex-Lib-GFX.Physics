@@ -24,13 +24,22 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current matrix contains 50 covered, 4 divergent, 5 excluded and two
-partial capabilities: motor/mouse transient qualification and global invalidation
-at the end of world lifetime. Common tuning for the
-five reference families that use it is compared with the reference. The
-[explicit world composition](WorldOwnership.md) usage is tested and accepted as the uniform
-adaptation of all four GetWorld accessors. The final gate stays red until these obligations
-are resolved. These counts describe the inventory, not full physical equivalence.
+The current matrix contains 49 covered capabilities, 7 explicit adaptations and
+5 exclusions. No capability remains partial or planned. Dedicated witnesses now
+qualify motor/mouse transient responses and handle invalidation at the end of
+world lifetime. Common tuning for the five reference families that use it is
+compared with the reference.
+
+The adaptations cover fixed meter units, validated geometry values, proxy
+representation, world lifetime, joint filtering and measurements, and
+[explicit world composition](WorldOwnership.md). Their differences from raw C
+calls remain recorded in the matrix and exercised by consumer tests.
+
+The `--final` gate checks this inventory and the presence of its evidence. It
+does not replace running the physical witnesses, parallelism comparisons or
+[time and memory budgets](OracleAndBudgets.md). Those budgets still need
+qualification; a complete inventory does not establish overall performance
+parity or equivalence in every possible scene.
 
 ## Intentional boundary
 
