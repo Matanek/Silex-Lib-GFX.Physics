@@ -160,3 +160,29 @@ The [tuning](../../Benchmarks/JointConstraintTuningOracle2D.sx) and
 anchors, a fixed body or two moving bodies, and an oblique axis. Fixed
 tolerances cover positions, angles, velocities, forces, and torques; these
 corpora do not guarantee every possible physics scene.
+
+## Motor and mouse targets
+
+A motor joint corrects angular error first, then translation through a coupled
+mass matrix. `linear_offset` is the target displacement between bodies in
+world space; `angular_offset` uses radians. The correction factor, between
+zero and one, applies to the substep duration. Force magnitude and absolute
+torque remain independently capped.
+
+A mouse joint draws its local anchor toward a world target. Frequency and
+damping control that attraction; separate soft angular damping reduces spin
+even when `maximum_force` is zero. The reported torque reflects that damping.
+Zero linear frequency removes the linear spring correction while retaining
+angular damping.
+
+Changing a target, offset, maximum or spring preserves accumulated impulses
+and wakes the affected bodies. New values take effect during preparation of
+the next step. Mutation during `step`, destroyed handles and non-finite or
+out-of-domain settings fail explicitly.
+
+The [motor/mouse witness](../../Benchmarks/MotorMouseOracle2D.sx) compares
+1,536 observations per mode: 1/2/4/8 substeps, offset anchors and center of
+mass, two moving bodies for motor, saturated or zero forces, target mutation,
+fixed rotation and disabled warm start. It measures both bodies and joint
+reactions. [Consumer tests](../../Tests/Consumer/Tests/MotorMouse.sx) also check
+waking and invalidation.

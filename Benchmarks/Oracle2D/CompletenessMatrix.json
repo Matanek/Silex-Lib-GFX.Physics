@@ -591,11 +591,12 @@
       "id": "joint-common-introspection",
       "domain": "joint",
       "capability": "joint bodies, kind, world, anchors, axis, reaction and separation",
-      "status": "divergent",
+      "status": "partial",
+      "tracking": "Physics-2D-Final-Parity",
       "patterns": ["^b2Joint_(?:GetType|GetBodyA|GetBodyB|GetLocalAnchorA|GetLocalAnchorB|GetReferenceAngle|GetLocalAxisA|GetCollideConnected|WakeBodies|GetConstraintForce|GetConstraintTorque|GetLinearSeparation|GetAngularSeparation|SetLocalAnchorA|SetLocalAnchorB|SetReferenceAngle|SetLocalAxisA|SetCollideConnected)$"],
       "silex_contract": "Typed handles expose connected bodies, local frames, collision policy, wake, separation and completed-step reactions without solver state.",
       "evidence": ["Benchmarks/FilterJointOracle2D.sx", "Benchmarks/Oracle2D/FilterJointOracle.c", "Benchmarks/Oracle2D/CheckFilterJoint.py", "Benchmarks/Oracle2D/TestFilterJoint.py", "Docs/FR/FilterJoints.md", "Docs/EN/FilterJoints.md", "Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"],
-      "rationale": "The accepted Silex usage applies collision policy on the next step: a live filter joint removes existing contacts, and destroying a blocking joint requests rediscovery without artificial body movement. The filter lifetime acts as its switch; mechanical joints retain their collision setting. Twenty-four stages match an explicit public-API Box2D mapping while preserving nine raw-reference lifecycle differences."
+      "rationale": "The accepted Silex usage applies collision policy on the next step: a live filter joint removes existing contacts, and destroying a blocking joint requests rediscovery without artificial body movement. The filter lifetime acts as its switch; mechanical joints retain their collision setting. Twenty-four stages match an explicit public-API Box2D mapping while preserving nine raw-reference lifecycle differences. The accepted filtering adaptation is retained; instantaneous geometric measurements remain under Task-25 qualification."
     },
     {
       "id": "joint-world-back-reference",
@@ -625,8 +626,8 @@
       "tracking": "Physics-2D-Final-Parity",
       "patterns": ["^b2(?:Distance|Motor|Mouse|Prismatic|Revolute|Weld|Wheel)Joint_.*$"],
       "silex_contract": "Each typed joint exposes its relevant limits, motors, springs, offsets, targets, maxima and measurements for validated runtime mutation.",
-      "evidence": ["Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"],
-      "rationale": "Typed runtime controls are exercised, but motor/mouse transient response still needs the dedicated differential qualification tracked by Task-23; the historical four-case oracle does not contain these two families."
+      "evidence": ["Benchmarks/MotorMouseOracle2D.sx", "Benchmarks/Oracle2D/MotorMouseOracle.c", "Benchmarks/Oracle2D/CheckMotorMouse.py", "Benchmarks/Oracle2D/TestMotorMouse.py", "Tests/Consumer/Tests/MotorMouse.sx", "Tests/Consumer/Smokes/InvalidMotorMouse.sx", "Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"],
+      "rationale": "Motor/mouse transient response now has a complete 1536-sample differential witness alongside the five common-tuning families. Instantaneous joint length, translation, speed, angle and separation before a step or after teleportation still require Task-25; solver reaction evidence does not qualify those getters."
     },
     {
       "id": "joint-user-data",

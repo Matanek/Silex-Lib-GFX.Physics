@@ -11,6 +11,9 @@ src/distance.c, src/hull.c and src/manifold.c at the same pinned revision.
 The chain/circle manifold uses adjacent ghost vertices to reject endpoint
 regions owned by neighboring chain segments.
 This includes analytic ray intersections and initial-overlap shape casts.
+Motor/mouse preparation and solving in Module/Joints2D.sx follow
+src/motor_joint.c and src/mouse_joint.c at that pinned revision
+(Copyright (c) 2023 Erin Catto). Inter-substep warm starting follows src/solver.c.
 Box2D is not linked into the Silex runtime.
 
 MIT License

@@ -54,37 +54,48 @@ test "disable connected collisions with a filter joint" {
 }
 
 test "drive a body toward a motor joint offset" {
-    var world = Physics.World2D(gravity:Math.Vec2())
-    var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..body_type = Physics.BodyType2D.fixed
-    )
-    var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
-        ..position = Math.Vec2(3.0, 0.0)
-        ..rotation = 0.8
-        ..allow_sleep = false
-    )
-    var joint = world.create_motor_joint(
-        fixed_body,
-        moving,
-        Physics.MotorJoint2DSettings()
-            ..linear_offset = Math.Vec2(1.0, 0.0)
-            ..angular_offset = 0.2
-            ..maximum_force = 100.0
-            ..maximum_torque = 100.0
-            ..correction_factor = 0.5
-    )
+    let corrections:float[] = [0.5, 0.05]
+    for correction in corrections {
+        var world = Physics.World2D(gravity:Math.Vec2())
+        var fixed_body = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed
+        )
+        var moving = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(3.0, 0.0)
+            ..rotation = 0.8
+            ..allow_sleep = false
+        )
+        var joint = world.create_motor_joint(
+            fixed_body,
+            moving,
+            Physics.MotorJoint2DSettings()
+                ..linear_offset = Math.Vec2(1.0, 0.0)
+                ..angular_offset = 0.2
+                ..maximum_force = 100.0
+                ..maximum_torque = 100.0
+                ..correction_factor = correction
+        )
 
-    var step = 0
-    while step < 180 {
-        world.step(1.0 / 120.0)
-        step++
+        var step = 0
+        while step < 180 {
+            world.step(1.0 / 120.0)
+            step++
+        }
+
+        // Box2D remains force-saturated and oscillating at 1.5 seconds for 0.5.
+        // A gentler correction converges in this same interval.
+        if correction == 0.5 {
+            assert(moving.position().nearly_equal(Math.Vec2(1.6145823, 0.0), 0.0001))
+            assert(moving.velocity().nearly_equal(Math.Vec2(-10.000002, 0.0), 0.001))
+        } else {
+            assert(moving.position().nearly_equal(Math.Vec2(1.0, 0.0), 0.0001))
+            assert(moving.velocity().length() < 0.001)
+        }
+        assert(Math.abs(moving.rotation() - 0.2) < 0.05)
+        assert(joint.constraint_force().length() ==
+            joint.constraint_force().length())
+        assert(joint.constraint_torque() == joint.constraint_torque())
     }
-
-    assert(moving.position().nearly_equal(Math.Vec2(1.0, 0.0), 0.05))
-    assert(Math.abs(moving.rotation() - 0.2) < 0.05)
-    assert(joint.constraint_force().length() ==
-        joint.constraint_force().length())
-    assert(joint.constraint_torque() == joint.constraint_torque())
 }
 
 test "retarget a body through a mouse joint" {

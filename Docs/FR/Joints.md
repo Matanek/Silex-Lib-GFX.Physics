@@ -116,3 +116,29 @@ ancres centrales ou décentrées, corps fixe ou deux corps mobiles et axe
 oblique. Ils contrôlent positions, angles, vitesses, forces et couples avec
 des seuils fixes ; ils ne constituent pas une garantie universelle pour toute
 scène physique.
+
+## Cibles motor et mouse
+
+Le joint motor corrige d’abord l’écart angulaire, puis l’écart de translation
+avec une masse couplée. `linear_offset` désigne le déplacement cible entre
+les corps dans le repère monde ; `angular_offset` est en radians. Le facteur
+de correction, entre zéro et un, s’applique à la durée d’un sous-pas. La norme
+de la force et la valeur absolue du couple restent plafonnées indépendamment.
+
+Le joint mouse attire son ancre locale vers une cible monde. Fréquence et
+amortissement règlent cette attraction ; un amortissement angulaire doux
+indépendant réduit la rotation, même si `maximum_force` vaut zéro. Le couple
+annoncé reflète cet amortissement. Une fréquence linéaire nulle supprime la
+correction linéaire du ressort ; elle ne supprime pas l’amortissement angulaire.
+
+Modifier cible, offset, maxima ou ressort conserve les impulsions accumulées
+et réveille les corps concernés. Les nouvelles valeurs sont prises en compte
+à la préparation du pas suivant. Les mutations pendant `step`, les handles
+détruits et les réglages non finis ou hors domaine sont rejetés explicitement.
+
+Le [témoin motor/mouse](../../Benchmarks/MotorMouseOracle2D.sx) compare
+1 536 observations par mode : 1/2/4/8 sous-pas, ancres décentrées, centre de
+masse décalé, deux corps mobiles pour motor, forces saturées ou nulles,
+mutation de cible, rotation fixée et warm start désactivé. Il mesure les
+deux corps et les réactions. Les [tests consommateurs](../../Tests/Consumer/Tests/MotorMouse.sx)
+vérifient aussi le réveil et l’invalidation.

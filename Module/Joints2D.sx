@@ -273,6 +273,9 @@ package struct JointConstraint2D {
     var prepared_relative_angle:float
     var prepared_spring:JointSoftness2D
     var prepared_angular:JointSoftness2D
+    var prepared_point_xx:float
+    var prepared_point_xy:float
+    var prepared_point_yy:float
     var prepared_axial_mass:float
     var prepared_perpendicular_mass:float
     var constraint_bias_rate:float
@@ -328,6 +331,9 @@ package struct JointConstraint2D {
         self.prepared_relative_angle = 0.0
         self.prepared_spring = JointSoftness2D(0.0, 0.0, 0.0)
         self.prepared_angular = JointSoftness2D(0.0, 0.0, 0.0)
+        self.prepared_point_xx = 0.0
+        self.prepared_point_xy = 0.0
+        self.prepared_point_yy = 0.0
         self.prepared_axial_mass = 0.0
         self.prepared_perpendicular_mass = 0.0
         self.constraint_bias_rate = 0.0
@@ -891,7 +897,7 @@ package class JointStore2D {
         self.joints[index].spring_enabled = enabled
         self.joints[index].spring_hertz = hertz
         self.joints[index].spring_damping_ratio = damping_ratio
-        self.reset_impulses(index)
+        if self.joints[index].kind != JointKind2D.mouse { self.reset_impulses(index) }
         self.wake_joint(index)
     }
 
@@ -927,7 +933,6 @@ package class JointStore2D {
         let index = self.require(id)
         self.joints[index].linear_target = linear
         self.joints[index].reference_angle = angular
-        self.reset_impulses(index)
         self.wake_joint(index)
     }
 
@@ -941,7 +946,6 @@ package class JointStore2D {
         let index = self.require(id)
         self.joints[index].maximum_motor_force = force
         self.joints[index].maximum_motor_torque = torque
-        self.reset_impulses(index)
         self.wake_joint(index)
     }
 
@@ -1202,7 +1206,8 @@ package class JointStore2D {
             }
             if self.joints[index].kind == JointKind2D.prismatic ||
                 self.joints[index].kind == JointKind2D.revolute ||
-                self.joints[index].kind == JointKind2D.weld {
+                self.joints[index].kind == JointKind2D.weld ||
+                self.joints[index].kind == JointKind2D.motor {
                 let first = self.bodies.require(self.joints[index].first_body)
                 let second = self.bodies.require(self.joints[index].second_body)
                 self.joints[index].prepared_relative_angle = joint_solver_atan(
@@ -1223,6 +1228,48 @@ package class JointStore2D {
                 self.bodies, first, self.joints[index].local_axis)
             self.joints[index].prepared_center_delta =
                 self.bodies.world_center_at(second).subtract(self.bodies.world_center_at(first))
+            if self.joints[index].kind == JointKind2D.motor ||
+                self.joints[index].kind == JointKind2D.mouse {
+                // One matrix per joint and step, reused by every substep and
+                // relaxation pass. No per-pass inversion or allocation.
+                let mouse = self.joints[index].kind == JointKind2D.mouse
+                var first_mass = 0.0
+                var first_inertia = 0.0
+                var second_mass = 0.0
+                var second_inertia = 0.0
+                if self.bodies.awake[first] {
+                    first_mass = self.bodies.inverse_masses[first]
+                    first_inertia = self.bodies.inverse_inertias[first]
+                }
+                if !mouse && self.bodies.awake[second] {
+                    second_mass = self.bodies.inverse_masses[second]
+                    second_inertia = self.bodies.inverse_inertias[second]
+                }
+                let r_a = self.joints[index].prepared_first_radius
+                let r_b = self.joints[index].prepared_second_radius
+                let xx = first_mass + second_mass + r_a.y * r_a.y * first_inertia +
+                    r_b.y * r_b.y * second_inertia
+                let xy = -r_a.y * r_a.x * first_inertia - r_b.y * r_b.x * second_inertia
+                let yy = first_mass + second_mass + r_a.x * r_a.x * first_inertia +
+                    r_b.x * r_b.x * second_inertia
+                let determinant = xx * yy - xy * xy
+                var inverse = 0.0
+                if determinant != 0.0 { inverse = 1.0 / determinant }
+                self.joints[index].prepared_point_xx = inverse * yy
+                self.joints[index].prepared_point_xy = -inverse * xy
+                self.joints[index].prepared_point_yy = inverse * xx
+                if mouse {
+                    self.joints[index].prepared_center_delta = self.bodies.world_center_at(first)
+                        .subtract(self.joints[index].linear_target)
+                    self.joints[index].prepared_spring = JointSoftness2D(
+                        self.joints[index].spring_hertz,
+                        self.joints[index].spring_damping_ratio, delta)
+                    self.joints[index].prepared_angular = JointSoftness2D(0.5, 0.1, delta)
+                } else {
+                    self.joints[index].prepared_center_delta = self.joints[index].prepared_center_delta
+                        .subtract(self.joints[index].linear_target)
+                }
+            }
             index++
         }
     }
@@ -1492,8 +1539,8 @@ func apply_joint_pair_impulse(
 func clamped_joint_vector(value:Math.Vec2, maximum:float) Math.Vec2 {
     if maximum < 0.0 { return value }
     let length = value.length()
-    if length <= maximum || length <= 0.000001 { return value }
-    return value.multiply(maximum / length)
+    if length <= maximum || length == 0.0 { return value }
+    return value.multiply(1.0 / length).multiply(maximum)
 }
 
 func joint_bias_rate(
@@ -1619,58 +1666,36 @@ func solve_joint_point_pair(
     )
 }
 
+func prepared_joint_point_correction(joint:JointConstraint2D, value:Math.Vec2) Math.Vec2 {
+    return Math.Vec2(joint.prepared_point_xx * value.x + joint.prepared_point_xy * value.y,
+        joint.prepared_point_xy * value.x + joint.prepared_point_yy * value.y)
+}
+
 func solve_joint_point_target(
     bodies:BodyStore2D,
     joint:&JointConstraint2D,
     body:int,
-    maximum_impulse:float,
-    inverse_delta:float,
-    use_bias:bool
+    maximum_impulse:float
 ) {
-    let point = joint_world_point(bodies, body, joint.first_anchor)
-    let error = point.subtract(joint.linear_target)
-    let velocity = joint_velocity_at(bodies, body, point)
-    let bias_rate = joint_bias_rate(
-        joint.spring_hertz,
-        joint.spring_damping_ratio,
-        inverse_delta,
-        use_bias
-    )
-    let x_axis = Math.Vec2(1.0, 0.0)
-    let y_axis = Math.Vec2(0.0, 1.0)
-    let x_inverse_mass = joint_inverse_mass_on_axis(
-        bodies,
-        body,
-        point,
-        x_axis
-    )
-    let y_inverse_mass = joint_inverse_mass_on_axis(
-        bodies,
-        body,
-        point,
-        y_axis
-    )
-    var increment = Math.Vec2()
-    if x_inverse_mass > 0.0 {
-        increment.x = -(velocity.x + bias_rate * error.x) / x_inverse_mass
-    }
-    if y_inverse_mass > 0.0 {
-        increment.y = -(velocity.y + bias_rate * error.y) / y_inverse_mass
-    }
-    let previous = Math.Vec2(
-        joint.linear_impulse.x + 0.0,
-        joint.linear_impulse.y + 0.0
-    )
-    joint.linear_impulse = clamped_joint_vector(
-        previous.add(increment),
-        maximum_impulse
-    )
-    apply_joint_impulse(
-        bodies,
-        body,
-        joint.linear_impulse.subtract(previous),
-        point
-    )
+    // Mouse angular softness damps spin independently of its linear force cap.
+    let inertia = bodies.inverse_inertias[body]
+    var angular = 0.0
+    if inertia > 0.0 { angular = -bodies.angular_velocities[body] / inertia }
+    angular = joint.prepared_angular.mass_scale * angular -
+        joint.prepared_angular.impulse_scale * joint.angular_impulse
+    joint.angular_impulse += angular
+    bodies.angular_velocities[body] += inertia * angular
+
+    let radius = joint_step_vector(bodies, body, joint.prepared_first_radius)
+    let error = joint_step_displacement(bodies, body).add(radius).add(joint.prepared_center_delta)
+    let velocity = joint_velocity_on_radius(bodies, body, radius)
+    let correction = prepared_joint_point_correction(joint,
+        velocity.add(error.multiply(joint.prepared_spring.bias_rate)))
+    let increment = correction.multiply(-joint.prepared_spring.mass_scale)
+        .subtract(joint.linear_impulse.multiply(joint.prepared_spring.impulse_scale))
+    let previous = Math.Vec2(joint.linear_impulse.x + 0.0, joint.linear_impulse.y + 0.0)
+    joint.linear_impulse = clamped_joint_vector(previous.add(increment), maximum_impulse)
+    apply_joint_radius_impulse(bodies, body, joint.linear_impulse.subtract(previous), radius)
 }
 
 func solve_joint_axis(
@@ -1775,8 +1800,9 @@ func warm_start_joint(bodies:BodyStore2D, joint:JointConstraint2D) {
     let first = bodies.require(joint.first_body)
     let second = bodies.require(joint.second_body)
     if joint.kind == JointKind2D.mouse {
-        apply_joint_impulse(bodies, first, joint.linear_impulse,
-            joint_world_point(bodies, first, joint.first_anchor))
+        let radius = joint_step_vector(bodies, first, joint.prepared_first_radius)
+        apply_joint_radius_impulse(bodies, first, joint.linear_impulse, radius)
+        bodies.angular_velocities[first] += bodies.inverse_inertias[first] * joint.angular_impulse
         return
     }
     let first_radius = joint_step_vector(bodies, first, joint.prepared_first_radius)
@@ -1907,9 +1933,7 @@ func solve_joint(
             bodies,
             joint,
             first,
-            joint.maximum_motor_force * delta,
-            inverse_delta,
-            use_bias
+            joint.maximum_motor_force * delta
         )
         return
     }
@@ -1966,35 +1990,28 @@ func solve_joint(
     }
 
     if joint.kind == JointKind2D.motor {
-        let target = joint_world_vector(bodies, first, joint.linear_target)
-        solve_joint_point_pair(
-            bodies,
-            joint,
-            first,
-            second,
-            target,
-            0.0,
-            0.0,
-            joint.maximum_motor_force * delta,
-            inverse_delta * joint.correction_factor,
-            true
-        )
-        let angular_error = bodies.rotations[second] -
-            bodies.rotations[first] - joint.reference_angle
-        joint.angular_impulse = solve_joint_angle(
-            bodies,
-            first,
-            second,
-            angular_error,
-            0.0,
-            joint.angular_impulse,
-            -joint.maximum_motor_torque * delta,
-            joint.maximum_motor_torque * delta,
-            0.0,
-            0.0,
-            inverse_delta * joint.correction_factor,
-            true
-        )
+        let angle_delta = joint_solver_atan(
+            bodies.step_rotation_sines[second] * bodies.step_rotation_cosines[first] -
+                bodies.step_rotation_cosines[second] * bodies.step_rotation_sines[first],
+            bodies.step_rotation_cosines[second] * bodies.step_rotation_cosines[first] +
+                bodies.step_rotation_sines[second] * bodies.step_rotation_sines[first])
+        let angular_error = unwind_joint_angle(angle_delta +
+            (joint.prepared_relative_angle - joint.reference_angle))
+        let bias_rate = inverse_delta * joint.correction_factor
+        // The angular solve feeds the point velocity in the same pass.
+        joint.angular_impulse = solve_joint_angle(bodies, first, second,
+            angular_error, 0.0, joint.angular_impulse,
+            -joint.maximum_motor_torque * delta, joint.maximum_motor_torque * delta,
+            0.0, 0.0, inverse_delta, true, bias_rate)
+        let velocity = joint_velocity_on_radius(bodies, second, second_point)
+            .subtract(joint_velocity_on_radius(bodies, first, first_point))
+        let correction = prepared_joint_point_correction(joint,
+            velocity.add(anchor_delta.multiply(bias_rate)))
+        let previous = Math.Vec2(joint.linear_impulse.x + 0.0, joint.linear_impulse.y + 0.0)
+        joint.linear_impulse = clamped_joint_vector(previous.subtract(correction),
+            joint.maximum_motor_force * delta)
+        apply_joint_pair_impulse(bodies, first, second,
+            joint.linear_impulse.subtract(previous), first_point, second_point)
         joint.current_angle = angular_error
         return
     }

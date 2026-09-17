@@ -5440,18 +5440,18 @@ public class World2D {
                 self.execute_integrate_soft_step_velocities(substep_delta)
                 self.current_soft_step_stages.append(3)
                 var color = 0
-                if self.current_warm_start_enabled {
-                    while color < 12 {
-                        if self.constraint_color_counts[color] == 0 &&
-                            self.joints.color_count(color) == 0
-                        {
-                            color++
-                            continue
-                        }
-                        self.execute_warm_start_color(color)
-                        self.execute_warm_start_joint_color(color)
+                // Disabling warm start clears the previous step's cache during
+                // preparation. Accumulated impulses still warm each substep.
+                while color < 12 {
+                    if self.constraint_color_counts[color] == 0 &&
+                        self.joints.color_count(color) == 0
+                    {
                         color++
+                        continue
                     }
+                    self.execute_warm_start_color(color)
+                    self.execute_warm_start_joint_color(color)
+                    color++
                 }
                 self.current_soft_step_stages.append(4)
                 // Box2D 3.1.1 Soft Step solves once with bias, then once

@@ -543,3 +543,20 @@ requires the nine known raw-reference differences, including retained physical
 response after filter creation and deferred rediscovery after destruction.
 This is an explicit usage mapping, not raw lifecycle parity. See the
 [filter-joint guide](../../Docs/EN/FilterJoints.md).
+
+## Motor and mouse transient response
+
+`MotorMouseOracle.c` and `../MotorMouseOracle2D.sx` compare 1,536 samples with
+fixed absolute tolerances in `CheckMotorMouse.py`: 1e-4 for positions/angles,
+1e-3 for velocities and 2e-3 for reactions. Both bodies are observed. The
+comparator requires the full key set, finite fields and independent physical
+force/torque limits. Its six tests reject malformed data and violations even
+when both input files contain the same invalid physical response.
+
+The corpus includes central/offset anchors, two moving motor bodies, offset
+mouse center of mass, saturation, zero settings, target mutation, fixed
+rotation and disabled warm start, at 1/2/4/8 substeps. Run both Debug and Release.
+`SpeculativeContactsOracle` also accepts `--no-warm-start` in both languages
+to exercise contact impulse reuse between substeps without a previous-step
+cache. Compile the Silex witness, then run its executable with `--no-warm-start` for that
+Silex mode; its case keys and comparison thresholds stay unchanged.

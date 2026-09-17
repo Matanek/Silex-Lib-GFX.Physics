@@ -1,0 +1,88 @@
+use GFX.Physics
+use STD.Math
+
+func record(first:Physics.RigidBody2D, second:Physics.RigidBody2D,
+    force:Math.Vec2, torque:float, family:int, geometry:int, variant:int, substeps:int, step:int) {
+    let a = first.position()
+    let b = second.position()
+    let va = first.velocity()
+    let vb = second.velocity()
+    print("target_$(family)_$(geometry)_$(variant)_$(substeps)_$(step) $(a.x) $(a.y) $(first.rotation()) $(va.x) $(va.y) $(first.angular_velocity()) $(b.x) $(b.y) $(second.rotation()) $(vb.x) $(vb.y) $(second.angular_velocity()) $(force.x) $(force.y) $(torque)")
+}
+
+func scenario(family:int, geometry:int, variant:int, substeps:int) {
+    var world = Physics.World2D(Physics.World2DSettings()
+        ..gravity = Math.Vec2(2.0, -3.0) ..warm_start_enabled = variant != 6)
+    var first_type = Physics.BodyType2D.fixed
+    if family == 0 && geometry == 2 { first_type = Physics.BodyType2D.dynamic }
+    var first = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = first_type ..create_implicit_collider = false ..allow_sleep = false)
+    if first_type == Physics.BodyType2D.dynamic {
+        first.set_mass_properties(Physics.MassProperties2D(1.0, 1.0))
+        first.set_velocity(Math.Vec2(0.1, -0.2))
+        first.set_angular_velocity(0.3)
+    }
+    var second = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false ..allow_sleep = false ..fixed_rotation = variant == 7)
+    var inertia = 3.0
+    if variant == 7 { inertia = 0.0 }
+    var center = Math.Vec2()
+    if family == 1 && geometry == 2 { center = Math.Vec2(0.15, -0.1) }
+    second.set_mass_properties(Physics.MassProperties2D(2.0, inertia, center))
+    var anchor = Math.Vec2()
+    if geometry > 0 { anchor = Math.Vec2(0.2, 0.3) }
+    var maximum_force = 1000.0
+    var maximum_torque = 1000.0
+    var correction = 0.3
+    var hertz = 5.0
+    var damping = 0.7
+    if variant == 0 { maximum_force = 1.0; maximum_torque = 1.0 }
+    if variant == 2 { maximum_force = 0.0; maximum_torque = 0.0 }
+    if variant == 3 { correction = 0.0; hertz = 0.0 }
+    if variant == 4 { correction = 1.0; hertz = 12.0; damping = 0.0; maximum_force = 20.0; maximum_torque = 5.0 }
+    var motor:Physics.MotorJoint2D? = null
+    var mouse:Physics.MouseJoint2D? = null
+    if family == 0 {
+        motor = world.create_motor_joint(first, second, Physics.MotorJoint2DSettings()
+            ..linear_offset = Math.Vec2(0.1, -0.2) ..angular_offset = -0.1
+            ..maximum_force = maximum_force ..maximum_torque = maximum_torque
+            ..correction_factor = correction)
+        if let joint = motor { joint.set_local_anchors(anchor, anchor.multiply(-0.5)) }
+    } else {
+        mouse = world.create_mouse_joint(second, Physics.MouseJoint2DSettings()
+            ..target = anchor ..spring_hertz = hertz ..spring_damping_ratio = damping
+            ..maximum_force = maximum_force)
+    }
+    second.set_position(Math.Vec2(0.7, 0.9))
+    second.set_rotation(0.25)
+    second.set_velocity(Math.Vec2(-0.2, 0.4))
+    if variant != 7 { second.set_angular_velocity(0.7) }
+    var step = 0
+    while step < 8 {
+        if variant == 5 && step == 3 {
+            if let joint = motor {
+                joint.set_offsets(Math.Vec2(-0.3, 0.4), 0.15)
+                joint.set_maxima(20.0, 5.0)
+                joint.set_correction_factor(0.6)
+            }
+            if let joint = mouse {
+                joint.set_target(Math.Vec2(0.8, -0.2))
+                joint.set_spring(8.0, 1.2)
+                joint.set_maximum_force(20.0)
+            }
+        }
+        world.step(1.0 / 60.0, substeps)
+        var force = Math.Vec2()
+        var torque = 0.0
+        if let joint = motor { force = joint.constraint_force(); torque = joint.constraint_torque() }
+        if let joint = mouse { force = joint.constraint_force(); torque = joint.constraint_torque() }
+        record(first, second, force, torque, family, geometry, variant, substeps, step)
+        step++
+    }
+}
+
+func main() {
+    for family in 0...2 { for geometry in 0...3 { for variant in 0...8 {
+        for substeps in [1, 2, 4, 8] { scenario(family, geometry, variant, substeps) }
+    } } }
+}

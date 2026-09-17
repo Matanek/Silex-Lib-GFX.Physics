@@ -1,0 +1,86 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(expected:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+    }
+    return false
+}
+class LockedMotor {
+    var joint:Physics.MotorJoint2D
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        self.joint.set_maxima(1.0, 1.0)
+        return Physics.ContactDecision2D()
+    }
+}
+class LockedMouse {
+    var joint:Physics.MouseJoint2D
+    func apply(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        self.joint.set_target(Math.Vec2())
+        return Physics.ContactDecision2D()
+    }
+}
+func main() {
+    var value = -1.0
+    var maximum = 3.4028235e38
+    var infinite = maximum * 2.0
+    if option("infinite") { value = infinite }
+    if option("nan") { value = infinite - infinite }
+    if option("above") { value = 1.1 }
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    world.create_collider(ground, Physics.Collider2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0)) ..enable_pre_solve = true)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)) ..position = Math.Vec2(1.4, 0.0))
+    if option("motor") {
+        var settings = Physics.MotorJoint2DSettings() ..collide_connected = true
+        if option("create") {
+            if option("force") { settings.maximum_force = value }
+            if option("torque") { settings.maximum_torque = value }
+            if option("factor") { settings.correction_factor = value }
+            if option("linear") { settings.linear_offset = Math.Vec2(value, 0.0) }
+            if option("angular") { settings.angular_offset = value }
+        }
+        var joint = world.create_motor_joint(ground, body, settings)
+        if option("stale") { world.destroy_joint(joint); joint.set_offsets(Math.Vec2(), 0.0) }
+        if option("locked") {
+            var policy = LockedMotor(joint:joint)
+            world.set_pre_solve(policy.apply)
+            world.step(0.001)
+        }
+        if option("mutate") {
+            if option("force") { joint.set_maxima(value, 1.0) }
+            if option("torque") { joint.set_maxima(1.0, value) }
+            if option("factor") { joint.set_correction_factor(value) }
+            if option("linear") { joint.set_offsets(Math.Vec2(value, 0.0), 0.0) }
+            if option("angular") { joint.set_offsets(Math.Vec2(), value) }
+        }
+    } else {
+        var settings = Physics.MouseJoint2DSettings()
+        if option("create") {
+            if option("force") { settings.maximum_force = value }
+            if option("hertz") { settings.spring_hertz = value }
+            if option("damping") { settings.spring_damping_ratio = value }
+            if option("target") { settings.target = Math.Vec2(value, 0.0) }
+        }
+        var joint = world.create_mouse_joint(body, settings)
+        if option("stale") { world.destroy_joint(joint); joint.set_target(Math.Vec2()) }
+        if option("locked") {
+            var policy = LockedMouse(joint:joint)
+            world.set_pre_solve(policy.apply)
+            world.step(0.001)
+        }
+        if option("mutate") {
+            if option("force") { joint.set_maximum_force(value) }
+            if option("hertz") { joint.set_spring(value, 0.7) }
+            if option("damping") { joint.set_spring(5.0, value) }
+            if option("target") { joint.set_target(Math.Vec2(value, 0.0)) }
+        }
+    }
+    panic("invalid motor/mouse input was accepted")
+}

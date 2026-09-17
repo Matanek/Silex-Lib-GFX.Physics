@@ -107,3 +107,7 @@ Existing calls to `step(0.0)` intended to refresh contacts must use
 `refresh_contacts()`. The [public checks](../../Tests/Consumer/Smokes/RefreshContacts.sx)
 and [differential witness](../../Benchmarks/ZeroStepOracle2D.sx) verify the two
 intentions separately.
+
+Disabling warm start clears impulses carried from the previous step.
+Impulses accumulated during the current step are still reused between its
+substeps, for both contacts and joints.

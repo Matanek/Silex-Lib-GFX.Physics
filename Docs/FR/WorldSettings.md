@@ -109,3 +109,7 @@ Les anciens usages de `step(0.0)` destinés à rafraîchir les contacts doivent
 appeler `refresh_contacts()`. Les [tests publics](../../Tests/Consumer/Smokes/RefreshContacts.sx)
 et le [témoin différentiel](../../Benchmarks/ZeroStepOracle2D.sx) vérifient ces
 intentions séparément.
+
+Désactiver le warm start efface les impulsions provenant du pas précédent.
+Les impulsions accumulées pendant le pas courant restent réutilisées entre
+ses sous-pas, pour les contacts comme pour les joints.

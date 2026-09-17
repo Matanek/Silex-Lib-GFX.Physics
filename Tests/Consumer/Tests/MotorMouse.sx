@@ -1,0 +1,70 @@
+use GFX.Physics
+use STD.Math
+
+func settle(world:Physics.World2D, body:Physics.RigidBody2D) {
+    var step = 0
+    while step < 240 { world.step(1.0 / 60.0); step++ }
+    assert(!body.is_awake())
+}
+
+test "wake a sleeping motor assembly after changing its target or strength" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+    body.set_mass_properties(Physics.MassProperties2D(1.0, 1.0))
+    var joint = world.create_motor_joint(ground, body, Physics.MotorJoint2DSettings()
+        ..maximum_force = 1000.0 ..maximum_torque = 1000.0)
+    settle(world, body)
+    joint.set_offsets(Math.Vec2(0.5, -0.2), 0.2)
+    assert(body.is_awake())
+    settle(world, body)
+    assert(body.position().nearly_equal(Math.Vec2(0.5, -0.2), 0.001))
+    joint.set_maxima(20.0, 5.0)
+    assert(body.is_awake())
+    settle(world, body)
+    joint.set_correction_factor(0.6)
+    assert(body.is_awake())
+}
+
+test "wake a sleeping mouse body after changing target spring or force" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+    body.set_mass_properties(Physics.MassProperties2D(1.0, 1.0))
+    var joint = world.create_mouse_joint(body, Physics.MouseJoint2DSettings() ..maximum_force = 1000.0)
+    settle(world, body)
+    joint.set_target(Math.Vec2(0.5, -0.2))
+    assert(body.is_awake())
+    settle(world, body)
+    assert(body.position().nearly_equal(Math.Vec2(0.5, -0.2), 0.001))
+    joint.set_spring(8.0, 1.2)
+    assert(body.is_awake())
+    settle(world, body)
+    joint.set_maximum_force(20.0)
+    assert(body.is_awake())
+}
+
+test "damp mouse spin independently of a zero linear force cap" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..create_implicit_collider = false ..allow_sleep = false)
+    body.set_mass_properties(Physics.MassProperties2D(1.0, 1.0))
+    var joint = world.create_mouse_joint(body, Physics.MouseJoint2DSettings() ..maximum_force = 0.0)
+    body.set_angular_velocity(1.0)
+    world.step(1.0 / 60.0)
+    assert(joint.constraint_force() == Math.Vec2())
+    assert(joint.constraint_torque() < 0.0)
+    assert(body.angular_velocity() > 0.0 && body.angular_velocity() < 1.0)
+}
+
+test "invalidate motor and mouse handles after destroying their body" {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+        ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+    var body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+    var motor = world.create_motor_joint(ground, body)
+    var mouse = world.create_mouse_joint(body)
+    world.destroy_rigid_body(body)
+    world.create_rigid_body()
+    assert(!motor.is_valid() && !mouse.is_valid())
+}

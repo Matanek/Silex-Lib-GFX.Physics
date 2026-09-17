@@ -1,5 +1,6 @@
 #include <box2d/box2d.h>
 #include <stdio.h>
+#include <string.h>
 
 static const b2Circle circle = {{0,0}, .5f};
 static const b2Capsule capsule = {{-.25f,0},{.25f,0},.5f};
@@ -12,7 +13,7 @@ static void shape(b2BodyId body, int family, bool fixed) {
     else if(family==3 && fixed) b2CreateSegmentShape(body,&sd,&segment);
     else b2CreateCapsuleShape(body,&sd,&capsule);
 }
-static void run(int family,int gap_index,int speed_index,int substeps,int timing) {
+static void run(int family,int gap_index,int speed_index,int substeps,int timing,bool warm_start) {
     const float gaps[]={.004f,.01f,.019f,.021f};
     const float speeds[]={0,-.3f,-3,-1};
     float y=(family==3?.5f:1)+gaps[gap_index];
@@ -23,7 +24,7 @@ static void run(int family,int gap_index,int speed_index,int substeps,int timing
     if(family==2) m=b2CollideCapsules(&capsule,a,&capsule,b);
     if(family==3) m=b2CollideSegmentAndCapsule(&segment,a,&capsule,b);
     b2WorldDef wd=b2DefaultWorldDef();wd.gravity=b2Vec2_zero;wd.enableContinuous=false;wd.contactHertz=40.0f;
-    b2WorldId world=b2CreateWorld(&wd);
+    b2WorldId world=b2CreateWorld(&wd);b2World_EnableWarmStarting(world,warm_start);
     b2BodyDef bd=b2DefaultBodyDef();b2BodyId ground=b2CreateBody(world,&bd);shape(ground,family,true);
     bd.type=b2_dynamicBody;bd.position=(b2Vec2){0,y};bd.linearVelocity=(b2Vec2){0,speeds[speed_index]};bd.fixedRotation=true;bd.enableSleep=false;
     b2BodyId body=b2CreateBody(world,&bd);shape(body,family,false);
@@ -37,4 +38,4 @@ static void run(int family,int gap_index,int speed_index,int substeps,int timing
     }
     b2DestroyWorld(world);
 }
-int main(void) {for(int f=0;f<4;++f)for(int g=0;g<4;++g)for(int v=0;v<4;++v)for(int s=1;s<=4;s*=4)for(int t=0;t<2;++t)run(f,g,v,s,t);}
+int main(int argc, char** argv) {bool warm_start=!(argc==2 && strcmp(argv[1],"--no-warm-start")==0);for(int f=0;f<4;++f)for(int g=0;g<4;++g)for(int v=0;v<4;++v)for(int s=1;s<=4;s*=4)for(int t=0;t<2;++t)run(f,g,v,s,t,warm_start);}
