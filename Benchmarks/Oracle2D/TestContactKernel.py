@@ -1,5 +1,5 @@
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 import io
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ import tempfile
 from unittest.mock import patch
 
 import RunContactKernel
-from RunContactKernel import checked_timing, check_totals, compare_states, parity_result, signature_interval, states, summary, timing
+from RunContactKernel import checked_timing, check_totals, compare_states, parity_result, signature_interval, states, summary, timing, matching_clang
 
 
 def fixture(full=False):
@@ -30,12 +30,12 @@ class ContactKernelChecks(unittest.TestCase):
                 if arguments == ("--check-full",):
                     return fixture(full=True)
                 engine = "silex" if binary.name in ("after", "before") else "clang"
-                layout = "packed4" if binary.name == "packed" else "slots8"
-                elapsed = 80 if binary.name == "before" else 40
+                layout = "private" if engine == "silex" else ("packed4" if binary.name == "packed" else "slots8")
+                elapsed = 80 if binary.name in ("before", "packed") else 40
                 return f"KERNEL {engine} {layout} 2048 2048 {elapsed} 0"
 
-            arguments = ["RunContactKernel.py", "--silex", str(root / "after"),
-                         "--baseline-silex", str(root / "before"),
+            arguments = ["RunContactKernel.py", "--silex-layout", "packed4", "--silex", str(root / "after"),
+                         "--baseline-silex", str(root / "before"), "--baseline-silex-layout", "slots8",
                          "--clang-slots", str(root / "slots"),
                          "--clang-packed", str(root / "packed"),
                          "--box2d-check", str(root / "oracle"),
@@ -47,6 +47,9 @@ class ContactKernelChecks(unittest.TestCase):
             report = json.loads((root / "report.json").read_text())
             self.assertEqual(report["correctness"]["silex-before"]["short"]["records"], 128)
             self.assertEqual(report["correctness"]["silex-before"]["full"]["records"], 32768)
+            self.assertEqual(report["same_layout_reference"], "clang-packed")
+            self.assertEqual(report["silex_over_clang_same_layout"], 0.5)
+            self.assertEqual(report["workload"]["layouts"]["silex-before"], "slots8")
             self.assertEqual(report["silex_after_over_before"], 0.5)
             self.assertEqual(report["silex_after_over_before_observed_range"], [0.5, 0.5])
             self.assertTrue(all(len(samples) == 7 for samples in report["samples"].values()))
@@ -78,13 +81,13 @@ class ContactKernelChecks(unittest.TestCase):
                     return output
                 timed.append(binary.name)
                 engine = "silex" if binary.name == "silex" else "clang"
-                layout = "packed4" if binary.name == "packed" else "slots8"
+                layout = "private" if engine == "silex" else ("packed4" if binary.name == "packed" else "slots8")
                 # Inside the zero fixture's 0.00128 reduction allowance, but
                 # different from this executable's already accepted warmup.
                 signature = 0.0001 if len(timed) > 3 else 0
                 return f"KERNEL {engine} {layout} 2048 2048 40 {signature}"
 
-            arguments = ["RunContactKernel.py", "--silex", str(root / "silex"),
+            arguments = ["RunContactKernel.py", "--silex-layout", "packed4", "--silex", str(root / "silex"),
                          "--clang-slots", str(root / "slots"),
                          "--clang-packed", str(root / "packed"),
                          "--box2d-check", str(root / "oracle")]
@@ -157,11 +160,11 @@ class ContactKernelChecks(unittest.TestCase):
             data[2047, index] = (1.0,) + data[2047, index][1:]
         interval = signature_interval(data)
         self.assertEqual(interval[0], 2048.0)
-        checked_timing("KERNEL silex slots8 2048 2048 40 2048", "silex", interval)
-        for output in ["KERNEL silex slots8 2048 2048 40 2049",
+        checked_timing("KERNEL silex private 2048 2048 40 2048", "silex", interval, "packed4")
+        for output in ["KERNEL silex private 2048 2048 40 2049",
                        "KERNEL clang packed4 2048 2048 40 2048"]:
             with self.assertRaises(ValueError):
-                checked_timing(output, "silex", interval)
+                checked_timing(output, "silex", interval, "packed4")
 
     def test_replay_preserves_keys_and_input_values(self):
         data = states(fixture(full=True), full=True)
@@ -172,14 +175,30 @@ class ContactKernelChecks(unittest.TestCase):
         self.assertEqual(command, ["oracle", "--check-replay"])
         self.assertEqual(states(run.call_args.kwargs["input"], full=True), data)
 
+    def test_layout_and_baseline_provenance_are_mandatory(self):
+        arguments = ["runner", "--silex", "unused", "--clang-slots", "unused",
+                     "--clang-packed", "unused", "--box2d-check", "unused"]
+        for extra in ([], ["--silex-layout", "packed4", "--baseline-silex", "unused"],
+                      ["--silex-layout", "packed4", "--baseline-silex-layout", "slots8"]):
+            with patch("sys.argv", arguments + extra), redirect_stderr(io.StringIO()), \
+                 self.assertRaises(SystemExit) as error:
+                RunContactKernel.main()
+            self.assertEqual(error.exception.code, 2)
+
+    def test_layout_reference_and_old_metadata(self):
+        self.assertEqual(matching_clang("slots8"), "clang-slots")
+        self.assertEqual(matching_clang("packed4"), "clang-packed")
+        with self.assertRaises(ValueError):
+            timing("KERNEL silex slots8 2048 2048 40 123")
+
     def test_timing(self):
-        self.assertEqual(timing("KERNEL silex slots8 2048 2048 40 123")["elapsed_ms"], 40)
+        self.assertEqual(timing("KERNEL silex private 2048 2048 40 123")["elapsed_ms"], 40)
 
     def test_wrong_timing_contract(self):
-        for value in ("KERNEL silex slots8 2048 1024 40 123",
-                      "KERNEL silex slots8 2048 2048 nan 123",
-                      "KERNEL silex slots8 2048 2048 40 inf",
-                      "KERNEL silex slots8 2048 2048 0 123",
+        for value in ("KERNEL silex private 2048 1024 40 123",
+                      "KERNEL silex private 2048 2048 nan 123",
+                      "KERNEL silex private 2048 2048 40 inf",
+                      "KERNEL silex private 2048 2048 0 123",
                       "KERNEL unknown slots8 2048 2048 40 123"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 timing(value)

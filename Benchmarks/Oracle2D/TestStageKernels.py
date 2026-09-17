@@ -1,4 +1,11 @@
 import unittest
+import io
+import json
+import tempfile
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+import RunStageKernels
 
 from RunStageKernels import PROFILES, compare_states, signature_interval, states, timing
 
@@ -8,6 +15,35 @@ class StageKernelTests(unittest.TestCase):
 
     def records(self):
         return "\n".join(f"STATE {p} {i} 1 2 3 4 5 0.6 0.8 0" for p in range(8) for i in range(16))
+
+    def test_pipeline_chooses_matching_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("silex", "slots", "packed", "oracle"):
+                (root / name).write_text(name)
+            def output(full):
+                return "\n".join(f"STATE {p} {i} " + " ".join(["0"] * 8)
+                                 for p in range(2048 if full else 8) for i in range(16))
+            def execute(binary, *arguments):
+                if arguments:
+                    return output(arguments == ("--check-full",))
+                engine = "silex" if binary.name == "silex" else "clang"
+                layout = "private" if engine == "silex" else ("packed4" if binary.name == "packed" else "slots8")
+                elapsed = {"silex": 40, "slots": 20, "packed": 80}[binary.name]
+                return f"KERNEL integration {engine} {layout} 8192 2048 {elapsed} 0"
+            arguments = ["runner", "--stage", "integration", "--silex-layout", "packed4",
+                         "--silex", str(root / "silex"), "--clang-slots", str(root / "slots"),
+                         "--clang-packed", str(root / "packed"), "--box2d-check", str(root / "oracle"),
+                         "--output", str(root / "report.json")]
+            with patch("sys.argv", arguments), patch.object(RunStageKernels, "execute", execute), \
+                 patch.object(RunStageKernels, "replay", return_value=states(output(True), self.profile, full=True)), \
+                 redirect_stdout(io.StringIO()):
+                self.assertEqual(RunStageKernels.main(), 0)
+            report = json.loads((root / "report.json").read_text())
+            self.assertEqual(report["same_layout_reference"], "clang-packed")
+            self.assertEqual(report["silex_over_clang_same_layout"], 0.5)
+            self.assertEqual(report["clang_slots_over_packed"], 0.25)
+            self.assertEqual(report["compiler_parity"], "demonstrated-for-this-kernel")
 
     def test_rejects_missing_duplicate_and_nonfinite_states(self):
         output = self.records()
@@ -35,13 +71,13 @@ class StageKernelTests(unittest.TestCase):
     def test_timing_rejects_wrong_metadata_and_unobserved_output(self):
         final = {(2047, i): (1, 0, 0, 0, 0, 0, 0, 0) for i in range(16)}
         signature = signature_interval(final, self.profile)
-        good = "KERNEL integration silex slots8 8192 2048 25 8192"
-        timing(good, "integration", "silex", signature)
-        for invalid in (good.replace("silex", "clang"), good.replace("slots8", "packed4"),
+        good = "KERNEL integration silex private 8192 2048 25 8192"
+        timing(good, "integration", "silex", signature, "packed4")
+        for invalid in (good.replace("silex", "clang"), good.replace("private", "slots8"),
                         good.replace("2048", "8"), good.replace("25 8192", "25 0"),
                         good.replace("25 8192", "nan 8192")):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
-                timing(invalid, "integration", "silex", signature)
+                timing(invalid, "integration", "silex", signature, "packed4")
 
     def test_preparation_checks_all_fields_and_each_pass_contributes(self):
         profile = PROFILES["preparation"]

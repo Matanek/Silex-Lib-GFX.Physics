@@ -96,11 +96,30 @@ def compare_states(reference, candidate):
     return maximum_error
 
 
+def add_layout_arguments(parser):
+    parser.add_argument("--silex-layout", required=True, choices=("slots8", "packed4"),
+                        help="Verified binary layout: current native=slots8, LLVM=packed4; record build provenance")
+    parser.add_argument("--baseline-silex-layout", choices=("slots8", "packed4"))
+
+
+def layout_configuration(parser, args):
+    if bool(args.baseline_silex) != bool(args.baseline_silex_layout):
+        parser.error("--baseline-silex and --baseline-silex-layout must be supplied together")
+    layouts = {"silex": args.silex_layout, "clang-slots": "slots8", "clang-packed": "packed4"}
+    if args.baseline_silex:
+        layouts["silex-before"] = args.baseline_silex_layout
+    return layouts
+
+
+def matching_clang(layout):
+    return {"slots8": "clang-slots", "packed4": "clang-packed"}[layout]
+
+
 def timing(output):
     fields = output.split()
     if len(fields) != 7 or fields[0] != "KERNEL" or fields[3:5] != ["2048", "2048"]:
         raise ValueError(f"invalid timing record: {output}")
-    if (fields[1], fields[2]) not in {("silex", "slots8"), ("clang", "slots8"), ("clang", "packed4")}:
+    if (fields[1], fields[2]) not in {("silex", "private"), ("clang", "slots8"), ("clang", "packed4")}:
         raise ValueError("unknown engine/layout")
     elapsed, signature = map(float, fields[5:])
     if not math.isfinite(elapsed) or elapsed <= 0 or not math.isfinite(signature):
@@ -108,15 +127,16 @@ def timing(output):
     return {"engine": fields[1], "layout": fields[2], "elapsed_ms": elapsed, "signature": signature}
 
 
-def checked_timing(output, name, signature):
+def checked_timing(output, name, signature, layout):
     record = timing(output)
     expected_engine = "silex" if name.startswith("silex") else "clang"
-    expected_layout = "packed4" if name == "clang-packed" else "slots8"
+    expected_layout = "private" if name.startswith("silex") else layout
     if (record["engine"], record["layout"]) != (expected_engine, expected_layout):
         raise ValueError(f"wrong executable metadata for {name}")
     expected, allowance = signature
     if abs(record["signature"] - expected) > allowance:
         raise ValueError(f"timed signature differs from verified final states: {name}")
+    record["layout"] = layout
     return record
 
 
@@ -147,7 +167,9 @@ def main():
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--require-parity", action="store_true")
     parser.add_argument("--output", type=Path)
+    add_layout_arguments(parser)
     args = parser.parse_args()
+    layouts = layout_configuration(parser, args)
     if args.check_only and args.require_parity:
         parser.error("--require-parity needs timing")
     binaries = {"silex": args.silex, "clang-slots": args.clang_slots, "clang-packed": args.clang_packed}
@@ -157,10 +179,10 @@ def main():
     full_reference = states(execute(args.box2d_check, "--check-full"), full=True)
     check_totals(reference)
     check_totals(full_reference)
-    result = {"schema": 2, "captured_at": datetime.now(timezone.utc).isoformat(),
+    result = {"schema": 3, "captured_at": datetime.now(timezone.utc).isoformat(),
               "host": platform.platform(), "machine": platform.machine(),
               "workload": {"contacts": 2048, "passes": 2048, "workers": 1,
-                           "float_bits": 32, "fma": True, "allocation_in_kernel": False},
+                           "float_bits": 32, "layouts": layouts, "allocation_in_kernel": False},
               "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
               "numerical_budgets": {"local_absolute": 2e-6, "state_type": "float32",
                                     "total_recurrence": "exact float32", "full": "identical-input replay"},
@@ -189,23 +211,24 @@ def main():
     if not args.check_only:
         # Warm-up excluded. Serial processes, rotating order, no compilation.
         for name, binary in binaries.items():
-            result["warmup"][name] = checked_timing(execute(binary), name, signatures[name])
+            result["warmup"][name] = checked_timing(execute(binary), name, signatures[name], layouts[name])
             result["samples"][name] = []
         names = list(binaries)
         for sample in range(7):
             offset = sample % len(names)
             for name in names[offset:] + names[:offset]:
-                record = checked_timing(execute(binaries[name]), name, signatures[name])
+                record = checked_timing(execute(binaries[name]), name, signatures[name], layouts[name])
                 if record["signature"] != result["warmup"][name]["signature"]:
                     raise ValueError(f"unstable final signature: {name}")
                 result["samples"][name].append(record)
             print(f"sample {sample + 1}/7 complete", flush=True)
         for name in names:
             result["summary"][name] = summary(result["samples"][name])
-        result["silex_over_clang_same_layout"] = result["summary"]["silex"]["median_ms"] / result["summary"]["clang-slots"]["median_ms"]
+        result["same_layout_reference"] = matching_clang(args.silex_layout)
+        result["silex_over_clang_same_layout"] = result["summary"]["silex"]["median_ms"] / result["summary"][result["same_layout_reference"]]["median_ms"]
         result["clang_slots_over_packed"] = result["summary"]["clang-slots"]["median_ms"] / result["summary"]["clang-packed"]["median_ms"]
         result["timing_admissible"] = all(s["mad_percent"] <= 5 and s["min_ms"] >= 20 for s in result["summary"].values())
-        candidate, reference_time = result["summary"]["silex"], result["summary"]["clang-slots"]
+        candidate, reference_time = result["summary"]["silex"], result["summary"][result["same_layout_reference"]]
         result["compiler_parity"] = parity_result(candidate, reference_time, result["timing_admissible"])
         if args.baseline_silex:
             before = result["summary"]["silex-before"]

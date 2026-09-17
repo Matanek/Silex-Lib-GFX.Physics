@@ -147,6 +147,6 @@ func main() {
                 body_view[i].s * 13.0 + capped * 17.0) as float64
             i++
         }
-        print("KERNEL integration silex slots8 ", count, " ", passes, " ", elapsed, " ", signature)
+        print("KERNEL integration silex private ", count, " ", passes, " ", elapsed, " ", signature)
     }
 }

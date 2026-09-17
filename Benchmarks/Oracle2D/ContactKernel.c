@@ -10,8 +10,8 @@
 #include <string.h>
 #include <time.h>
 
-// Same field offsets and strides as the current Silex slot representation.
-// A second build without SLOT8 diagnoses layout cost, not compiler equality.
+// Same field offsets and strides as the native Silex slot representation.
+// Without SLOT8, compact fields match the LLVM backend; the runner selects the verified layout.
 #ifdef SLOT8
 #define F(name) float name; uint32_t padding_##name
 #define LAYOUT "slots8"

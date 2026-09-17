@@ -3,19 +3,34 @@
 These development-only kernels separate compilation from engine architecture.
 The C witnesses keep Clang `-O3 -DNDEBUG -ffp-contract=fast`, without fast-math,
 `restrict`, forced inlining, volatile work or disabled vectorization. Silex uses
-native Release. Box2D is pinned at
+Release with its backend and flags recorded. Box2D is pinned at
 `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`; its unmodified code is invoked only
 for correctness, with contraction disabled in that reference build.
 
 | Case | Physics path in `Module/World2D.sx` | Box2D path | Compared operations and cardinality | Storage and precision |
 | --- | --- | --- | --- | --- |
-| Normal/friction/rolling resolution | `solve_soft_single_collision`, `solve_soft_compact_circle` | `contact_solver.c`, `b2SolveOverflowContacts` | One point, two bodies, accumulated impulses; 2,048 independent contacts × 2,048 passes | State 7 floats, constraint 2 integers + 20 floats, impulse 4 floats; float32 arithmetic; Silex 8-byte slots matched by C padding, plus separate packed C |
+| Normal/friction/rolling resolution | `solve_soft_single_collision`, `solve_soft_compact_circle` | `contact_solver.c`, `b2SolveOverflowContacts` | One point, two bodies, accumulated impulses; 2,048 independent contacts × 2,048 passes | State 7 floats, constraint 2 integers + 20 floats, impulse 4 floats; float32 arithmetic; Native 8-byte slots match padded C; LLVM compact structs match packed C |
 | Velocity and position integration | `integrate_body_velocity`, `integrate_body_position` | `solver.c`, `b2IntegrateVelocitiesTask`, `b2IntegratePositionsTask`; `b2IntegrateRotation` | Forces, gravity, two damping reciprocals, linear/angular speed limits, normalized rotation and translation; 8,192 bodies × 2,048 passes; two body traversals per pass | Body 7 floats: 56/28 bytes; forces 8 floats + 2 booleans: 80/36 bytes in slots/packed layouts; float32, boolean results exact |
 | One-point constraint preparation | `prepare_collision_constraints`, `prepare_circle_collision_constraints` | `contact_solver.c`, `b2PrepareOverflowContacts` | Normal/tangent/rolling effective masses, anchor separation, relative velocity, warm impulses, static/dynamic softness; 8,192 contacts × 2,048 passes | Input 24 floats: 192/96 bytes; prepared result 26 floats: 208/104 bytes, slots/packed; float32 arithmetic, float64 signature accumulation |
 
+The Silex binaries report `private` storage instead of assuming a backend
+layout. Both runners require `--silex-layout packed4` for the current LLVM
+backend or `--silex-layout slots8` for the native backend. Verify this against
+the actual compiler layout and record the build flags and executable hash;
+the runners cannot discover backend provenance from an arbitrary executable.
+An optional baseline also requires `--baseline-silex-layout`. The matching C
+variant supplies the parity denominator; the other layout stays diagnostic.
+Old binaries hard-coding `slots8` are rejected and must be rebuilt.
+
+LLVM currently uses compact float32 struct fields and emits with
+`-fp-contract=off`; native Release can fuse eligible operations. The C timing
+variants keep `-ffp-contract=fast`. These are explicit compiler configurations,
+not a common FMA guarantee. Numerical replay permits the resulting legal
+rounding differences without changing the arithmetic tolerances.
+
 The integration sources implement the same Box2D ordering in both languages.
 Production Physics currently damps after adding forces, stores an angle and
-recomputes its sine/cosine, and includes center-of-mass adjustment. Box2D damps
+composes normalized rotation deltas, and includes center-of-mass adjustment. Box2D damps
 the old velocity and integrates a normalized rotation pair. The witness does
 not change Physics or claim those production paths are algorithmically equal.
 The contact witness likewise does not reproduce production batching/scheduling.
@@ -36,8 +51,9 @@ Each pass prepares its complete output buffer and consumes all 26 fields in a
 weighted float32 sum accumulated in float64. **That reduction is timed** and is
 identical in C/Silex; it prevents unobserved earlier outputs from disappearing.
 The reported case is preparation plus observation, not a measured share of a
-production step. The 16 input frames occupy 24 MiB in the Silex/slots8 layout
-and 12 MiB packed; the output buffer occupies 1.625/0.8125 MiB. Initialization
+production step. The 16 input frames occupy 24 MiB with native/slots8 storage
+and 12 MiB with LLVM/packed4 storage; the output buffer occupies
+1.625/0.8125 MiB. Initialization
 and allocation are excluded. There is no forced inlining or anti-optimization
 barrier; invariant hoisting and vectorization remain available to both compilers.
 
@@ -99,7 +115,7 @@ decimal printing; it is independent of the looser cumulative diagnostic.
 One excluded warmup precedes seven serial processes in rotating order.
 MAD must be at most 5% and each sample at least 20 ms. Overlapping time ranges
 are inconclusive; parity requires the Silex maximum no greater than the
-matching-layout Clang minimum. Use `--require-parity` to enforce that gate.
+explicitly selected matching-layout Clang minimum. Use `--require-parity` to enforce that gate.
 
 ## Reproduction
 
@@ -113,10 +129,10 @@ cmake --build "$ARTIFACTS/stages" --target \
   gfx_physics_integration_kernel_slots gfx_physics_integration_kernel_packed \
   gfx_physics_integration_kernel_reference
 Silex/Toolchain/zig-out/bin/silex compile \
-  Packages/GFX.Physics/Benchmarks/IntegrationKernel2D.sx --release --nocache \
+  Packages/GFX.Physics/Benchmarks/IntegrationKernel2D.sx --backend llvm --release --nocache \
   -o "$ARTIFACTS/integration-release"
 python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/RunStageKernels.py \
-  --stage integration --silex "$ARTIFACTS/integration-release" \
+  --stage integration --silex-layout packed4 --silex "$ARTIFACTS/integration-release" \
   --clang-slots "$ARTIFACTS/stages/gfx_physics_integration_kernel_slots" \
   --clang-packed "$ARTIFACTS/stages/gfx_physics_integration_kernel_packed" \
   --box2d-check "$ARTIFACTS/stages/gfx_physics_integration_kernel_reference" \

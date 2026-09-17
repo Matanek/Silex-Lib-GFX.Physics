@@ -224,6 +224,6 @@ func main() {
                 impulse_view[i].total * 19.0 + impulse_view[i].rolling * 23.0) as float64
             i++
         }
-        print("KERNEL silex slots8 ", count, " ", passes, " ", elapsed_ms, " ", signature)
+        print("KERNEL silex private ", count, " ", passes, " ", elapsed_ms, " ", signature)
     }
 }

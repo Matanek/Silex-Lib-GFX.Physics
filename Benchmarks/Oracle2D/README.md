@@ -347,29 +347,30 @@ Build three C witnesses with the existing pinned-oracle CMake configuration:
 ```text
 cmake -S Packages/GFX.Physics/Benchmarks/Oracle2D -B /tmp/gfx-physics-box2d -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/gfx-physics-box2d --target gfx_physics_contact_kernel_slots gfx_physics_contact_kernel_packed gfx_physics_contact_kernel_reference
-silex compile Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx --release -o /tmp/gfx-physics-contact-kernel
-python3 Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py --silex /tmp/gfx-physics-contact-kernel --clang-slots /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_slots --clang-packed /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_packed --box2d-check /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_reference --output /tmp/contact-kernel.json
+silex compile Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx --backend llvm --release -o /tmp/gfx-physics-contact-kernel
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py --silex-layout packed4 --silex /tmp/gfx-physics-contact-kernel --clang-slots /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_slots --clang-packed /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_packed --box2d-check /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_reference --output /tmp/contact-kernel.json
 ```
 
 These optional targets use a POSIX clock and Clang; they are not part of
-the default build. On the current macOS ARM64 backend, every Silex scalar
-occupies an eight-byte storage slot. `slots` reproduces those offsets and
-strides (State 56 B, Constraint 176 B, Impulses 32 B), while `packed` keeps
-four-byte floats. Both retain 64-bit indices. Comparing Silex with `slots`
-isolates compilation/runtime overhead; comparing the two C witnesses diagnoses
-layout cost. Neither comparison changes the public engine's representation.
+the default build. The native backend uses eight-byte scalar slots in these
+structs: State 56 B, Constraint 176 B, Impulses 32 B. LLVM uses compact structs:
+State 28 B, Constraint 96 B, Impulses 16 B. Both retain 64-bit indices.
+The Silex output says `private`; the runner requires the layout verified from
+build provenance (`--silex-layout packed4` for LLVM, `slots8` for native), then
+selects that C variant for parity. Comparing the two C witnesses diagnoses
+layout cost. Rebuild older Silex witnesses that hard-code `slots8`.
 
-Silex Release fuses eligible multiply/add operations. The C timing targets
-therefore use `-O3 -DNDEBUG -ffp-contract=fast`, **without fast-math** or
-disabled SIMD. The real Box2D reference remains a correctness check and is
+The native Silex backend can fuse eligible multiply/add operations; LLVM
+currently emits with `-fp-contract=off`. The C timing targets use
+`-O3 -DNDEBUG -ffp-contract=fast`, **without fast-math** or disabled SIMD. The real Box2D reference remains a correctness check and is
 not timed by this harness. Its established full-engine build flags are unchanged.
 
 The runner checks correctness before timing, excludes one warm-up per binary,
 rotates seven serial processes per variant, checks final signatures and reports
 median, range and MAD. A minimum below 20 ms or MAD above 5% makes the timing
 inadmissible. The JSON includes raw samples and executable hashes. Use
-`--baseline-silex <binary-before>` to include a compiler baseline in the same
-seven-process series. It receives the same correctness checks and excluded
+`--baseline-silex <binary-before> --baseline-silex-layout <layout>` to include
+a compiler baseline in the same seven-process series. It receives the same correctness checks and excluded
 warmup; all four variants rotate through the execution order. The report adds
 the after/before median ratio and its observed minimum/maximum range, which is
 a sample envelope, not a statistical confidence interval. This comparison

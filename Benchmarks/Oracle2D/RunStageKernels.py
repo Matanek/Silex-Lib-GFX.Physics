@@ -10,7 +10,7 @@ import platform
 import subprocess
 import sys
 
-from RunContactKernel import execute, parity_result, summary
+from RunContactKernel import add_layout_arguments, execute, layout_configuration, matching_clang, parity_result, summary
 
 
 # Fixed local float32 tolerances. Long trajectories permit different legal FMA
@@ -94,11 +94,11 @@ def replay(binary, candidate, profile):
     return states(result.stdout, profile, full=True)
 
 
-def timing(output, stage, name, signature):
+def timing(output, stage, name, signature, layout):
     fields = output.split()
     engine = "silex" if name.startswith("silex") else "clang"
-    layout = "packed4" if name == "clang-packed" else "slots8"
-    if len(fields) != 8 or fields[:6] != ["KERNEL", stage, engine, layout, str(COUNT), str(PASSES)]:
+    reported_layout = "private" if name.startswith("silex") else layout
+    if len(fields) != 8 or fields[:6] != ["KERNEL", stage, engine, reported_layout, str(COUNT), str(PASSES)]:
         raise ValueError(f"invalid timing metadata: {output}")
     elapsed, actual = map(float, fields[6:])
     if not math.isfinite(elapsed) or elapsed <= 0 or not math.isfinite(actual):
@@ -120,7 +120,9 @@ def main():
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--require-parity", action="store_true")
     parser.add_argument("--output", type=Path)
+    add_layout_arguments(parser)
     args = parser.parse_args()
+    layouts = layout_configuration(parser, args)
     if args.check_only and args.require_parity:
         parser.error("--require-parity needs timing")
     profile = PROFILES[args.stage]
@@ -129,10 +131,10 @@ def main():
         binaries["silex-before"] = args.baseline_silex
     references = {full: states(execute(args.box2d_check, "--check-full" if full else "--check"), profile, full)
                   for full in (False, True)}
-    result = {"schema": 1, "stage": args.stage, "captured_at": datetime.now(timezone.utc).isoformat(),
+    result = {"schema": 2, "stage": args.stage, "captured_at": datetime.now(timezone.utc).isoformat(),
               "host": platform.platform(), "machine": platform.machine(),
               "workload": {"count": COUNT, "passes": PASSES, "workers": 1, "float_bits": 32,
-                           "fma": True, "allocation_in_kernel": False,
+                           "layouts": layouts, "allocation_in_kernel": False,
                            "signature_reduction_in_kernel": profile["accumulate_passes"],
                            "input_frames": 16 if args.stage == "preparation" else 1},
               "oracle_revision": "8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3",
@@ -165,19 +167,20 @@ def main():
         print(f"PASS {name}: short and full trajectories", flush=True)
     if not args.check_only:
         for name, binary in binaries.items():
-            result["warmup"][name] = timing(execute(binary), args.stage, name, signatures[name])
+            result["warmup"][name] = timing(execute(binary), args.stage, name, signatures[name], layouts[name])
             result["samples"][name] = []
         names = list(binaries)
         for sample in range(7):
             offset = sample % len(names)
             for name in names[offset:] + names[:offset]:
-                result["samples"][name].append(timing(execute(binaries[name]), args.stage, name, signatures[name]))
+                result["samples"][name].append(timing(execute(binaries[name]), args.stage, name, signatures[name], layouts[name]))
             print(f"sample {sample + 1}/7 complete", flush=True)
         for name in names:
             result["summary"][name] = summary(result["samples"][name])
-        candidate, reference = result["summary"]["silex"], result["summary"]["clang-slots"]
+        result["same_layout_reference"] = matching_clang(args.silex_layout)
+        candidate, reference = result["summary"]["silex"], result["summary"][result["same_layout_reference"]]
         result["silex_over_clang_same_layout"] = candidate["median_ms"] / reference["median_ms"]
-        result["clang_slots_over_packed"] = reference["median_ms"] / result["summary"]["clang-packed"]["median_ms"]
+        result["clang_slots_over_packed"] = result["summary"]["clang-slots"]["median_ms"] / result["summary"]["clang-packed"]["median_ms"]
         result["timing_admissible"] = all(s["mad_percent"] <= 5 and s["min_ms"] >= 20 for s in result["summary"].values())
         result["compiler_parity"] = parity_result(candidate, reference, result["timing_admissible"])
         print(json.dumps(result["summary"], indent=2))
