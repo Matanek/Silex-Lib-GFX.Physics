@@ -598,12 +598,11 @@
       "id": "joint-world-back-reference",
       "domain": "world",
       "capability": "recover the owning world from body, collider, chain and joint handles",
-      "status": "partial",
-      "tracking": "Physics-2D-Final-Parity",
+      "status": "divergent",
       "patterns": ["^b2(?:Body|Shape|Chain|Joint)_GetWorld$"],
       "silex_contract": "Consumers can explicitly retain or pass World2D alongside every handle family for creation, queries and destruction. A bare handle does not recover its world.",
       "evidence": ["Tests/Consumer/Tests/WorldOwnership.sx", "Docs/FR/WorldOwnership.md", "Docs/EN/WorldOwnership.md"],
-      "rationale": "Task-14 supplies a tested explicit-composition proposal. Acceptance of this facade adaptation remains pending; it is not yet declared equivalent to GetWorld."
+      "rationale": "The accepted Silex facade keeps World2D in the application scene or passes it explicitly with a handle for global operations. This uniform adaptation covers all four GetWorld symbols; a bare handle intentionally does not recover its world. World-wide invalidation remains a separate lifecycle obligation."
     },
     {
       "id": "joint-generic-constraint-tuning",

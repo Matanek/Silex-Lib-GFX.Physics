@@ -15,12 +15,12 @@ sous-ensemble utile, `planned` pour une capacité absente mais planifiée,
 plumbing sans comportement de gameplay. Chaque statut impose preuve, Spec ou
 justification appropriée.
 
-La matrice courante compte 50 capacités couvertes, 3 divergentes, 5 exclues
-et trois partielles : qualification transitoire des joints motor/mouse,
-accès au monde propriétaire et invalidation globale à la fin de vie du monde.
+La matrice courante compte 50 capacités couvertes, 4 divergentes, 5 exclues
+et deux partielles : qualification transitoire des joints motor/mouse
+et invalidation globale à la fin de vie du monde.
 Le réglage commun des cinq familles qui l’utilisent est comparé à la référence.
-Le parcours de [composition explicite du monde](WorldOwnership.md) est testé,
-mais son acceptation comme adaptation reste ouverte. La porte finale reste
+Le parcours de [composition explicite du monde](WorldOwnership.md) est testé
+et accepté comme adaptation uniforme des quatre accès GetWorld. La porte finale reste
 rouge tant que ces obligations ne sont pas closes. Ces nombres décrivent
 l’inventaire, pas une preuve globale d’équivalence physique.
 

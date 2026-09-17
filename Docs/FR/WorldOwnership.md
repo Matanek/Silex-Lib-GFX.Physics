@@ -29,6 +29,6 @@ ne constitue actuellement **pas** une preuve de cette invalidation globale :
 un handle conservé peut encore accéder à son stockage. Le cycle de vie global
 reste en cours de qualification ; conservez le monde pendant l’usage des objets.
 
-Cette composition explicite est un parcours disponible et testé. Son adoption
-comme adaptation de `b2Body_GetWorld`, `b2Shape_GetWorld`, `b2Chain_GetWorld` et
-`b2Joint_GetWorld` reste ouverte dans la matrice de complétude.
+Cette composition explicite est l’adaptation retenue pour `b2Body_GetWorld`,
+`b2Shape_GetWorld`, `b2Chain_GetWorld` et `b2Joint_GetWorld`. Elle ne change pas
+l’obligation distincte de qualifier la fin de vie globale du monde.

@@ -24,12 +24,12 @@ unjustified exclusion fails validation.
 | `divergent` | Silex deliberately expresses the same intention differently. | A consumer proof and a testable rationale. |
 | `excluded` | The symbol is integration plumbing or a non-gameplay implementation control. | An explicit rationale. |
 
-The current matrix contains 50 covered, 3 divergent, 5 excluded and three
-partial capabilities: motor/mouse transient qualification, owning-world access,
-and global invalidation at the end of world lifetime. Common tuning for the
+The current matrix contains 50 covered, 4 divergent, 5 excluded and two
+partial capabilities: motor/mouse transient qualification and global invalidation
+at the end of world lifetime. Common tuning for the
 five reference families that use it is compared with the reference. The
-[explicit world composition](WorldOwnership.md) usage is tested; its acceptance
-as an adaptation remains open. The final gate stays red until these obligations
+[explicit world composition](WorldOwnership.md) usage is tested and accepted as the uniform
+adaptation of all four GetWorld accessors. The final gate stays red until these obligations
 are resolved. These counts describe the inventory, not full physical equivalence.
 
 ## Intentional boundary

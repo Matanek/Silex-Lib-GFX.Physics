@@ -28,6 +28,6 @@ retained aliases. Letting only the world variable leave scope currently does
 storage. World lifetime remains under qualification; retain the world while
 using its objects.
 
-Explicit composition is an available, tested usage. Its adoption as an
-adaptation of `b2Body_GetWorld`, `b2Shape_GetWorld`, `b2Chain_GetWorld`, and
-`b2Joint_GetWorld` remains open in the completeness matrix.
+Explicit composition is the accepted adaptation of `b2Body_GetWorld`,
+`b2Shape_GetWorld`, `b2Chain_GetWorld`, and `b2Joint_GetWorld`. It does not
+resolve the separate obligation to qualify global world lifetime.
