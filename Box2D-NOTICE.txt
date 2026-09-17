@@ -3,9 +3,13 @@ src/solver.h, src/{distance,prismatic,revolute,weld,wheel}_joint.c,
 src/math_functions.c and include/box2d/math_functions.h, commit
 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3. Step-relative displacement and
 normalized rotation integration in Module/World2D.sx follow src/solver.c
-and include/box2d/math_functions.h at the same revision.
+and include/box2d/math_functions.h at the same revision. Speculative contact
+margin, contact frequency caps and post-solve hit criteria follow src/constants.h,
+src/world.c and src/solver.c at that revision.
 Geometry in Module/Geometry2D.sx is adapted from src/geometry.c,
 src/distance.c, src/hull.c and src/manifold.c at the same pinned revision.
+The chain/circle manifold uses adjacent ghost vertices to reject endpoint
+regions owned by neighboring chain segments.
 This includes analytic ray intersections and initial-overlap shape casts.
 Box2D is not linked into the Silex runtime.
 

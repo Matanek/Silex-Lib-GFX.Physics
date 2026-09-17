@@ -3081,30 +3081,53 @@ public class World2D {
 
     private func collect_discrete_hit_events() {
         if self.hit_event_body_count == 0 { return }
-        for candidate in self.active_pairs {
-            let pair = self.candidate_bodies[candidate]
-            let hit_colliders = self.candidate_colliders[candidate]
-            if !self.candidate_pre_solve_allowed[candidate] ||
-                pair_is_sensor(self.store, pair) ||
-                !hit_colliders.valid ||
-                !contact_policy_enabled(self.store, hit_colliders, 4)
-            {
-                continue
+        // Once per solved contact, after all substeps. A speculative manifold
+        // alone is not an impact: at least one point must receive an impulse.
+        for entry in self.soft_constraints.entries {
+            var candidate = -1
+            var point = Math.Vec2()
+            var normal = Math.Vec2()
+            var approach_speed = self.current_hit_event_threshold + 0.0
+            var hit = false
+            if entry >= 0 {
+                let collision = self.soft_constraints.compact_collisions[entry]
+                let impulses = self.soft_constraints.compact_impulses[entry]
+                candidate = collision.cache_index
+                normal = collision.normal
+                let speed = -collision.initial_normal_velocity
+                if speed > approach_speed && impulses.total_normal > 0.0 {
+                    hit = true
+                    approach_speed = speed
+                    point = Math.Vec2(
+                        self.store.previous_positions_x[collision.first_body],
+                        self.store.previous_positions_y[collision.first_body]
+                    ).add(collision.first_contact)
+                }
+            } else {
+                let collision = self.soft_constraints.collisions[-entry - 1]
+                candidate = collision.cache_index
+                normal = collision.normal
+                let first_speed = -collision.initial_normal_velocity_first
+                if first_speed > approach_speed &&
+                    collision.total_normal_impulse_first > 0.0
+                {
+                    hit = true
+                    approach_speed = first_speed
+                    point = collision.contacts.first
+                }
+                let second_speed = -collision.initial_normal_velocity_second
+                if collision.contacts.count > 1 && second_speed > approach_speed &&
+                    collision.total_normal_impulse_second > 0.0
+                {
+                    hit = true
+                    approach_speed = second_speed
+                    point = collision.contacts.second
+                }
             }
-            let manifold = collider_contact_manifold(self.store, pair, self.candidate_colliders[candidate])
-            if manifold.point_count() == 0 { continue }
-            let point = manifold.points[0].point
-            let relative = velocity_at(self.store, pair.second, point)
-                .subtract(velocity_at(self.store, pair.first, point))
-            let approach_speed = -relative.dot(manifold.normal)
-            if approach_speed >= self.current_hit_event_threshold {
-                self.append_contact_hit_event(
-                    pair,
-                    hit_colliders,
-                    point,
-                    manifold.normal,
-                    approach_speed
-                )
+            let colliders = self.candidate_colliders[candidate]
+            if hit && colliders.valid && contact_policy_enabled(self.store, colliders, 4) {
+                self.append_contact_hit_event(self.candidate_bodies[candidate],
+                    colliders, point, normal, approach_speed)
             }
         }
     }
@@ -3135,9 +3158,9 @@ public class World2D {
                 self.store,
                 mover
             )
-            // Box2D can rely on speculative contacts up to half the minimum
-            // extent. This solver has no speculative contact row yet, so start
-            // the sweep at the quarter-extent allowance used for chain CCD.
+            // Keep the existing conservative CCD threshold. Speculative rows
+            // cover near contacts; changing sweep eligibility needs its own
+            // continuous-motion qualification.
             if !self.body_requires_continuous_sweep(
                 mover,
                 surface_motion,
@@ -4802,12 +4825,8 @@ public class World2D {
                 index++
                 continue
             }
-            if self.tight_bounds[pair.first].overlaps(
+            if expanded_contact_bounds(self.tight_bounds[pair.first], 0.02).overlaps(
                 self.tight_bounds[pair.second]
-            ) || speculative_circle_pair(
-                self.store,
-                pair.first,
-                pair.second
             ) {
                 self.active_pairs.append(index)
             }
@@ -5388,7 +5407,6 @@ public class World2D {
         if self.profiling_enabled {
             self.current_collision_build_ms = profile_clock.tick() * 1000.0
         }
-        if delta > 0.0 { self.collect_discrete_hit_events() }
         self.build_constraint_colors()
         self.current_soft_step_stages.append(1)
         self.execute_begin_soft_step_bodies()
@@ -5397,15 +5415,17 @@ public class World2D {
         if delta > 0.0 {
             let substep_delta = delta / substep_count as float
             let inverse_substep_delta = 1.0 / substep_delta
+            let contact_hertz = Math.min(self.current_contact_stiffness_hertz,
+                0.125 * inverse_substep_delta)
             let contact_softness = make_contact_softness(
-                self.current_contact_stiffness_hertz,
+                contact_hertz,
                 self.current_contact_damping_ratio,
                 substep_delta,
                 inverse_substep_delta,
                 self.current_maximum_correction_speed
             )
             let static_softness = make_contact_softness(
-                2.0 * self.current_contact_stiffness_hertz,
+                2.0 * contact_hertz,
                 self.current_contact_damping_ratio,
                 substep_delta,
                 inverse_substep_delta,
@@ -5505,6 +5525,7 @@ public class World2D {
             self.current_soft_step_stages.append(9)
             self.execute_finalize_soft_step_bodies()
             self.joints.finish_step(inverse_substep_delta)
+            self.collect_discrete_hit_events()
         } else {
             self.joints.finish_step(0.0)
         }
@@ -7323,7 +7344,7 @@ func build_circle_collision(
         first_body,
         second_body,
         normal,
-        ContactPoints2D(contact),
+        ContactPoints2D(contact, -penetration),
         -penetration,
         cache_index,
         cache,
@@ -7597,7 +7618,7 @@ func build_circle_box_collision(
         first_body,
         second_body,
         normal,
-        ContactPoints2D(contact),
+        ContactPoints2D(contact, -penetration),
         -penetration,
         cache_index,
         cache

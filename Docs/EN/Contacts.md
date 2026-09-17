@@ -58,7 +58,7 @@ the touched collider or chain segment supplies friction, restitution, tangent
 surface speed, and rolling resistance without changing the public read surface.
 
 When several colliders of the same two bodies meet at a corner, the world
-selects the deepest manifold instead of depending on collider creation order.
+retains one contact per exact collider pair, independently of creation order.
 Solver anchors remain relative to each center of mass: oriented-shape anchors
 follow body rotation, while circle anchors remain rotation-invariant. A
 compound body with an offset center of mass can therefore rotate or reverse a
@@ -78,3 +78,28 @@ material behavior are covered by
 Collider identity, resolved impulses, current sensor overlaps and stale-value
 lifetime are covered by
 [`../Tests/Consumer/Tests/ContactSnapshots.sx`](../../Tests/Consumer/Tests/ContactSnapshots.sx).
+
+## Speculative contacts
+
+A pair can produce a manifold up to a positive separation of 0.02 m. An
+inclined face retains both clipped endpoints: one may exceed that margin while
+the other already touches the support. The solver can
+therefore slow an approach before penetration, even with CCD disabled. A begin
+event marks the appearance of a manifold, which may precede geometric touching.
+A hit event requires an approach speed strictly above `hit_event_threshold`
+and a normal impulse actually accumulated at that point during the step. An
+approach without an impulse is not a hit.
+
+Effective contact frequency is capped at one eighth of inverse substep duration,
+then doubled for a static surface. Getters retain the configured frequency.
+Snapshots preserve the separation prepared at the beginning of the step,
+including circle contacts.
+
+The [speculative witness](../../Benchmarks/SpeculativeContactsOracle2D.sx) compares
+1,536 samples of circle/circle, box/box, capsule/capsule, and segment/capsule:
+two step durations, one or four substeps, gaps below and above the margin,
+resting pairs, and the exact hit threshold. CCD is disabled to isolate the
+speculative response. These cases do not prove every shape, speed, or scene.
+
+The [geometry witness](../../Benchmarks/GeometryOracle2D.sx) also checks four
+inclined predictive faces, including one partially outside its support.

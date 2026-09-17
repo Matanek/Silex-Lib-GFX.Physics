@@ -98,3 +98,7 @@ silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContinuousCollision.sx
 La comparaison sur un pas avec Box2D 3.1.1, y compris les divergences de
 réponse documentées, est décrite dans
 [`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
+
+Les événements de début peuvent signaler un manifold prédictif avant le toucher
+géométrique. Les impacts exigent une impulsion et dépassent strictement le seuil
+configuré ; voir [les contacts prédictifs](Contacts.md).

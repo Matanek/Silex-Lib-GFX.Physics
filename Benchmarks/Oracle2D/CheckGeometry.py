@@ -37,16 +37,16 @@ def main() -> int:
     if reference.keys() != candidate.keys():
         print("geometry case sets differ", file=sys.stderr)
         return 1
-    required = {"segment_circle", "capsule_capsule", "segment_capsule"}
-    if not required <= reference.keys() or len(reference) != 11:
-        print("expected eleven geometry cases including the three contact pairs", file=sys.stderr)
+    required = {"segment_circle", "capsule_capsule", "segment_capsule", "tilted_segment", "tilted_polygon", "tilted_polygon_far", "clipped_tilted_polygon"}
+    if not required <= reference.keys() or len(reference) != 15:
+        print("expected fifteen geometry cases including contact pairs and predictive faces", file=sys.stderr)
         return 1
     for name, expected in reference.items():
         actual = candidate[name]
         if len(expected) != len(actual):
             print(f"{name}: field counts differ", file=sys.stderr)
             return 1
-        if name in {"segment_circle", "capsule_capsule", "segment_capsule"}:
+        if name in {"segment_circle", "capsule_capsule", "segment_capsule", "tilted_segment", "tilted_polygon", "tilted_polygon_far", "clipped_tilted_polygon"}:
             count = 1 if name == "segment_circle" else 2
             if len(actual) != 3 + 3 * count or expected[0] != count or actual[0] != count:
                 print(f"{name}: unexpected manifold point count", file=sys.stderr)

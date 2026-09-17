@@ -508,3 +508,25 @@ Build `gfx_physics_box2d_compound_contacts_oracle`, run the Silex witness in
 Debug/Release at 1/2/4 workers, and compare their output with
 `CheckCompoundContacts.py`. `CompoundContacts.sx` also checks independent custom
 filters/pre-solve decisions and invalidation of every contact by a filter joint.
+
+## Speculative contact response
+
+`SpeculativeContactsOracle.c` and `../SpeculativeContactsOracle2D.sx` compare
+1,536 observations with CCD disabled: four shape pair families, four gaps,
+four approach speeds, one/four substeps, six steps and two step durations.
+`CheckSpeculativeContacts.py` requires the exact case set and fixed absolute
+tolerances: 1e-4 m for positions/separations, 1e-3 m/s for velocity, 2e-3 for
+normal impulse, and exact counts for geometry, contacts and begin/end/hit.
+`GeometryOracle` additionally checks four inclined or clipped predictive faces.
+
+From the workspace root (or the isolated Spec Worktree group):
+
+```text
+cmake --build /tmp/gfx-physics-box2d --target gfx_physics_box2d_speculative_contacts_oracle -j1
+/tmp/gfx-physics-box2d/gfx_physics_box2d_speculative_contacts_oracle > /tmp/speculative-box2d.txt
+silex run Packages/GFX.Physics/Benchmarks/SpeculativeContactsOracle2D.sx --backend llvm --debug > /tmp/speculative-silex.txt
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckSpeculativeContacts.py /tmp/speculative-box2d.txt /tmp/speculative-silex.txt
+```
+
+Repeat with `--release`. The six comparator tests reject missing cases, extra
+cases, duplicates, invalid counts, non-finite values and numerical violations.

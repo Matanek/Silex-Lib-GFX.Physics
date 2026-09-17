@@ -79,6 +79,29 @@ int main(void)
     print_pair("capsule_capsule", b2CollideCapsules(&capsule, identity, &pair_capsule, high));
     print_pair("segment_capsule", b2CollideSegmentAndCapsule(&segment, identity, &segment_capsule, low));
 
+    b2Polygon predictive_floor = b2MakeBox(2.0f, 0.25f);
+    b2Transform floor_transform = {{0.0f, -0.25f}, b2Rot_identity};
+    b2Segment tilted_segment = {{-0.55f, 0.0f}, {0.55f, 0.0f}};
+    b2Transform segment_transform = {{0.0f, 0.0f}, b2MakeRot(0.03f)};
+    b2Manifold tilted = b2CollideSegmentAndPolygon(
+        &tilted_segment, segment_transform, &predictive_floor, floor_transform);
+    tilted.normal = b2Neg(tilted.normal);
+    print_pair("tilted_segment", tilted);
+    b2Vec2 predictive_vertices[] = {
+        {-0.5f, -0.4f}, {0.5f, -0.4f}, {0.42f, 0.45f}, {-0.42f, 0.45f},
+    };
+    b2Hull predictive_hull = b2ComputeHull(predictive_vertices, 4);
+    b2Polygon predictive_polygon = b2MakePolygon(&predictive_hull, 0.1f);
+    b2Transform polygon_transform = {{0.0f, 0.5f}, b2MakeRot(0.05f)};
+    print_pair("tilted_polygon", b2CollidePolygons(
+        &predictive_floor, floor_transform, &predictive_polygon, polygon_transform));
+    polygon_transform.q = b2MakeRot(0.1f);
+    print_pair("tilted_polygon_far", b2CollidePolygons(
+        &predictive_floor, floor_transform, &predictive_polygon, polygon_transform));
+    polygon_transform = (b2Transform){{1.8f, 0.5f}, b2MakeRot(0.05f)};
+    print_pair("clipped_tilted_polygon", b2CollidePolygons(
+        &predictive_floor, floor_transform, &predictive_polygon, polygon_transform));
+
     b2RayCastInput ray = {{-3.0f, 0.0f}, {6.0f, 0.0f}, 1.0f};
     b2CastOutput ray_output = b2RayCastPolygon(&ray, &box_shape);
     printf("ray %d %.9g %.9g %.9g %.9g %.9g\n",

@@ -113,7 +113,7 @@ test "compute transformed distances overlaps and manifolds" {
     assert(face_manifold.normal.nearly_equal(Math.Vec2.right(), 0.0001))
 }
 
-test "keep a tilted support on one contact until its face is level" {
+test "retain both incident face endpoints for predictive contact" {
     let floor = Physics.ShapePlacement2D(
         Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.5))),
         Physics.Transform2D(position:Math.Vec2(0.0, -0.25))
@@ -144,9 +144,9 @@ test "keep a tilted support on one contact until its face is level" {
         Physics.Transform2D(position:Math.Vec2(0.0, 0.5))
     )
 
-    assert(Physics.Geometry2D.manifold(floor, tilted_segment).point_count() == 1)
+    assert(Physics.Geometry2D.manifold(floor, tilted_segment).point_count() == 2)
     assert(Physics.Geometry2D.manifold(floor, flat_segment).point_count() == 2)
-    assert(Physics.Geometry2D.manifold(floor, tilted_polygon).point_count() == 1)
+    assert(Physics.Geometry2D.manifold(floor, tilted_polygon).point_count() == 2)
     assert(Physics.Geometry2D.manifold(floor, flat_polygon).point_count() == 2)
 
     let narrow_floor = Physics.ShapePlacement2D(

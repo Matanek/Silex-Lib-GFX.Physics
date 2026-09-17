@@ -1,7 +1,7 @@
 use GFX.Physics
 use STD.Math
 
-func print_pair(name:str, first:Physics.ShapePlacement2D, second:Physics.ShapePlacement2D, count:int) {
+func print_pair(name:str, first:Physics.ShapePlacement2D, second:Physics.ShapePlacement2D, count:int, predictive:bool = false) {
     let manifold = Physics.Geometry2D.manifold(first, second)
     let repeated = Physics.Geometry2D.manifold(first, second)
     let reversed = Physics.Geometry2D.manifold(second, first)
@@ -12,7 +12,7 @@ func print_pair(name:str, first:Physics.ShapePlacement2D, second:Physics.ShapePl
     var index = 0
     while index < count {
         let point = manifold.points[index]
-        assert(point.separation < 0.0)
+        if !predictive { assert(point.separation < 0.0) }
         assert(point.point.nearly_equal(repeated.points[index].point, 0.0001))
         var found = false
         for other in reversed.points {
@@ -75,6 +75,28 @@ let segment_capsule = Physics.ShapePlacement2D(Physics.Shape2D.capsule(Physics.C
 print_pair("segment_circle", segment, pair_circle, 1)
 print_pair("capsule_capsule", capsule, pair_capsule, 2)
 print_pair("segment_capsule", segment, segment_capsule, 2)
+
+let predictive_floor = Physics.ShapePlacement2D(
+    Physics.Shape2D.box(Physics.Box2D(Math.Vec2(4.0, 0.5))),
+    Physics.Transform2D(position:Math.Vec2(0.0, -0.25))
+)
+let predictive_polygon = Physics.Shape2D.polygon(Physics.Polygon2D([
+    Math.Vec2(-0.5, -0.4), Math.Vec2(0.5, -0.4),
+    Math.Vec2(0.42, 0.45), Math.Vec2(-0.42, 0.45)
+], 0.1))
+print_pair("tilted_segment", predictive_floor, Physics.ShapePlacement2D(
+    Physics.Shape2D.segment(Physics.Segment2D(Math.Vec2(-0.55, 0.0), Math.Vec2(0.55, 0.0))),
+    Physics.Transform2D(rotation:0.03)
+), 2, true)
+print_pair("tilted_polygon", predictive_floor, Physics.ShapePlacement2D(
+    predictive_polygon, Physics.Transform2D(position:Math.Vec2(0.0, 0.5), rotation:0.05)
+), 2, true)
+print_pair("tilted_polygon_far", predictive_floor, Physics.ShapePlacement2D(
+    predictive_polygon, Physics.Transform2D(position:Math.Vec2(0.0, 0.5), rotation:0.1)
+), 2, true)
+print_pair("clipped_tilted_polygon", predictive_floor, Physics.ShapePlacement2D(
+    predictive_polygon, Physics.Transform2D(position:Math.Vec2(1.8, 0.5), rotation:0.05)
+), 2, true)
 
 let ray = Physics.Geometry2D.ray_cast(
     Physics.Ray2D(Math.Vec2(-3.0, 0.0), Math.Vec2(6.0, 0.0)),

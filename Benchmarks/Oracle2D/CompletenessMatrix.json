@@ -381,6 +381,7 @@
       "domain": "integration",
       "capability": "static-tree rebuild, speculative test mode and memory dump",
       "status": "excluded",
+      "evidence": ["Benchmarks/SpeculativeContactsOracle2D.sx", "Benchmarks/Oracle2D/SpeculativeContactsOracle.c", "Benchmarks/Oracle2D/CheckSpeculativeContacts.py", "Benchmarks/Oracle2D/TestSpeculativeContacts.py", "Docs/FR/Contacts.md", "Docs/EN/Contacts.md"],
       "patterns": ["^b2World_(?:RebuildStaticTree|EnableSpeculative|DumpMemoryStats)$"],
       "silex_contract": "World2D selects and maintains its acceleration and solver structures privately.",
       "rationale": "These are diagnostic or implementation-tuning controls rather than stable gameplay intentions."

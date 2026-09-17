@@ -137,3 +137,7 @@ silex test Packages/GFX.Physics/Tests/Consumer/Tests/ContactSnapshots.sx
 The pinned Box2D 3.1.1 one-step comparison, including its documented response
 divergences, is described in
 [`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
+
+Begin events can describe a speculative manifold before geometric touching.
+Hit events require an impulse and strictly exceed the configured speed threshold;
+see [speculative contacts](Contacts.md).

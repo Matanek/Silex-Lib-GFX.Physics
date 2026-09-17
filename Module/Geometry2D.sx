@@ -279,19 +279,25 @@ class ConvexProxy2D {
     let one_sided:bool
     let front_normal:Math.Vec2
     let feature:int
+    let previous_point:Math.Vec2
+    let next_point:Math.Vec2
 
     init(
         points:Math.Vec2[],
         radius:float,
         one_sided:bool = false,
         front_normal:Math.Vec2 = Math.Vec2(),
-        feature:int = 0
+        feature:int = 0,
+        previous_point:Math.Vec2 = Math.Vec2(),
+        next_point:Math.Vec2 = Math.Vec2()
     ) {
         self.points = points
         self.radius = radius
         self.one_sided = one_sided
         self.front_normal = front_normal
         self.feature = feature
+        self.previous_point = previous_point
+        self.next_point = next_point
     }
 }
 
@@ -378,7 +384,9 @@ func shape_proxies(shape:Shape2D, transform:Transform2D) ConvexProxy2D[] {
                     0.0,
                     true,
                     Math.Vec2(edge.y, -edge.x).normalized(),
-                    index
+                    index,
+                    transform.point(value.points[(index + value.points.count() - 1) % value.points.count()]),
+                    transform.point(value.points[(index + 2) % value.points.count()])
                 ))
                 index++
             }
@@ -931,6 +939,13 @@ func proxy_manifold(
     first:ConvexProxy2D,
     second:ConvexProxy2D
 ) Manifold2D {
+    if first.one_sided && second.points.count() == 1 {
+        return chain_circle_manifold(first, second)
+    }
+    if second.one_sided && first.points.count() == 1 {
+        let reversed = chain_circle_manifold(second, first)
+        return Manifold2D(reversed.normal.negated(), reversed.points)
+    }
     let center_delta = proxy_center(second).subtract(proxy_center(first))
     var axes:Math.Vec2[] = []
     append_edge_axes(axes, first)
@@ -952,143 +967,20 @@ func proxy_manifold(
         if center_delta.dot(axis) < 0.0 { axis = axis.negated() }
         let separation = minimum_projection(second, axis) - second.radius -
             maximum_projection(first, axis) - first.radius
-        if separation > 0.005 { return Manifold2D() }
+        if separation > 0.02 { return Manifold2D() }
         if separation > best_separation {
             best_separation = separation
             best_normal = axis
         }
     }
 
-    let tangent = Math.Vec2(-best_normal.y, best_normal.x)
-    let contact_slop = 0.005
-    let face_epsilon = 0.000001
-    let first_core_surface = maximum_projection(first, best_normal)
-    let second_core_surface = minimum_projection(second, best_normal)
-    var first_tangent_min = 3.4028235e38
-    var first_tangent_max = -3.4028235e38
-    var first_support_count = 0
-    for point in first.points {
-        if first_core_surface - point.dot(best_normal) <= face_epsilon {
-            let projection = point.dot(tangent)
-            first_tangent_min = Math.min(first_tangent_min, projection)
-            first_tangent_max = Math.max(first_tangent_max, projection)
-            first_support_count++
-        }
-    }
-    var second_tangent_min = 3.4028235e38
-    var second_tangent_max = -3.4028235e38
-    var second_support_count = 0
-    for point in second.points {
-        if point.dot(best_normal) - second_core_surface <= face_epsilon {
-            let projection = point.dot(tangent)
-            second_tangent_min = Math.min(second_tangent_min, projection)
-            second_tangent_max = Math.max(second_tangent_max, projection)
-            second_support_count++
-        }
-    }
-    let first_surface = first_core_surface + first.radius
-    let second_surface = second_core_surface - second.radius
-    if first_support_count > 1 {
-        var incident_count = 0
-        var incident_min_tangent = 3.4028235e38
-        var incident_max_tangent = -3.4028235e38
-        var incident_min_normal = 0.0
-        var incident_max_normal = 0.0
-        var incident_min_separation = 0.0
-        var incident_max_separation = 0.0
-        for point in second.points {
-            let point_tangent = point.dot(tangent)
-            let point_normal = point.dot(best_normal) - second.radius
-            let separation = point_normal - first_surface
-            if separation <= contact_slop {
-                let clipped_tangent = Math.max(
-                    first_tangent_min,
-                    Math.min(point_tangent, first_tangent_max)
-                )
-                if clipped_tangent < incident_min_tangent {
-                    incident_min_tangent = clipped_tangent
-                    incident_min_normal = point_normal
-                    incident_min_separation = separation
-                }
-                if clipped_tangent > incident_max_tangent {
-                    incident_max_tangent = clipped_tangent
-                    incident_max_normal = point_normal
-                    incident_max_separation = separation
-                }
-                incident_count++
-            }
-        }
-        if incident_count > 0 {
-            var clipped:ManifoldPoint2D[] = []
-            clipped.append(ManifoldPoint2D(
-                best_normal.multiply(
-                    (first_surface + incident_min_normal) * 0.5
-                ).add(tangent.multiply(incident_min_tangent)),
-                incident_min_separation
-            ))
-            if incident_count > 1 &&
-                incident_max_tangent - incident_min_tangent > contact_slop
-            {
-                clipped.append(ManifoldPoint2D(
-                    best_normal.multiply(
-                        (first_surface + incident_max_normal) * 0.5
-                    ).add(tangent.multiply(incident_max_tangent)),
-                    incident_max_separation
-                ))
-            }
-            return Manifold2D(best_normal, clipped)
-        }
-    }
-    if second_support_count > 1 {
-        var incident_count = 0
-        var incident_min_tangent = 3.4028235e38
-        var incident_max_tangent = -3.4028235e38
-        var incident_min_normal = 0.0
-        var incident_max_normal = 0.0
-        var incident_min_separation = 0.0
-        var incident_max_separation = 0.0
-        for point in first.points {
-            let point_tangent = point.dot(tangent)
-            let point_normal = point.dot(best_normal) + first.radius
-            let separation = second_surface - point_normal
-            if separation <= contact_slop {
-                let clipped_tangent = Math.max(
-                    second_tangent_min,
-                    Math.min(point_tangent, second_tangent_max)
-                )
-                if clipped_tangent < incident_min_tangent {
-                    incident_min_tangent = clipped_tangent
-                    incident_min_normal = point_normal
-                    incident_min_separation = separation
-                }
-                if clipped_tangent > incident_max_tangent {
-                    incident_max_tangent = clipped_tangent
-                    incident_max_normal = point_normal
-                    incident_max_separation = separation
-                }
-                incident_count++
-            }
-        }
-        if incident_count > 0 {
-            var clipped:ManifoldPoint2D[] = []
-            clipped.append(ManifoldPoint2D(
-                best_normal.multiply(
-                    (second_surface + incident_min_normal) * 0.5
-                ).add(tangent.multiply(incident_min_tangent)),
-                incident_min_separation
-            ))
-            if incident_count > 1 &&
-                incident_max_tangent - incident_min_tangent > contact_slop
-            {
-                clipped.append(ManifoldPoint2D(
-                    best_normal.multiply(
-                        (second_surface + incident_max_normal) * 0.5
-                    ).add(tangent.multiply(incident_max_tangent)),
-                    incident_max_separation
-                ))
-            }
-            return Manifold2D(best_normal, clipped)
-        }
+    // Clip the incident edge as a whole. A separated endpoint remains useful
+    // to the predictive solver even when the other endpoint already touches.
+    let first_face = clipped_proxy_face(first, second, best_normal)
+    if first_face.point_count() > 0 { return first_face }
+    let second_face = clipped_proxy_face(second, first, best_normal.negated())
+    if second_face.point_count() > 0 {
+        return Manifold2D(best_normal, second_face.points)
     }
 
     let first_core = first.points[support_index(first, best_normal)]
@@ -1106,6 +998,109 @@ func proxy_manifold(
         best_separation
     ))
     return Manifold2D(best_normal, points)
+}
+
+func clipped_proxy_face(
+    reference:ConvexProxy2D,
+    incident:ConvexProxy2D,
+    normal:Math.Vec2
+) Manifold2D {
+    let tangent = Math.Vec2(-normal.y, normal.x)
+    let core_surface = maximum_projection(reference, normal)
+    var lower = 3.4028235e38
+    var upper = -3.4028235e38
+    var support_count = 0
+    for point in reference.points {
+        if core_surface - point.dot(normal) <= 0.000001 {
+            lower = Math.min(lower, point.dot(tangent))
+            upper = Math.max(upper, point.dot(tangent))
+            support_count++
+        }
+    }
+    if support_count < 2 || incident.points.count() < 2 { return Manifold2D() }
+
+    var edge_index = 0
+    if incident.points.count() > 2 {
+        var minimum_dot = 3.4028235e38
+        var index = 0
+        while index < incident.points.count() {
+            let next = (index + 1) % incident.points.count()
+            let edge = incident.points[next].subtract(incident.points[index])
+            let dot = Math.Vec2(edge.y, -edge.x).normalized().dot(normal)
+            if dot < minimum_dot { minimum_dot = dot; edge_index = index }
+            index++
+        }
+    }
+    let first = incident.points[edge_index]
+    let second = incident.points[(edge_index + 1) % incident.points.count()]
+    var low_point = first
+    var high_point = second
+    if first.dot(tangent) > second.dot(tangent) {
+        low_point = second
+        high_point = first
+    }
+    let incident_lower = low_point.dot(tangent)
+    let incident_upper = high_point.dot(tangent)
+    if incident_upper < lower || incident_lower > upper { return Manifold2D() }
+    let span = incident_upper - incident_lower
+    if span <= 0.00000011920929 { return Manifold2D() }
+    var clipped_lower = low_point
+    var clipped_upper = high_point
+    if span > 0.00000011920929 {
+        if incident_lower < lower {
+            clipped_lower = low_point.lerp(high_point, (lower - incident_lower) / span)
+        }
+        if incident_upper > upper {
+            clipped_upper = low_point.lerp(high_point, (upper - incident_lower) / span)
+        }
+    }
+    let lower_separation = clipped_lower.dot(normal) - core_surface
+    let upper_separation = clipped_upper.dot(normal) - core_surface
+    let radius = reference.radius + incident.radius
+    return Manifold2D(normal, [
+        ManifoldPoint2D(clipped_lower.add(normal.multiply(
+            0.5 * (reference.radius - incident.radius - lower_separation)
+        )), lower_separation - radius),
+        ManifoldPoint2D(clipped_upper.add(normal.multiply(
+            0.5 * (reference.radius - incident.radius - upper_separation)
+        )), upper_separation - radius)
+    ])
+}
+
+// Neighbor edges own their endpoint regions; rejecting those regions avoids
+// ghost normals when a circle crosses a chain vertex inside the speculative margin.
+func chain_circle_manifold(chain:ConvexProxy2D, circle:ConvexProxy2D) Manifold2D {
+    let first = chain.points[0]
+    let second = chain.points[1]
+    let center = circle.points[0]
+    let edge = second.subtract(first)
+    if Math.Vec2(edge.y, -edge.x).dot(center.subtract(first)) < 0.0 {
+        return Manifold2D()
+    }
+    let u = edge.dot(second.subtract(center))
+    let v = edge.dot(center.subtract(first))
+    var closest = first
+    if v <= 0.0 {
+        let previous_edge = first.subtract(chain.previous_point)
+        if previous_edge.dot(center.subtract(first)) <= 0.0 { return Manifold2D() }
+    } else if u <= 0.0 {
+        let next_edge = chain.next_point.subtract(second)
+        if next_edge.dot(center.subtract(second)) > 0.0 { return Manifold2D() }
+        closest = second
+    } else {
+        let squared_length = edge.length_squared()
+        if squared_length > 0.0 {
+            closest = first.multiply(u).add(second.multiply(v)).multiply(1.0 / squared_length)
+        }
+    }
+    let offset = center.subtract(closest)
+    let distance = offset.length()
+    let separation = distance - circle.radius
+    if separation > 0.02 { return Manifold2D() }
+    var normal = Math.Vec2()
+    if distance > 0.0 { normal = offset.multiply(1.0 / distance) }
+    let surface = center.subtract(normal.multiply(circle.radius))
+    return Manifold2D(normal, [ManifoldPoint2D(closest.lerp(surface, 0.5), separation)])
 }
 
 func append_edge_axes(output:&Math.Vec2[], proxy:ConvexProxy2D) {

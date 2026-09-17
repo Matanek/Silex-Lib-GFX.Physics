@@ -53,10 +53,12 @@ test "resolve capsule rounded polygon and segment contacts through Soft Step" {
 }
 
 test "settle the ShapeResponse polygon and segment on supported faces" {
+    // Keep the support under the entire rebound trajectory. A narrow platform
+    // can let either body fall off before its resting orientation is checked.
     var polygon_world = Physics.World2D()
     polygon_world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(3.0, 0.5)))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(30.0, 0.5)))
         ..position = Math.Vec2(3.0, -2.45)
     )
     var polygon = polygon_world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -74,6 +76,8 @@ test "settle the ShapeResponse polygon and segment on supported faces" {
         polygon_world.step(1.0 / 60.0)
         step++
     }
+    assert(polygon.position().y > -2.0 && polygon.position().y < -1.4)
+    assert(polygon.velocity().length() < 0.005)
     let polygon_angle = polygon.rotation()
     let polygon_sine = Math.sin(polygon_angle)
     let polygon_cosine = Math.cos(polygon_angle)
@@ -95,7 +99,7 @@ test "settle the ShapeResponse polygon and segment on supported faces" {
     var segment_world = Physics.World2D()
     segment_world.create_rigid_body(Physics.RigidBody2DSettings()
         ..body_type = Physics.BodyType2D.fixed
-        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(3.0, 0.5)))
+        ..shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(30.0, 0.5)))
         ..position = Math.Vec2(3.0, -2.45)
     )
     var segment = segment_world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -113,6 +117,8 @@ test "settle the ShapeResponse polygon and segment on supported faces" {
         segment_world.step(1.0 / 60.0)
         step++
     }
+    assert(segment.position().y > -2.21 && segment.position().y < -2.15)
+    assert(segment.velocity().length() < 0.005)
     assert(
         Math.abs(Math.sin(segment.rotation())) < 0.005,
         "segment stopped before reaching a supported face: angle=$(segment.rotation())"

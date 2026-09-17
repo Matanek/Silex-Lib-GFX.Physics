@@ -40,6 +40,10 @@ add_executable(gfx_physics_box2d_geometry_oracle GeometryOracle.c)
 target_compile_features(gfx_physics_box2d_geometry_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_geometry_oracle PRIVATE box2d)
 
+add_executable(gfx_physics_box2d_speculative_contacts_oracle SpeculativeContactsOracle.c)
+target_compile_features(gfx_physics_box2d_speculative_contacts_oracle PRIVATE c_std_17)
+target_link_libraries(gfx_physics_box2d_speculative_contacts_oracle PRIVATE box2d)
+
 add_executable(gfx_physics_box2d_compound_contacts_oracle CompoundContactsOracle.c)
 target_compile_features(gfx_physics_box2d_compound_contacts_oracle PRIVATE c_std_17)
 target_link_libraries(gfx_physics_box2d_compound_contacts_oracle PRIVATE box2d)
@@ -184,6 +188,11 @@ if(Python3_Interpreter_FOUND)
         NAME gfx_physics_distance_tuning_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestDistanceTuning.py
+    )
+    add_test(
+        NAME gfx_physics_speculative_contact_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestSpeculativeContacts.py
     )
     add_test(
         NAME gfx_physics_joint_constraint_checks
