@@ -16,7 +16,7 @@ func run_case(family:int,gap_index:int,speed_index:int,substeps:int,timing:int) 
         Physics.ShapePlacement2D(shape(family,false),Physics.Transform2D(position:Math.Vec2(0.0,y))))
     var initial_separation=0.0
     if geometry.point_count()>0 { initial_separation=geometry.points[0].separation }
-    var world=Physics.World2D(Physics.World2DSettings() ..gravity=Math.Vec2() ..continuous_collision_enabled=false)
+    var world=Physics.World2D(Physics.World2DSettings() ..gravity=Math.Vec2() ..continuous_collision_enabled=false ..contact_stiffness_hertz=40.0)
     world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type=Physics.BodyType2D.fixed
         ..shape=shape(family,true) ..friction=0.0 ..enable_contact_events=true ..enable_hit_events=true)
     var body=world.create_rigid_body(Physics.RigidBody2DSettings() ..shape=shape(family,false)

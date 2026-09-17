@@ -22,7 +22,7 @@ static void run(int family,int gap_index,int speed_index,int substeps,int timing
     if(family==1) { b2Polygon p=b2MakeBox(.5f,.5f); m=b2CollidePolygons(&p,a,&p,b); }
     if(family==2) m=b2CollideCapsules(&capsule,a,&capsule,b);
     if(family==3) m=b2CollideSegmentAndCapsule(&segment,a,&capsule,b);
-    b2WorldDef wd=b2DefaultWorldDef();wd.gravity=b2Vec2_zero;wd.enableContinuous=false;
+    b2WorldDef wd=b2DefaultWorldDef();wd.gravity=b2Vec2_zero;wd.enableContinuous=false;wd.contactHertz=40.0f;
     b2WorldId world=b2CreateWorld(&wd);
     b2BodyDef bd=b2DefaultBodyDef();b2BodyId ground=b2CreateBody(world,&bd);shape(ground,family,true);
     bd.type=b2_dynamicBody;bd.position=(b2Vec2){0,y};bd.linearVelocity=(b2Vec2){0,speeds[speed_index]};bd.fixedRotation=true;bd.enableSleep=false;
