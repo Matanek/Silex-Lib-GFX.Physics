@@ -581,23 +581,21 @@
       "id": "joint-lifecycle",
       "domain": "joint",
       "capability": "typed joint creation, validity and destruction",
-      "status": "partial",
-      "tracking": "Physics-2D-Final-Parity",
+      "status": "divergent",
       "patterns": ["^b2Create(?:Distance|Motor|Mouse|Filter|Prismatic|Revolute|Weld|Wheel)Joint$", "^b2DestroyJoint$", "^b2Joint_IsValid$"],
       "silex_contract": "World2D owns eight typed invalidable joint handles.",
       "evidence": ["Benchmarks/FilterJointOracle2D.sx", "Benchmarks/Oracle2D/FilterJointOracle.c", "Benchmarks/Oracle2D/CheckFilterJoint.py", "Benchmarks/Oracle2D/TestFilterJoint.py", "Docs/FR/FilterJoints.md", "Docs/EN/FilterJoints.md", "Tests/Consumer/Tests/Joints.sx"],
-      "rationale": "Task-22 qualifies immediate removal of existing contacts and rediscovery after joint destruction against an explicit public-API Box2D mapping. The raw reference has nine preserved lifecycle differences. Acceptance of this usage adaptation, including the lifetime-based filter joint switch, remains pending."
+      "rationale": "The accepted Silex usage applies collision policy on the next step: a live filter joint removes existing contacts, and destroying a blocking joint requests rediscovery without artificial body movement. The filter lifetime acts as its switch; mechanical joints retain their collision setting. Twenty-four stages match an explicit public-API Box2D mapping while preserving nine raw-reference lifecycle differences."
     },
     {
       "id": "joint-common-introspection",
       "domain": "joint",
       "capability": "joint bodies, kind, world, anchors, axis, reaction and separation",
-      "status": "partial",
-      "tracking": "Physics-2D-Final-Parity",
+      "status": "divergent",
       "patterns": ["^b2Joint_(?:GetType|GetBodyA|GetBodyB|GetLocalAnchorA|GetLocalAnchorB|GetReferenceAngle|GetLocalAxisA|GetCollideConnected|WakeBodies|GetConstraintForce|GetConstraintTorque|GetLinearSeparation|GetAngularSeparation|SetLocalAnchorA|SetLocalAnchorB|SetReferenceAngle|SetLocalAxisA|SetCollideConnected)$"],
       "silex_contract": "Typed handles expose connected bodies, local frames, collision policy, wake, separation and completed-step reactions without solver state.",
       "evidence": ["Benchmarks/FilterJointOracle2D.sx", "Benchmarks/Oracle2D/FilterJointOracle.c", "Benchmarks/Oracle2D/CheckFilterJoint.py", "Benchmarks/Oracle2D/TestFilterJoint.py", "Docs/FR/FilterJoints.md", "Docs/EN/FilterJoints.md", "Tests/Consumer/Tests/Joints.sx", "Tests/Consumer/Tests/JointRuntimeConfiguration.sx", "Benchmarks/JointsOracle2D.sx", "Benchmarks/Oracle2D/CheckJoints.py"],
-      "rationale": "Task-22 qualifies immediate removal of existing contacts and rediscovery after joint destruction against an explicit public-API Box2D mapping. The raw reference has nine preserved lifecycle differences. Acceptance of this usage adaptation, including the lifetime-based filter joint switch, remains pending."
+      "rationale": "The accepted Silex usage applies collision policy on the next step: a live filter joint removes existing contacts, and destroying a blocking joint requests rediscovery without artificial body movement. The filter lifetime acts as its switch; mechanical joints retain their collision setting. Twenty-four stages match an explicit public-API Box2D mapping while preserving nine raw-reference lifecycle differences."
     },
     {
       "id": "joint-world-back-reference",
