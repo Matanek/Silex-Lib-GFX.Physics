@@ -1,0 +1,179 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func option(name:str) bool {
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => { for argument in arguments { if argument == name { return true } } }
+    }
+    return false
+}
+
+class Fixture {
+    var world:Physics.World2D
+    var bodies:Physics.RigidBody2D[]
+    init(kind:int, count:int, workers:int) {
+        self.world = Physics.World2D(gravity:Math.Vec2())
+        self.world.enable_parallelism(workers)
+        self.bodies = []
+        for i in 0...count {
+            let x = i as float * 4.0
+            var settings = Physics.RigidBody2DSettings()
+                ..position = Math.Vec2(x,0.0)
+                ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5))
+                ..allow_sleep = false
+                ..enable_contact_events = true
+                ..enable_hit_events = true
+                ..enable_move_events = true
+                ..application_id = (2*i) as uint64
+            if kind == 1 { settings.create_implicit_collider = false }
+            if kind == 2 { settings.velocity = Math.Vec2(0.1,0.2) }
+            var first = self.world.create_rigid_body(settings)
+            self.bodies.append(first)
+            if kind != 2 {
+                settings.position = Math.Vec2(x+0.9,0.0)
+                settings.velocity = Math.Vec2(-0.1,0.0)
+                settings.application_id = (2*i+1) as uint64
+                var second = self.world.create_rigid_body(settings)
+                self.bodies.append(second)
+                if kind == 1 {
+                    first.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+                    second.set_mass_properties(Physics.MassProperties2D(1.0,1.0))
+                    self.world.create_distance_joint(first,second,Physics.DistanceJoint2DSettings()
+                        ..first_anchor = Math.Vec2(x,0.0)
+                        ..second_anchor = Math.Vec2(x+0.9,0.0)
+                        ..length = 1.0)
+                }
+            }
+        }
+    }
+}
+func same_pair(a:Physics.ContactPairSnapshot2D,b:Physics.ContactPairSnapshot2D) {
+    assert(a.first().body_application_id == b.first().body_application_id)
+    assert(a.second().body_application_id == b.second().body_application_id)
+}
+func same_manifold(a:Physics.Manifold2D,b:Physics.Manifold2D,dump:bool = false) {
+    if dump { print("manifold $(a.normal.x) $(a.normal.y) $(a.point_count())") }
+    assert(a.normal == b.normal && a.point_count() == b.point_count())
+    for i in 0...a.point_count() {
+        assert(a.points[i].point == b.points[i].point)
+        assert(a.points[i].separation == b.points[i].separation)
+        if dump { print("point $(a.points[i].point.x) $(a.points[i].point.y) $(a.points[i].separation)") }
+    }
+}
+func compare(a:Fixture,b:Fixture,dump:bool) {
+    assert(a.bodies.count() == b.bodies.count())
+    for i in 0...a.bodies.count() {
+        var first = a.bodies[i]
+        var second = b.bodies[i]
+        assert(first.position() == second.position())
+        assert(first.velocity() == second.velocity())
+        assert(first.rotation() == second.rotation())
+        assert(first.angular_velocity() == second.angular_velocity())
+        assert(first.is_awake() == second.is_awake())
+        if dump { print("body $(i) $(first.position().x) $(first.position().y) $(first.velocity().x) $(first.velocity().y) $(first.rotation()) $(first.angular_velocity()) $(first.is_awake())") }
+        assert(Math.abs(first.position().x) < 1_000_000.0 && Math.abs(first.position().y) < 1_000_000.0)
+        assert(Math.abs(first.velocity().x) < 1_000_000.0 && Math.abs(first.velocity().y) < 1_000_000.0)
+    }
+    assert(a.world.soft_step_stage_count() == b.world.soft_step_stage_count())
+    for i in 0...a.world.soft_step_stage_count() { assert(a.world.soft_step_stage_at(i) == b.world.soft_step_stage_at(i)) }
+    var ac:Physics.Contact2D[] = []
+    var bc:Physics.Contact2D[] = []
+    a.world.write_contacts(ac)
+    b.world.write_contacts(bc)
+    assert(ac.count() == bc.count())
+    for i in 0...ac.count() {
+        same_pair(ac[i].pair(),bc[i].pair())
+        if dump { print("contact $(ac[i].pair().first().body_application_id!) $(ac[i].pair().second().body_application_id!)") }
+        same_manifold(ac[i].manifold(),bc[i].manifold(),dump)
+        // Pointwise assertions also identify the impulse channel under test.
+        let an = ac[i].normal_impulses()
+        let bn = bc[i].normal_impulses()
+        let at = ac[i].tangent_impulses()
+        let bt = bc[i].tangent_impulses()
+        assert(an.count() == bn.count() && at.count() == bt.count())
+        for point in 0...an.count() {
+            assert(an[point] == bn[point])
+            if dump { print("normal $(an[point])") }
+        }
+        for point in 0...at.count() {
+            assert(at[point] == bt[point])
+            if dump { print("tangent $(at[point])") }
+        }
+    }
+    var am:Physics.BodyMoveEvent2D[] = []
+    var bm:Physics.BodyMoveEvent2D[] = []
+    a.world.write_body_move_events(am)
+    b.world.write_body_move_events(bm)
+    assert(am.count() == bm.count())
+    for i in 0...am.count() {
+        assert(am[i].application_id() == bm[i].application_id())
+        assert(am[i].transform().position == bm[i].transform().position)
+        assert(am[i].transform().rotation == bm[i].transform().rotation)
+        assert(am[i].fell_asleep() == bm[i].fell_asleep())
+        if dump { print("move $(am[i].application_id()!) $(am[i].transform().position.x) $(am[i].transform().position.y) $(am[i].transform().rotation) $(am[i].fell_asleep())") }
+    }
+    var ab:Physics.ContactBeginEvent2D[] = []
+    var bb:Physics.ContactBeginEvent2D[] = []
+    a.world.write_contact_begin_events(ab)
+    b.world.write_contact_begin_events(bb)
+    assert(ab.count() == bb.count())
+    for i in 0...ab.count() {
+        same_pair(ab[i].pair(),bb[i].pair())
+        if dump { print("begin $(ab[i].pair().first().body_application_id!) $(ab[i].pair().second().body_application_id!)") }
+        same_manifold(ab[i].manifold(),bb[i].manifold(),dump)
+    }
+    var ae:Physics.ContactEndEvent2D[] = []
+    var be:Physics.ContactEndEvent2D[] = []
+    a.world.write_contact_end_events(ae)
+    b.world.write_contact_end_events(be)
+    assert(ae.count() == be.count())
+    for i in 0...ae.count() {
+        same_pair(ae[i].pair(),be[i].pair())
+        if dump { print("end $(ae[i].pair().first().body_application_id!) $(ae[i].pair().second().body_application_id!)") }
+    }
+    var ah:Physics.ContactHitEvent2D[] = []
+    var bh:Physics.ContactHitEvent2D[] = []
+    a.world.write_contact_hit_events(ah)
+    b.world.write_contact_hit_events(bh)
+    assert(ah.count() == bh.count())
+    for i in 0...ah.count() {
+        same_pair(ah[i].pair(),bh[i].pair())
+        assert(ah[i].point() == bh[i].point())
+        assert(ah[i].normal() == bh[i].normal())
+        assert(ah[i].approach_speed() == bh[i].approach_speed())
+        if dump { print("hit $(ah[i].pair().first().body_application_id!) $(ah[i].pair().second().body_application_id!) $(ah[i].point().x) $(ah[i].point().y) $(ah[i].normal().x) $(ah[i].normal().y) $(ah[i].approach_speed())") }
+    }
+    if dump { print("events $(ac.count()) $(am.count()) $(ab.count()) $(ae.count()) $(ah.count())") }
+}
+func main() {
+    var kind = 0
+    if option("--joints") { kind = 1 }
+    if option("--bodies") { kind = 2 }
+    var count = 4_096
+    if kind == 2 { count = 16_384 }
+    if option("--below") { count-- }
+    if option("--above") { count++ }
+    var workers = 4
+    if option("--workers-2") { workers = 2 }
+    var substeps = 4
+    if option("--substeps-1") { substeps = 1 }
+    if option("--substeps-2") { substeps = 2 }
+    if option("--substeps-8") { substeps = 8 }
+    var direct = Fixture(kind,count,1)
+    var parallel = Fixture(kind,count,workers)
+    let dump = option("--dump")
+    var dispatched = 0
+    for step in 0...4 {
+        direct.world.step(1.0/60.0,substeps)
+        parallel.world.step(1.0/60.0,substeps)
+        if dump { print("step $(step)") }
+        compare(direct,parallel,dump)
+        assert(direct.world.soft_step_parallel_dispatch_count() == 0)
+        dispatched += parallel.world.soft_step_parallel_dispatch_count()
+        print("parallel kind=$(kind) count=$(count) workers=$(workers) substeps=$(substeps) step=$(step) dispatch=$(parallel.world.soft_step_parallel_dispatch_count()) color=$(parallel.world.soft_step_maximum_color_count()) exact=true")
+    }
+    if option("--below") { assert(dispatched == 0) }
+    else { assert(dispatched > 0) }
+}

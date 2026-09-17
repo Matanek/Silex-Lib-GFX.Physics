@@ -624,3 +624,34 @@ participation by every worker, exact range coverage, pool reuse, and repeated
 real-world state equality at 1/2/4 workers. The adapter is exercised on macOS;
 these tests make no Windows or performance claim. The runtime Physics package
 has no Box2D or POSIX task-adapter dependency.
+
+## Silex parallel thresholds
+
+`../ParallelThresholds2D.sx` builds independent serial and parallel worlds.
+It compares every body's pose, velocity and awake state after each of four
+steps, plus ordered contacts, manifold points, impulses and movement/contact
+events. Independent contact pairs and distance joints exercise the 4096
+constraints-per-color threshold; sparse moving bodies exercise the 16384-body
+threshold. Internal dispatch counters must stay zero below each threshold and
+be positive at or above it.
+
+`CheckParallelThresholds.py` runs two independent executions per configuration,
+at two and four workers immediately below/at/above each threshold with four
+substeps. Additional threshold cases use one, two and eight substeps. Each run
+also asserts exact equality against its serial world. Complete value/event
+traces are compressed beside the report; their SHA-256 signatures must match
+across repetitions and worker counts at identical scene/substep settings.
+Numeric printing preserves the scalar values used by this witness; signed
+zero can differ textually even when the in-process equality accepts it.
+
+From the workspace root, compile the witness in Debug and Release, then run
+the checker separately for each executable:
+
+```text
+silex compile Packages/GFX.Physics/Benchmarks/ParallelThresholds2D.sx --backend llvm --debug -o /private/tmp/physics-parallel-debug
+python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelThresholds.py --binary /private/tmp/physics-parallel-debug --report /private/tmp/physics-parallel-debug.json
+```
+
+Use `--probe` for one threshold case per workload before the full grid.
+These are correctness witnesses, not performance measurements or proof of
+every joint family, CCD, sensors, callback order or lifecycle transitions.

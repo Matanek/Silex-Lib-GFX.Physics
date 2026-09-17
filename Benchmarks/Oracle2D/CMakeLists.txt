@@ -179,6 +179,11 @@ endif()
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME gfx_physics_parallel_threshold_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestParallelThresholds.py
+    )
+    add_test(
         NAME gfx_physics_oracle_worker_world
         COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/CheckTaskSystem.py
             $<TARGET_FILE:gfx_physics_box2d_oracle>
