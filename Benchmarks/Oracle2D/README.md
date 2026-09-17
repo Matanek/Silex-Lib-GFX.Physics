@@ -679,3 +679,31 @@ repetitions and, with `--reference`, builds. Every positive step must dispatch;
 the zero-time step must not. The witness asserts that every named lifecycle
 channel was exercised. These are correctness checks, not timing measurements
 or an inter-engine comparison.
+
+## Parallel mechanical joint families
+
+`ParallelJointFamilies2D.sx` distributes 4096 independent constraints across
+seven families: distance, motor, mouse, prismatic, revolute, weld and wheel.
+There are only 8192 bodies, below the body integration threshold, so positive
+dispatch counts prove parallel constraint work. Every step also requires a
+constraint color containing all 4096 joints and a nonzero reaction in every
+family. Springs, limits and motors are enabled where applicable. The filter
+joint has no mechanical constraint and is covered by the lifecycle witness.
+
+The witness compares every body's position, velocity, rotation and angular
+velocity, plus each joint's identity, reaction force/torque and instantaneous
+linear/angular separation. Eight steps use 1, 2, 4 or 8 substeps. The checker
+runs two independent processes per configuration at two and four workers and
+requires complete state traces to match exactly across workers, repetitions
+and builds. Different substep configurations are compared independently.
+
+```text
+silex compile Packages/GFX.Physics/Benchmarks/ParallelJointFamilies2D.sx --backend llvm --debug -o /private/tmp/physics-joints-debug
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelJointFamilies.py --binary /private/tmp/physics-joints-debug --report /private/tmp/physics-joints-debug.json
+silex compile Packages/GFX.Physics/Benchmarks/ParallelJointFamilies2D.sx --backend llvm --release -o /private/tmp/physics-joints-release
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelJointFamilies.py --binary /private/tmp/physics-joints-release --report /private/tmp/physics-joints-release.json --reference /private/tmp/physics-joints-debug.json
+```
+
+Run these commands from the workspace root, or from the Spec Worktree group
+when qualifying a Spec candidate. These checks establish intra-engine
+correctness; they do not measure speed or replace differential Box2D checks.
