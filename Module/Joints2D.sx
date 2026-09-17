@@ -395,6 +395,19 @@ package class JointStore2D {
     var color_offsets:int[]
     var entry_colors:int[]
 
+    // World finalization invalidates every generation and releases bulk storage.
+    func invalidate_all() {
+        self.slot_generations = []
+        self.slot_dense_indices = []
+        self.dense_slots = []
+        self.free_slots = []
+        self.joints = []
+        self.colored_entries = []
+        self.color_counts = []
+        self.color_offsets = []
+        self.entry_colors = []
+    }
+
     init() {
         self.bodies = BodyStore2D()
         self.next_stable_order = 0

@@ -24,11 +24,30 @@ création, requête, remplacement de colliders, remplacement d’un corps depuis
 chacune des huit familles de joints et invalidation des handles détruits.
 
 La destruction explicite d’un corps invalide ses colliders et joints ainsi
-que leurs copies conservées. La sortie de portée de la seule variable monde
-ne constitue actuellement **pas** une preuve de cette invalidation globale :
-un handle conservé peut encore accéder à son stockage. Le cycle de vie global
-reste en cours de qualification ; conservez le monde pendant l’usage des objets.
+que leurs copies conservées. Quand la dernière référence atteignable au monde
+disparaît, la simulation se termine et tous ses handles deviennent invalides :
+corps, colliders, chaînes et huit familles de joints. `is_valid()` retourne
+alors `false` ; lire ou modifier l’objet par ce handle échoue avec un diagnostic.
+Conserver un handle seul ne prolonge pas la simulation. Conserver un alias du
+monde, notamment dans une scène, la prolonge.
+
+Un callback lié à la scène peut former un cycle avec le monde. Quand ce cycle
+n’est plus atteignable, Silex le finalise également. Si un callback retire la
+dernière référence extérieure pendant `step` ou `refresh_contacts`, le monde
+reste vivant jusqu’au retour de l’appel actif. Les restrictions de mutation
+pendant le pas continuent de s’appliquer.
+
+Les données des snapshots de contacts et d’événements restent lisibles après
+la fin du monde ; leurs handles incorporés deviennent invalides. Créer un
+nouveau monde ne réactive jamais un ancien handle. Le témoin Box2D 3.1.1
+épinglé montre une différence sur ce dernier point : ses IDs bruts peuvent
+redevenir valides après réutilisation d’un emplacement de monde. Silex conserve
+l’identité du monde d’origine et refuse cet accès à une nouvelle simulation.
+
+Les [tests de fin de vie](../../Tests/Consumer/Tests/WorldLifetime.sx) vérifient
+les aliases, les cycles, les callbacks actifs, les snapshots et l’indépendance
+de deux mondes. Les [accès périmés](../../Tests/Consumer/check-world-lifetime.py)
+sont vérifiés pour chaque famille de handle.
 
 Cette composition explicite est l’adaptation retenue pour `b2Body_GetWorld`,
-`b2Shape_GetWorld`, `b2Chain_GetWorld` et `b2Joint_GetWorld`. Elle ne change pas
-l’obligation distincte de qualifier la fin de vie globale du monde.
+`b2Shape_GetWorld`, `b2Chain_GetWorld` et `b2Joint_GetWorld`.

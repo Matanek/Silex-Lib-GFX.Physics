@@ -124,3 +124,12 @@ from `Plugin.build`. No ECS query remains active during their execution.
 Removals and deactivations performed in these callbacks are reconciled before
 any following catch-up step. `GFX.Nodes` updates its areas and rays there, then
 delivers its tree’s deferred events.
+
+## Context lifetime
+
+The `shutdown` schedule destroys bodies bound to ECS entities. It does not
+destroy bodies created directly in `Resources.World2D` while that world is
+still referenced. When the last world reference disappears, including after
+the Application and its resources are released, all remaining handles become
+invalid. Keeping a world alias extends its lifetime; keeping only a body handle
+does not. See [world lifetime](WorldOwnership.md).

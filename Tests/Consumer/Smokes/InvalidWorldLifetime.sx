@@ -1,0 +1,70 @@
+use GFX.Physics
+use STD.Math
+
+struct Handles {
+    var body:Physics.RigidBody2D
+    var collider:Physics.Collider2D
+    var chain:Physics.Collider2D
+    var joints:Physics.Joint2D[]
+    init(world:Physics.World2D) {
+        var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+        self.body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+        self.collider = world.create_collider(self.body)
+        self.chain = world.create_collider(ground, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0, 0.0), Math.Vec2(-1.0, 0.0), Math.Vec2(1.0, 0.0), Math.Vec2(2.0, 0.0)])))
+        world.create_distance_joint(ground, self.body)
+        world.create_filter_joint(ground, self.body)
+        world.create_motor_joint(ground, self.body)
+        world.create_mouse_joint(self.body)
+        world.create_prismatic_joint(ground, self.body)
+        world.create_revolute_joint(ground, self.body)
+        world.create_weld_joint(ground, self.body)
+        world.create_wheel_joint(ground, self.body)
+        self.joints = []
+        world.write_joints(self.joints)
+    }
+}
+func valid(joint:Physics.Joint2D) bool {
+    match joint {
+        distance(value) => { return value.is_valid() }
+        filter(value) => { return value.is_valid() }
+        motor(value) => { return value.is_valid() }
+        mouse(value) => { return value.is_valid() }
+        prismatic(value) => { return value.is_valid() }
+        revolute(value) => { return value.is_valid() }
+        weld(value) => { return value.is_valid() }
+        wheel(value) => { return value.is_valid() }
+    }
+}
+func orphan() Handles {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    return Handles(world)
+}
+
+use STD.Process
+func main() {
+    var selected = "body"
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => { if arguments.count() > 1 { selected = arguments[1] } }
+    }
+    var handles = orphan()
+    if selected == "body" { handles.body.set_position(Math.Vec2()) }
+    if selected == "collider" { handles.collider.body() }
+    if selected == "chain" { handles.chain.body() }
+    for joint in handles.joints {
+        match joint {
+            distance(value) => { if selected == "distance" { value.first_body() } }
+            filter(value) => { if selected == "filter" { value.first_body() } }
+            motor(value) => { if selected == "motor" { value.first_body() } }
+            mouse(value) => { if selected == "mouse" { value.body() } }
+            prismatic(value) => { if selected == "prismatic" { value.first_body() } }
+            revolute(value) => { if selected == "revolute" { value.first_body() } }
+            weld(value) => { if selected == "weld" { value.first_body() } }
+            wheel(value) => { if selected == "wheel" { value.first_body() } }
+        }
+    }
+    panic("world-finalized handle was accepted")
+}

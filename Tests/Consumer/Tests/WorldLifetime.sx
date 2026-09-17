@@ -1,0 +1,171 @@
+use GFX.Physics
+use STD.Math
+
+struct Handles {
+    var body:Physics.RigidBody2D
+    var collider:Physics.Collider2D
+    var chain:Physics.Collider2D
+    var joints:Physics.Joint2D[]
+    init(world:Physics.World2D) {
+        var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+        self.body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+        self.collider = world.create_collider(self.body)
+        self.chain = world.create_collider(ground, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0, 0.0), Math.Vec2(-1.0, 0.0), Math.Vec2(1.0, 0.0), Math.Vec2(2.0, 0.0)])))
+        world.create_distance_joint(ground, self.body)
+        world.create_filter_joint(ground, self.body)
+        world.create_motor_joint(ground, self.body)
+        world.create_mouse_joint(self.body)
+        world.create_prismatic_joint(ground, self.body)
+        world.create_revolute_joint(ground, self.body)
+        world.create_weld_joint(ground, self.body)
+        world.create_wheel_joint(ground, self.body)
+        self.joints = []
+        world.write_joints(self.joints)
+    }
+}
+func valid(joint:Physics.Joint2D) bool {
+    match joint {
+        distance(value) => { return value.is_valid() }
+        filter(value) => { return value.is_valid() }
+        motor(value) => { return value.is_valid() }
+        mouse(value) => { return value.is_valid() }
+        prismatic(value) => { return value.is_valid() }
+        revolute(value) => { return value.is_valid() }
+        weld(value) => { return value.is_valid() }
+        wheel(value) => { return value.is_valid() }
+    }
+}
+func orphan() Handles {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    return Handles(world)
+}
+
+test "invalidate every handle family when the last world reference leaves scope" {
+    var old = orphan()
+    assert(!old.body.is_valid() && !old.collider.is_valid() && !old.chain.is_valid())
+    assert(old.joints.count() == 8)
+    for joint in old.joints { assert(!valid(joint)) }
+    var world = Physics.World2D()
+    var fresh = Handles(world)
+    assert(fresh.body.is_valid() && fresh.collider.is_valid() && fresh.chain.is_valid())
+    for joint in fresh.joints { assert(valid(joint)) }
+    assert(!old.body.same_body(fresh.body))
+    for joint in old.joints { assert(!valid(joint)) }
+}
+
+test "keep the simulation alive through an explicit world alias" {
+    var world:Physics.World2D? = Physics.World2D(gravity:Math.Vec2())
+    var body = world!.create_rigid_body(Physics.RigidBody2DSettings() ..velocity = Math.Vec2(1.0, 0.0))
+    var alias = world
+    world = null
+    assert(body.is_valid())
+    alias!.step(0.1)
+    assert(body.position().x > 0.09)
+    alias = null
+    assert(!body.is_valid())
+}
+
+class Scene {
+    var world:Physics.World2D
+    var body:Physics.RigidBody2D
+    init() {
+        self.world = Physics.World2D(gravity:Math.Vec2())
+        self.body = self.world.create_rigid_body()
+    }
+    func filter(pair:Physics.ContactPairSnapshot2D) bool { return self.body.is_valid() }
+}
+func make_scene() Scene { return Scene() }
+func cyclic_body() Physics.RigidBody2D {
+    var scene = Scene()
+    scene.world.set_custom_filter(scene.filter)
+    return scene.body
+}
+
+test "retain a world inside a scene and finalize an unreachable callback cycle" {
+    var scene:Scene? = make_scene()
+    var body = scene!.body
+    assert(body.is_valid())
+    scene!.world.step(0.01)
+    scene = null
+    assert(!body.is_valid())
+    var cyclic = cyclic_body()
+    assert(!cyclic.is_valid())
+}
+
+func detached_contacts() Physics.Contact2D[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings() ..body_type = Physics.BodyType2D.fixed
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(1.0)))
+    world.create_rigid_body(Physics.RigidBody2DSettings() ..position = Math.Vec2(1.2, 0.0)
+        ..shape = Physics.Shape2D.circle(Physics.Circle2D(0.5)))
+    world.refresh_contacts()
+    var contacts:Physics.Contact2D[] = []
+    world.write_contacts(contacts)
+    return contacts
+}
+func detached_moves() Physics.BodyMoveEvent2D[] {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    world.create_rigid_body(Physics.RigidBody2DSettings() ..velocity = Math.Vec2(1.0, 0.0)
+        ..enable_move_events = true ..application_id = 42 as uint64)
+    world.step(0.1)
+    var moves:Physics.BodyMoveEvent2D[] = []
+    world.write_body_move_events(moves)
+    return moves
+}
+
+test "retain autonomous snapshots after world finalization" {
+    var contacts = detached_contacts()
+    assert(contacts.count() == 1)
+    assert(contacts[0].manifold().point_count() == 1)
+    assert(contacts[0].manifold().points[0].separation < 0.0)
+    assert(!contacts[0].first_body().is_valid() && !contacts[0].second_body().is_valid())
+    assert(!contacts[0].first_collider().is_valid() && !contacts[0].second_collider().is_valid())
+    var moves = detached_moves()
+    assert(moves.count() == 1)
+    assert(moves[0].application_id() == (42 as uint64))
+    assert(Math.abs(moves[0].transform().position.x - 0.1) < 0.0001)
+    assert(!moves[0].body().is_valid())
+}
+
+class SteppingOwner {
+    var world:Physics.World2D?
+    var body:Physics.RigidBody2D
+    var called:bool = false
+    init() {
+        self.world = Physics.World2D(gravity:Math.Vec2())
+        self.world!.create_rigid_body(Physics.RigidBody2DSettings() ..body_type = Physics.BodyType2D.fixed)
+        self.body = self.world!.create_rigid_body(Physics.RigidBody2DSettings()
+            ..position = Math.Vec2(0.0, 0.9) ..create_implicit_collider = false)
+        self.world!.create_collider(self.body, Physics.Collider2DSettings() ..enable_pre_solve = true)
+        self.world!.set_pre_solve(self.decide)
+    }
+    func decide(input:Physics.ContactPreSolve2D) Physics.ContactDecision2D {
+        self.called = true
+        self.world = null
+        assert(self.body.is_valid())
+        return Physics.ContactDecision2D()
+    }
+    func advance() { self.world!.step(0.01) }
+}
+
+test "keep the active method receiver alive when a callback releases the external owner" {
+    var owner = SteppingOwner()
+    owner.advance()
+    assert(owner.called && owner.world == null)
+    assert(!owner.body.is_valid())
+}
+
+test "finalizing one world preserves another world and its handles" {
+    var first:Physics.World2D? = Physics.World2D(gravity:Math.Vec2())
+    var second = Physics.World2D(gravity:Math.Vec2())
+    var first_body = first!.create_rigid_body()
+    var second_body = second.create_rigid_body(Physics.RigidBody2DSettings() ..velocity = Math.Vec2(1.0, 0.0))
+    first = null
+    assert(!first_body.is_valid() && second_body.is_valid())
+    second.step(0.1)
+    assert(second_body.position().x > 0.09)
+    assert(!first_body.same_body(second_body))
+}

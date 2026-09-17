@@ -450,3 +450,24 @@ test "body identity includes the world and generation and remains comparable aft
     var replacement = first_world.create_rigid_body()
     assert(!first.same_body(replacement))
 }
+
+func body_after_application_lifetime() Physics.RigidBody2D {
+    var application = Application()..add_plugin(Plugins.Physics2D())
+    application.prepare()
+    var resources = application.resources()
+    var physics = resources.get_mut<Resources.World2D>()
+    var body = physics.create_rigid_body()
+    application.run_schedule(Application.Schedule.shutdown)
+    // Shutdown removes ECS bindings. This manually created body still belongs
+    // to the retained world resource until Application and its aliases expire.
+    assert(body.is_valid())
+    return body
+}
+
+test "finalize the application world resource without retaining orphan body handles" {
+    var body = body_after_application_lifetime()
+    assert(!body.is_valid())
+    var other = Physics.World2D()
+    var fresh = other.create_rigid_body()
+    assert(fresh.is_valid() && !body.is_valid() && !body.same_body(fresh))
+}

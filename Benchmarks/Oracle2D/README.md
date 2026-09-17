@@ -560,3 +560,22 @@ rotation and disabled warm start, at 1/2/4/8 substeps. Run both Debug and Releas
 to exercise contact impulse reuse between substeps without a previous-step
 cache. Compile the Silex witness, then run its executable with `--no-warm-start` for that
 Silex mode; its case keys and comparison thresholds stay unchanged.
+
+## World finalization and retained handles
+
+`WorldLifetimeOracle.c` and `../WorldLifetimeOracle2D.sx` observe eleven handle
+families at four stages: live world, finalized world, a newly created world,
+and the new world's handles. `CheckWorldLifetime.py` checks all 44 boolean
+observations and requires the eleven pinned raw-reference differences: reusing
+a Box2D world slot can reactivate old raw IDs, while a Silex handle always remains
+tied to its original world. This stronger invalidation is explicit; the checker
+does not claim 44 equal observations.
+
+Run the C witness, then the Silex witness in Debug and Release and pass each
+pair of outputs to `CheckWorldLifetime.py`. `TestWorldLifetime.py` rejects
+missing stages, duplicate records, non-boolean values and unexpected validity.
+From the workspace root, `python3 Packages/GFX.Physics/Tests/Consumer/check-world-lifetime.py
+--mode debug` checks the exact failure diagnostic for all eleven stale-handle
+accesses; repeat with `--mode release`. The consumer lifetime and Application
+integration tests additionally exercise aliases, callbacks, cycles, snapshots,
+independent worlds and resource finalization.

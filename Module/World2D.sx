@@ -740,6 +740,12 @@ public class World2D {
     private var pre_solve_enabled:bool
     private var pre_solve:func(ContactPreSolve2D) ContactDecision2D
 
+    drop {
+        // Handles retain their stores, never the simulation context itself.
+        self.joints.invalidate_all()
+        self.store.invalidate_all()
+    }
+
     init(
         settings:World2DSettings = World2DSettings(),
         gravity:Math.Vec2? = null,

@@ -128,3 +128,13 @@ active pendant leur exécution. Les retraits et désactivations effectués dans
 ces callbacks sont réconciliés avant un éventuel pas de rattrapage suivant.
 `GFX.Nodes` y actualise ses zones et ses rayons, puis livre les événements
 différés de son arbre.
+
+## Fin de vie du contexte
+
+Le schedule `shutdown` détruit les corps liés aux entités ECS. Il ne détruit pas
+les corps créés directement dans `Resources.World2D` tant que ce monde reste
+référencé. À la disparition de la dernière référence au monde, notamment après
+libération de l’Application et de ses ressources, tous les handles restants
+deviennent invalides. Conserver un alias du monde prolonge sa durée de vie ;
+conserver uniquement un handle de corps ne la prolonge pas. Voir
+[la durée de vie du monde](WorldOwnership.md).

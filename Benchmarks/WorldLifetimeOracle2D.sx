@@ -1,0 +1,59 @@
+use GFX.Physics
+use STD.Math
+
+struct Handles {
+    var body:Physics.RigidBody2D
+    var collider:Physics.Collider2D
+    var chain:Physics.Collider2D
+    var joints:Physics.Joint2D[]
+    init(world:Physics.World2D) {
+        var ground = world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.fixed ..create_implicit_collider = false)
+        self.body = world.create_rigid_body(Physics.RigidBody2DSettings() ..create_implicit_collider = false)
+        self.collider = world.create_collider(self.body)
+        self.chain = world.create_collider(ground, Physics.Collider2DSettings()
+            ..shape = Physics.Shape2D.chain(Physics.Chain2D([
+                Math.Vec2(-2.0, 0.0), Math.Vec2(-1.0, 0.0), Math.Vec2(1.0, 0.0), Math.Vec2(2.0, 0.0)])))
+        world.create_distance_joint(ground, self.body)
+        world.create_filter_joint(ground, self.body)
+        world.create_motor_joint(ground, self.body)
+        world.create_mouse_joint(self.body)
+        world.create_prismatic_joint(ground, self.body)
+        world.create_revolute_joint(ground, self.body)
+        world.create_weld_joint(ground, self.body)
+        world.create_wheel_joint(ground, self.body)
+        self.joints = []
+        world.write_joints(self.joints)
+    }
+}
+func valid(joint:Physics.Joint2D) bool {
+    match joint {
+        distance(value) => { return value.is_valid() }
+        filter(value) => { return value.is_valid() }
+        motor(value) => { return value.is_valid() }
+        mouse(value) => { return value.is_valid() }
+        prismatic(value) => { return value.is_valid() }
+        revolute(value) => { return value.is_valid() }
+        weld(value) => { return value.is_valid() }
+        wheel(value) => { return value.is_valid() }
+    }
+}
+func bit(value:bool) int { if value { return 1 }
+    return 0 }
+func record(stage:int, handles:Handles) {
+    print("lifetime_$(stage) $(bit(handles.body.is_valid())) $(bit(handles.collider.is_valid())) $(bit(handles.chain.is_valid())) $(bit(valid(handles.joints[0]))) $(bit(valid(handles.joints[1]))) $(bit(valid(handles.joints[2]))) $(bit(valid(handles.joints[3]))) $(bit(valid(handles.joints[4]))) $(bit(valid(handles.joints[5]))) $(bit(valid(handles.joints[6]))) $(bit(valid(handles.joints[7])))")
+}
+func orphan() Handles {
+    var world = Physics.World2D(gravity:Math.Vec2())
+    var handles = Handles(world)
+    record(0, handles)
+    return handles
+}
+func main() {
+    var old = orphan()
+    record(1, old)
+    var replacement = Physics.World2D(gravity:Math.Vec2())
+    var fresh = Handles(replacement)
+    record(2, old)
+    record(3, fresh)
+}
