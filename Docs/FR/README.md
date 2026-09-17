@@ -122,5 +122,5 @@ Les seuils ne modifient que la répartition du même travail.
 L’exemple visuel central se lance depuis la racine :
 
 ```text
-silex run Silex-Examples/Sources/RotatingPhysicsContainer/Main.sx --release
+silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --release
 ```

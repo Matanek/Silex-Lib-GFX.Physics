@@ -43,8 +43,9 @@ le bruit en ralentissement autorisé. Le contrôle compare une configuration par
 scène et par invocation ; il ne remplace ni l'audit des sources et options de
 compilation, ni le corpus différentiel complet.
 
-Cette porte ne prouve que les scènes mesurées. Le benchmark Box2D reste
-mono-worker ; la parité multi-worker n'est pas encore couverte. Atteindre un
+Cette porte ne prouve que les configurations mesurées. Le témoin Box2D accepte
+un, deux et quatre workers grâce à son adaptateur de tâches du benchmark ; les
+comparaisons parallèles exigent donc aussi des nombres égaux. Atteindre un
 budget absolu ci-dessous ne prouve pas la parité de performance.
 
 ## Budgets historiques de non-régression
@@ -55,9 +56,9 @@ clairsemés à 33,33 ms pour 10 000 corps ou la pile. Les scènes de cercles vi
 à 5 % échoue même sous le plafond absolu.
 
 La mémoire mesure le RSS du processus séparément du temps. Après soustraction
-de la scène de référence, `sparse-10000` dispose de 1 Kio par corps dynamique ;
-`circle-5000` ajoute 512 octets par paire persistante. Ce plafond n’est pas une
-cible d’allocation.
+de la scène de référence appariée, chaque corps dynamique clairsemé dispose de
+1 Kio ; une scène dense ajoute 512 octets par paire persistante. Ces plafonds
+ne sont pas des cibles d’allocation.
 
 ## Sentinelles GFX
 

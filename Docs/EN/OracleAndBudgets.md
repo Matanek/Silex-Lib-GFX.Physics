@@ -1,151 +1,72 @@
-# Physics reconstruction corpus and gates
+# Reconstruction corpus and budgets
 
-This contract fixes the evidence required before and during the native Silex
-physics reconstruction. It does not change the public API or the current
-solver. The immutable external revisions and build instructions are recorded
-in [`../Benchmarks/Oracle2D/README.md`](../../Benchmarks/Oracle2D/README.md).
+This protocol defines the evidence for the native Silex 2D physics
+reconstruction. Each result identifies the OS, architecture, CPU, commits,
+build mode, worker count, fixed step and repetitions. Time and memory budgets
+apply only to the reference macOS ARM64 machine; they do not predict x64
+results.
 
-## Configurations
+Correctness runs in Debug and Release. Release measurements use one warm-up
+followed by seven separate processes and report the median, range and median
+absolute deviation. Correctness is a hard gate: a faster run cannot justify
+invalid containment, overlap, finite state or determinism.
 
-Each result names an OS, architecture, CPU, Silex commit, engine revision,
-Debug or Release mode, worker count, fixed delta and repetition set. Timing,
-memory and scaling baselines belong only to the macOS ARM64 reference machine;
-there is no X64 performance baseline and no ARM64 result is presented as an
-X64 prediction.
+## Shared scenes
 
-Compiler and runtime optimizations remain portable despite that measurement
-scope. After each compiler Spec 02, 03 and 04, and after runtime Spec 05, emit
-the affected verified targets, run the correctness corpus on ARM64 and replay
-the local performance gates named below. These are intermediate local gates:
-do not create or push a commit solely to run the native matrix after each Spec.
-
-The shared remote portability gate is the Spec 05 milestone. On one exact
-pushed checkpoint containing the completed Specs 02 through 05, require native
-GitHub Actions for macOS ARM64, Linux X64 and Windows X64, plus every other
-verified target affected by the sequence. If a verified target is missing from
-the workflow triggered by that push, extend that workflow before claiming the
-sequence as a general Silex optimization. Until this milestone is green,
-describe intermediate X64 results as structural emissions rather than native
-verification. CI correctness is not a substitute for the ARM64 performance
-baseline, and the ARM64 baseline is not a substitute for native CI
-correctness.
-
-Correctness runs in Debug and Release. Cadence and memory gates use Release
-after one warm-up, with seven isolated process repetitions. Interactive GFX
-sentinels use immediate presentation, a fixed window and their built-in
-five-second measurement. Record median, range and median absolute deviation
-for every timing or FPS series.
-
-## Shared 2D scenes
-
-| Scenario | Scene and duration | Observable correction gate | Release cadence gate |
-| --- | --- | --- | ---: |
-| `release-parity` | One 1 m box falls from `(0, 2)` onto a 8 m × 1 m floor; 120 steps at 120 Hz | Final center Y within `[0.495, 0.505]` m and speed at most `0.005` m/s | Informational |
-| `sparse-1000` | 1,000 non-sleeping 0.5 m boxes on a contact-free 100-column grid, velocity `(2, 0.25)`; 120 steps at 60 Hz | No contact; centroid displacement `(4, 0.5)` m within `0.001` m | `4.00` ms/step |
-| `sparse-5000` | Same scene with 5,000 bodies | Same invariant | `16.67` ms/step |
-| `sparse-10000` | Same scene with 10,000 bodies | Same invariant | `33.33` ms/step |
-| `pile-1000` | 1,000 frictional 0.4 m boxes in 50 columns on a floor; 240 steps at 60 Hz | No center below `0.195` m; all values finite | `33.33` ms/step |
-| `circle-1800` | 1,800 non-sleeping circles of radius 0.05 m in the 9.2 m × 6 m graphical container; 300 steps at 60 Hz | No center below `-2.952` m; maximum circle overlap at most `12` mm | `16.67` ms/step |
-| `circle-5000` | Same container with 5,000 non-sleeping circles of radius 0.025 m and 170 columns; 300 steps at 60 Hz | No center below `-2.978` m; maximum circle overlap at most `20` mm | `16.67` ms/step target |
-
-With `--box2d-parity`, the scene dimensions, initial order, materials, gravity,
-body masses and time step match between `Benchmarks/Corpus2D.sx` and the Box2D
-witness. Without it, the Silex corpus retains its historical settings, which
-are not directly comparable to Box2D timings. Both witnesses record
-and exercise one, two, four, or eight substeps through their public step API.
-Their solver identities remain explicit rather than being disguised as the
-same implementation. Any future Silex kernel joins this corpus by emitting the
-same record and using the same scene definitions.
-
-Correctness is a hard gate. A faster result that violates containment,
-overlap, finite-state or same-configuration determinism is rejected. The
-Box2D envelope is diagnostic: a Silex result outside it requires explanation,
-but Silex is not required to reproduce Box2D's exact floating-point state.
+The corpus covers a falling reference body, sparse scenes of 1,000, 5,000 and
+10,000 boxes, a stack of 1,000 boxes and containers holding 1,800 and 5,000
+awake circles. Each scene fixes dimensions, initial order, materials, gravity
+and time step. Silex need not reproduce Box2D's exact floating-point bits.
 
 ## Direct Box2D performance comparison
 
-Run the Silex corpus with `--box2d-parity`. This mode sets gravity to
-−10 m/s² (zero for sparse scenes), contact stiffness to 30 Hz and every
-dynamic body's mass to 1 kg. Sparse and circle scenes disable sleep both on
-the world and on the bodies.
+Run `Corpus2D.sx` with `--box2d-parity` when comparing the two engines. This
+mode sets gravity to −10 m/s² (zero in sparse scenes), contact stiffness to
+30 Hz and each dynamic body's mass to 1 kg. Sparse and circle scenes disable
+sleep for the world and the bodies. Without this option, the corpus retains its
+historical Silex settings for regression checks; those times cannot be
+compared directly with Box2D.
 
-After one warm-up of each executable, alternate seven processes per engine
-on the same available machine, in Release, with identical substeps and worker
-counts. Save measured output without the warm-up, then run:
+After warming up each executable, alternate seven processes per engine on the
+same machine, in Release, with matching substeps and worker counts. Keep the
+measured output, excluding the warm-ups, then run:
 
 ```text
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CompareCorpus.py box2d.log silex.log
 ```
 
 The checker requires the `box2d-3.1.1-v1` workload marker, equivalent
-configurations, physical invariants, per-engine determinism and MAD at most 5%.
-It reports the Silex/Box2D median-time ratio and fails above 1. Overlapping
-observed timing ranges also prevent a positive conclusion: refine the campaign
-instead of treating noise as an allowed slowdown. Compare one configuration per
-scene and invocation. This check does not replace the source/build-option audit
-or the full differential correctness corpus.
+configurations, physical invariants, determinism for each engine and a MAD no
+greater than 5%. It reports the Silex/Box2D median-time ratio and fails above
+1. Overlapping timing ranges are inconclusive: refine the experiment instead
+of treating noise as an allowed slowdown. It compares one scene and
+configuration per invocation; it does not replace the build-option audit or
+the full differential correctness corpus.
 
-This gate proves only the measured scenes. The Box2D benchmark remains
-single-worker; multi-worker parity is not covered yet. Meeting an absolute
-budget below does not prove performance parity.
+This gate proves only the configurations actually measured. The Box2D witness
+accepts one, two and four workers through its benchmark task adapter, so
+multi-worker results also require matching counts. Meeting an absolute budget
+does not prove direct performance parity.
 
-## Historical performance and memory decisions
+## Historical regression budgets
 
-The cadence budgets apply only to the macOS ARM64 reference machine. A gate
-passes when the seven-run median is within budget and median absolute deviation
-is at most 5%. A change also fails when its median regresses more than 5%
-against the accepted ARM64 baseline, even if it remains under the absolute
-budget. Improvements are reported per scene and never generalized from body
-count alone.
+On the reference machine, the limits range from 4 ms per step for 1,000 sparse
+bodies to 33.33 ms for 10,000 sparse bodies or the stack. Circle scenes target
+16.67 ms. A median that regresses more than 5%, or dispersion above 5%, fails
+even below an absolute limit.
 
-Record peak process RSS separately from elapsed simulation time. Until a
-portable package allocator counter exists, the memory gate is relative. After
-subtracting the `release-parity` process RSS, `sparse-10000` has a budget of
-1 KiB per dynamic body. The dense `circle-5000` scene adds 512 bytes per
-persistent pair to that body budget; its corpus record must therefore expose
-`persistent_pairs`. This separates body storage from the contact graph instead
-of pretending that a contact-free world and a world retaining more than three
-pairs per body have the same storage shape. Both scenes must also avoid a
-greater than 5% regression against their accepted ARM64 baseline.
-
-The pair allowance was fixed from the reconstruction evidence: the original
-body-only gate was already contradicted by the pinned Box2D witness, whose
-world counter reaches 58,550,880 bytes on `circle-5000`, and the corrected
-Silex corpus retains 16,194 pairs. The 512-byte value is a ceiling, not an
-allocation target. Box2D's `memory_bytes` remains its own world counter and is
-diagnostic, not a substitute for the process RSS comparison.
-
-Debug runs establish behavior and diagnostics only; they do not carry cadence
-budgets. Compilation time, CMake/FetchContent work and compiler caches never
-enter a physics measurement.
+Measure process RSS separately from simulation time. After subtracting the
+paired reference scene, each sparse dynamic body has a 1 KiB allowance; a
+dense scene adds 512 bytes per persistent pair. These are ceilings, not
+allocation targets.
 
 ## GFX sentinels
 
-The following gates protect compiler and runtime work outside Physics:
+Boids2D protects 2D throughput; WorldRendering3D requires at least 120 FPS in
+its reference configuration; ShapeGallery2D checks construction, text,
+rendering and diagnostics. Automated smokes do not replace an explicitly
+requested visual acceptance. These gates do not take automated screenshots.
 
-| Sentinel | Protocol | Gate |
-| --- | --- | --- |
-| `Silex-Benchmarks/Sources/Boids2D/Silex.sx` | Release, 4,000 boids, immediate presentation, fixed 960 × 640 logical window with high pixel density, one warm-up plus seven five-second runs | Same-machine median FPS must not regress by more than 5%; MAD must be at most 5% |
-| `Silex-Benchmarks/Sources/WorldRendering3D/Main.sx` | Release with `--benchmark-focused`, focused window, immediate presentation, default scene and window, seven five-second runs | Median at least 120 FPS; MAD at most 5% |
-| `Silex-Examples/Sources/ShapeGallery2D/Main.sx` | Compile the centralized application in Release; inspect emitted assertions and renderer diagnostics | More than 50 retained commands, font/text path succeeds, no renderer or shader diagnostic; visual acceptance remains required at milestones named by the Spec sequence |
-
-Do not take automated screenshots for these gates. ShapeGallery's automated
-smoke protects construction, text loading and the render path; the explicitly
-requested milestone review remains the authority for visual integrity.
-
-Replay the Boids benchmark locally after compiler Specs 02, 03 and 04 and after
-runtime Spec 05. Replay all three sentinels locally at the Spec 05 milestone,
-then run the shared remote portability gate on the exact checkpoint. Replay
-the three sentinels again before the Spec 13 switch.
-
-## Baseline acceptance
-
-Raw results belong in a dated file under `Benchmarks/Baselines/` and identify
-the exact Git commits. A local series is a baseline observation, not an
-accepted replacement. Replacing an accepted baseline requires a green
-correctness corpus, admissible variance and explicit review of every missed or
-materially changed gate.
-
-Until the reference machine is idle, `Benchmarks/Baselines/README.md` records
-the exact pending configuration without promoting contaminated observations
-to an accepted baseline.
+Raw results are dated under `Benchmarks/Baselines/` and identify the exact
+commits. Replacing an accepted baseline requires a green correctness corpus,
+admissible variance and explicit review of every changed gate.

@@ -217,10 +217,9 @@ capability are documented in
 contacts through the same persistent Soft Step path. Every sufficiently fast
 dynamic convex collider also sweeps against fixed and kinematic geometry;
 ordinary bodies do not silently opt into the additional dynamic-target cost,
-which remains reserved for bullets. Application plugins remain outside the
-current world contract.
+which remains reserved for bullets.
 
-[Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/RotatingPhysicsContainer)
+[Rotating physics container](https://github.com/Matanek/Silex-Examples/tree/main/Sources/Physics2D/RotatingPhysicsContainer)
 is the recommended visual introduction: it progressively reveals 120 circles and
 boxes of varied sizes at deterministic randomized positions inside the
 container. Each new element follows the rotating local frame while
@@ -232,7 +231,7 @@ the container, animated previews, and simulated bodies visually aligned between
 60 Hz physics updates.
 
 ```text
-silex run Silex-Examples/Sources/RotatingPhysicsContainer/Main.sx --release
+silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --release
 ```
 
 [FallingBodies2D](https://github.com/Matanek/Silex-Benchmarks/tree/main/Sources/FallingBodies2D)
