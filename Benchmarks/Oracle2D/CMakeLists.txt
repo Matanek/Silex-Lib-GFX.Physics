@@ -58,7 +58,7 @@ target_link_libraries(gfx_physics_box2d_world_lifetime_oracle PRIVATE box2d)
 
 add_executable(gfx_physics_box2d_motor_mouse_oracle MotorMouseOracle.c)
 target_compile_features(gfx_physics_box2d_motor_mouse_oracle PRIVATE c_std_17)
-target_link_libraries(gfx_physics_box2d_motor_mouse_oracle PRIVATE box2d)
+target_link_libraries(gfx_physics_box2d_motor_mouse_oracle PRIVATE gfx_physics_oracle_tasks)
 
 add_executable(gfx_physics_box2d_filter_joint_oracle FilterJointOracle.c)
 target_compile_features(gfx_physics_box2d_filter_joint_oracle PRIVATE c_std_17)
@@ -118,7 +118,7 @@ target_link_libraries(gfx_physics_box2d_distance_tuning_oracle PRIVATE box2d)
 
 add_executable(gfx_physics_box2d_joint_tuning_oracle JointConstraintTuningOracle.c)
 target_compile_features(gfx_physics_box2d_joint_tuning_oracle PRIVATE c_std_17)
-target_link_libraries(gfx_physics_box2d_joint_tuning_oracle PRIVATE box2d)
+target_link_libraries(gfx_physics_box2d_joint_tuning_oracle PRIVATE gfx_physics_oracle_tasks)
 
 add_executable(gfx_physics_box2d_joint_combinations_oracle JointCombinationsOracle.c)
 target_compile_features(gfx_physics_box2d_joint_combinations_oracle PRIVATE c_std_17)
@@ -126,7 +126,7 @@ target_link_libraries(gfx_physics_box2d_joint_combinations_oracle PRIVATE box2d)
 
 add_executable(gfx_physics_box2d_joints_oracle JointsOracle.c)
 target_compile_features(gfx_physics_box2d_joints_oracle PRIVATE c_std_17)
-target_link_libraries(gfx_physics_box2d_joints_oracle PRIVATE box2d)
+target_link_libraries(gfx_physics_box2d_joints_oracle PRIVATE gfx_physics_oracle_tasks)
 
 # Internal one-point solver comparison. POSIX timing, opt-in build only;
 # neither this harness nor Box2D enters the Silex runtime.
@@ -178,6 +178,11 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME gfx_physics_matched_joint_worker_checks
+        COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR} -p TestMatchedJointWorkers.py
+    )
     add_test(
         NAME gfx_physics_parallel_joint_family_checks
         COMMAND ${Python3_EXECUTABLE} -B -m unittest discover

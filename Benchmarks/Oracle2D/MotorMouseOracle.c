@@ -1,5 +1,6 @@
 // Differential witness against Box2D 3.1.1, commit 8c661469.
 #include <box2d/box2d.h>
+#include "WorkerOptions.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -16,10 +17,11 @@ static void record(b2BodyId first, b2BodyId second, b2JointId joint,
         force.x, force.y, b2Joint_GetConstraintTorque(joint));
 }
 
-static void scenario(int family, int geometry, int variant, int substeps)
+static void scenario(OracleTaskSystem* tasks, int family, int geometry, int variant, int substeps)
 {
     b2WorldDef wd = b2DefaultWorldDef();
     wd.gravity = (b2Vec2){2, -3};
+    oracle_tasks_configure(tasks, &wd);
     b2WorldId world = b2CreateWorld(&wd);
     b2World_EnableWarmStarting(world, variant != 6);
     b2BodyDef bd = b2DefaultBodyDef();
@@ -93,11 +95,14 @@ static void scenario(int family, int geometry, int variant, int substeps)
     b2DestroyWorld(world);
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
+    OracleWorkers workers;
+    if (!oracle_workers_open(&workers, argc, argv)) return 2;
     for (int family = 0; family < 2; ++family)
         for (int geometry = 0; geometry < 3; ++geometry)
             for (int variant = 0; variant < 8; ++variant)
                 for (int substeps = 1; substeps <= 8; substeps *= 2)
-                    scenario(family, geometry, variant, substeps);
+                    scenario(workers.tasks, family, geometry, variant, substeps);
+    return oracle_workers_close(&workers);
 }

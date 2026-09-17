@@ -1,9 +1,11 @@
 #include <box2d/box2d.h>
+#include "WorkerOptions.h"
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
-static void run(int family,int tuning,int substeps,int geometry) {
+static void run(OracleTaskSystem* tasks,int family,int tuning,int substeps,int geometry) {
     b2WorldDef wd=b2DefaultWorldDef(); wd.gravity=(b2Vec2){2,-3};
+    oracle_tasks_configure(tasks,&wd);
     b2WorldId world=b2CreateWorld(&wd);
     b2Vec2 anchor=geometry>0?(b2Vec2){.2f,.3f}:(b2Vec2){0,0};
     b2Vec2 axis=geometry==2?(b2Vec2){.6f,.8f}:(b2Vec2){1,0};
@@ -33,4 +35,14 @@ static void run(int family,int tuning,int substeps,int geometry) {
     }
     b2DestroyWorld(world);
 }
-int main(void) { for(int geometry=0;geometry<3;++geometry) for(int family=0;family<4;++family) for(int tuning=0;tuning<7;++tuning) for(int steps=1;steps<=8;steps*=2) run(family,tuning,steps,geometry); }
+int main(int argc, char** argv)
+{
+    OracleWorkers workers;
+    if (!oracle_workers_open(&workers, argc, argv)) return 2;
+    for (int geometry = 0; geometry < 3; ++geometry)
+        for (int family = 0; family < 4; ++family)
+            for (int tuning = 0; tuning < 7; ++tuning)
+                for (int steps = 1; steps <= 8; steps *= 2)
+                    run(workers.tasks, family, tuning, steps, geometry);
+    return oracle_workers_close(&workers);
+}

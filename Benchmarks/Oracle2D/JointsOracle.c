@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 
 #include <box2d/box2d.h>
+#include "WorkerOptions.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 
-static b2WorldId create_world(float gravity_y)
+static b2WorldId create_world(OracleTaskSystem* tasks, float gravity_y)
 {
     b2WorldDef definition = b2DefaultWorldDef();
     definition.gravity = (b2Vec2){0.0f, gravity_y};
+    oracle_tasks_configure(tasks, &definition);
     return b2CreateWorld(&definition);
 }
 
@@ -34,9 +36,9 @@ static void run_steps(b2WorldId world, int count)
     }
 }
 
-static void distance_case(void)
+static void distance_case(OracleTaskSystem* tasks)
 {
-    b2WorldId world = create_world(0.0f);
+    b2WorldId world = create_world(tasks, 0.0f);
     b2BodyId ground = add_body(world, true, (b2Vec2){0.0f, 0.0f});
     b2BodyId body = add_body(world, false, (b2Vec2){2.0f, 0.0f});
     b2DistanceJointDef definition = b2DefaultDistanceJointDef();
@@ -59,9 +61,9 @@ static void distance_case(void)
     b2DestroyWorld(world);
 }
 
-static void prismatic_case(void)
+static void prismatic_case(OracleTaskSystem* tasks)
 {
-    b2WorldId world = create_world(0.0f);
+    b2WorldId world = create_world(tasks, 0.0f);
     b2BodyId ground = add_body(world, true, (b2Vec2){0.0f, 0.0f});
     b2BodyId body = add_body(world, false, (b2Vec2){0.0f, 0.0f});
     b2PrismaticJointDef definition = b2DefaultPrismaticJointDef();
@@ -85,9 +87,9 @@ static void prismatic_case(void)
     b2DestroyWorld(world);
 }
 
-static void revolute_case(void)
+static void revolute_case(OracleTaskSystem* tasks)
 {
-    b2WorldId world = create_world(0.0f);
+    b2WorldId world = create_world(tasks, 0.0f);
     b2BodyId ground = add_body(world, true, (b2Vec2){0.0f, 0.0f});
     b2BodyId body = add_body(world, false, (b2Vec2){1.0f, 0.0f});
     b2RevoluteJointDef definition = b2DefaultRevoluteJointDef();
@@ -110,9 +112,9 @@ static void revolute_case(void)
     b2DestroyWorld(world);
 }
 
-static void wheel_case(void)
+static void wheel_case(OracleTaskSystem* tasks)
 {
-    b2WorldId world = create_world(-10.0f);
+    b2WorldId world = create_world(tasks, -10.0f);
     b2BodyId ground = add_body(world, true, (b2Vec2){0.0f, 0.0f});
     b2BodyId body = add_body(world, false, (b2Vec2){0.0f, 0.5f});
     b2WheelJointDef definition = b2DefaultWheelJointDef();
@@ -141,11 +143,13 @@ static void wheel_case(void)
     b2DestroyWorld(world);
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
-    distance_case();
-    prismatic_case();
-    revolute_case();
-    wheel_case();
-    return 0;
+    OracleWorkers workers;
+    if (!oracle_workers_open(&workers, argc, argv)) return 2;
+    distance_case(workers.tasks);
+    prismatic_case(workers.tasks);
+    revolute_case(workers.tasks);
+    wheel_case(workers.tasks);
+    return oracle_workers_close(&workers);
 }

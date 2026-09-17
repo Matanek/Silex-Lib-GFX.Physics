@@ -1,5 +1,28 @@
 use GFX.Physics
 use STD.Math
+use STD.Process
+
+func requested_worker_count() int {
+    var workers = 1
+    var selected = false
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                var value = 0
+                if argument == "--workers-1" { value = 1 }
+                if argument == "--workers-2" { value = 2 }
+                if argument == "--workers-4" { value = 4 }
+                if value != 0 {
+                    assert(!selected)
+                    workers = value
+                    selected = true
+                }
+            }
+        }
+    }
+    return workers
+}
 func record(family:int, tuning:int, substeps:int, step:int, geometry:int, body:Physics.RigidBody2D, force:Math.Vec2, torque:float) {
     let p=body.position()
     let v=body.velocity()
@@ -33,8 +56,9 @@ func tune(joint:Physics.Joint2D, hertz:float, damping:float, write:bool) {
         mouse(value) => { panic("unexpected mouse") }
     }
 }
-func run_case(family:int, tuning:int, substeps:int, geometry:int) {
+func run_case(workers:int, family:int, tuning:int, substeps:int, geometry:int) {
     var world=Physics.World2D(gravity:Math.Vec2(2.0,-3.0))
+    world.enable_parallelism(workers)
     var first_type=Physics.BodyType2D.fixed
     var anchor=Math.Vec2()
     var axis=Math.Vec2(1.0,0.0)
@@ -78,6 +102,7 @@ func run_case(family:int, tuning:int, substeps:int, geometry:int) {
     }
 }
 func main() {
+    let workers = requested_worker_count()
     var geometry=0
     while geometry<3 {
     var family=0
@@ -85,7 +110,7 @@ func main() {
         var tuning=0
         while tuning<7 {
             var substeps=1
-            while substeps<=8 { run_case(family,tuning,substeps,geometry); substeps*=2 }
+            while substeps<=8 { run_case(workers,family,tuning,substeps,geometry); substeps*=2 }
             tuning++
         }
         family++

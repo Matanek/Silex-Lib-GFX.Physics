@@ -707,3 +707,27 @@ python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelJointFamilies.py -
 Run these commands from the workspace root, or from the Spec Worktree group
 when qualifying a Spec candidate. These checks establish intra-engine
 correctness; they do not measure speed or replace differential Box2D checks.
+
+## Matched worker counts in functional joint oracles
+
+`JointsOracle2D.sx`, `MotorMouseOracle2D.sx` and
+`JointConstraintTuningOracle2D.sx`, together with their C counterparts, accept
+`--workers-1`, `--workers-2` or `--workers-4` (default: one). The C witnesses
+reuse the persistent task adapter and write completion statistics to stderr;
+their numerical stdout format is unchanged.
+
+After building the three Silex executables and corresponding CMake targets,
+run the following from the workspace root. Use `--reference` with an earlier
+report to require the same observations across Debug/Release builds.
+
+```text
+python3 Packages/GFX.Physics/Benchmarks/Oracle2D/CheckMatchedJointWorkers.py --oracle-dir /tmp/gfx-physics-box2d --silex-joints /private/tmp/physics-joints-oracle --silex-motor-mouse /private/tmp/physics-motor-mouse-oracle --silex-joint-tuning /private/tmp/physics-joint-tuning-oracle --report /private/tmp/physics-matched-joints.json
+```
+
+The checker compares two repetitions per worker count and requires identical
+observations within each engine. Inter-engine checks retain the existing
+criteria: four settled joint cases, 1536 motor/mouse transient records and
+2688 constraint-tuning records per configuration. No tolerance is changed.
+Small functional scenes may stay below dispatch thresholds; effective
+parallel solving is proven by the separate threshold and family witnesses.
+These functional results do not admit timing parity.

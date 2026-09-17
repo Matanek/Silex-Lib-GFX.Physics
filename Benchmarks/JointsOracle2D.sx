@@ -1,5 +1,28 @@
 use GFX.Physics as Physics
 use STD.Math
+use STD.Process
+
+func requested_worker_count() int {
+    var workers = 1
+    var selected = false
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                var value = 0
+                if argument == "--workers-1" { value = 1 }
+                if argument == "--workers-2" { value = 2 }
+                if argument == "--workers-4" { value = 4 }
+                if value != 0 {
+                    assert(!selected)
+                    workers = value
+                    selected = true
+                }
+            }
+        }
+    }
+    return workers
+}
 
 func fixed_body(world:Physics.World2D) Physics.RigidBody2D {
     return world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -25,8 +48,9 @@ func run_steps(world:Physics.World2D, count:int) {
     }
 }
 
-func distance_case() {
+func distance_case(workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
     var ground = fixed_body(world)
     var body = dynamic_body(world, Math.Vec2(2.0, 0.0))
     var joint = world.create_distance_joint(
@@ -43,8 +67,9 @@ func distance_case() {
     print("distance $(joint.current_length()) $(body.position().x) $(body.velocity().x) $(joint.constraint_force().x)")
 }
 
-func prismatic_case() {
+func prismatic_case(workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
     var ground = fixed_body(world)
     var body = dynamic_body(world, Math.Vec2())
     var joint = world.create_prismatic_joint(ground, body)
@@ -55,8 +80,9 @@ func prismatic_case() {
     print("prismatic $(joint.translation()) $(joint.speed()) $(joint.motor_force()) $(body.position().x)")
 }
 
-func revolute_case() {
+func revolute_case(workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2())
+    world.enable_parallelism(workers)
     var ground = fixed_body(world)
     var body = dynamic_body(world, Math.Vec2(1.0, 0.0))
     var joint = world.create_revolute_joint(
@@ -70,8 +96,9 @@ func revolute_case() {
     print("revolute $(joint.angle()) $(body.angular_velocity()) $(joint.motor_torque()) $(body.position().length())")
 }
 
-func wheel_case() {
+func wheel_case(workers:int) {
     var world = Physics.World2D(gravity:Math.Vec2(0.0, -10.0))
+    world.enable_parallelism(workers)
     var ground = fixed_body(world)
     var body = dynamic_body(world, Math.Vec2(0.0, 0.5))
     var joint = world.create_wheel_joint(
@@ -89,8 +116,9 @@ func wheel_case() {
 }
 
 func main() {
-    distance_case()
-    prismatic_case()
-    revolute_case()
-    wheel_case()
+    let workers = requested_worker_count()
+    distance_case(workers)
+    prismatic_case(workers)
+    revolute_case(workers)
+    wheel_case(workers)
 }

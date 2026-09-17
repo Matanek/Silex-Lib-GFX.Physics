@@ -1,5 +1,28 @@
 use GFX.Physics
 use STD.Math
+use STD.Process
+
+func requested_worker_count() int {
+    var workers = 1
+    var selected = false
+    match Process.arguments() {
+        failure(error) => { panic(error.detail) }
+        success(arguments) => {
+            for argument in arguments {
+                var value = 0
+                if argument == "--workers-1" { value = 1 }
+                if argument == "--workers-2" { value = 2 }
+                if argument == "--workers-4" { value = 4 }
+                if value != 0 {
+                    assert(!selected)
+                    workers = value
+                    selected = true
+                }
+            }
+        }
+    }
+    return workers
+}
 
 func record(first:Physics.RigidBody2D, second:Physics.RigidBody2D,
     force:Math.Vec2, torque:float, family:int, geometry:int, variant:int, substeps:int, step:int) {
@@ -10,9 +33,10 @@ func record(first:Physics.RigidBody2D, second:Physics.RigidBody2D,
     print("target_$(family)_$(geometry)_$(variant)_$(substeps)_$(step) $(a.x) $(a.y) $(first.rotation()) $(va.x) $(va.y) $(first.angular_velocity()) $(b.x) $(b.y) $(second.rotation()) $(vb.x) $(vb.y) $(second.angular_velocity()) $(force.x) $(force.y) $(torque)")
 }
 
-func scenario(family:int, geometry:int, variant:int, substeps:int) {
+func scenario(workers:int, family:int, geometry:int, variant:int, substeps:int) {
     var world = Physics.World2D(Physics.World2DSettings()
         ..gravity = Math.Vec2(2.0, -3.0) ..warm_start_enabled = variant != 6)
+    world.enable_parallelism(workers)
     var first_type = Physics.BodyType2D.fixed
     if family == 0 && geometry == 2 { first_type = Physics.BodyType2D.dynamic }
     var first = world.create_rigid_body(Physics.RigidBody2DSettings()
@@ -82,7 +106,8 @@ func scenario(family:int, geometry:int, variant:int, substeps:int) {
 }
 
 func main() {
+    let workers = requested_worker_count()
     for family in 0...2 { for geometry in 0...3 { for variant in 0...8 {
-        for substeps in [1, 2, 4, 8] { scenario(family, geometry, variant, substeps) }
+        for substeps in [1, 2, 4, 8] { scenario(workers, family, geometry, variant, substeps) }
     } } }
 }
