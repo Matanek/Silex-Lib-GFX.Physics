@@ -36,12 +36,24 @@ test "reuse generation slots while keeping body and shape pools dense" {
     store.step_states[store.require(moved)].center_y = 8.0
     store.step_states[store.require(moved)].displacement_x = 9.0
     store.step_states[store.require(moved)].displacement_y = 10.0
+    store.velocity_inputs[store.require(moved)].gravity_scale = 2.0
+    store.velocity_inputs[store.require(moved)].force_x = 3.0
+    store.velocity_inputs[store.require(moved)].force_y = 4.0
+    store.velocity_inputs[store.require(moved)].torque = 5.0
+    store.velocity_inputs[store.require(moved)].linear_damping = 0.25
+    store.velocity_inputs[store.require(moved)].angular_damping = 0.75
     store.destroy(removed)
 
     assert(!store.contains(removed))
     assert(store.count() == 2)
     assert(store.require(moved) == 1)
     assert(store.positions_x[store.require(moved)] == 3.0)
+    let moved_inputs = store.velocity_inputs[store.require(moved)]
+    assert(moved_inputs.gravity_scale == 2.0)
+    assert(moved_inputs.force_x == 3.0 && moved_inputs.force_y == 4.0)
+    assert(moved_inputs.torque == 5.0)
+    assert(moved_inputs.linear_damping == 0.25)
+    assert(moved_inputs.angular_damping == 0.75)
     let moved_step = store.step_states[store.require(moved)]
     assert(moved_step.rotation_cosine == 0.8)
     assert(moved_step.rotation_sine == 0.6)
@@ -60,6 +72,12 @@ test "reuse generation slots while keeping body and shape pools dense" {
     assert(replacement.slot == removed.slot)
     assert(replacement.generation != removed.generation)
     assert(store.require(replacement) == 2)
+    let replacement_inputs = store.velocity_inputs[store.require(replacement)]
+    assert(replacement_inputs.gravity_scale == 1.0)
+    assert(replacement_inputs.force_x == 0.0 && replacement_inputs.force_y == 0.0)
+    assert(replacement_inputs.torque == 0.0)
+    assert(replacement_inputs.linear_damping == 0.0)
+    assert(replacement_inputs.angular_damping == 0.0)
     let replacement_step = store.step_states[store.require(replacement)]
     assert(replacement_step.rotation_cosine == 1.0)
     assert(replacement_step.rotation_sine == 0.0)

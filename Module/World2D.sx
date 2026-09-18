@@ -6382,15 +6382,15 @@ func integrate_body_velocity(
     maximum_linear_speed:float
 ) {
     store.velocities_x[index] +=
-        (gravity.x * store.gravity_scales[index] +
-            store.forces_x[index] * store.inverse_masses[index]) * delta
+        (gravity.x * store.velocity_inputs[index].gravity_scale +
+            store.velocity_inputs[index].force_x * store.inverse_masses[index]) * delta
     store.velocities_y[index] +=
-        (gravity.y * store.gravity_scales[index] +
-            store.forces_y[index] * store.inverse_masses[index]) * delta
+        (gravity.y * store.velocity_inputs[index].gravity_scale +
+            store.velocity_inputs[index].force_y * store.inverse_masses[index]) * delta
     store.angular_velocities[index] +=
-        store.torques[index] * store.inverse_inertias[index] * delta
+        store.velocity_inputs[index].torque * store.inverse_inertias[index] * delta
     let linear_scale = 1.0 / (
-        1.0 + store.linear_dampings[index] * delta
+        1.0 + store.velocity_inputs[index].linear_damping * delta
     )
     store.velocities_x[index] *= linear_scale
     store.velocities_y[index] *= linear_scale
@@ -6404,7 +6404,7 @@ func integrate_body_velocity(
         store.velocities_y[index] *= scale
     }
     store.angular_velocities[index] *= 1.0 / (
-        1.0 + store.angular_dampings[index] * delta
+        1.0 + store.velocity_inputs[index].angular_damping * delta
     )
 }
 

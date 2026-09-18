@@ -692,6 +692,25 @@ package struct BodyStep2D {
     }
 }
 
+// Inputs shared by the velocity integration of each substep.
+package struct BodyVelocityInputs2D {
+    var gravity_scale:float
+    var force_x:float
+    var force_y:float
+    var torque:float
+    var linear_damping:float
+    var angular_damping:float
+
+    init(settings:RigidBody2DSettings) {
+        self.gravity_scale = settings.gravity_scale
+        self.force_x = 0.0
+        self.force_y = 0.0
+        self.torque = 0.0
+        self.linear_damping = settings.linear_damping
+        self.angular_damping = settings.angular_damping
+    }
+}
+
 package class BodyStore2D {
     var slot_generations:int[]
     var slot_dense_indices:int[]
@@ -725,20 +744,15 @@ package class BodyStore2D {
     var rotation_cosines:float[]
     var rotation_sines:float[]
     var angular_velocities:float[]
-    var gravity_scales:float[]
+    var velocity_inputs:BodyVelocityInputs2D[]
     var masses:float[]
     var inertias:float[]
     var inverse_masses:float[]
     var inverse_inertias:float[]
     var local_centers_x:float[]
     var local_centers_y:float[]
-    var forces_x:float[]
-    var forces_y:float[]
-    var torques:float[]
     var restitutions:float[]
     var friction_roots:float[]
-    var linear_dampings:float[]
-    var angular_dampings:float[]
     var sleep_thresholds:float[]
     var allow_sleep:bool[]
     var fixed_rotations:bool[]
@@ -788,20 +802,15 @@ package class BodyStore2D {
         self.rotation_cosines = []
         self.rotation_sines = []
         self.angular_velocities = []
-        self.gravity_scales = []
+        self.velocity_inputs = []
         self.masses = []
         self.inertias = []
         self.inverse_masses = []
         self.inverse_inertias = []
         self.local_centers_x = []
         self.local_centers_y = []
-        self.forces_x = []
-        self.forces_y = []
-        self.torques = []
         self.restitutions = []
         self.friction_roots = []
-        self.linear_dampings = []
-        self.angular_dampings = []
         self.sleep_thresholds = []
         self.allow_sleep = []
         self.fixed_rotations = []
@@ -848,20 +857,15 @@ package class BodyStore2D {
         self.rotation_cosines = []
         self.rotation_sines = []
         self.angular_velocities = []
-        self.gravity_scales = []
+        self.velocity_inputs = []
         self.masses = []
         self.inertias = []
         self.inverse_masses = []
         self.inverse_inertias = []
         self.local_centers_x = []
         self.local_centers_y = []
-        self.forces_x = []
-        self.forces_y = []
-        self.torques = []
         self.restitutions = []
         self.friction_roots = []
-        self.linear_dampings = []
-        self.angular_dampings = []
         self.sleep_thresholds = []
         self.allow_sleep = []
         self.fixed_rotations = []
@@ -959,20 +963,15 @@ package class BodyStore2D {
         } else {
             self.angular_velocities.append(settings.angular_velocity)
         }
-        self.gravity_scales.append(settings.gravity_scale)
+        self.velocity_inputs.append(BodyVelocityInputs2D(settings))
         self.masses.append(0.0)
         self.inertias.append(0.0)
         self.inverse_masses.append(0.0)
         self.inverse_inertias.append(0.0)
         self.local_centers_x.append(0.0)
         self.local_centers_y.append(0.0)
-        self.forces_x.append(0.0)
-        self.forces_y.append(0.0)
-        self.torques.append(0.0)
         self.restitutions.append(settings.restitution)
         self.friction_roots.append(Math.sqrt(settings.friction))
-        self.linear_dampings.append(settings.linear_damping)
-        self.angular_dampings.append(settings.angular_damping)
         self.sleep_thresholds.append(settings.sleep_threshold)
         self.allow_sleep.append(settings.allow_sleep)
         self.fixed_rotations.append(settings.fixed_rotation)
@@ -1466,9 +1465,9 @@ package class BodyStore2D {
     func clear_forces() {
         var index = 0
         while index < self.count() {
-            self.forces_x[index] = 0.0
-            self.forces_y[index] = 0.0
-            self.torques[index] = 0.0
+            self.velocity_inputs[index].force_x = 0.0
+            self.velocity_inputs[index].force_y = 0.0
+            self.velocity_inputs[index].torque = 0.0
             index++
         }
     }
@@ -1502,20 +1501,15 @@ package class BodyStore2D {
         self.rotation_cosines.swap(first, second)
         self.rotation_sines.swap(first, second)
         self.angular_velocities.swap(first, second)
-        self.gravity_scales.swap(first, second)
+        self.velocity_inputs.swap(first, second)
         self.masses.swap(first, second)
         self.inertias.swap(first, second)
         self.inverse_masses.swap(first, second)
         self.inverse_inertias.swap(first, second)
         self.local_centers_x.swap(first, second)
         self.local_centers_y.swap(first, second)
-        self.forces_x.swap(first, second)
-        self.forces_y.swap(first, second)
-        self.torques.swap(first, second)
         self.restitutions.swap(first, second)
         self.friction_roots.swap(first, second)
-        self.linear_dampings.swap(first, second)
-        self.angular_dampings.swap(first, second)
         self.sleep_thresholds.swap(first, second)
         self.allow_sleep.swap(first, second)
         self.fixed_rotations.swap(first, second)
@@ -1558,20 +1552,15 @@ package class BodyStore2D {
         self.rotation_cosines.take_last()
         self.rotation_sines.take_last()
         self.angular_velocities.take_last()
-        self.gravity_scales.take_last()
+        self.velocity_inputs.take_last()
         self.masses.take_last()
         self.inertias.take_last()
         self.inverse_masses.take_last()
         self.inverse_inertias.take_last()
         self.local_centers_x.take_last()
         self.local_centers_y.take_last()
-        self.forces_x.take_last()
-        self.forces_y.take_last()
-        self.torques.take_last()
         self.restitutions.take_last()
         self.friction_roots.take_last()
-        self.linear_dampings.take_last()
-        self.angular_dampings.take_last()
         self.sleep_thresholds.take_last()
         self.allow_sleep.take_last()
         self.fixed_rotations.take_last()
@@ -1944,15 +1933,15 @@ public class RigidBody2D {
     }
 
     func gravity_scale() float {
-        return self.store.gravity_scales[self.store.require(self.id)]
+        return self.store.velocity_inputs[self.store.require(self.id)].gravity_scale
     }
 
     func linear_damping() float {
-        return self.store.linear_dampings[self.store.require(self.id)]
+        return self.store.velocity_inputs[self.store.require(self.id)].linear_damping
     }
 
     func angular_damping() float {
-        return self.store.angular_dampings[self.store.require(self.id)]
+        return self.store.velocity_inputs[self.store.require(self.id)].angular_damping
     }
 
     func sleep_threshold() float {
@@ -2081,9 +2070,9 @@ public class RigidBody2D {
         }
         self.store.body_types[index] = body_type
         self.store.refresh_inverse_mass(index)
-        self.store.forces_x[index] = 0.0
-        self.store.forces_y[index] = 0.0
-        self.store.torques[index] = 0.0
+        self.store.velocity_inputs[index].force_x = 0.0
+        self.store.velocity_inputs[index].force_y = 0.0
+        self.store.velocity_inputs[index].torque = 0.0
         if body_type == BodyType2D.fixed {
             self.store.awake[index] = false
         } else {
@@ -2151,7 +2140,7 @@ public class RigidBody2D {
             panic("GFX.Physics.RigidBody2D gravity scale must be finite")
         }
         let index = self.store.require(self.id)
-        self.store.gravity_scales[index] = scale
+        self.store.velocity_inputs[index].gravity_scale = scale
         self.store.wake(index)
     }
 
@@ -2161,7 +2150,7 @@ public class RigidBody2D {
             panic("GFX.Physics.RigidBody2D linear damping must be finite and non-negative")
         }
         let index = self.store.require(self.id)
-        self.store.linear_dampings[index] = damping
+        self.store.velocity_inputs[index].linear_damping = damping
         self.store.wake(index)
     }
 
@@ -2171,7 +2160,7 @@ public class RigidBody2D {
             panic("GFX.Physics.RigidBody2D angular damping must be finite and non-negative")
         }
         let index = self.store.require(self.id)
-        self.store.angular_dampings[index] = damping
+        self.store.velocity_inputs[index].angular_damping = damping
         self.store.wake(index)
     }
 
@@ -2218,9 +2207,9 @@ public class RigidBody2D {
         let index = self.store.require(self.id)
         if self.store.enabled[index] == enabled { return }
         self.store.enabled[index] = enabled
-        self.store.forces_x[index] = 0.0
-        self.store.forces_y[index] = 0.0
-        self.store.torques[index] = 0.0
+        self.store.velocity_inputs[index].force_x = 0.0
+        self.store.velocity_inputs[index].force_y = 0.0
+        self.store.velocity_inputs[index].torque = 0.0
         if enabled { self.store.wake(index) }
         else {
             self.store.awake[index] = false
@@ -2276,10 +2265,10 @@ public class RigidBody2D {
         }
         let index = self.prepare_dynamic_action(wake)
         if !self.store.awake[index] { return }
-        self.store.forces_x[index] += force.x
-        self.store.forces_y[index] += force.y
+        self.store.velocity_inputs[index].force_x += force.x
+        self.store.velocity_inputs[index].force_y += force.y
         let radius = point.subtract(self.store.world_center_at(index))
-        self.store.torques[index] += radius.x * force.y - radius.y * force.x
+        self.store.velocity_inputs[index].torque += radius.x * force.y - radius.y * force.x
     }
 
     func apply_force_to_center(force:Math.Vec2, wake:bool = true) {
@@ -2288,8 +2277,8 @@ public class RigidBody2D {
         }
         let index = self.prepare_dynamic_action(wake)
         if !self.store.awake[index] { return }
-        self.store.forces_x[index] += force.x
-        self.store.forces_y[index] += force.y
+        self.store.velocity_inputs[index].force_x += force.x
+        self.store.velocity_inputs[index].force_y += force.y
     }
 
     func apply_torque(torque:float, wake:bool = true) {
@@ -2300,7 +2289,7 @@ public class RigidBody2D {
         if self.store.fixed_rotations[index] {
             panic("GFX.Physics.RigidBody2D torque requires free rotation")
         }
-        if self.store.awake[index] { self.store.torques[index] += torque }
+        if self.store.awake[index] { self.store.velocity_inputs[index].torque += torque }
     }
 
     func apply_linear_impulse(
