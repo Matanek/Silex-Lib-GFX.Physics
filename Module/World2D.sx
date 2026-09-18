@@ -6363,15 +6363,15 @@ func begin_soft_step_motion(store:BodyStore2D, index:int) {
     store.previous_positions_x[index] = store.positions_x[index]
     store.previous_positions_y[index] = store.positions_y[index]
     store.previous_rotations[index] = store.rotations[index]
-    store.step_start_cosines[index] = store.rotation_cosines[index]
-    store.step_start_sines[index] = store.rotation_sines[index]
-    store.step_rotation_cosines[index] = 1.0
-    store.step_rotation_sines[index] = 0.0
+    store.step_states[index].start_cosine = store.rotation_cosines[index]
+    store.step_states[index].start_sine = store.rotation_sines[index]
+    store.step_states[index].rotation_cosine = 1.0
+    store.step_states[index].rotation_sine = 0.0
     let center = store.world_center_at(index)
-    store.step_centers_x[index] = center.x
-    store.step_centers_y[index] = center.y
-    store.step_displacements_x[index] = 0.0
-    store.step_displacements_y[index] = 0.0
+    store.step_states[index].center_x = center.x
+    store.step_states[index].center_y = center.y
+    store.step_states[index].displacement_x = 0.0
+    store.step_states[index].displacement_y = 0.0
 }
 
 func integrate_body_velocity(
@@ -6509,13 +6509,14 @@ func integrate_body_position(
     index:int,
     delta:float
 ) {
-    var center = store.world_center_at(index)
+    var center = Math.Vec2()
     if store.body_types[index] == BodyType2D.dynamic {
-        store.step_displacements_x[index] += store.velocities_x[index] * delta
-        store.step_displacements_y[index] += store.velocities_y[index] * delta
-        center.x = store.step_centers_x[index] + store.step_displacements_x[index]
-        center.y = store.step_centers_y[index] + store.step_displacements_y[index]
+        store.step_states[index].displacement_x += store.velocities_x[index] * delta
+        store.step_states[index].displacement_y += store.velocities_y[index] * delta
+        center.x = store.step_states[index].center_x + store.step_states[index].displacement_x
+        center.y = store.step_states[index].center_y + store.step_states[index].displacement_y
     } else {
+        center = store.world_center_at(index)
         center.x += store.velocities_x[index] * delta
         center.y += store.velocities_y[index] * delta
     }
@@ -6523,20 +6524,20 @@ func integrate_body_position(
         let angle_delta = store.angular_velocities[index] * delta
         if store.body_types[index] == BodyType2D.dynamic {
             // Normalize the rotation delta, then compose with the step origin.
-            let cosine = store.step_rotation_cosines[index] -
-                angle_delta * store.step_rotation_sines[index]
-            let sine = store.step_rotation_sines[index] +
-                angle_delta * store.step_rotation_cosines[index]
+            let cosine = store.step_states[index].rotation_cosine -
+                angle_delta * store.step_states[index].rotation_sine
+            let sine = store.step_states[index].rotation_sine +
+                angle_delta * store.step_states[index].rotation_cosine
             let inverse_length = 1.0 / Math.sqrt(cosine * cosine + sine * sine)
             let normalized_cosine = cosine * inverse_length
             let normalized_sine = sine * inverse_length
-            store.step_rotation_cosines[index] = normalized_cosine
-            store.step_rotation_sines[index] = normalized_sine
+            store.step_states[index].rotation_cosine = normalized_cosine
+            store.step_states[index].rotation_sine = normalized_sine
             store.rotations[index] += Math.atan(angle_delta)
-            store.rotation_cosines[index] = normalized_cosine * store.step_start_cosines[index] -
-                normalized_sine * store.step_start_sines[index]
-            store.rotation_sines[index] = normalized_sine * store.step_start_cosines[index] +
-                normalized_cosine * store.step_start_sines[index]
+            store.rotation_cosines[index] = normalized_cosine * store.step_states[index].start_cosine -
+                normalized_sine * store.step_states[index].start_sine
+            store.rotation_sines[index] = normalized_sine * store.step_states[index].start_cosine +
+                normalized_cosine * store.step_states[index].start_sine
         } else {
             // Kinematic targets retain their prescribed displacement.
             store.rotations[index] += angle_delta
@@ -7995,18 +7996,18 @@ struct FinalizeSoftStepBodies2D:Threading.ParallelJob {
             let normalized_sine = sine * inverse_length
             self.store.rotation_cosines[index] = normalized_cosine
             self.store.rotation_sines[index] = normalized_sine
-            let center_x = self.store.step_centers_x[index] + self.store.step_displacements_x[index]
-            let center_y = self.store.step_centers_y[index] + self.store.step_displacements_y[index]
+            let center_x = self.store.step_states[index].center_x + self.store.step_states[index].displacement_x
+            let center_y = self.store.step_states[index].center_y + self.store.step_states[index].displacement_y
             self.store.positions_x[index] = center_x -
                 (normalized_cosine * self.store.local_centers_x[index] -
                     normalized_sine * self.store.local_centers_y[index])
             self.store.positions_y[index] = center_y -
                 (normalized_sine * self.store.local_centers_x[index] +
                     normalized_cosine * self.store.local_centers_y[index])
-            self.store.step_rotation_cosines[index] = 1.0
-            self.store.step_rotation_sines[index] = 0.0
-            self.store.step_displacements_x[index] = 0.0
-            self.store.step_displacements_y[index] = 0.0
+            self.store.step_states[index].rotation_cosine = 1.0
+            self.store.step_states[index].rotation_sine = 0.0
+            self.store.step_states[index].displacement_x = 0.0
+            self.store.step_states[index].displacement_y = 0.0
             item++
         }
     }

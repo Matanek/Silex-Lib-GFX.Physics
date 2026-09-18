@@ -1972,15 +1972,15 @@ func solve_joint_axis_limits(bodies:BodyStore2D, joint:&JointConstraint2D,
 }
 
 func joint_step_vector(bodies:BodyStore2D, index:int, vector:Math.Vec2) Math.Vec2 {
-    let cosine = bodies.step_rotation_cosines[index]
-    let sine = bodies.step_rotation_sines[index]
+    let cosine = bodies.step_states[index].rotation_cosine
+    let sine = bodies.step_states[index].rotation_sine
     return Math.Vec2(cosine * vector.x - sine * vector.y,
         sine * vector.x + cosine * vector.y)
 }
 
 func joint_step_displacement(bodies:BodyStore2D, index:int) Math.Vec2 {
     if !bodies.awake[index] { return Math.Vec2() }
-    return Math.Vec2(bodies.step_displacements_x[index], bodies.step_displacements_y[index])
+    return Math.Vec2(bodies.step_states[index].displacement_x, bodies.step_states[index].displacement_y)
 }
 
 func joint_anchor_separation(bodies:BodyStore2D, joint:JointConstraint2D,
@@ -2068,10 +2068,10 @@ func solve_joint(
 
     if joint.kind == JointKind2D.motor {
         let angle_delta = joint_solver_atan(
-            bodies.step_rotation_sines[second] * bodies.step_rotation_cosines[first] -
-                bodies.step_rotation_cosines[second] * bodies.step_rotation_sines[first],
-            bodies.step_rotation_cosines[second] * bodies.step_rotation_cosines[first] +
-                bodies.step_rotation_sines[second] * bodies.step_rotation_sines[first])
+            bodies.step_states[second].rotation_sine * bodies.step_states[first].rotation_cosine -
+                bodies.step_states[second].rotation_cosine * bodies.step_states[first].rotation_sine,
+            bodies.step_states[second].rotation_cosine * bodies.step_states[first].rotation_cosine +
+                bodies.step_states[second].rotation_sine * bodies.step_states[first].rotation_sine)
         let angular_error = unwind_joint_angle(angle_delta +
             (joint.prepared_relative_angle - joint.reference_angle))
         let bias_rate = inverse_delta * joint.correction_factor
@@ -2094,10 +2094,10 @@ func solve_joint(
     }
 
     let angle_delta = joint_solver_atan(
-        bodies.step_rotation_sines[second] * bodies.step_rotation_cosines[first] -
-            bodies.step_rotation_cosines[second] * bodies.step_rotation_sines[first],
-        bodies.step_rotation_cosines[second] * bodies.step_rotation_cosines[first] +
-            bodies.step_rotation_sines[second] * bodies.step_rotation_sines[first])
+        bodies.step_states[second].rotation_sine * bodies.step_states[first].rotation_cosine -
+            bodies.step_states[second].rotation_cosine * bodies.step_states[first].rotation_sine,
+        bodies.step_states[second].rotation_cosine * bodies.step_states[first].rotation_cosine +
+            bodies.step_states[second].rotation_sine * bodies.step_states[first].rotation_sine)
     let relative_angle = angle_delta +
         unwind_joint_angle(joint.prepared_relative_angle - joint.reference_angle)
     joint.current_angle = relative_angle

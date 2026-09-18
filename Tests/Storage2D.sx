@@ -27,12 +27,30 @@ test "reuse generation slots while keeping body and shape pools dense" {
     assert(store.shape_store.count() == 4)
     assert(store.shape_store.contains(extra_shape))
 
+    // Keep an ongoing substep attached to its body across dense removal.
+    store.step_states[store.require(moved)].rotation_cosine = 0.8
+    store.step_states[store.require(moved)].rotation_sine = 0.6
+    store.step_states[store.require(moved)].start_cosine = 0.6
+    store.step_states[store.require(moved)].start_sine = 0.8
+    store.step_states[store.require(moved)].center_x = 7.0
+    store.step_states[store.require(moved)].center_y = 8.0
+    store.step_states[store.require(moved)].displacement_x = 9.0
+    store.step_states[store.require(moved)].displacement_y = 10.0
     store.destroy(removed)
 
     assert(!store.contains(removed))
     assert(store.count() == 2)
     assert(store.require(moved) == 1)
     assert(store.positions_x[store.require(moved)] == 3.0)
+    let moved_step = store.step_states[store.require(moved)]
+    assert(moved_step.rotation_cosine == 0.8)
+    assert(moved_step.rotation_sine == 0.6)
+    assert(moved_step.start_cosine == 0.6)
+    assert(moved_step.start_sine == 0.8)
+    assert(moved_step.center_x == 7.0)
+    assert(moved_step.center_y == 8.0)
+    assert(moved_step.displacement_x == 9.0)
+    assert(moved_step.displacement_y == 10.0)
 
     let replacement = store.append(RigidBody2DSettings()
         ..shape = Shape2D.box(Box2D(Math.Vec2(2.0, 1.0)))
@@ -42,6 +60,15 @@ test "reuse generation slots while keeping body and shape pools dense" {
     assert(replacement.slot == removed.slot)
     assert(replacement.generation != removed.generation)
     assert(store.require(replacement) == 2)
+    let replacement_step = store.step_states[store.require(replacement)]
+    assert(replacement_step.rotation_cosine == 1.0)
+    assert(replacement_step.rotation_sine == 0.0)
+    assert(replacement_step.start_cosine == 1.0)
+    assert(replacement_step.start_sine == 0.0)
+    assert(replacement_step.center_x == 0.0)
+    assert(replacement_step.center_y == 0.0)
+    assert(replacement_step.displacement_x == 0.0)
+    assert(replacement_step.displacement_y == 0.0)
     assert(store.count() == store.dense_slots.count())
     assert(store.shape_store.count() == 4)
 
