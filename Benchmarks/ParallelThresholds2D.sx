@@ -27,6 +27,10 @@ class Fixture {
                 ..enable_hit_events = true
                 ..enable_move_events = true
                 ..application_id = (2*i) as uint64
+            if kind == 3 {
+                settings.shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(1.0)))
+                settings.rotation = 0.02
+            }
             if kind == 1 { settings.create_implicit_collider = false }
             if kind == 2 { settings.velocity = Math.Vec2(0.1,0.2) }
             var first = self.world.create_rigid_body(settings)
@@ -151,6 +155,7 @@ func main() {
     var kind = 0
     if option("--joints") { kind = 1 }
     if option("--bodies") { kind = 2 }
+    if option("--general-contacts") { kind = 3 }
     var count = 4_096
     if kind == 2 { count = 16_384 }
     if option("--below") { count-- }
@@ -170,6 +175,15 @@ func main() {
         parallel.world.step(1.0/60.0,substeps)
         if dump { print("step $(step)") }
         compare(direct,parallel,dump)
+        if kind == 3 {
+            assert(direct.world.compact_collision_count() == 0)
+            assert(parallel.world.compact_collision_count() == 0)
+            assert(direct.world.collision_count() > 0)
+            if step == 0 {
+                assert(direct.world.single_contact_collision_count() <
+                    direct.world.collision_count())
+            }
+        }
         assert(direct.world.soft_step_parallel_dispatch_count() == 0)
         dispatched += parallel.world.soft_step_parallel_dispatch_count()
         print("parallel kind=$(kind) count=$(count) workers=$(workers) substeps=$(substeps) step=$(step) dispatch=$(parallel.world.soft_step_parallel_dispatch_count()) color=$(parallel.world.soft_step_maximum_color_count()) exact=true")

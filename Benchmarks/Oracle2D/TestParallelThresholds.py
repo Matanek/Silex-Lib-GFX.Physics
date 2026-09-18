@@ -40,6 +40,14 @@ class ThresholdChecks(unittest.TestCase):
             self.inspect(self.trace(), below=True)
         self.inspect(self.trace(dispatch=0), below=True)
 
+    def test_general_contacts_require_both_bodies_and_their_own_kind(self):
+        text = self.trace().replace("kind=0", "kind=3")
+        inspect_trace(text, 3, 1, 4, 4, False)
+        with self.assertRaises(ValueError):
+            inspect_trace(text.replace("body 1 0\n", "", 1), 3, 1, 4, 4, False)
+        with self.assertRaises(ValueError):
+            inspect_trace(text, 0, 1, 4, 4, False)
+
     def test_wrong_configuration_is_rejected(self):
         for change in ["kind=1", "count=2", "workers=2", "substeps=8"]:
             field = change.split("=")[0]

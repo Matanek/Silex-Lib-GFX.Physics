@@ -8117,6 +8117,7 @@ struct SolveSoftConstraints2D:Threading.ParallelJob {
         var state = self.state
         let body_count = store.count()
         let compact_count = state.compact_impulses.count()
+        let collision_count = state.collisions.count()
         solve_soft_constraint_range(
             store,
             state,
@@ -8128,6 +8129,7 @@ struct SolveSoftConstraints2D:Threading.ParallelJob {
             &store.velocities_y[0:body_count],
             &store.angular_velocities[0:body_count],
             &state.compact_impulses[0:compact_count],
+            &state.collisions[0:collision_count],
             self.offset,
             self.count,
             self.reverse,
@@ -8153,6 +8155,7 @@ func solve_soft_constraint_range(
     velocities_y:&float[..],
     angular_velocities:&float[..],
     compact_impulses:&CompactCircleImpulses2D[..],
+    collisions:&Collision2D[..],
     offset:int,
     count:int,
     reverse:bool,
@@ -8297,10 +8300,10 @@ func solve_soft_constraint_range(
                 }
                 compact_impulses[entry] = impulses
             } else {
-                var collision = state.collisions[-entry - 1]
+                let collision_index = -entry - 1
                 var softness = contact_softness
-                let first = collision.first_body
-                let second = collision.second_body
+                let first = collisions[collision_index].first_body
+                let second = collisions[collision_index].second_body
                 if !store.awake[first] || !store.awake[second] ||
                     store.inverse_masses[first] <= 0.0 ||
                     store.inverse_masses[second] <= 0.0
@@ -8309,14 +8312,13 @@ func solve_soft_constraint_range(
                 }
                 solve_soft_collision(
                     store,
-                    collision,
+                    collisions[collision_index],
                     softness,
                     inverse_delta,
                     use_bias,
                     false,
                     solve_friction
                 )
-                state.collisions[-entry - 1] = collision
             }
         item++
     }

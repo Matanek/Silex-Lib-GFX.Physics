@@ -638,7 +638,9 @@ It compares every body's pose, velocity and awake state after each of four
 steps, plus ordered contacts, manifold points, impulses and movement/contact
 events. Independent contact pairs and distance joints exercise the 4096
 constraints-per-color threshold; sparse moving bodies exercise the 16384-body
-threshold. Internal dispatch counters must stay zero below each threshold and
+threshold. The `contacts` workload uses compact circle constraints.
+`general-contacts` uses slightly rotated boxes and requires noncompact
+constraints, including two-point contacts on the first step. Internal dispatch counters must stay zero below each threshold and
 be positive at or above it.
 
 `CheckParallelThresholds.py` runs two independent executions per configuration,
@@ -659,6 +661,8 @@ python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/CheckParallelThresholds.py -
 ```
 
 Use `--probe` for one threshold case per workload before the full grid.
+Use `--kind general-contacts` to run the complete grid for box contacts only.
+The executable accepts `--general-contacts` to select that scene directly.
 These are correctness witnesses, not performance measurements or proof of
 every joint family, CCD, sensors, callback order or lifecycle transitions.
 

@@ -10,7 +10,7 @@ import subprocess
 
 
 ROW = re.compile(r"parallel kind=(\d+) count=(\d+) workers=(\d+) substeps=(\d+) step=(\d+) dispatch=(\d+) color=(\d+) exact=true")
-KINDS = {"contacts": 0, "joints": 1, "bodies": 2}
+KINDS = {"contacts": 0, "joints": 1, "bodies": 2, "general-contacts": 3}
 
 
 def inspect_trace(text, kind, count, workers, substeps, below):
@@ -49,7 +49,9 @@ def main():
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--reference", type=Path, help="also compare an earlier build's state traces")
     parser.add_argument("--probe", action="store_true", help="one run per kind before the full grid")
+    parser.add_argument("--kind", choices=KINDS, help="qualify one constraint family")
     args = parser.parse_args()
+    kinds = [args.kind] if args.kind else KINDS
     binary = args.binary.resolve()
     args.report.parent.mkdir(parents=True, exist_ok=True)
     traces = args.report.with_suffix("")
@@ -58,12 +60,12 @@ def main():
     if args.reference:
         for record in json.loads(args.reference.read_text())["runs"]:
             signatures[tuple(record["state_key"])] = record["sha256"]
-    cases = [(kind, level, workers, 4) for kind in KINDS
+    cases = [(kind, level, workers, 4) for kind in kinds
              for level in ["below", "at", "above"] for workers in [2, 4]]
-    cases += [(kind, "at", 4, substeps) for kind in KINDS for substeps in [1, 2, 8]]
+    cases += [(kind, "at", 4, substeps) for kind in kinds for substeps in [1, 2, 8]]
     repetitions = 2
     if args.probe:
-        cases = [(kind, "at", 4, 4) for kind in KINDS]
+        cases = [(kind, "at", 4, 4) for kind in kinds]
         repetitions = 1
     result = {"binary": str(binary), "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "runs": []}
     for kind, level, workers, substeps in cases:
