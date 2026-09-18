@@ -8627,7 +8627,7 @@ func prepare_circle_collision_constraints(
 }
 
 func contact_anchor_vector(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     body:int,
     local_point:Math.Vec2,
     rotates:bool
@@ -8688,7 +8688,7 @@ func apply_soft_contact_impulse(
 }
 
 func soft_relative_velocity(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first:int,
     second:int,
     first_anchor:Math.Vec2,
@@ -8707,7 +8707,7 @@ func soft_relative_velocity(
 }
 
 func soft_contact_separation(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     collision:@Collision2D,
     first_anchor:Math.Vec2,
     second_anchor:Math.Vec2,
