@@ -6359,7 +6359,7 @@ func continuous_placement_at(
     )
 }
 
-func begin_soft_step_motion(store:BodyStore2D, index:int) {
+func begin_soft_step_motion(store:&BodyStore2D, index:int) {
     store.previous_positions_x[index] = store.positions_x[index]
     store.previous_positions_y[index] = store.positions_y[index]
     store.previous_rotations[index] = store.rotations[index]
@@ -6375,7 +6375,7 @@ func begin_soft_step_motion(store:BodyStore2D, index:int) {
 }
 
 func integrate_body_velocity(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     gravity:Math.Vec2,
     index:int,
     delta:float,
@@ -6505,7 +6505,7 @@ func shape_cast_query_bounds(
 }
 
 func integrate_body_position(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     index:int,
     delta:float
 ) {
@@ -6965,7 +6965,7 @@ func material_uses_default_combine(material:PhysicsMaterial2D) bool {
         material.restitution_combine == MaterialCombineMode2D.maximum
 }
 
-func supports_compact_circle_collision(store:BodyStore2D, body:int) bool {
+func supports_compact_circle_collision(store:@BodyStore2D, body:int) bool {
     if store.shape_counts[body] == 1 && store.shape_kinds[body] == 1 &&
         Math.abs(store.local_centers_x[body]) <= 0.000000001 &&
         Math.abs(store.local_centers_y[body]) <= 0.000000001
@@ -7155,7 +7155,7 @@ func collider_placement(
     )
 }
 
-func primary_material(store:BodyStore2D, body:int) PhysicsMaterial2D {
+func primary_material(store:@BodyStore2D, body:int) PhysicsMaterial2D {
     let slot = store.primary_shape_slots[body]
     return store.shape_store.materials[
         store.shape_store.slot_dense_indices[slot]
@@ -7362,7 +7362,7 @@ func build_circle_collision(
 }
 
 func build_compact_circle_collision(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first_body:int,
     second_body:int,
     cache_index:int,
@@ -7763,7 +7763,7 @@ struct Collision2D {
     }
 
     init(
-        store:BodyStore2D,
+        store:@BodyStore2D,
         first_body:int,
         second_body:int,
         normal:Math.Vec2,
@@ -7866,7 +7866,7 @@ struct Collision2D {
     }
 
     init(
-        store:BodyStore2D,
+        store:@BodyStore2D,
         first_body:int,
         second_body:int,
         normal:Math.Vec2,
@@ -8482,7 +8482,7 @@ func build_box_collision(
 }
 
 func prepare_collision_constraints(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     collision:&Collision2D
 ) {
     let first:int = collision.first_body + 0
@@ -8571,7 +8571,7 @@ func prepare_collision_constraints(
 }
 
 func prepare_circle_collision_constraints(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     collision:&Collision2D
 ) {
     let first:int = collision.first_body + 0
@@ -8647,7 +8647,7 @@ func contact_anchor_vector(
 }
 
 func soft_step_contact_anchor(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     body:int,
     point:Math.Vec2,
     rotates:bool
@@ -8659,7 +8659,7 @@ func soft_step_contact_anchor(
 }
 
 func apply_soft_contact_impulse(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     first:int,
     second:int,
     first_anchor:Math.Vec2,
@@ -8712,7 +8712,7 @@ func soft_relative_velocity(
 }
 
 func warm_start_soft_collision(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@Collision2D
 ) {
     warm_start_soft_rolling(store, collision)
@@ -8727,7 +8727,7 @@ func warm_start_soft_collision(
 }
 
 func warm_start_soft_rolling(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@Collision2D
 ) {
     let impulse = collision.rolling_impulse
@@ -8745,7 +8745,7 @@ func warm_start_soft_rolling(
 }
 
 func warm_start_soft_single_collision(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@Collision2D
 ) {
     let normal_impulse = collision.normal_impulse_first
@@ -8802,7 +8802,7 @@ func warm_start_soft_single_collision(
 }
 
 func warm_start_soft_collision_point(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@Collision2D,
     second_contact:bool
 ) {
@@ -9429,7 +9429,7 @@ func solve_soft_rolling_friction(
 }
 
 func apply_soft_collision_restitution(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:&Collision2D,
     threshold:float
 ) {
@@ -9444,7 +9444,7 @@ func apply_soft_collision_restitution(
 }
 
 func apply_soft_single_collision_restitution(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:&Collision2D,
     threshold:float
 ) {
@@ -9525,7 +9525,7 @@ func apply_soft_single_collision_restitution(
 }
 
 func apply_soft_collision_restitution_point(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:&Collision2D,
     second_contact:bool,
     threshold:float
@@ -9594,7 +9594,7 @@ func apply_soft_collision_restitution_point(
 }
 
 func warm_start_compact_circle_collision(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@CompactCircleCollision2D,
     impulses:@CompactCircleImpulses2D
 ) {
@@ -10026,7 +10026,7 @@ func solve_soft_compact_circle_four_normals(
 }
 
 func apply_soft_compact_restitution(
-    store:BodyStore2D,
+    store:&BodyStore2D,
     collision:@CompactCircleCollision2D,
     impulses:&CompactCircleImpulses2D,
     threshold:float
@@ -10110,7 +10110,7 @@ func clip_contact_segment(
 }
 
 func contact_points(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first:int,
     second:int,
     normal:Math.Vec2
@@ -10232,7 +10232,7 @@ func contact_points(
     )
 }
 
-func face_alignment(store:BodyStore2D, body:int, normal:Math.Vec2) float {
+func face_alignment(store:@BodyStore2D, body:int, normal:Math.Vec2) float {
     return Math.max(
         Math.abs(body_axis_x(store, body).dot(normal)),
         Math.abs(body_axis_y(store, body).dot(normal))
@@ -10240,7 +10240,7 @@ func face_alignment(store:BodyStore2D, body:int, normal:Math.Vec2) float {
 }
 
 func overlap_on_axis(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first:int,
     second:int,
     offset:Math.Vec2,
@@ -10251,12 +10251,12 @@ func overlap_on_axis(
         Math.abs(offset.dot(axis))
 }
 
-func body_position(store:BodyStore2D, index:int) Math.Vec2 {
+func body_position(store:@BodyStore2D, index:int) Math.Vec2 {
     return Math.Vec2(store.positions_x[index], store.positions_y[index])
 }
 
 func speculative_circle_pair(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first:int,
     second:int
 ) bool {
@@ -10270,7 +10270,7 @@ func speculative_circle_pair(
 }
 
 func circle_contact_normal(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     first:int,
     second:int,
     offset_x:float,
@@ -10332,7 +10332,7 @@ func circle_separation_normal(
 }
 
 func body_local_point(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
@@ -10347,7 +10347,7 @@ func body_local_point(
 }
 
 func body_local_vector(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     vector:Math.Vec2
 ) Math.Vec2 {
@@ -10368,7 +10368,7 @@ func normalized_joint_axis(axis:Math.Vec2) Math.Vec2 {
 }
 
 func body_contact_cache_point(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
@@ -10378,14 +10378,14 @@ func body_contact_cache_point(
     ))
 }
 
-func body_axis_x(store:BodyStore2D, index:int) Math.Vec2 {
+func body_axis_x(store:@BodyStore2D, index:int) Math.Vec2 {
     return Math.Vec2(
         store.rotation_cosines[index],
         store.rotation_sines[index]
     )
 }
 
-func body_axis_y(store:BodyStore2D, index:int) Math.Vec2 {
+func body_axis_y(store:@BodyStore2D, index:int) Math.Vec2 {
     return Math.Vec2(
         -store.rotation_sines[index],
         store.rotation_cosines[index]
@@ -10393,7 +10393,7 @@ func body_axis_y(store:BodyStore2D, index:int) Math.Vec2 {
 }
 
 func projection_radius(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     axis:Math.Vec2
 ) float {
@@ -10407,7 +10407,7 @@ func projection_radius(
 }
 
 func body_support(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     direction:Math.Vec2
 ) Math.Vec2 {
@@ -10434,7 +10434,7 @@ func body_support(
 }
 
 func velocity_at(
-    store:BodyStore2D,
+    store:@BodyStore2D,
     index:int,
     point:Math.Vec2
 ) Math.Vec2 {
@@ -10465,12 +10465,12 @@ func wake_for_contact(
     else { store.wake(first) }
 }
 
-func solver_inverse_mass(store:BodyStore2D, index:int) float {
+func solver_inverse_mass(store:@BodyStore2D, index:int) float {
     if !store.awake[index] { return 0.0 }
     return store.inverse_masses[index]
 }
 
-func solver_inverse_inertia(store:BodyStore2D, index:int) float {
+func solver_inverse_inertia(store:@BodyStore2D, index:int) float {
     if !store.awake[index] { return 0.0 }
     return store.inverse_inertias[index]
 }
