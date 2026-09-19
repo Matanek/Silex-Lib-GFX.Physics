@@ -8708,21 +8708,6 @@ func soft_relative_velocity(
     )
 }
 
-func soft_contact_separation(
-    store:@BodyStore2D,
-    collision:@Collision2D,
-    first_anchor:Math.Vec2,
-    second_anchor:Math.Vec2,
-    base_separation:float
-) float {
-    let center_offset = store.world_center_at(
-        collision.second_body
-    ).subtract(store.world_center_at(collision.first_body))
-    return base_separation + center_offset.add(
-        second_anchor.subtract(first_anchor)
-    ).dot(collision.normal)
-}
-
 func warm_start_soft_collision(
     store:BodyStore2D,
     collision:@Collision2D
@@ -8867,6 +8852,123 @@ func warm_start_soft_collision_point(
     )
 }
 
+// A contact owns these temporary velocities until both normal and friction
+// impulses have been applied. Positions, anchors and effective masses stay
+// constant throughout that solve; neighbouring contacts see the final writeback.
+struct SoftContactSolve2D {
+    let first_anchor_a:Math.Vec2
+    let first_anchor_b:Math.Vec2
+    let second_anchor_a:Math.Vec2
+    let second_anchor_b:Math.Vec2
+    let center_offset:Math.Vec2
+    let first_inverse_mass:float
+    let first_inverse_inertia:float
+    let second_inverse_mass:float
+    let second_inverse_inertia:float
+    var first_velocity_x:float
+    var first_velocity_y:float
+    var first_angular_velocity:float
+    var second_velocity_x:float
+    var second_velocity_y:float
+    var second_angular_velocity:float
+
+    init(store:@BodyStore2D, collision:@Collision2D) {
+        let first = collision.first_body
+        let second = collision.second_body
+        self.first_anchor_a = contact_anchor_vector(
+            store, first, collision.first_anchor_a, collision.first_anchor_rotates
+        )
+        self.first_anchor_b = contact_anchor_vector(
+            store, second, collision.first_anchor_b, collision.second_anchor_rotates
+        )
+        self.second_anchor_a = contact_anchor_vector(
+            store, first, collision.second_anchor_a, collision.first_anchor_rotates
+        )
+        self.second_anchor_b = contact_anchor_vector(
+            store, second, collision.second_anchor_b, collision.second_anchor_rotates
+        )
+        self.center_offset = store.world_center_at(second).subtract(
+            store.world_center_at(first)
+        )
+        var first_mass = 0.0
+        var first_inertia = 0.0
+        if store.awake[first] {
+            first_mass = store.inverse_masses[first]
+            first_inertia = store.inverse_inertias[first]
+        }
+        var second_mass = 0.0
+        var second_inertia = 0.0
+        if store.awake[second] {
+            second_mass = store.inverse_masses[second]
+            second_inertia = store.inverse_inertias[second]
+        }
+        self.first_inverse_mass = first_mass
+        self.first_inverse_inertia = first_inertia
+        self.second_inverse_mass = second_mass
+        self.second_inverse_inertia = second_inertia
+        self.first_velocity_x = store.velocities_x[first]
+        self.first_velocity_y = store.velocities_y[first]
+        self.first_angular_velocity = store.angular_velocities[first]
+        self.second_velocity_x = store.velocities_x[second]
+        self.second_velocity_y = store.velocities_y[second]
+        self.second_angular_velocity = store.angular_velocities[second]
+    }
+
+    func relative_velocity(first_anchor:Math.Vec2, second_anchor:Math.Vec2) Math.Vec2 {
+        return Math.Vec2(
+            self.second_velocity_x - self.second_angular_velocity * second_anchor.y -
+                self.first_velocity_x + self.first_angular_velocity * first_anchor.y,
+            self.second_velocity_y + self.second_angular_velocity * second_anchor.x -
+                self.first_velocity_y - self.first_angular_velocity * first_anchor.x
+        )
+    }
+
+    func separation(
+        normal:Math.Vec2,
+        first_anchor:Math.Vec2,
+        second_anchor:Math.Vec2,
+        base_separation:float
+    ) float {
+        return base_separation + self.center_offset.add(
+            second_anchor.subtract(first_anchor)
+        ).dot(normal)
+    }
+
+    func apply_impulse(
+        first_anchor:Math.Vec2,
+        second_anchor:Math.Vec2,
+        impulse:Math.Vec2
+    ) {
+        if self.first_inverse_mass > 0.0 || self.first_inverse_inertia > 0.0 {
+            self.first_velocity_x -= impulse.x * self.first_inverse_mass
+            self.first_velocity_y -= impulse.y * self.first_inverse_mass
+            self.first_angular_velocity -= cross(first_anchor, impulse) *
+                self.first_inverse_inertia
+        }
+        if self.second_inverse_mass > 0.0 || self.second_inverse_inertia > 0.0 {
+            self.second_velocity_x += impulse.x * self.second_inverse_mass
+            self.second_velocity_y += impulse.y * self.second_inverse_mass
+            self.second_angular_velocity += cross(second_anchor, impulse) *
+                self.second_inverse_inertia
+        }
+    }
+
+    func write_back(store:BodyStore2D, collision:@Collision2D) {
+        let first = collision.first_body
+        let second = collision.second_body
+        if self.first_inverse_mass > 0.0 || self.first_inverse_inertia > 0.0 {
+            store.velocities_x[first] = self.first_velocity_x
+            store.velocities_y[first] = self.first_velocity_y
+            store.angular_velocities[first] = self.first_angular_velocity
+        }
+        if self.second_inverse_mass > 0.0 || self.second_inverse_inertia > 0.0 {
+            store.velocities_x[second] = self.second_velocity_x
+            store.velocities_y[second] = self.second_velocity_y
+            store.angular_velocities[second] = self.second_angular_velocity
+        }
+    }
+}
+
 func solve_soft_collision(
     store:BodyStore2D,
     collision:&Collision2D,
@@ -8887,9 +8989,10 @@ func solve_soft_collision(
         )
         return
     }
+    var solver = SoftContactSolve2D(store, collision)
     let solved_block = collision.contacts.count > 1 &&
         solve_soft_collision_block_normals(
-            store,
+            solver,
             collision,
             softness,
             inverse_delta,
@@ -8897,7 +9000,7 @@ func solve_soft_collision(
         )
     if !solved_block && reverse_points && collision.contacts.count > 1 {
         solve_soft_collision_point(
-            store,
+            solver,
             collision,
             softness,
             inverse_delta,
@@ -8907,7 +9010,7 @@ func solve_soft_collision(
     }
     if !solved_block {
         solve_soft_collision_point(
-            store,
+            solver,
             collision,
             softness,
             inverse_delta,
@@ -8916,7 +9019,7 @@ func solve_soft_collision(
         )
         if collision.contacts.count > 1 && !reverse_points {
             solve_soft_collision_point(
-                store,
+                solver,
                 collision,
                 softness,
                 inverse_delta,
@@ -8927,14 +9030,15 @@ func solve_soft_collision(
     }
     if solve_friction {
         if reverse_points && collision.contacts.count > 1 {
-            solve_soft_collision_friction_point(store, collision, true)
+            solve_soft_collision_friction_point(solver, collision, true)
         }
-        solve_soft_collision_friction_point(store, collision, false)
+        solve_soft_collision_friction_point(solver, collision, false)
         if collision.contacts.count > 1 && !reverse_points {
-            solve_soft_collision_friction_point(store, collision, true)
+            solve_soft_collision_friction_point(solver, collision, true)
         }
-        solve_soft_rolling_friction(store, collision)
     }
+    solver.write_back(store, collision)
+    if solve_friction { solve_soft_rolling_friction(store, collision) }
 }
 
 func solve_soft_single_collision(
@@ -9073,7 +9177,7 @@ func solve_soft_single_collision(
 }
 
 func solve_soft_collision_block_normals(
-    store:BodyStore2D,
+    solver:&SoftContactSolve2D,
     collision:&Collision2D,
     softness:ContactSoftness2D,
     inverse_delta:float,
@@ -9086,40 +9190,18 @@ func solve_soft_collision_block_normals(
         collision.normal_denominator_second + 0.0
     let coupling:float = collision.normal_coupling + 0.0
     if determinant <= 0.00000001 { return false }
-    let first_anchor_a = contact_anchor_vector(
-        store,
-        collision.first_body,
-        collision.first_anchor_a,
-        collision.first_anchor_rotates
-    )
-    let first_anchor_b = contact_anchor_vector(
-        store,
-        collision.second_body,
-        collision.first_anchor_b,
-        collision.second_anchor_rotates
-    )
-    let second_anchor_a = contact_anchor_vector(
-        store,
-        collision.first_body,
-        collision.second_anchor_a,
-        collision.first_anchor_rotates
-    )
-    let second_anchor_b = contact_anchor_vector(
-        store,
-        collision.second_body,
-        collision.second_anchor_b,
-        collision.second_anchor_rotates
-    )
-    let first_separation = soft_contact_separation(
-        store,
-        collision,
+    let first_anchor_a = copy solver.first_anchor_a
+    let first_anchor_b = copy solver.first_anchor_b
+    let second_anchor_a = copy solver.second_anchor_a
+    let second_anchor_b = copy solver.second_anchor_b
+    let first_separation = solver.separation(
+        collision.normal,
         first_anchor_a,
         first_anchor_b,
         collision.base_separation_first
     )
-    let second_separation = soft_contact_separation(
-        store,
-        collision,
+    let second_separation = solver.separation(
+        collision.normal,
         second_anchor_a,
         second_anchor_b,
         collision.base_separation_second
@@ -9150,17 +9232,11 @@ func solve_soft_collision_block_normals(
         second_mass_scale = softness.mass_scale
         second_impulse_scale = softness.impulse_scale
     }
-    let first_velocity = soft_relative_velocity(
-        store,
-        collision.first_body,
-        collision.second_body,
+    let first_velocity = solver.relative_velocity(
         first_anchor_a,
         first_anchor_b
     ).dot(collision.normal)
-    let second_velocity = soft_relative_velocity(
-        store,
-        collision.first_body,
-        collision.second_body,
+    let second_velocity = solver.relative_velocity(
         second_anchor_a,
         second_anchor_b
     ).dot(collision.normal)
@@ -9177,18 +9253,12 @@ func solve_soft_collision_block_normals(
     let first_accumulated = first_previous + first_increment
     let second_accumulated = second_previous + second_increment
     if first_accumulated < 0.0 || second_accumulated < 0.0 { return false }
-    apply_soft_contact_impulse(
-        store,
-        collision.first_body,
-        collision.second_body,
+    solver.apply_impulse(
         first_anchor_a,
         first_anchor_b,
         collision.normal.multiply(first_increment)
     )
-    apply_soft_contact_impulse(
-        store,
-        collision.first_body,
-        collision.second_body,
+    solver.apply_impulse(
         second_anchor_a,
         second_anchor_b,
         collision.normal.multiply(second_increment)
@@ -9201,52 +9271,27 @@ func solve_soft_collision_block_normals(
 }
 
 func solve_soft_collision_point(
-    store:BodyStore2D,
+    solver:&SoftContactSolve2D,
     collision:&Collision2D,
     softness:ContactSoftness2D,
     inverse_delta:float,
     use_bias:bool,
     second_contact:bool
 ) {
-    var first_local = Math.Vec2(
-        collision.first_anchor_a.x,
-        collision.first_anchor_a.y
-    )
-    var second_local = Math.Vec2(
-        collision.first_anchor_b.x,
-        collision.first_anchor_b.y
-    )
+    var first_anchor = copy solver.first_anchor_a
+    var second_anchor = copy solver.first_anchor_b
     var base_separation = collision.base_separation_first + 0.0
     var normal_mass = collision.normal_mass_first + 0.0
     var previous_normal = collision.normal_impulse_first + 0.0
     if second_contact {
-        first_local = Math.Vec2(
-            collision.second_anchor_a.x,
-            collision.second_anchor_a.y
-        )
-        second_local = Math.Vec2(
-            collision.second_anchor_b.x,
-            collision.second_anchor_b.y
-        )
+        first_anchor = copy solver.second_anchor_a
+        second_anchor = copy solver.second_anchor_b
         base_separation = collision.base_separation_second + 0.0
         normal_mass = collision.normal_mass_second + 0.0
         previous_normal = collision.normal_impulse_second + 0.0
     }
-    let first_anchor = contact_anchor_vector(
-        store,
-        collision.first_body,
-        first_local,
-        collision.first_anchor_rotates
-    )
-    let second_anchor = contact_anchor_vector(
-        store,
-        collision.second_body,
-        second_local,
-        collision.second_anchor_rotates
-    )
-    let separation = soft_contact_separation(
-        store,
-        collision,
+    let separation = solver.separation(
+        collision.normal,
         first_anchor,
         second_anchor,
         base_separation
@@ -9264,10 +9309,7 @@ func solve_soft_collision_point(
         mass_scale = softness.mass_scale
         impulse_scale = softness.impulse_scale
     }
-    let relative = soft_relative_velocity(
-        store,
-        collision.first_body,
-        collision.second_body,
+    let relative = solver.relative_velocity(
         first_anchor,
         second_anchor
     )
@@ -9277,10 +9319,7 @@ func solve_soft_collision_point(
         impulse_scale * previous_normal
     let accumulated_normal = Math.max(previous_normal + increment, 0.0)
     let applied_normal = accumulated_normal - previous_normal
-    apply_soft_contact_impulse(
-        store,
-        collision.first_body,
-        collision.second_body,
+    solver.apply_impulse(
         first_anchor,
         second_anchor,
         collision.normal.multiply(applied_normal)
@@ -9295,52 +9334,25 @@ func solve_soft_collision_point(
 }
 
 func solve_soft_collision_friction_point(
-    store:BodyStore2D,
+    solver:&SoftContactSolve2D,
     collision:&Collision2D,
     second_contact:bool
 ) {
-    var first_local = Math.Vec2(
-        collision.first_anchor_a.x,
-        collision.first_anchor_a.y
-    )
-    var second_local = Math.Vec2(
-        collision.first_anchor_b.x,
-        collision.first_anchor_b.y
-    )
+    var first_anchor = copy solver.first_anchor_a
+    var second_anchor = copy solver.first_anchor_b
     var tangent_mass = collision.tangent_mass_first + 0.0
     var normal_impulse = collision.normal_impulse_first + 0.0
     var previous_tangent = collision.tangent_impulse_first + 0.0
     if second_contact {
-        first_local = Math.Vec2(
-            collision.second_anchor_a.x,
-            collision.second_anchor_a.y
-        )
-        second_local = Math.Vec2(
-            collision.second_anchor_b.x,
-            collision.second_anchor_b.y
-        )
+        first_anchor = copy solver.second_anchor_a
+        second_anchor = copy solver.second_anchor_b
         tangent_mass = collision.tangent_mass_second + 0.0
         normal_impulse = collision.normal_impulse_second + 0.0
         previous_tangent = collision.tangent_impulse_second + 0.0
     }
-    let first_anchor = contact_anchor_vector(
-        store,
-        collision.first_body,
-        first_local,
-        collision.first_anchor_rotates
-    )
-    let second_anchor = contact_anchor_vector(
-        store,
-        collision.second_body,
-        second_local,
-        collision.second_anchor_rotates
-    )
 
     let tangent = Math.Vec2(-collision.normal.y, collision.normal.x)
-    let tangent_velocity = soft_relative_velocity(
-        store,
-        collision.first_body,
-        collision.second_body,
+    let tangent_velocity = solver.relative_velocity(
         first_anchor,
         second_anchor
     ).dot(tangent) + collision.tangent_speed
@@ -9350,10 +9362,7 @@ func solve_soft_collision_friction_point(
         -friction_limit,
         Math.min(previous_tangent + tangent_increment, friction_limit)
     )
-    apply_soft_contact_impulse(
-        store,
-        collision.first_body,
-        collision.second_body,
+    solver.apply_impulse(
         first_anchor,
         second_anchor,
         tangent.multiply(accumulated_tangent - previous_tangent)
