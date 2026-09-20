@@ -238,6 +238,6 @@ func main() {
     }
     if !check {
         let elapsed = clock.tick() * 1000.0
-        print("KERNEL preparation silex slots8 ", count, " ", passes, " ", elapsed, " ", signature)
+        print("KERNEL preparation silex private ", count, " ", passes, " ", elapsed, " ", signature)
     }
 }

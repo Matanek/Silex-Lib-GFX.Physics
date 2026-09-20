@@ -312,7 +312,7 @@ record.
 
 ### Isolate compiler cost from engine architecture
 
-`ContactKernel2D.sx` and `ContactKernel.c` implement the same fused,
+`StageKernels2D/Contact.sx` and `ContactKernel.c` implement the same fused,
 single-point contact calculation: separation, normal impulse, friction and
 rolling resistance. This is an internal diagnostic, not a replacement for
 `World2D` or a claim of whole-engine parity. The adaptation is attributed to
@@ -347,7 +347,7 @@ Build three C witnesses with the existing pinned-oracle CMake configuration:
 ```text
 cmake -S Packages/GFX.Physics/Benchmarks/Oracle2D -B /tmp/gfx-physics-box2d -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/gfx-physics-box2d --target gfx_physics_contact_kernel_slots gfx_physics_contact_kernel_packed gfx_physics_contact_kernel_reference
-silex compile Packages/GFX.Physics/Benchmarks/ContactKernel2D.sx --backend llvm --release -o /tmp/gfx-physics-contact-kernel
+silex compile Packages/GFX.Physics/Benchmarks/StageKernels2D/Contact.sx --backend llvm --release -o /tmp/gfx-physics-contact-kernel
 python3 Packages/GFX.Physics/Benchmarks/Oracle2D/RunContactKernel.py --silex-layout packed4 --silex /tmp/gfx-physics-contact-kernel --clang-slots /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_slots --clang-packed /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_packed --box2d-check /tmp/gfx-physics-box2d/gfx_physics_contact_kernel_reference --output /tmp/contact-kernel.json
 ```
 

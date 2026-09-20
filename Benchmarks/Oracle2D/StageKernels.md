@@ -13,6 +13,12 @@ for correctness, with contraction disabled in that reference build.
 | Velocity and position integration | `integrate_body_velocity`, `integrate_body_position` | `solver.c`, `b2IntegrateVelocitiesTask`, `b2IntegratePositionsTask`; `b2IntegrateRotation` | Forces, gravity, two damping reciprocals, linear/angular speed limits, normalized rotation and translation; 8,192 bodies × 2,048 passes; two body traversals per pass | Body 7 floats: 56/28 bytes; forces 8 floats + 2 booleans: 80/36 bytes in slots/packed layouts; float32, boolean results exact |
 | One-point constraint preparation | `prepare_collision_constraints`, `prepare_circle_collision_constraints` | `contact_solver.c`, `b2PrepareOverflowContacts` | Normal/tangent/rolling effective masses, anchor separation, relative velocity, warm impulses, static/dynamic softness; 8,192 contacts × 2,048 passes | Input 24 floats: 192/96 bytes; prepared result 26 floats: 208/104 bytes, slots/packed; float32 arithmetic, float64 signature accumulation |
 
+The active sources live under `Benchmarks/StageKernels2D/`. The three older
+`*Kernel2D.sx` files remain byte-for-byte frozen inputs of the compiler optimizer
+oracle, including their historical output labels. Use the active sources below
+for new measurements and complete state checks. Kernel arithmetic is identical
+to the frozen fixtures; the contact driver also adds full-state check mode.
+
 The Silex binaries report `private` storage instead of assuming a backend
 layout. Both runners require `--silex-layout packed4` for the current LLVM
 backend or `--silex-layout slots8` for the native backend. Verify this against
@@ -129,7 +135,7 @@ cmake --build "$ARTIFACTS/stages" --target \
   gfx_physics_integration_kernel_slots gfx_physics_integration_kernel_packed \
   gfx_physics_integration_kernel_reference
 Silex/Toolchain/zig-out/bin/silex compile \
-  Packages/GFX.Physics/Benchmarks/IntegrationKernel2D.sx --backend llvm --release --nocache \
+  Packages/GFX.Physics/Benchmarks/StageKernels2D/Integration.sx --backend llvm --release --nocache \
   -o "$ARTIFACTS/integration-release"
 python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/RunStageKernels.py \
   --stage integration --silex-layout packed4 --silex "$ARTIFACTS/integration-release" \
@@ -141,7 +147,7 @@ python3 -B Packages/GFX.Physics/Benchmarks/Oracle2D/RunStageKernels.py \
 
 Compile again without `--release` and run with `--check-only` for Debug.
 For preparation, build the three `gfx_physics_preparation_kernel_*` targets,
-compile `Packages/GFX.Physics/Benchmarks/PreparationKernel2D.sx`, and select
+compile `Packages/GFX.Physics/Benchmarks/StageKernels2D/Preparation.sx`, and select
 `--stage preparation` with those executables. Use the same measurement gate.
 Comparator regressions: `python3 -B -m unittest discover -s
 Packages/GFX.Physics/Benchmarks/Oracle2D -p 'Test*Kernel*.py'`.

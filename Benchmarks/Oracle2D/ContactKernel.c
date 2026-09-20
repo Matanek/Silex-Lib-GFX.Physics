@@ -1,7 +1,7 @@
 // One-point adaptation of Box2D 3.1.1 src/contact_solver.c,
 // b2SolveOverflowContacts, revision 8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3.
 // Copyright (c) 2022-2023 Erin Catto. MIT license: Box2D-LICENSE.txt.
-// Keep arithmetic and fixtures aligned with ../ContactKernel2D.sx.
+// Keep arithmetic and fixtures aligned with ../StageKernels2D/Contact.sx.
 #include <stdbool.h>
 #include <math.h>
 #include <stdint.h>
