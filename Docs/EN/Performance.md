@@ -25,6 +25,12 @@ Use Release, one warm-up and isolated repetitions. Compare medians and
 dispersion on the same machine. An improvement in one scene does not establish
 an improvement for another workload.
 
+To compare the work actually performed by `CircleScale2D`, add `--state` to
+the same workload arguments on both executables. The benchmark prints final
+contact and candidate counts, then each body's position, rotation, velocity,
+angular velocity, and awake state. These `STATE` lines are emitted after the
+timed loop; compare them before interpreting timings.
+
 ## Hot-path architecture
 
 Awake bodies are kept in a reusable contiguous list. A deterministic grid

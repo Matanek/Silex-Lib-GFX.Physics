@@ -22,6 +22,12 @@ Utilisez Release, un échauffement et des répétitions isolées. Comparez médi
 et dispersion sur la même machine. Une amélioration d’une scène ne se généralise
 pas à une autre charge.
 
+Pour comparer le travail réellement effectué par `CircleScale2D`, ajoutez
+`--state` aux mêmes paramètres de charge sur les deux exécutables. Le benchmark
+imprime les contacts et candidats finaux, puis la position, rotation, vitesse,
+vitesse angulaire et l'état éveillé de chaque corps. Ces lignes `STATE` sont
+émises après la boucle chronométrée ; comparez-les avant d'interpréter les temps.
+
 ## Architecture du chemin chaud
 
 Les corps éveillés sont rangés dans une liste contiguë réutilisable. Une grille

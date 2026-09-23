@@ -222,6 +222,17 @@ func run_case(body_count:int, step_count:int) {
     print("  sleep ready: $(world.sleep_ready_body_count())")
     assert(world.body_count() == body_count + 4)
     assert(minimum_y >= -half_height - 0.001)
+    // Optional correctness evidence, outside the measured stepping loop.
+    if option_requested("--state") {
+        print("STATE contacts=$(world.contact_count()) candidates=$(world.candidate_pair_count())")
+        var state_index = 0
+        for body in bodies {
+            let position = body.position()
+            let velocity = body.velocity()
+            print("STATE $(state_index) position=$(position.x),$(position.y) rotation=$(body.rotation()) velocity=$(velocity.x),$(velocity.y) angular=$(body.angular_velocity()) awake=$(body.is_awake())")
+            state_index++
+        }
+    }
 }
 
 func main() {
