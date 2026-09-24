@@ -1,6 +1,6 @@
 {
   "name": "GFX.Physics",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": {
     "en": "Optional native Silex 2D physics simulation for GFX.",
     "fr": "Simulation physique 2D native Silex et optionnelle pour GFX."

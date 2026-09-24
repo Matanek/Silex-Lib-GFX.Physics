@@ -11,5 +11,6 @@ silex install GFX.Physics
 
 - [French documentation](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
+- [Release notes](CHANGELOG.md) · [Nouveautés](CHANGELOG.fr.md)
 
 The package requires Silex 0.44.0 or newer.
