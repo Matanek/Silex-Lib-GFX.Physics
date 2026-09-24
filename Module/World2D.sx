@@ -9120,14 +9120,20 @@ func solve_soft_single_collision(
         mass_scale = softness.mass_scale
         impulse_scale = softness.impulse_scale
     }
-    var relative_x:float = velocities_x[second] -
-        angular_velocities[second] * second_anchor_y -
-        velocities_x[first] +
-        angular_velocities[first] * first_anchor_y
-    var relative_y:float = velocities_y[second] +
-        angular_velocities[second] * second_anchor_x -
-        velocities_y[first] -
-        angular_velocities[first] * first_anchor_x
+    var first_velocity_x = velocities_x[first]
+    var first_velocity_y = velocities_y[first]
+    var first_angular_velocity = angular_velocities[first]
+    var second_velocity_x = velocities_x[second]
+    var second_velocity_y = velocities_y[second]
+    var second_angular_velocity = angular_velocities[second]
+    var relative_x:float = second_velocity_x -
+        second_angular_velocity * second_anchor_y -
+        first_velocity_x +
+        first_angular_velocity * first_anchor_y
+    var relative_y:float = second_velocity_y +
+        second_angular_velocity * second_anchor_x -
+        first_velocity_y -
+        first_angular_velocity * first_anchor_x
     let normal_velocity = relative_x * normal_x + relative_y * normal_y
     let increment = -normal_mass * mass_scale *
         (normal_velocity + velocity_bias) -
@@ -9148,51 +9154,59 @@ func solve_soft_single_collision(
         second_inverse_mass = store.inverse_masses[second]
         second_inverse_inertia = store.inverse_inertias[second]
     }
-    velocities_x[first] -= normal_impulse_x * first_inverse_mass
-    velocities_y[first] -= normal_impulse_y * first_inverse_mass
-    angular_velocities[first] -=
+    first_velocity_x -= normal_impulse_x * first_inverse_mass
+    first_velocity_y -= normal_impulse_y * first_inverse_mass
+    first_angular_velocity -=
         (first_anchor_x * normal_impulse_y -
             first_anchor_y * normal_impulse_x) * first_inverse_inertia
-    velocities_x[second] += normal_impulse_x * second_inverse_mass
-    velocities_y[second] += normal_impulse_y * second_inverse_mass
-    angular_velocities[second] +=
+    second_velocity_x += normal_impulse_x * second_inverse_mass
+    second_velocity_y += normal_impulse_y * second_inverse_mass
+    second_angular_velocity +=
         (second_anchor_x * normal_impulse_y -
             second_anchor_y * normal_impulse_x) * second_inverse_inertia
     collision.normal_impulse_first = accumulated_normal
     collision.total_normal_impulse_first += accumulated_normal
-    if !solve_friction { return }
-
-    relative_x = velocities_x[second] -
-        angular_velocities[second] * second_anchor_y -
-        velocities_x[first] +
-        angular_velocities[first] * first_anchor_y
-    relative_y = velocities_y[second] +
-        angular_velocities[second] * second_anchor_x -
-        velocities_y[first] -
-        angular_velocities[first] * first_anchor_x
-    let tangent_velocity = relative_y * normal_x - relative_x * normal_y +
-        collision.tangent_speed
-    let tangent_increment = -tangent_mass * tangent_velocity
-    let friction_limit = combined_friction * accumulated_normal
-    let accumulated_tangent = Math.max(
-        -friction_limit,
-        Math.min(previous_tangent + tangent_increment, friction_limit)
-    )
-    let applied_tangent = accumulated_tangent - previous_tangent
-    let tangent_impulse_x = -normal_y * applied_tangent
-    let tangent_impulse_y = normal_x * applied_tangent
-    velocities_x[first] -= tangent_impulse_x * first_inverse_mass
-    velocities_y[first] -= tangent_impulse_y * first_inverse_mass
-    angular_velocities[first] -=
-        (first_anchor_x * tangent_impulse_y -
-            first_anchor_y * tangent_impulse_x) * first_inverse_inertia
-    velocities_x[second] += tangent_impulse_x * second_inverse_mass
-    velocities_y[second] += tangent_impulse_y * second_inverse_mass
-    angular_velocities[second] +=
-        (second_anchor_x * tangent_impulse_y -
-            second_anchor_y * tangent_impulse_x) * second_inverse_inertia
-    collision.tangent_impulse_first = accumulated_tangent
-    solve_soft_rolling_friction(store, angular_velocities, collision)
+    if solve_friction {
+        relative_x = second_velocity_x -
+            second_angular_velocity * second_anchor_y -
+            first_velocity_x +
+            first_angular_velocity * first_anchor_y
+        relative_y = second_velocity_y +
+            second_angular_velocity * second_anchor_x -
+            first_velocity_y -
+            first_angular_velocity * first_anchor_x
+        let tangent_velocity = relative_y * normal_x - relative_x * normal_y +
+            collision.tangent_speed
+        let tangent_increment = -tangent_mass * tangent_velocity
+        let friction_limit = combined_friction * accumulated_normal
+        let accumulated_tangent = Math.max(
+            -friction_limit,
+            Math.min(previous_tangent + tangent_increment, friction_limit)
+        )
+        let applied_tangent = accumulated_tangent - previous_tangent
+        let tangent_impulse_x = -normal_y * applied_tangent
+        let tangent_impulse_y = normal_x * applied_tangent
+        first_velocity_x -= tangent_impulse_x * first_inverse_mass
+        first_velocity_y -= tangent_impulse_y * first_inverse_mass
+        first_angular_velocity -=
+            (first_anchor_x * tangent_impulse_y -
+                first_anchor_y * tangent_impulse_x) * first_inverse_inertia
+        second_velocity_x += tangent_impulse_x * second_inverse_mass
+        second_velocity_y += tangent_impulse_y * second_inverse_mass
+        second_angular_velocity +=
+            (second_anchor_x * tangent_impulse_y -
+                second_anchor_y * tangent_impulse_x) * second_inverse_inertia
+        collision.tangent_impulse_first = accumulated_tangent
+    }
+    velocities_x[first] = first_velocity_x
+    velocities_y[first] = first_velocity_y
+    angular_velocities[first] = first_angular_velocity
+    velocities_x[second] = second_velocity_x
+    velocities_y[second] = second_velocity_y
+    angular_velocities[second] = second_angular_velocity
+    if solve_friction {
+        solve_soft_rolling_friction(store, angular_velocities, collision)
+    }
 }
 
 func solve_soft_collision_block_normals(
