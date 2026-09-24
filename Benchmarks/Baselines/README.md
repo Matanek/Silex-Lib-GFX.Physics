@@ -1,5 +1,12 @@
 # Accepted physics reconstruction baselines
 
+## Native heap and rotating CCD — 2026-09-24
+
+The [rotating-container witness](2026-09-24-native-heap.md) isolates the cost
+of small allocations in continuous collision queries. The Darwin ARM64 heap
+change substantially reduces its fixed-work time with identical states;
+it does not establish general backend parity or interactive FPS bounds.
+
 ## Part 16 compiler memory access — 2026-09-03
 
 The [first scalar-memory qualification](2026-09-03-spec16-scalar-memory.md)

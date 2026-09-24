@@ -1,0 +1,71 @@
+use GFX.Physics
+use STD.Math
+use STD.Time.Clock
+
+// Fixed work for the rotating-kinematic CCD path, without presentation or ECS.
+// Compare the STATE lines before interpreting timings from different backends.
+func main() {
+    let delta = 1.0 / 60.0
+    let steps = 24
+    let offsets:Math.Vec2[] = [
+        Math.Vec2(-2.575, 0.0), Math.Vec2(2.575, 0.0),
+        Math.Vec2(0.0, -2.575), Math.Vec2(0.0, 2.575)
+    ]
+    var world = Physics.World2D()
+    var walls:Physics.RigidBody2D[] = []
+    var bodies:Physics.RigidBody2D[] = []
+    for index in 0...4 {
+        var size = Math.Vec2(0.45, 5.6)
+        if index >= 2 { size = Math.Vec2(5.6, 0.45) }
+        walls.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..body_type = Physics.BodyType2D.kinematic
+            ..position = offsets[index]
+            ..shape = Physics.Shape2D.box(Physics.Box2D(size))
+            ..friction = 0.85
+        ))
+    }
+    for index in 0...16 {
+        var shape = Physics.Shape2D.circle(Physics.Circle2D(0.14))
+        if index % 2 == 1 {
+            shape = Physics.Shape2D.box(Physics.Box2D(Math.Vec2(0.28)))
+        }
+        bodies.append(world.create_rigid_body(Physics.RigidBody2DSettings()
+            ..shape = shape
+            ..position = Math.Vec2(
+                (index % 4) as float * 0.45 - 0.675,
+                (index / 4) as float * 0.45 - 1.5
+            )
+            ..friction = 0.65
+            ..restitution = 0.28
+            ..angular_damping = 0.16
+            ..allow_sleep = false
+        ))
+    }
+    var clock = Clock()
+    clock.tick()
+    for step in 0...steps {
+        let angle = (step + 1) as float * 0.04
+        let cosine = Math.cos(angle)
+        let sine = Math.sin(angle)
+        for index in 0...4 {
+            let offset = offsets[index]
+            var wall = walls[index]
+            wall.set_target_transform(Physics.Transform2D(
+                position:Math.Vec2(
+                    offset.x * cosine - offset.y * sine,
+                    offset.x * sine + offset.y * cosine
+                ),
+                rotation:angle
+            ), delta)
+        }
+        world.step(delta)
+    }
+    let elapsed = clock.tick() * 1_000.0
+    print("ROTATING_CONTAINER bodies=16 walls=4 steps=$(steps) elapsed_ms=$(elapsed) step_ms=$(elapsed / steps as float)")
+    for index in 0...bodies.count() {
+        var body = bodies[index]
+        let position = body.position()
+        let velocity = body.velocity()
+        print("STATE $(index) $(position.x) $(position.y) $(body.rotation()) $(velocity.x) $(velocity.y) $(body.angular_velocity())")
+    }
+}
