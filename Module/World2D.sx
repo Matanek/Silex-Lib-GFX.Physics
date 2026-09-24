@@ -3359,7 +3359,7 @@ public class World2D {
         let pair = ordered_body_pair(mover, target)
         self.refresh_body_contact_bounds(mover, false)
         self.refresh_body_contact_bounds(target, false)
-        self.insert_candidate_pair(pair)
+        self.insert_candidate_pair(pair, self.joints.joints.count() > 0)
         let mover_collider = self.store.shape_store.require(hit.mover_collider)
         let target_collider = self.store.shape_store.require(hit.target_collider)
         var colliders = ContactColliderPair2D(mover_collider, target_collider)
@@ -4402,7 +4402,7 @@ public class World2D {
             self.current_pair_discovery_ms = profile_clock.tick() * 1000.0
             self.current_pair_sort_ms = 0.0
         }
-        for pair in discovered { self.insert_candidate_pair(pair) }
+        for pair in discovered { self.insert_candidate_pair(pair, has_joints) }
         if self.profiling_enabled {
             self.current_pair_insertion_ms = profile_clock.tick() * 1000.0
         }
@@ -4840,11 +4840,11 @@ public class World2D {
         }
     }
 
-    private func insert_candidate_pair(pair:BodyPair2D) {
+    private func insert_candidate_pair(pair:BodyPair2D, has_joints:bool) {
         if self.store.inverse_masses[pair.first] +
             self.store.inverse_masses[pair.second] <= 0.0 ||
-            !self.joints.collision_allowed(
-                self.store.body_id_at(pair.first), self.store.body_id_at(pair.second)) {
+            (has_joints && !self.joints.collision_allowed(
+                self.store.body_id_at(pair.first), self.store.body_id_at(pair.second))) {
             return
         }
         var first_slot = self.store.first_shape_slots[pair.first]
