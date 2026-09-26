@@ -4,6 +4,10 @@ This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes
 are recorded under `## [Unreleased]` before publication, with French authored
 first in `CHANGELOG.fr.md`.
 
+## [Unreleased]
+
+- Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
+
 ## [0.7.0] - 2026-09-24
 
 ### Why upgrade?

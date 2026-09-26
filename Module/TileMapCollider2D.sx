@@ -1,0 +1,156 @@
+use GFX.ECS
+use GFX.Physics.Application2D.PhysicsBody2D
+use GFX.Physics.Application2D.Physics2DStep
+use GFX.Physics.CollisionFilter2D.CollisionFilter2D
+use GFX.Physics.Polygon2D.Polygon2D
+use GFX.Physics.RigidBody2D.BodyType2D
+use GFX.Physics.RigidBody2D.Collider2DSettings
+use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.Shape2D.Shape2D
+use GFX.Scene2D
+use STD.Math
+
+// All occupied cells of this layer are solid. Keep decoration in another map.
+// Physics2D owns the generated PhysicsBody2D on this entity.
+public struct TileMapCollider2D {
+    let collision_filter:CollisionFilter2D
+
+    init(collision_filter:CollisionFilter2D = CollisionFilter2D()) {
+        self.collision_filter = collision_filter
+    }
+
+    func rectangles(map:@Scene2D.TileMap) TileCollisionRect2D[] {
+        var result:TileCollisionRect2D[] = []
+        var previous:int[] = []
+        var current:int[] = []
+        for _ in 0...map.columns() { previous.append(-1); current.append(-1) }
+        for row in 0...map.rows() {
+            for column in 0...map.columns() { current[column] = -1 }
+            var column = 0
+            while column < map.columns() {
+                if map.tile(column, row) == null { column++; continue }
+                let start = column
+                while column < map.columns() && map.tile(column, row) != null { column++ }
+                let width = column - start
+                let prior = previous[start]
+                if prior >= 0 && result[prior].columns == width {
+                    result[prior].rows++
+                    current[start] = prior
+                } else {
+                    current[start] = result.count()
+                    result.append(TileCollisionRect2D(column:start, row:row, columns:width, rows:1))
+                }
+            }
+            var swap = previous
+            previous = current
+            current = swap
+        }
+        return result
+    }
+
+    func body(map:@Scene2D.TileMap, scene_units_per_meter:float = 1.0) PhysicsBody2D {
+        if scene_units_per_meter <= 0.0 || scene_units_per_meter != scene_units_per_meter ||
+            scene_units_per_meter + scene_units_per_meter == scene_units_per_meter {
+            panic("TileMapCollider2D requires finite positive scene units per meter")
+        }
+        let cell = map.atlas().tile_size().divide(scene_units_per_meter)
+        var shapes:Collider2DSettings[] = []
+        for rectangle in self.rectangles(map) {
+            let x = rectangle.column as float * cell.x
+            let y = rectangle.row as float * cell.y
+            let right = x + rectangle.columns as float * cell.x
+            let bottom = y + rectangle.rows as float * cell.y
+            shapes.append(Collider2DSettings()
+                ..shape = Shape2D.polygon(Polygon2D([
+                    Math.Vec2(x, y), Math.Vec2(right, y),
+                    Math.Vec2(right, bottom), Math.Vec2(x, bottom)]))
+                ..collision_filter = self.collision_filter)
+        }
+        return PhysicsBody2D(RigidBody2DSettings()
+            ..body_type = BodyType2D.fixed..create_implicit_collider = false, shapes)
+    }
+}
+
+public struct TileCollisionRect2D {
+    let column:int
+    let row:int
+    let columns:int
+    var rows:int
+}
+
+class TileColliderBinding {
+    let entity:ECS.Entity
+    var revision:int
+    var collider:TileMapCollider2D
+    var pending:PhysicsBody2D
+    var dirty:bool = true
+
+    init(entity:ECS.Entity, revision:int, collider:TileMapCollider2D, body:PhysicsBody2D) {
+        self.entity = entity
+        self.revision = revision
+        self.collider = collider
+        self.pending = body
+    }
+}
+
+package class TileColliderRuntime {
+    private var bindings:TileColliderBinding[] = []
+
+    func collect(entity:ECS.Entity, map:@Scene2D.TileMap, collider:TileMapCollider2D, units:float) {
+        var index = 0
+        while index < self.bindings.count() {
+            var binding = self.bindings[index]
+            if binding.entity == entity {
+                if binding.revision != map.revision() ||
+                    binding.collider.collision_filter.category_bits != collider.collision_filter.category_bits ||
+                    binding.collider.collision_filter.mask_bits != collider.collision_filter.mask_bits ||
+                    binding.collider.collision_filter.group_index != collider.collision_filter.group_index {
+                    binding.revision = map.revision()
+                    binding.collider = collider
+                    binding.pending = collider.body(map, units)
+                    binding.dirty = true
+                }
+                return
+            }
+            index++
+        }
+        self.bindings.append(TileColliderBinding(entity, map.revision(), collider, collider.body(map, units)))
+    }
+
+    func apply(world:&ECS.World) {
+        var index = self.bindings.count() - 1
+        while index >= 0 {
+            var binding = self.bindings[index]
+            let entity = binding.entity
+            if !world.has<TileMapCollider2D>(entity) || !world.has<Scene2D.TileMap>(entity) ||
+                !world.has<Scene2D.Transform>(entity) {
+                if world.is_alive(entity) { world.remove<PhysicsBody2D>(entity) }
+                self.bindings.swap(index, self.bindings.count() - 1)
+                self.bindings.take_last()
+            } elif binding.dirty {
+                world.insert(entity, binding.pending)
+                binding.dirty = false
+            }
+            index--
+        }
+    }
+}
+
+// Stable frames compare map revisions without traversing unchanged cells.
+package func collect_tile_colliders(
+    runtime:&TileColliderRuntime,
+    step:@Physics2DStep,
+    maps:ECS.Query<(ECS.Entity, @Scene2D.TileMap, @Scene2D.Transform, @TileMapCollider2D)>
+) {
+    for (entity, map, transform, collider) in maps {
+        if !transform.scale.nearly_equal(Math.Vec2(1.0), 0.000001) {
+            panic("TileMapCollider2D requires unit global scale; choose the atlas cell size instead")
+        }
+        runtime.collect(entity, map, collider, step.scene_units_per_meter())
+    }
+}
+
+// Structural changes happen after the query has ended, before body reconciliation.
+package func apply_tile_colliders(world:&ECS.World, runtime:&TileColliderRuntime) {
+    runtime.apply(world)
+}

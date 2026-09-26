@@ -16,6 +16,9 @@ use GFX.Physics.RigidBody2D.BodyType2D
 use GFX.Physics.RigidBody2D.Collider2DSettings
 use GFX.Physics.RigidBody2D.RigidBody2D
 use GFX.Physics.RigidBody2D.RigidBody2DSettings
+use GFX.Physics.TileMapCollider2D.TileColliderRuntime
+use GFX.Physics.TileMapCollider2D.collect_tile_colliders
+use GFX.Physics.TileMapCollider2D.apply_tile_colliders
 use GFX.Physics.Transform2D.Transform2D as PhysicsTransform2D
 use GFX.Physics.World2D.World2D
 use GFX.Physics.World2D.World2DSettings
@@ -326,6 +329,7 @@ public struct Plugin:PluginProtocol {
         }
         host.add_resource(world)
         host.add_resource(Physics2DFrameEvents())
+        host.add_resource(TileColliderRuntime())
         host.add_plugin(Physics2DStepPlugin())
         {
             var resources = host.resources()
@@ -338,6 +342,8 @@ public struct Plugin:PluginProtocol {
             self.settings.scene_units_per_meter
         ))
         host.add_system(Schedule.post_update, clear_physics_events, process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, collect_tile_colliders, process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, apply_tile_colliders, process_mode:GFX.Application.ProcessMode.always)
         host.add_system(Schedule.post_update, reconcile_body_activation, process_mode:GFX.Application.ProcessMode.always)
         host.add_system(Schedule.post_update, reconcile_application_bodies)
         host.add_system(Schedule.post_update, update_application_physics)

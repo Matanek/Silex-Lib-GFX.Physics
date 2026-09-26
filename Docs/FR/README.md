@@ -124,3 +124,7 @@ L’exemple visuel central se lance depuis la racine :
 ```text
 silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --release
 ```
+
+## Cartes tuilées
+
+[Collisions de cartes tuilées](TileMap2D.md)

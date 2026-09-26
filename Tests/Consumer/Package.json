@@ -2,6 +2,7 @@
   "sources": "Tests",
   "dependencies": {
     "GFX": "^0.39.0",
+    "GFX.Assets": "^0.3.0",
     "GFX.Application": "^0.1.0",
     "GFX.ECS": "^0.2.0",
     "GFX.Physics": "^0.7.0",

@@ -4,6 +4,10 @@ Ce journal commence à 0.7.0 et couvre les changements depuis le tag 0.6.0.
 Les changements futurs sont consignés sous `## [Unreleased]` avant publication,
 puis traduits dans `CHANGELOG.md`.
 
+## [Unreleased]
+
+- Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
+
 ## [0.7.0] - 2026-09-24
 
 ### Pourquoi mettre à jour ?

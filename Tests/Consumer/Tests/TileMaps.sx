@@ -1,0 +1,46 @@
+use GFX.Application
+use GFX.Assets.Image
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Scene2D
+use STD.Math
+
+test "ECS tile maps rebuild replacement content and filters without requiring Nodes" {
+    var images = Image.Store()
+    let atlas = Scene2D.TileAtlas(images.add(Image()), 18, 18)
+    var map = Scene2D.TileMap(atlas, 8, 4)
+    map.fill(0)
+    var app = Application()..add_plugin(Plugins.Physics2D(
+        Plugins.Physics2D.Settings()..scene_units_per_meter = 18.0))
+    app.run_schedule(Application.Schedule.startup)
+    var resources = app.resources()
+    var world = resources.get_mut<ECS.World>()
+    let entity = world.spawn(ECS.EntityRecipe()..with(map)..with(Scene2D.Transform())
+        ..with(Physics.TileMapCollider2D()))
+    app.run_schedule(Application.Schedule.post_update)
+    var old = world.get<Physics.PhysicsBody2D>(entity).body()!
+    assert(old.collider_count() == 1)
+    var replacement = Scene2D.TileMap(atlas, 8, 4)
+    replacement.set(3, 2, 0)
+    world.insert(entity, replacement)
+    app.run_schedule(Application.Schedule.post_update)
+    assert(!old.is_valid())
+    var updated = world.get<Physics.PhysicsBody2D>(entity).body()!
+    assert(updated.collider_count() == 1)
+    world.insert(entity, Physics.TileMapCollider2D(Physics.CollisionFilter2D(category_bits:8)))
+    app.run_schedule(Application.Schedule.post_update)
+    assert(!updated.is_valid())
+    var filtered = world.get<Physics.PhysicsBody2D>(entity).body()!
+    var shapes:Physics.Collider2D[] = []
+    filtered.write_colliders(shapes)
+    assert(shapes[0].collision_filter().category_bits == 8)
+    world.enable(entity, false)
+    app.run_schedule(Application.Schedule.post_update)
+    assert(!filtered.is_enabled())
+    world.remove<Scene2D.TileMap>(entity)
+    app.run_schedule(Application.Schedule.post_update)
+    assert(!filtered.is_valid())
+    assert(!world.has<Physics.PhysicsBody2D>(entity))
+    app.run_schedule(Application.Schedule.shutdown)
+}

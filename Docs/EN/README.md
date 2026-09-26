@@ -243,3 +243,7 @@ persistent worker while rendering remains independent, and its reusable
 handle object per body and frame. Interactive runs use synchronized presentation
 by default; performance measurements can opt into immediate presentation with
 `--immediate`.
+
+## Tile maps
+
+[Tile map collisions](TileMap2D.md)
