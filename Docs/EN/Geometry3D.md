@@ -2,7 +2,7 @@
 
 `GFX.Physics` provides spheres, boxes, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
-The 3D physics world is not available yet.
+The [3D world](World3D.md) uses these first shapes for free body motion.
 
 ```silex
 use GFX.Physics
@@ -61,6 +61,6 @@ the target's outward normal. A ray starting inside returns its first exit. A
 miss returns `hit = false`.
 
 Separated box pairs compare vertices against faces and edges against edges.
-The query retains no cache; a future world will select candidate pairs before
-calling these narrow queries. Other shape families, shape casts, and world
-queries remain to be delivered.
+The query retains no cache; future world collision detection will select
+candidate pairs before calling these narrow queries. Other shape families,
+shape casts, and world queries remain to be delivered.

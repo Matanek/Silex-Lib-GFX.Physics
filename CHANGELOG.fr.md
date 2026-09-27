@@ -9,7 +9,11 @@ puis traduits dans `CHANGELOG.md`.
 - Ajout des valeurs `Sphere3D`, `Box3D`, `Shape3D` et `Transform3D` pour amorcer
   la géométrie 3D autonome. Les dimensions, poses et rotations invalides sont
   rejetées. `Geometry3D` fournit les distances signées, recouvrements et rayons
-  pour sphères et boîtes orientées ; le monde 3D reste à livrer.
+  pour sphères et boîtes orientées.
+- Ajout d'un premier `World3D` autonome : corps fixes, cinématiques et
+  dynamiques, masse et inertie des sphères/boîtes, forces, couples, impulsions,
+  mouvement libre et handles invalidés à la destruction. Ce monde ne résout
+  pas encore les collisions.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

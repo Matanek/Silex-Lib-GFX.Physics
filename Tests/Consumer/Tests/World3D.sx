@@ -1,0 +1,118 @@
+use GFX.Physics
+use STD.Math
+
+test "create, impulse, advance, observe and destroy a 3D body" {
+    var world = Physics.World3D(Physics.World3DSettings()
+        ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    assert(world.body_count() == 1)
+    assert(Math.abs(body.mass_properties().mass - 8.0) < 0.00001)
+    body.apply_impulse(Math.Vec3(8.0, 0.0, 0.0))
+    world.step(0.25)
+    assert(body.position().nearly_equal(Math.Vec3(0.25, 0.0, 0.0), 0.00001))
+    world.destroy_rigid_body(body)
+    assert(!body.is_valid() && world.body_count() == 0)
+    var replacement = world.create_rigid_body()
+    assert(replacement.is_valid() && !body.is_valid())
+    assert(!body.same_body(replacement))
+}
+
+test "independent worlds, gravity and fixed body" {
+    var falling = Physics.World3D()
+    var still = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var dynamic = falling.create_rigid_body()
+    var fixed = still.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    falling.step(1.0)
+    still.step(1.0)
+    assert(Math.abs(dynamic.position().y + 9.81) < 0.0001)
+    assert(fixed.position().nearly_equal(Math.Vec3(), 0.00001))
+    assert(Math.abs(falling.gravity().y + 9.81) < 0.00001)
+}
+
+test "off-center impulse and asymmetric world inertia" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 4.0, 6.0))))
+    let mass = body.mass_properties().mass
+    let inertia = body.mass_properties().local_inertia
+    assert(Math.abs(mass - 48.0) < 0.00001)
+    assert(inertia.nearly_equal(Math.Vec3(208.0, 160.0, 80.0), 0.00001))
+    body.apply_impulse(Math.Vec3(48.0, 0.0, 0.0), Math.Vec3(0.0, 1.0, 0.0))
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(1.0, 0.0, 0.0), 0.00001))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, -0.6), 0.00001))
+    world.step(0.1)
+    assert(body.rotation().z < 0.0)
+    assert(Math.abs(body.rotation().length_squared() - 1.0) < 0.00001)
+
+    body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(
+        Math.half_pi(), Math.Vec3.back())))
+    body.set_mass_properties(Physics.MassProperties3D(2.0, Math.Vec3(1.0, 2.0, 4.0)))
+    body.set_angular_velocity(Math.Vec3())
+    body.apply_angular_impulse(Math.Vec3(2.0, 0.0, 0.0))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(1.0, 0.0, 0.0), 0.00001))
+}
+
+test "preserve an offset center of mass under free rotation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(
+            2.0, Math.Vec3(1.0, 2.0, 3.0), Math.Vec3(1.0, 0.0, 0.0)
+        )
+        ..angular_velocity = Math.Vec3(0.0, 0.0, 1.0))
+    let center = body.world_center_of_mass()
+    world.step(0.1)
+    assert(body.world_center_of_mass().nearly_equal(center, 0.00001))
+    assert(body.position().y < 0.0)
+}
+
+test "accumulate force and torque until a positive step" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(4.0)))
+    body.apply_force(Math.Vec3(4.0, 0.0, 0.0))
+    body.apply_torque(Math.Vec3(0.0, 0.0, 8.0))
+    world.step(0.0)
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(), 0.00001))
+    world.step(0.25)
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(0.5, 0.0, 0.0), 0.00001))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, 0.5), 0.00001))
+    world.step(0.25)
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(0.5, 0.0, 0.0), 0.00001))
+}
+
+test "kinematic target reaches and stops at the requested pose" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic)
+    let target = Physics.Transform3D(
+        position:Math.Vec3(2.0, 0.0, 0.0),
+        rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.up())
+    )
+    body.move_kinematic(target, 1.0)
+    world.step(0.25)
+    assert(Math.abs(body.position().x - 0.5) < 0.00001)
+    world.step(0.75)
+    assert(body.position().nearly_equal(target.position, 0.00001))
+    assert(Math.abs(body.rotation().dot(target.rotation) - 1.0) < 0.00001)
+    world.step(0.25)
+    assert(body.position().nearly_equal(target.position, 0.00001))
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(), 0.00001))
+}
+
+func orphan_body() Physics.RigidBody3D {
+    var world = Physics.World3D()
+    return world.create_rigid_body()
+}
+
+test "invalidate bodies when world lifetime ends" {
+    var old = orphan_body()
+    assert(!old.is_valid())
+    var world = Physics.World3D()
+    var current = world.create_rigid_body()
+    assert(current.is_valid() && !old.same_body(current))
+    var bodies:Physics.RigidBody3D[] = []
+    world.write_bodies(bodies)
+    assert(bodies.count() == 1 && bodies[0].same_body(current))
+}

@@ -1,0 +1,147 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public struct World3DSettings {
+    var gravity:Math.Vec3
+    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0) }
+}
+
+public class World3D {
+    private var store:BodyStore3D
+    private var current_gravity:Math.Vec3
+
+    drop { self.store.invalidate_all() }
+
+    init(settings:World3DSettings = World3DSettings()) {
+        if !finite_body3d_point(settings.gravity) {
+            panic("GFX.Physics.World3D requires finite gravity")
+        }
+        self.store = BodyStore3D()
+        self.current_gravity = settings.gravity
+    }
+
+    func gravity() Math.Vec3 { return self.current_gravity }
+
+    func set_gravity(gravity:Math.Vec3) {
+        if !finite_body3d_point(gravity) {
+            panic("GFX.Physics.World3D requires finite gravity")
+        }
+        self.store.require_mutable()
+        self.current_gravity = gravity
+    }
+
+    func body_count() int { return self.store.live_count }
+
+    func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
+        let id = self.store.append(settings)
+        return RigidBody3D(self.store, id)
+    }
+
+    func destroy_rigid_body(body:RigidBody3D) {
+        self.store.require_mutable()
+        if !body.belongs_to(self.store) {
+            panic("GFX.Physics.World3D cannot destroy a body owned by another world")
+        }
+        self.store.destroy(body.body_id())
+    }
+
+    func write_bodies(output:&RigidBody3D[]) {
+        output.clear()
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if self.store.slots[slot] != null {
+                output.append(RigidBody3D(
+                    self.store,
+                    BodyId3D(slot, self.store.generations[slot])
+                ))
+            }
+            slot++
+        }
+    }
+
+    func step(delta:float) {
+        if !finite_body3d_value(delta) || delta < 0.0 {
+            panic("GFX.Physics.World3D.step requires a finite non-negative delta")
+        }
+        self.store.require_mutable()
+        if delta == 0.0 { return }
+        self.store.locked = true
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if var state = self.store.slots[slot] {
+                if state.is_enabled {
+                    match state.body_type {
+                        fixed => {}
+                        kinematic => { integrate_kinematic3d(state, delta) }
+                        dynamic => { integrate_dynamic3d(state, self.current_gravity, delta) }
+                    }
+                }
+                state.force = Math.Vec3()
+                state.torque = Math.Vec3()
+            }
+            slot++
+        }
+        self.store.locked = false
+    }
+}
+
+func integrate_kinematic3d(state:BodyState3D, delta:float) {
+    if let target = state.target {
+        if delta >= state.target_remaining {
+            state.transform = target
+            state.linear_velocity = Math.Vec3()
+            state.angular_velocity = Math.Vec3()
+            state.target = null
+            state.target_remaining = 0.0
+            return
+        }
+        state.target_remaining -= delta
+    }
+    advance_pose3d(state, delta)
+}
+
+func integrate_dynamic3d(
+    state:BodyState3D,
+    gravity:Math.Vec3,
+    delta:float
+) {
+    let acceleration = gravity.multiply(state.gravity_scale).add(
+        state.force.multiply(state.inverse_mass)
+    )
+    state.linear_velocity = state.linear_velocity.add(acceleration.multiply(delta))
+    let angular_momentum = state.inertia_times(state.angular_velocity)
+    let effective_torque = state.torque.subtract(
+        state.angular_velocity.cross(angular_momentum)
+    )
+    state.angular_velocity = state.angular_velocity.add(
+        state.inverse_inertia_times(effective_torque).multiply(delta)
+    )
+    state.linear_velocity = state.linear_velocity.divide(1.0 + state.linear_damping * delta)
+    state.angular_velocity = state.angular_velocity.divide(1.0 + state.angular_damping * delta)
+    advance_pose3d(state, delta)
+}
+
+func advance_pose3d(state:BodyState3D, delta:float) {
+    let center = state.world_center().add(state.linear_velocity.multiply(delta))
+    var next_rotation = state.transform.rotation
+    let angular_speed = state.angular_velocity.length()
+    if angular_speed > 0.0 {
+        let turn = Math.Quat.angle_axis(
+            angular_speed * delta,
+            state.angular_velocity.divide(angular_speed)
+        )
+        next_rotation = turn.multiply(next_rotation).normalized()
+    }
+    state.transform = Transform3D(
+        center.subtract(next_rotation.rotate(state.mass_properties.local_center)),
+        next_rotation
+    )
+}

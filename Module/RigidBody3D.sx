@@ -1,0 +1,398 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public enum BodyType3D {
+    fixed
+    kinematic
+    dynamic
+}
+
+public struct MassProperties3D {
+    let mass:float
+    let local_center:Math.Vec3
+    let local_inertia:Math.Vec3
+
+    init(mass:float, local_inertia:Math.Vec3, local_center:Math.Vec3 = Math.Vec3()) {
+        if !finite_body3d_value(mass) || mass < 0.0 ||
+            !finite_body3d_point(local_center) || !finite_body3d_point(local_inertia) ||
+            local_inertia.x < 0.0 || local_inertia.y < 0.0 || local_inertia.z < 0.0
+        {
+            panic("GFX.Physics.MassProperties3D requires finite non-negative mass and inertia")
+        }
+        self.mass = mass
+        self.local_center = local_center
+        self.local_inertia = local_inertia
+    }
+}
+
+public struct RigidBody3DSettings {
+    var body_type:BodyType3D
+    var shape:Shape3D
+    var transform:Transform3D
+    var linear_velocity:Math.Vec3
+    var angular_velocity:Math.Vec3
+    var density:float
+    var mass_properties:MassProperties3D?
+    var gravity_scale:float
+    var linear_damping:float
+    var angular_damping:float
+    var is_enabled:bool
+
+    init() {
+        self.body_type = BodyType3D.dynamic
+        self.shape = Shape3D.sphere(Sphere3D())
+        self.transform = Transform3D()
+        self.linear_velocity = Math.Vec3()
+        self.angular_velocity = Math.Vec3()
+        self.density = 1.0
+        self.mass_properties = null
+        self.gravity_scale = 1.0
+        self.linear_damping = 0.0
+        self.angular_damping = 0.0
+        self.is_enabled = true
+    }
+}
+
+package struct BodyId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class BodyState3D {
+    var body_type:BodyType3D
+    var shape:Shape3D
+    var transform:Transform3D
+    var linear_velocity:Math.Vec3
+    var angular_velocity:Math.Vec3
+    var force:Math.Vec3
+    var torque:Math.Vec3
+    var mass_properties:MassProperties3D
+    var inverse_mass:float
+    var inverse_inertia:Math.Vec3
+    var gravity_scale:float
+    var linear_damping:float
+    var angular_damping:float
+    var is_enabled:bool
+    var target:Transform3D?
+    var target_remaining:float
+
+    init(settings:RigidBody3DSettings) {
+        if !finite_body3d_point(settings.linear_velocity) ||
+            !finite_body3d_point(settings.angular_velocity) ||
+            !finite_body3d_value(settings.density) || settings.density <= 0.0 ||
+            !finite_body3d_value(settings.gravity_scale) ||
+            !finite_body3d_value(settings.linear_damping) || settings.linear_damping < 0.0 ||
+            !finite_body3d_value(settings.angular_damping) || settings.angular_damping < 0.0
+        {
+            panic("GFX.Physics.RigidBody3DSettings requires finite motion, density and damping")
+        }
+        if settings.body_type == BodyType3D.fixed &&
+            (settings.linear_velocity.length_squared() > 0.0 ||
+                settings.angular_velocity.length_squared() > 0.0)
+        {
+            panic("GFX.Physics.RigidBody3DSettings fixed body requires zero velocity")
+        }
+        if settings.body_type != BodyType3D.dynamic && settings.mass_properties != null {
+            panic("GFX.Physics.RigidBody3DSettings mass override requires a dynamic body")
+        }
+        self.body_type = settings.body_type
+        self.shape = settings.shape
+        self.transform = Transform3D(settings.transform.position, settings.transform.rotation)
+        self.linear_velocity = settings.linear_velocity
+        self.angular_velocity = settings.angular_velocity
+        self.force = Math.Vec3()
+        self.torque = Math.Vec3()
+        var properties = shape_mass_properties3d(settings.shape, settings.density)
+        if let selected = settings.mass_properties { properties = selected }
+        if settings.body_type == BodyType3D.dynamic {
+            require_dynamic_mass3d(properties)
+            self.mass_properties = properties
+            self.inverse_mass = 1.0 / properties.mass
+            self.inverse_inertia = Math.Vec3(
+                1.0 / properties.local_inertia.x,
+                1.0 / properties.local_inertia.y,
+                1.0 / properties.local_inertia.z
+            )
+        } else {
+            self.mass_properties = MassProperties3D(0.0, Math.Vec3())
+            self.inverse_mass = 0.0
+            self.inverse_inertia = Math.Vec3()
+        }
+        self.gravity_scale = settings.gravity_scale
+        self.linear_damping = settings.linear_damping
+        self.angular_damping = settings.angular_damping
+        self.is_enabled = settings.is_enabled
+        self.target = null
+        self.target_remaining = 0.0
+    }
+
+    func world_center() Math.Vec3 {
+        return self.transform.point(self.mass_properties.local_center)
+    }
+
+    func inverse_inertia_times(world_vector:Math.Vec3) Math.Vec3 {
+        let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
+        return self.transform.rotation.rotate(local_vector.multiply(self.inverse_inertia))
+    }
+
+    func inertia_times(world_vector:Math.Vec3) Math.Vec3 {
+        let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
+        return self.transform.rotation.rotate(local_vector.multiply(self.mass_properties.local_inertia))
+    }
+}
+
+package class BodyStore3D {
+    var slots:BodyState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+    var locked:bool = false
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func require_mutable() {
+        if self.locked { panic("GFX.Physics.World3D cannot be modified during step") }
+    }
+
+    func append(settings:RigidBody3DSettings) BodyId3D {
+        self.require_mutable()
+        var state = BodyState3D(settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        return BodyId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:BodyId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:BodyId3D) BodyState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.RigidBody3D no longer refers to a live body")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:BodyId3D) {
+        self.require_mutable()
+        self.require(id)
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+}
+
+public class RigidBody3D {
+    private var store:BodyStore3D
+    private let id:BodyId3D
+
+    package init(store:BodyStore3D, id:BodyId3D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    func same_body(other:RigidBody3D) bool {
+        return self.store == other.store && self.id.slot == other.id.slot &&
+            self.id.generation == other.id.generation
+    }
+    package func belongs_to(store:BodyStore3D) bool { return self.store == store }
+    package func body_id() BodyId3D { return self.id }
+    func body_type() BodyType3D { return self.store.require(self.id).body_type }
+    func shape() Shape3D { return self.store.require(self.id).shape }
+    func transform() Transform3D { return self.store.require(self.id).transform }
+    func position() Math.Vec3 { return self.transform().position }
+    func rotation() Math.Quat { return self.transform().rotation }
+    func linear_velocity() Math.Vec3 { return self.store.require(self.id).linear_velocity }
+    func angular_velocity() Math.Vec3 { return self.store.require(self.id).angular_velocity }
+    func mass_properties() MassProperties3D { return self.store.require(self.id).mass_properties }
+    func world_center_of_mass() Math.Vec3 { return self.store.require(self.id).world_center() }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+
+    func set_enabled(enabled:bool) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.is_enabled = enabled
+    }
+
+    func set_transform(transform:Transform3D) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.transform = Transform3D(transform.position, transform.rotation)
+        state.target = null
+        state.target_remaining = 0.0
+    }
+
+    func set_linear_velocity(velocity:Math.Vec3) {
+        if !finite_body3d_point(velocity) { panic("GFX.Physics.RigidBody3D requires finite linear velocity") }
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if state.body_type == BodyType3D.fixed { panic("GFX.Physics.RigidBody3D fixed body cannot move") }
+        state.linear_velocity = velocity
+        state.target = null
+    }
+
+    func set_angular_velocity(velocity:Math.Vec3) {
+        if !finite_body3d_point(velocity) { panic("GFX.Physics.RigidBody3D requires finite angular velocity") }
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if state.body_type == BodyType3D.fixed { panic("GFX.Physics.RigidBody3D fixed body cannot rotate") }
+        state.angular_velocity = velocity
+        state.target = null
+    }
+
+    func set_mass_properties(properties:MassProperties3D) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if state.body_type != BodyType3D.dynamic {
+            panic("GFX.Physics.RigidBody3D mass override requires a dynamic body")
+        }
+        require_dynamic_mass3d(properties)
+        let previous_center = state.world_center()
+        state.mass_properties = properties
+        state.inverse_mass = 1.0 / properties.mass
+        state.inverse_inertia = Math.Vec3(
+            1.0 / properties.local_inertia.x,
+            1.0 / properties.local_inertia.y,
+            1.0 / properties.local_inertia.z
+        )
+        state.linear_velocity = state.linear_velocity.add(
+            state.angular_velocity.cross(state.world_center().subtract(previous_center))
+        )
+    }
+
+    private func dynamic_state() BodyState3D {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if state.body_type != BodyType3D.dynamic {
+            panic("GFX.Physics.RigidBody3D force and impulse require a dynamic body")
+        }
+        return state
+    }
+
+    func apply_force(force:Math.Vec3, point:Math.Vec3? = null) {
+        if !finite_body3d_point(force) { panic("GFX.Physics.RigidBody3D requires finite force") }
+        if let world_point = point {
+            if !finite_body3d_point(world_point) { panic("GFX.Physics.RigidBody3D requires finite force point") }
+        }
+        var state = self.dynamic_state()
+        state.force = state.force.add(force)
+        if let world_point = point {
+            state.torque = state.torque.add(world_point.subtract(state.world_center()).cross(force))
+        }
+    }
+
+    func apply_torque(torque:Math.Vec3) {
+        if !finite_body3d_point(torque) { panic("GFX.Physics.RigidBody3D requires finite torque") }
+        var state = self.dynamic_state()
+        state.torque = state.torque.add(torque)
+    }
+
+    func apply_impulse(impulse:Math.Vec3, point:Math.Vec3? = null) {
+        if !finite_body3d_point(impulse) { panic("GFX.Physics.RigidBody3D requires finite impulse") }
+        if let world_point = point {
+            if !finite_body3d_point(world_point) { panic("GFX.Physics.RigidBody3D requires finite impulse point") }
+        }
+        var state = self.dynamic_state()
+        state.linear_velocity = state.linear_velocity.add(impulse.multiply(state.inverse_mass))
+        if let world_point = point {
+            let angular_impulse = world_point.subtract(state.world_center()).cross(impulse)
+            state.angular_velocity = state.angular_velocity.add(
+                state.inverse_inertia_times(angular_impulse)
+            )
+        }
+    }
+
+    func apply_angular_impulse(impulse:Math.Vec3) {
+        if !finite_body3d_point(impulse) { panic("GFX.Physics.RigidBody3D requires finite angular impulse") }
+        var state = self.dynamic_state()
+        state.angular_velocity = state.angular_velocity.add(state.inverse_inertia_times(impulse))
+    }
+
+    func move_kinematic(target:Transform3D, duration:float) {
+        if !finite_body3d_value(duration) || duration <= 0.0 {
+            panic("GFX.Physics.RigidBody3D kinematic duration must be finite and positive")
+        }
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if state.body_type != BodyType3D.kinematic {
+            panic("GFX.Physics.RigidBody3D kinematic target requires a kinematic body")
+        }
+        let selected = Transform3D(target.position, target.rotation)
+        let linear_velocity = selected.position.subtract(state.transform.position).divide(duration)
+        var delta = selected.rotation.multiply(state.transform.rotation.conjugated())
+        if delta.w < 0.0 { delta = delta.multiply(-1.0) }
+        let imaginary = Math.Vec3(delta.x, delta.y, delta.z)
+        let sine = imaginary.length()
+        var angular_velocity = Math.Vec3()
+        if sine > 0.000001 {
+            angular_velocity = imaginary.multiply(
+                2.0 * Math.atan2(sine, delta.w) / (sine * duration)
+            )
+        }
+        if !finite_body3d_point(linear_velocity) || !finite_body3d_point(angular_velocity) {
+            panic("GFX.Physics.RigidBody3D kinematic target exceeds finite velocity")
+        }
+        state.linear_velocity = linear_velocity
+        state.angular_velocity = angular_velocity
+        state.target = selected
+        state.target_remaining = duration
+    }
+}
+
+package func finite_body3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+
+package func finite_body3d_point(value:Math.Vec3) bool {
+    return finite_body3d_value(value.x) && finite_body3d_value(value.y) &&
+        finite_body3d_value(value.z)
+}
+
+package func require_dynamic_mass3d(properties:MassProperties3D) {
+    if properties.mass <= 0.0 || properties.local_inertia.x <= 0.0 ||
+        properties.local_inertia.y <= 0.0 || properties.local_inertia.z <= 0.0
+    {
+        panic("GFX.Physics.RigidBody3D dynamic mass and principal inertia must be positive")
+    }
+}
+
+package func shape_mass_properties3d(shape:Shape3D, density:float) MassProperties3D {
+    match shape {
+        sphere(value) => {
+            let mass = density * (4.0 / 3.0) * Math.pi() * value.radius * value.radius * value.radius
+            let inertia = 0.4 * mass * value.radius * value.radius
+            return MassProperties3D(mass, Math.Vec3(inertia))
+        }
+        box(value) => {
+            let mass = density * value.size.x * value.size.y * value.size.z
+            let scale = mass / 12.0
+            return MassProperties3D(mass, Math.Vec3(
+                scale * (value.size.y * value.size.y + value.size.z * value.size.z),
+                scale * (value.size.x * value.size.x + value.size.z * value.size.z),
+                scale * (value.size.x * value.size.x + value.size.y * value.size.y)
+            ))
+        }
+    }
+}

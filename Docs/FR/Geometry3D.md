@@ -2,7 +2,8 @@
 
 `GFX.Physics` fournit des sphères, des boîtes et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
-monde, scène ni renderer. Le monde physique 3D n'est pas encore disponible.
+monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
+formes pour le mouvement libre des corps.
 
 ```silex
 use GFX.Physics
@@ -62,6 +63,7 @@ le point et la normale extérieure de la forme. Depuis l'intérieur d'une
 forme, le premier passage sortant est retourné. Un rayon manqué a `hit = false`.
 
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
-arêtes. Il n'alloue pas de cache persistant ; un futur monde devra sélectionner
-les paires candidates avant ces requêtes fines. Les autres familles de formes,
-les casts de formes et les requêtes sur le monde restent à livrer.
+arêtes. Il n'alloue pas de cache persistant ; la future détection des
+collisions du monde devra sélectionner les paires candidates avant ces requêtes
+fines. Les autres familles de formes, les casts de formes et les requêtes sur
+le monde restent à livrer.
