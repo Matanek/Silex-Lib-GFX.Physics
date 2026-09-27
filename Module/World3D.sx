@@ -1,3 +1,7 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Contact3D.Contact3D
+use GFX.Physics.Geometry3D.Geometry3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.RigidBody3D.BodyId3D
 use GFX.Physics.RigidBody3D.BodyState3D
 use GFX.Physics.RigidBody3D.BodyStore3D
@@ -17,6 +21,7 @@ public struct World3DSettings {
 public class World3D {
     private var store:BodyStore3D
     private var current_gravity:Math.Vec3
+    private var contacts:Contact3D[]
 
     drop { self.store.invalidate_all() }
 
@@ -26,6 +31,7 @@ public class World3D {
         }
         self.store = BodyStore3D()
         self.current_gravity = settings.gravity
+        self.contacts = []
     }
 
     func gravity() Math.Vec3 { return self.current_gravity }
@@ -39,6 +45,12 @@ public class World3D {
     }
 
     func body_count() int { return self.store.live_count }
+    func contact_count() int { return self.contacts.count() }
+
+    func write_contacts(output:&Contact3D[]) {
+        output.clear()
+        for contact in self.contacts { output.append(contact) }
+    }
 
     func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
         let id = self.store.append(settings)
@@ -51,6 +63,15 @@ public class World3D {
             panic("GFX.Physics.World3D cannot destroy a body owned by another world")
         }
         self.store.destroy(body.body_id())
+        var retained:Contact3D[] = []
+        for contact in self.contacts {
+            if !contact.first_body().same_body(body) &&
+                !contact.second_body().same_body(body)
+            {
+                retained.append(contact)
+            }
+        }
+        self.contacts = retained
     }
 
     func write_bodies(output:&RigidBody3D[]) {
@@ -89,8 +110,150 @@ public class World3D {
             }
             slot++
         }
+        self.detect_and_resolve_contacts()
         self.store.locked = false
     }
+
+    private func detect_and_resolve_contacts() {
+        self.contacts.clear()
+        var first_slot = 0
+        while first_slot < self.store.slots.count() {
+            if var first = self.store.slots[first_slot] {
+                if first.is_enabled {
+                    var second_slot = first_slot + 1
+                    while second_slot < self.store.slots.count() {
+                        if var second = self.store.slots[second_slot] {
+                            if second.is_enabled &&
+                                (first.body_type == BodyType3D.dynamic ||
+                                    second.body_type == BodyType3D.dynamic)
+                            {
+                                let distance = Geometry3D.distance(
+                                    ShapePlacement3D(first.shape, first.transform),
+                                    ShapePlacement3D(second.shape, second.transform)
+                                )
+                                if distance.separation <= 0.0 {
+                                    let normal = contact_normal3d(
+                                        first, second, distance.normal
+                                    )
+                                    let point = distance.first_point.add(
+                                        distance.second_point
+                                    ).multiply(0.5)
+                                    let impulse = resolve_contact3d(
+                                        first, second, normal,
+                                        distance.separation, point
+                                    )
+                                    self.contacts.append(Contact3D(
+                                        RigidBody3D(self.store, BodyId3D(
+                                            first_slot, self.store.generations[first_slot]
+                                        )),
+                                        RigidBody3D(self.store, BodyId3D(
+                                            second_slot, self.store.generations[second_slot]
+                                        )),
+                                        normal, distance.separation, point, impulse
+                                    ))
+                                }
+                            }
+                        }
+                        second_slot++
+                    }
+                }
+            }
+            first_slot++
+        }
+    }
+}
+
+func contact_normal3d(
+    first:BodyState3D,
+    second:BodyState3D,
+    geometric_normal:Math.Vec3
+) Math.Vec3 {
+    match first.shape {
+        sphere(_) => {
+            match second.shape {
+                box(box) => {
+                    if inside_box3d(first.transform.position, box, second.transform) {
+                        return geometric_normal.negated()
+                    }
+                }
+                sphere(_) => {}
+            }
+        }
+        box(box) => {
+            match second.shape {
+                sphere(_) => {
+                    if inside_box3d(second.transform.position, box, first.transform) {
+                        return geometric_normal.negated()
+                    }
+                }
+                box(_) => {}
+            }
+        }
+    }
+    return geometric_normal
+}
+
+func inside_box3d(point:Math.Vec3, box:Box3D, transform:Transform3D) bool {
+    let local_point = transform.inverse_point(point)
+    let half = box.half_size()
+    return Math.abs(local_point.x) <= half.x &&
+        Math.abs(local_point.y) <= half.y &&
+        Math.abs(local_point.z) <= half.z
+}
+
+func resolve_contact3d(
+    first:BodyState3D,
+    second:BodyState3D,
+    normal:Math.Vec3,
+    separation:float,
+    point:Math.Vec3
+) float {
+    let first_radius = point.subtract(first.world_center())
+    let second_radius = point.subtract(second.world_center())
+    let first_velocity = first.linear_velocity.add(
+        first.angular_velocity.cross(first_radius)
+    )
+    let second_velocity = second.linear_velocity.add(
+        second.angular_velocity.cross(second_radius)
+    )
+    let approach_speed = second_velocity.subtract(first_velocity).dot(normal)
+    let first_arm = first_radius.cross(normal)
+    let second_arm = second_radius.cross(normal)
+    let inverse_effective_mass = first.inverse_mass + second.inverse_mass +
+        first.inverse_inertia_times(first_arm).cross(first_radius).dot(normal) +
+        second.inverse_inertia_times(second_arm).cross(second_radius).dot(normal)
+    var magnitude = 0.0
+    if approach_speed < 0.0 && inverse_effective_mass > 0.0 {
+        magnitude = -approach_speed / inverse_effective_mass
+        let impulse = normal.multiply(magnitude)
+        first.linear_velocity = first.linear_velocity.subtract(
+            impulse.multiply(first.inverse_mass)
+        )
+        second.linear_velocity = second.linear_velocity.add(
+            impulse.multiply(second.inverse_mass)
+        )
+        first.angular_velocity = first.angular_velocity.subtract(
+            first.inverse_inertia_times(first_radius.cross(impulse))
+        )
+        second.angular_velocity = second.angular_velocity.add(
+            second.inverse_inertia_times(second_radius.cross(impulse))
+        )
+    }
+    if separation < 0.0 {
+        let total_inverse_mass = first.inverse_mass + second.inverse_mass
+        if total_inverse_mass > 0.0 {
+            let correction = normal.multiply(-separation / total_inverse_mass)
+            first.transform = Transform3D(
+                first.transform.position.subtract(correction.multiply(first.inverse_mass)),
+                first.transform.rotation
+            )
+            second.transform = Transform3D(
+                second.transform.position.add(correction.multiply(second.inverse_mass)),
+                second.transform.rotation
+            )
+        }
+    }
+    return magnitude
 }
 
 func integrate_kinematic3d(state:BodyState3D, delta:float) {

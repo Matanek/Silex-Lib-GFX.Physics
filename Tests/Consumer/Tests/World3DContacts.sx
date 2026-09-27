@@ -1,0 +1,87 @@
+use GFX.Physics
+use STD.Math
+
+test "stop a falling sphere on a fixed box and report the pair" {
+    var world = Physics.World3D()
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.5, 0.0)))
+    var ground = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0))))
+    var step = 0
+    while step < 10 {
+        world.step(0.05)
+        step++
+    }
+    assert(Math.abs(sphere.position().y - 1.0) < 0.0001)
+    assert(Math.abs(sphere.linear_velocity().y) < 0.0001)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_body().same_body(sphere))
+    assert(contacts[0].second_body().same_body(ground))
+    assert(contacts[0].normal().nearly_equal(Math.Vec3.down(), 0.0001))
+    assert(contacts[0].separation() <= 0.0)
+    world.destroy_rigid_body(sphere)
+    assert(world.contact_count() == 0)
+    assert(!contacts[0].first_body().is_valid())
+    assert(contacts[0].normal().nearly_equal(Math.Vec3.down(), 0.0001))
+}
+
+test "stop equal head-on spheres without applying contact to distant bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(2.0, 0.0, 0.0))
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(-2.0, 0.0, 0.0))
+    var distant = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(100.0, 0.0, 0.0)))
+    world.step(0.25)
+    assert(world.contact_count() == 1)
+    assert(first.linear_velocity().nearly_equal(Math.Vec3(), 0.00001))
+    assert(second.linear_velocity().nearly_equal(Math.Vec3(), 0.00001))
+    assert(first.position().nearly_equal(Math.Vec3(-0.5, 0.0, 0.0), 0.00001))
+    assert(second.position().nearly_equal(Math.Vec3(0.5, 0.0, 0.0), 0.00001))
+    world.step(0.0)
+    assert(world.contact_count() == 1)
+    world.destroy_rigid_body(first)
+    assert(world.contact_count() == 0)
+    assert(distant.is_valid())
+}
+
+test "separate the first box contact from a fixed box" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var ground = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    var falling = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.1, 0.0))
+        ..linear_velocity = Math.Vec3(0.0, -2.0, 0.0))
+    world.step(0.1)
+    assert(world.contact_count() == 1)
+    assert(falling.position().y >= 1.9999)
+    assert(falling.linear_velocity().y > -2.0)
+    assert(ground.position().nearly_equal(Math.Vec3(), 0.00001))
+}
+
+test "expel a sphere initially enclosed by a fixed box" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sphere = world.create_rigid_body()
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    assert(Math.abs(sphere.position().x - 1.5) < 0.0001)
+    assert(box.position().nearly_equal(Math.Vec3(), 0.00001))
+    let gap = Physics.Geometry3D.distance(
+        Physics.ShapePlacement3D(sphere.shape(), sphere.transform()),
+        Physics.ShapePlacement3D(box.shape(), box.transform())
+    )
+    assert(gap.separation >= -0.0001)
+}

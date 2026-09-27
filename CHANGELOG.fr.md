@@ -12,8 +12,10 @@ puis traduits dans `CHANGELOG.md`.
   pour sphères et boîtes orientées.
 - Ajout d'un premier `World3D` autonome : corps fixes, cinématiques et
   dynamiques, masse et inertie des sphères/boîtes, forces, couples, impulsions,
-  mouvement libre et handles invalidés à la destruction. Ce monde ne résout
-  pas encore les collisions.
+  mouvement libre et handles invalidés à la destruction.
+- Première réponse aux contacts sphère/boîte dans `World3D` : impulsion normale,
+  correction de pénétration et observations de paire après le pas. La friction,
+  la restitution, la persistance du manifold et le CCD restent à livrer.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

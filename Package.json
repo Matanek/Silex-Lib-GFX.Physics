@@ -2,8 +2,8 @@
   "name": "GFX.Physics",
   "version": "0.7.0",
   "description": {
-    "en": "Optional native Silex 2D physics, 3D geometry and free body motion for GFX.",
-    "fr": "Physique 2D, géométrie 3D et mouvement libre de corps en Silex natif pour GFX."
+    "en": "Optional native Silex 2D physics, 3D geometry and initial rigid-body contacts for GFX.",
+    "fr": "Physique 2D, géométrie 3D et premiers contacts rigides en Silex natif pour GFX."
   },
   "authors": ["Matanek"],
   "requires": { "silex": ">=0.44.0" },

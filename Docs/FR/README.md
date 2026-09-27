@@ -39,7 +39,8 @@ Les huit familles de joints conservent des réglages runtime typés et peuvent
 
 La [géométrie convexe 3D autonome](Geometry3D.md) expose sphère, boîte orientée,
 pose rigide et requêtes de distance, recouvrement et rayon. Le [monde 3D](World3D.md)
-fait avancer des corps libres ; les collisions restent à livrer.
+fait avancer les corps et répond aux premiers contacts sphère/boîte ; la
+stabilité des contacts multiples reste à livrer.
 
 Les formes comprennent boîtes, cercles, capsules, polygones convexes, segments
 et chaînes. Les requêtes de distance, recouvrement, manifold, rayon et shape

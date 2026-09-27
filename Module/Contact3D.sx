@@ -1,0 +1,34 @@
+use GFX.Physics.RigidBody3D.RigidBody3D
+use STD.Math
+
+public class Contact3D {
+    private var first:RigidBody3D
+    private var second:RigidBody3D
+    private var contact_normal:Math.Vec3
+    private var contact_separation:float
+    private var contact_point:Math.Vec3
+    private var applied_normal_impulse:float
+
+    package init(
+        first:RigidBody3D,
+        second:RigidBody3D,
+        normal:Math.Vec3,
+        separation:float,
+        point:Math.Vec3,
+        normal_impulse:float
+    ) {
+        self.first = first
+        self.second = second
+        self.contact_normal = normal
+        self.contact_separation = separation
+        self.contact_point = point
+        self.applied_normal_impulse = normal_impulse
+    }
+
+    func first_body() RigidBody3D { return self.first }
+    func second_body() RigidBody3D { return self.second }
+    func normal() Math.Vec3 { return self.contact_normal }
+    func separation() float { return self.contact_separation }
+    func point() Math.Vec3 { return self.contact_point }
+    func normal_impulse() float { return self.applied_normal_impulse }
+}

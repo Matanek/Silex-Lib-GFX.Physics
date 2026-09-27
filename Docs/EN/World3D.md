@@ -1,9 +1,9 @@
-# Move free bodies in 3D
+# Simulate rigid bodies in 3D
 
-`World3D` simulates the free motion of fixed, kinematic, and dynamic bodies
-without a window, scene, renderer, or ECS. It accepts `Shape3D` spheres and
-boxes. This first step neither detects nor resolves collisions: bodies can
-pass through each other.
+`World3D` simulates fixed, kinematic, and dynamic bodies without a window,
+scene, renderer, or ECS. It accepts `Shape3D` spheres and boxes and provides
+a first contact response between these shapes. Multiple contacts are not yet
+stabilized; fast motion can pass through an obstacle.
 
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.
@@ -57,6 +57,24 @@ accumulate until the next positive step, then clear. A zero step moves no
 body and preserves those accumulations. Integration uses semi implicit
 velocity and keeps a normalized quaternion; results depend on step size.
 
+## Read a first contact
+
+After a positive step, `contact_count()` counts detected pairs and
+`write_contacts(output)` copies their observations to a caller-owned array.
+Each `Contact3D` exposes the two handles, point, response normal, separation
+measured before correction, and applied normal impulse. Negative separation
+means penetration; the step then moves dynamic bodies back toward tangency
+and cancels incoming velocity at the contact point. If a sphere starts inside
+a box, the response normal can be opposite to the `Geometry3D.distance`
+query normal so the sphere exits through the nearest face.
+
+Detection currently examines every pair of enabled bodies with at least one
+dynamic body. It handles one point per pair and has no manifold cache,
+friction, restitution, or CCD. Stacks and oblique contacts can still drift.
+`step(0)` preserves the last observations; destroying a body removes current
+contacts that refer to it. A retained snapshot keeps its measurements, but
+its handles become invalid with their bodies or world.
+
 ## Ownership and lifetime
 
 Each world owns its storage and bodies. `RigidBody3D` is a typed handle with
@@ -67,6 +85,6 @@ handle fails explicitly. A world refuses to destroy another world's body.
 `write_bodies` fills a caller-owned array with live bodies without promising
 creation order.
 
-The world does not yet provide contacts, materials, sleeping, constraints,
-spatial queries, or CCD. [Standalone geometry queries](Geometry3D.md) remain
+The world does not yet provide materials, sleeping, constraints, spatial
+queries, or CCD. [Standalone geometry queries](Geometry3D.md) remain
 available for individual shapes.
