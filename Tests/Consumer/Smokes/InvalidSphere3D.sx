@@ -1,0 +1,6 @@
+use GFX.Physics
+
+func main() {
+    let invalid = Physics.Sphere3D(0.0)
+    print(invalid.radius)
+}

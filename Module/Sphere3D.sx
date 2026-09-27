@@ -1,0 +1,14 @@
+public struct Sphere3D {
+    let radius:float
+
+    init(radius:float = 0.5) {
+        if !finite_sphere3d_value(radius) || radius <= 0.0 {
+            panic("GFX.Physics.Sphere3D requires a finite positive radius")
+        }
+        self.radius = radius
+    }
+}
+
+func finite_sphere3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

@@ -1,0 +1,22 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let sphere = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+    let box = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 1.0, 3.0)))
+    let pose = Physics.Transform3D(
+        position:Math.Vec3(2.0, 3.0, 4.0),
+        rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.up())
+    )
+    let point = pose.point(Math.Vec3.right())
+    assert(pose.inverse_point(point).nearly_equal(Math.Vec3.right(), 0.00001))
+    match sphere {
+        sphere(value) => { assert(value.radius == 0.5) }
+        box(_) => { assert(false) }
+    }
+    match box {
+        sphere(_) => { assert(false) }
+        box(value) => { assert(value.half_size().x == 1.0) }
+    }
+    print("3D geometry values: ok")
+}

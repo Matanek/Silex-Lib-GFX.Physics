@@ -1,0 +1,7 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Sphere3D.Sphere3D
+
+public enum Shape3D {
+    box(Box3D)
+    sphere(Sphere3D)
+}

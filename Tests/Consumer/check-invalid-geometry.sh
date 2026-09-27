@@ -29,3 +29,9 @@ check_failure InvalidRay.sx \
     "GFX.Physics.Ray2D requires finite values and a maximum fraction in [0, 100000)"
 check_failure InvalidDynamicChain.sx \
     "GFX.Physics.World2D requires chain body shapes to be fixed"
+check_failure InvalidSphere3D.sx \
+    "GFX.Physics.Sphere3D requires a finite positive radius"
+check_failure InvalidBox3D.sx \
+    "GFX.Physics.Box3D requires finite positive dimensions"
+check_failure InvalidTransform3D.sx \
+    "GFX.Physics.Transform3D requires a finite position and unit rotation"

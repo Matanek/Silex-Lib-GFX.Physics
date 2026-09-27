@@ -1,13 +1,17 @@
 public use GFX.Physics.TileMapCollider2D.TileMapCollider2D
 public use GFX.Physics.TileMapCollider2D.TileCollisionRect2D
 public use GFX.Physics.Box2D.Box2D
+public use GFX.Physics.Box3D.Box3D
 public use GFX.Physics.Capsule2D.Capsule2D
 public use GFX.Physics.Chain2D.Chain2D
 public use GFX.Physics.Circle2D.Circle2D
 public use GFX.Physics.Polygon2D.Polygon2D
 public use GFX.Physics.Segment2D.Segment2D
 public use GFX.Physics.Shape2D.Shape2D
+public use GFX.Physics.Shape3D.Shape3D
 public use GFX.Physics.Transform2D.Transform2D
+public use GFX.Physics.Transform3D.Transform3D
+public use GFX.Physics.Sphere3D.Sphere3D
 public use GFX.Physics.CollisionFilter2D.CollisionFilter2D
 public use GFX.Physics.CollisionResponse.CollisionResponse
 public use GFX.Physics.BroadPhase2D.AABB2D

@@ -1,0 +1,45 @@
+use STD.Math
+
+public struct Transform3D {
+    let position:Math.Vec3
+    let rotation:Math.Quat
+
+    init(
+        position:Math.Vec3 = Math.Vec3(),
+        rotation:Math.Quat = Math.Quat.identity()
+    ) {
+        if !finite_transform3d_value(position.x) ||
+            !finite_transform3d_value(position.y) ||
+            !finite_transform3d_value(position.z) ||
+            !finite_transform3d_value(rotation.x) ||
+            !finite_transform3d_value(rotation.y) ||
+            !finite_transform3d_value(rotation.z) ||
+            !finite_transform3d_value(rotation.w) ||
+            !Math.nearly_equal(rotation.length_squared(), 1.0, 0.0001)
+        {
+            panic("GFX.Physics.Transform3D requires a finite position and unit rotation")
+        }
+        self.position = position
+        self.rotation = rotation
+    }
+
+    func point(local_point:Math.Vec3) Math.Vec3 {
+        return self.rotation.rotate(local_point).add(self.position)
+    }
+
+    func vector(local_vector:Math.Vec3) Math.Vec3 {
+        return self.rotation.rotate(local_vector)
+    }
+
+    func inverse_point(world_point:Math.Vec3) Math.Vec3 {
+        return self.rotation.conjugated().rotate(world_point.subtract(self.position))
+    }
+
+    func inverse_vector(world_vector:Math.Vec3) Math.Vec3 {
+        return self.rotation.conjugated().rotate(world_vector)
+    }
+}
+
+func finite_transform3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

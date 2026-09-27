@@ -40,6 +40,9 @@ reference without learning its internal slot or generation.
 
 Collision geometry is also available without creating a world:
 
+The [first 3D geometry values](Geometry3D.md) expose spheres, boxes, and rigid
+poses. 3D queries and worlds are still under development.
+
 ```silex
 let capsule = Physics.ShapePlacement2D(
     Physics.Shape2D.capsule(Physics.Capsule2D(

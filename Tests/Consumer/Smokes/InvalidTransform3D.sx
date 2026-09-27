@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Transform3D(rotation:Math.Quat(0.0, 0.0, 0.0, 0.0))
+    print(invalid.position.x)
+}

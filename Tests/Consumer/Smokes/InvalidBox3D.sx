@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Box3D(Math.Vec3(1.0, 0.0, 1.0))
+    print(invalid.size.x)
+}
