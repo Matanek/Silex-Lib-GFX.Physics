@@ -1,0 +1,258 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public struct ShapePlacement3D {
+    private var current_shape:Shape3D?
+    private var current_transform:Transform3D
+
+    init(shape:Shape3D, transform:Transform3D = Transform3D()) {
+        self.current_shape = shape
+        self.current_transform = transform
+    }
+
+    func shape() Shape3D {
+        if let shape = self.current_shape { return shape }
+        panic("GFX.Physics.ShapePlacement3D is not initialized")
+    }
+
+    func transform() Transform3D { return self.current_transform }
+}
+
+public struct Ray3D {
+    let origin:Math.Vec3
+    let translation:Math.Vec3
+
+    init(origin:Math.Vec3, translation:Math.Vec3) {
+        if !finite_geometry3d_vector(origin) ||
+            !finite_geometry3d_vector(translation) ||
+            translation.length_squared() <= 0.0 ||
+            !finite_geometry3d_value(translation.length_squared())
+        {
+            panic("GFX.Physics.Ray3D requires a finite origin and nonzero finite translation")
+        }
+        self.origin = origin
+        self.translation = translation
+    }
+}
+
+public struct DistanceResult3D {
+    let first_point:Math.Vec3
+    let second_point:Math.Vec3
+    let normal:Math.Vec3
+    let separation:float
+
+    init(
+        first_point:Math.Vec3,
+        second_point:Math.Vec3,
+        normal:Math.Vec3,
+        separation:float
+    ) {
+        self.first_point = first_point
+        self.second_point = second_point
+        self.normal = normal
+        self.separation = separation
+    }
+}
+
+public struct CastResult3D {
+    let hit:bool
+    let point:Math.Vec3
+    let normal:Math.Vec3
+    let fraction:float
+
+    init() {
+        self.hit = false
+        self.point = Math.Vec3()
+        self.normal = Math.Vec3()
+        self.fraction = 0.0
+    }
+
+    init(point:Math.Vec3, normal:Math.Vec3, fraction:float) {
+        self.hit = true
+        self.point = point
+        self.normal = normal
+        self.fraction = fraction
+    }
+}
+
+public struct Geometry3D {
+    private init() {}
+
+    static func distance(
+        first:ShapePlacement3D,
+        second:ShapePlacement3D
+    ) DistanceResult3D {
+        match first.shape() {
+            sphere(first_sphere) => {
+                match second.shape() {
+                    sphere(second_sphere) => {
+                        return sphere_sphere_distance(
+                            first_sphere, first.transform(),
+                            second_sphere, second.transform()
+                        )
+                    }
+                    box(second_box) => {
+                        return sphere_box_distance(
+                            first_sphere, first.transform(),
+                            second_box, second.transform()
+                        )
+                    }
+                }
+            }
+            box(first_box) => {
+                match second.shape() {
+                    sphere(second_sphere) => {
+                        return reversed_distance(sphere_box_distance(
+                            second_sphere, second.transform(),
+                            first_box, first.transform()
+                        ))
+                    }
+                    box(second_box) => {
+                        return box_box_distance(
+                            first_box, first.transform(),
+                            second_box, second.transform()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    static func overlaps(
+        first:ShapePlacement3D,
+        second:ShapePlacement3D
+    ) bool {
+        match first.shape() {
+            box(first_box) => {
+                match second.shape() {
+                    box(second_box) => {
+                        return box_box_overlaps(
+                            first_box, first.transform(),
+                            second_box, second.transform()
+                        )
+                    }
+                    sphere(_) => {}
+                }
+            }
+            sphere(_) => {}
+        }
+        return Geometry3D.distance(first, second).separation <= 0.0
+    }
+
+    static func ray_cast(ray:Ray3D, target:ShapePlacement3D) CastResult3D {
+        match target.shape() {
+            sphere(sphere) => {
+                return ray_sphere_cast(ray, sphere, target.transform())
+            }
+            box(box) => {
+                return ray_box_cast(ray, box, target.transform())
+            }
+        }
+    }
+}
+
+func sphere_sphere_distance(
+    first:Sphere3D,
+    first_transform:Transform3D,
+    second:Sphere3D,
+    second_transform:Transform3D
+) DistanceResult3D {
+    let offset = second_transform.position.subtract(first_transform.position)
+    let length = offset.length()
+    var normal = Math.Vec3.right()
+    if length > 0.0 { normal = offset.divide(length) }
+    return DistanceResult3D(
+        first_transform.position.add(normal.multiply(first.radius)),
+        second_transform.position.subtract(normal.multiply(second.radius)),
+        normal,
+        length - first.radius - second.radius
+    )
+}
+
+func sphere_box_distance(
+    sphere:Sphere3D,
+    sphere_transform:Transform3D,
+    box:Box3D,
+    box_transform:Transform3D
+) DistanceResult3D {
+    let local_center = box_transform.inverse_point(sphere_transform.position)
+    let half = box.half_size()
+    let local_closest = local_center.clamped(half.negated(), half)
+    let offset = local_closest.subtract(local_center)
+    let squared = offset.length_squared()
+    if squared > 0.0 {
+        let length = Math.sqrt(squared)
+        let normal = box_transform.vector(offset.divide(length))
+        return DistanceResult3D(
+            sphere_transform.position.add(normal.multiply(sphere.radius)),
+            box_transform.point(local_closest),
+            normal,
+            length - sphere.radius
+        )
+    }
+
+    var face_distance = half.x - Math.abs(local_center.x)
+    var local_normal = Math.Vec3(signed_geometry3d_axis(local_center.x), 0.0, 0.0)
+    let y_distance = half.y - Math.abs(local_center.y)
+    if y_distance < face_distance {
+        face_distance = y_distance
+        local_normal = Math.Vec3(0.0, signed_geometry3d_axis(local_center.y), 0.0)
+    }
+    let z_distance = half.z - Math.abs(local_center.z)
+    if z_distance < face_distance {
+        face_distance = z_distance
+        local_normal = Math.Vec3(0.0, 0.0, signed_geometry3d_axis(local_center.z))
+    }
+    let normal = box_transform.vector(local_normal)
+    return DistanceResult3D(
+        sphere_transform.position.add(normal.multiply(sphere.radius)),
+        box_transform.point(local_center.add(local_normal.multiply(face_distance))),
+        normal,
+        -face_distance - sphere.radius
+    )
+}
+
+func reversed_distance(result:DistanceResult3D) DistanceResult3D {
+    return DistanceResult3D(
+        result.second_point, result.first_point,
+        result.normal.negated(), result.separation
+    )
+}
+
+func ray_sphere_cast(
+    ray:Ray3D,
+    sphere:Sphere3D,
+    transform:Transform3D
+) CastResult3D {
+    let offset = ray.origin.subtract(transform.position)
+    let a = ray.translation.length_squared()
+    let b = offset.dot(ray.translation)
+    let c = offset.length_squared() - sphere.radius * sphere.radius
+    let discriminant = b * b - a * c
+    if discriminant < 0.0 { return CastResult3D() }
+    let root = Math.sqrt(discriminant)
+    var fraction = (-b - root) / a
+    if fraction < 0.0 { fraction = (-b + root) / a }
+    if fraction < 0.0 || fraction > 1.0 { return CastResult3D() }
+    let point = ray.origin.add(ray.translation.multiply(fraction))
+    return CastResult3D(
+        point, point.subtract(transform.position).normalized(), fraction
+    )
+}
+
+func finite_geometry3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+
+func finite_geometry3d_vector(value:Math.Vec3) bool {
+    return finite_geometry3d_value(value.x) &&
+        finite_geometry3d_value(value.y) && finite_geometry3d_value(value.z)
+}
+
+func signed_geometry3d_axis(value:float) float {
+    if value < 0.0 { return -1.0 }
+    return 1.0
+}

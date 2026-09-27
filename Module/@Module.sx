@@ -22,6 +22,11 @@ public use GFX.Physics.Geometry2D.Manifold2D
 public use GFX.Physics.Geometry2D.ManifoldPoint2D
 public use GFX.Physics.Geometry2D.Ray2D
 public use GFX.Physics.Geometry2D.ShapePlacement2D
+public use GFX.Physics.Geometry3D.CastResult3D
+public use GFX.Physics.Geometry3D.DistanceResult3D
+public use GFX.Physics.Geometry3D.Geometry3D
+public use GFX.Physics.Geometry3D.Ray3D
+public use GFX.Physics.Geometry3D.ShapePlacement3D
 public use GFX.Physics.BodyTransform2D.BodyTransform2D
 public use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 public use GFX.Physics.Events2D.BodyMoveEvent2D

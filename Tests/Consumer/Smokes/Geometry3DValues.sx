@@ -18,5 +18,15 @@ func main() {
         sphere(_) => { assert(false) }
         box(value) => { assert(value.half_size().x == 1.0) }
     }
-    print("3D geometry values: ok")
+    let placed_sphere = Physics.ShapePlacement3D(sphere)
+    let placed_box = Physics.ShapePlacement3D(box, pose)
+    let distance = Physics.Geometry3D.distance(placed_sphere, placed_box)
+    assert(distance.separation > 0.0)
+    assert(!Physics.Geometry3D.overlaps(placed_sphere, placed_box))
+    let hit = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(-4.0, 3.0, 4.0), Math.Vec3(8.0, 0.0, 0.0)),
+        placed_box
+    )
+    assert(hit.hit)
+    print("3D geometry queries: ok")
 }

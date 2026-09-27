@@ -1,0 +1,84 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+func ray_box_cast(ray:Ray3D, box:Box3D, transform:Transform3D) CastResult3D {
+    let local_origin = transform.inverse_point(ray.origin)
+    let local_translation = transform.inverse_vector(ray.translation)
+    let half = box.half_size()
+    var entry = 0.0
+    var exit = 1.0
+    var entry_normal = Math.Vec3()
+    var exit_normal = Math.Vec3()
+    var inside = true
+    var axis = 0
+    while axis < 3 {
+        let origin = box_axis_component(local_origin, axis)
+        let direction = box_axis_component(local_translation, axis)
+        let extent = box_axis_component(half, axis)
+        if Math.abs(origin) >= extent { inside = false }
+        if Math.abs(direction) < 0.000000000001 {
+            if origin < -extent || origin > extent { return CastResult3D() }
+        } else {
+            var near = (-extent - origin) / direction
+            var far = (extent - origin) / direction
+            var near_normal = box_unit_axis(axis, -1.0)
+            var far_normal = box_unit_axis(axis, 1.0)
+            if near > far {
+                let old_near = near
+                near = far
+                far = old_near
+                near_normal = box_unit_axis(axis, 1.0)
+                far_normal = box_unit_axis(axis, -1.0)
+            }
+            if near >= entry {
+                entry = near
+                entry_normal = near_normal
+            }
+            if far < exit {
+                exit = far
+                exit_normal = far_normal
+            }
+            if entry > exit { return CastResult3D() }
+        }
+        axis++
+    }
+    var fraction = entry
+    var normal = entry_normal
+    if inside {
+        fraction = exit
+        normal = exit_normal
+    } else if fraction == 0.0 && normal.length_squared() == 0.0 {
+        // A ray starting on a face and moving outward has no entering slab.
+        if local_origin.x <= -half.x {
+            normal = Math.Vec3(-1.0, 0.0, 0.0)
+        } else if local_origin.x >= half.x {
+            normal = Math.Vec3.right()
+        } else if local_origin.y <= -half.y {
+            normal = Math.Vec3(0.0, -1.0, 0.0)
+        } else if local_origin.y >= half.y {
+            normal = Math.Vec3.up()
+        } else if local_origin.z <= -half.z {
+            normal = Math.Vec3(0.0, 0.0, -1.0)
+        } else if local_origin.z >= half.z {
+            normal = Math.Vec3(0.0, 0.0, 1.0)
+        }
+    }
+    if fraction < 0.0 || fraction > 1.0 { return CastResult3D() }
+    return CastResult3D(
+        ray.origin.add(ray.translation.multiply(fraction)),
+        transform.vector(normal), fraction
+    )
+}
+
+func box_axis_component(vector:Math.Vec3, axis:int) float {
+    if axis == 0 { return vector.x }
+    if axis == 1 { return vector.y }
+    return vector.z
+}
+
+func box_unit_axis(axis:int, sign:float) Math.Vec3 {
+    if axis == 0 { return Math.Vec3(sign, 0.0, 0.0) }
+    if axis == 1 { return Math.Vec3(0.0, sign, 0.0) }
+    return Math.Vec3(0.0, 0.0, sign)
+}

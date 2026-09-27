@@ -1,9 +1,8 @@
 # GFX.Physics
 
-`GFX.Physics` provides an optional native Silex 2D physics simulation and the
-first standalone 3D geometry values. Both are independent from windows,
-renderers, scenes, and ECS worlds. The 3D world and queries are not available
-yet.
+`GFX.Physics` provides an optional native Silex 2D physics simulation and
+standalone 3D convex geometry queries. Both are independent from windows,
+renderers, scenes, and ECS worlds. The 3D world is not available yet.
 
 ```text
 silex install GFX.Physics

@@ -37,8 +37,9 @@ Les huit familles de joints conservent des réglages runtime typés et peuvent
 
 ## Géométrie et contacts
 
-Les [premières valeurs de géométrie 3D](Geometry3D.md) exposent sphère, boîte
-et pose rigide. Les requêtes et le monde 3D restent à venir.
+La [géométrie convexe 3D autonome](Geometry3D.md) expose sphère, boîte orientée,
+pose rigide et requêtes de distance, recouvrement et rayon. Le monde 3D reste à
+venir.
 
 Les formes comprennent boîtes, cercles, capsules, polygones convexes, segments
 et chaînes. Les requêtes de distance, recouvrement, manifold, rayon et shape

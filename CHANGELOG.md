@@ -8,7 +8,8 @@ first in `CHANGELOG.fr.md`.
 
 - Added `Sphere3D`, `Box3D`, `Shape3D`, and `Transform3D` values as the first
   standalone 3D geometry primitives. Invalid dimensions, poses, and rotations
-  are rejected; 3D geometry queries and worlds are not exposed yet.
+  are rejected. `Geometry3D` provides signed distances, overlaps, and rays for
+  spheres and oriented boxes; the 3D world remains to be delivered.
 - Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
 
 ## [0.7.0] - 2026-09-24

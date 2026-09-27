@@ -35,3 +35,5 @@ check_failure InvalidBox3D.sx \
     "GFX.Physics.Box3D requires finite positive dimensions"
 check_failure InvalidTransform3D.sx \
     "GFX.Physics.Transform3D requires a finite position and unit rotation"
+check_failure InvalidRay3D.sx \
+    "GFX.Physics.Ray3D requires a finite origin and nonzero finite translation"

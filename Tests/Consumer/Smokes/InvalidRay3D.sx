@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let invalid = Physics.Ray3D(Math.Vec3(), Math.Vec3())
+    print(invalid.translation.x)
+}

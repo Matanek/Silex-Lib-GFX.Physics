@@ -8,7 +8,8 @@ puis traduits dans `CHANGELOG.md`.
 
 - Ajout des valeurs `Sphere3D`, `Box3D`, `Shape3D` et `Transform3D` pour amorcer
   la géométrie 3D autonome. Les dimensions, poses et rotations invalides sont
-  rejetées ; les requêtes géométriques et le monde 3D ne sont pas encore exposés.
+  rejetées. `Geometry3D` fournit les distances signées, recouvrements et rayons
+  pour sphères et boîtes orientées ; le monde 3D reste à livrer.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

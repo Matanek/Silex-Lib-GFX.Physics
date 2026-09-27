@@ -20,7 +20,7 @@ public struct Transform3D {
             panic("GFX.Physics.Transform3D requires a finite position and unit rotation")
         }
         self.position = position
-        self.rotation = rotation
+        self.rotation = rotation.normalized()
     }
 
     func point(local_point:Math.Vec3) Math.Vec3 {

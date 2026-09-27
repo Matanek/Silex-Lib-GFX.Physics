@@ -1,0 +1,207 @@
+use GFX.Physics
+use STD.Math
+
+test "measure sphere and box gaps contacts and overlap" {
+    let sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0))
+    )
+    let box_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    let separated = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+    )
+    let gap = Physics.Geometry3D.distance(sphere, separated)
+    assert(Math.nearly_equal(gap.separation, 1.0, 0.00001))
+    assert(gap.first_point.nearly_equal(Math.Vec3(1.0, 0.0, 0.0), 0.00001))
+    assert(gap.second_point.nearly_equal(Math.Vec3(2.0, 0.0, 0.0), 0.00001))
+    assert(gap.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+    assert(!Physics.Geometry3D.overlaps(sphere, separated))
+
+    let reversed = Physics.Geometry3D.distance(separated, sphere)
+    assert(Math.nearly_equal(reversed.separation, gap.separation, 0.00001))
+    assert(reversed.normal.nearly_equal(gap.normal.negated(), 0.00001))
+    assert(reversed.first_point.nearly_equal(gap.second_point, 0.00001))
+
+    let touching = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+    )
+    assert(Math.nearly_equal(Physics.Geometry3D.distance(sphere, touching).separation,
+        0.0, 0.00001))
+    assert(Physics.Geometry3D.overlaps(sphere, touching))
+
+    let overlapping = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(1.5, 0.0, 0.0))
+    )
+    assert(Math.nearly_equal(Physics.Geometry3D.distance(sphere, overlapping).separation,
+        -0.5, 0.00001))
+    assert(Physics.Geometry3D.overlaps(sphere, overlapping))
+}
+
+test "measure sphere pairs and rotated box pairs" {
+    let first_sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0))
+    )
+    let second_sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+        Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+    )
+    assert(Math.nearly_equal(
+        Physics.Geometry3D.distance(first_sphere, second_sphere).separation,
+        1.0, 0.00001
+    ))
+    let touching_sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+    )
+    assert(Math.nearly_equal(
+        Physics.Geometry3D.distance(first_sphere, touching_sphere).separation,
+        0.0, 0.00001
+    ))
+    assert(Physics.Geometry3D.overlaps(first_sphere, touching_sphere))
+    let overlapping_sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+        Physics.Transform3D(position:Math.Vec3(1.5, 0.0, 0.0))
+    )
+    assert(Math.nearly_equal(
+        Physics.Geometry3D.distance(first_sphere, overlapping_sphere).separation,
+        -0.5, 0.00001
+    ))
+    assert(Physics.Geometry3D.overlaps(first_sphere, overlapping_sphere))
+
+    let box_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    let first_box = Physics.ShapePlacement3D(box_shape)
+    let second_box = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(
+            position:Math.Vec3(3.0, 0.0, 0.0),
+            rotation:Math.Quat.angle_axis(Math.pi() * 0.25, Math.Vec3.up())
+        )
+    )
+    let gap = Physics.Geometry3D.distance(first_box, second_box)
+    assert(Math.nearly_equal(gap.separation, 3.0 - 1.0 - Math.sqrt(2.0), 0.0001))
+    assert(gap.normal.nearly_equal(Math.Vec3.right(), 0.0001))
+    assert(!Physics.Geometry3D.overlaps(first_box, second_box))
+    let reversed = Physics.Geometry3D.distance(second_box, first_box)
+    assert(Math.nearly_equal(reversed.separation, gap.separation, 0.0001))
+    assert(reversed.normal.nearly_equal(gap.normal.negated(), 0.0001))
+}
+
+test "cast finite rays against spheres and oriented boxes" {
+    let ray = Physics.Ray3D(Math.Vec3(-4.0, 0.0, 0.0), Math.Vec3(8.0, 0.0, 0.0))
+    let sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+        Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+    )
+    let sphere_hit = Physics.Geometry3D.ray_cast(ray, sphere)
+    assert(sphere_hit.hit)
+    assert(Math.nearly_equal(sphere_hit.fraction, 0.75, 0.00001))
+    assert(sphere_hit.normal.nearly_equal(Math.Vec3(-1.0, 0.0, 0.0), 0.00001))
+
+    let box_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    let box_target = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+    )
+    let box_hit = Physics.Geometry3D.ray_cast(ray, box_target)
+    assert(box_hit.hit)
+    assert(Math.nearly_equal(box_hit.fraction, 0.75, 0.00001))
+
+    let turned = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(
+            position:Math.Vec3(3.0, 0.0, 0.0),
+            rotation:Math.Quat.angle_axis(Math.pi() * 0.25, Math.Vec3.up())
+        )
+    )
+    let turned_hit = Physics.Geometry3D.ray_cast(ray, turned)
+    assert(turned_hit.hit)
+    assert(Math.nearly_equal(turned_hit.fraction, 0.6982233047, 0.0001))
+
+    let missed = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(-4.0, 4.0, 0.0), Math.Vec3(8.0, 0.0, 0.0)),
+        turned
+    )
+    assert(!missed.hit)
+}
+
+test "resolve box tangency and penetration without a world" {
+    let box_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    let first = Physics.ShapePlacement3D(box_shape)
+    let tangent = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+    )
+    let tangent_result = Physics.Geometry3D.distance(first, tangent)
+    assert(Math.nearly_equal(tangent_result.separation, 0.0, 0.00001))
+    assert(tangent_result.first_point.nearly_equal(
+        tangent_result.second_point, 0.00001
+    ))
+    assert(Physics.Geometry3D.overlaps(first, tangent))
+
+    let penetrated = Physics.ShapePlacement3D(
+        box_shape,
+        Physics.Transform3D(position:Math.Vec3(1.5, 0.0, 0.0))
+    )
+    let penetration = Physics.Geometry3D.distance(first, penetrated)
+    assert(Math.nearly_equal(penetration.separation, -0.5, 0.00001))
+    assert(penetration.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+    assert(Physics.Geometry3D.overlaps(first, penetrated))
+}
+
+test "cast from a box interior and boundary" {
+    let box = Physics.ShapePlacement3D(
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    )
+    let exiting = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(), Math.Vec3(2.0, 0.0, 0.0)), box
+    )
+    assert(exiting.hit)
+    assert(Math.nearly_equal(exiting.fraction, 0.5, 0.00001))
+    assert(exiting.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+
+    let outward = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(1.0, 0.0, 0.0), Math.Vec3(2.0, 0.0, 0.0)), box
+    )
+    assert(outward.hit)
+    assert(Math.nearly_equal(outward.fraction, 0.0, 0.00001))
+    assert(outward.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+}
+
+test "measure a sphere contained inside a box" {
+    let sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+    )
+    let box = Physics.ShapePlacement3D(
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+    )
+    let result = Physics.Geometry3D.distance(sphere, box)
+    assert(Math.nearly_equal(result.separation, -1.5, 0.00001))
+    assert(result.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+    assert(Physics.Geometry3D.overlaps(sphere, box))
+}
+
+test "preserve pair symmetry under compound rotations" {
+    let first = Physics.ShapePlacement3D(
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 3.0, 1.0))),
+        Physics.Transform3D(
+            position:Math.Vec3(-1.0, 0.5, 0.0),
+            rotation:Math.Quat.angle_axis(0.2, Math.Vec3(1.0, 2.0, 3.0))
+        )
+    )
+    let second = Physics.ShapePlacement3D(
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 2.0, 3.0))),
+        Physics.Transform3D(
+            position:Math.Vec3(3.0, 1.0, 1.0),
+            rotation:Math.Quat.angle_axis(0.7, Math.Vec3(2.0, 1.0, 0.5))
+        )
+    )
+    let forward = Physics.Geometry3D.distance(first, second)
+    let reverse = Physics.Geometry3D.distance(second, first)
+    assert(forward.separation > 0.0)
+    assert(Math.nearly_equal(forward.separation, reverse.separation, 0.0001))
+    assert(forward.normal.nearly_equal(reverse.normal.negated(), 0.0001))
+    assert(forward.first_point.nearly_equal(reverse.second_point, 0.0001))
+    assert(forward.second_point.nearly_equal(reverse.first_point, 0.0001))
+}

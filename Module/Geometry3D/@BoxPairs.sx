@@ -1,0 +1,247 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+struct BoxSegment3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+
+    init(first:Math.Vec3, second:Math.Vec3) {
+        self.first = first
+        self.second = second
+    }
+}
+
+struct BoxSegmentPair3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+
+    init(first:Math.Vec3, second:Math.Vec3) {
+        self.first = first
+        self.second = second
+    }
+}
+
+struct BoxAxis3D {
+    let normal:Math.Vec3
+    let gap:float
+
+    init(normal:Math.Vec3, gap:float) {
+        self.normal = normal
+        self.gap = gap
+    }
+}
+
+func box_box_axis(
+    first:Box3D,
+    first_transform:Transform3D,
+    second:Box3D,
+    second_transform:Transform3D
+) BoxAxis3D {
+    let offset = second_transform.position.subtract(first_transform.position)
+    var best_gap = -3.4028235e38
+    var best_axis = Math.Vec3.right()
+    var axis_index = 0
+    while axis_index < 15 {
+        var axis = Math.Vec3()
+        if axis_index < 3 {
+            axis = box_axis(first_transform, axis_index)
+        } else if axis_index < 6 {
+            axis = box_axis(second_transform, axis_index - 3)
+        } else {
+            let cross_index = axis_index - 6
+            axis = box_axis(first_transform, cross_index / 3).cross(
+                box_axis(second_transform, cross_index % 3)
+            )
+        }
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            if offset.dot(axis) < 0.0 { axis = axis.negated() }
+            let gap = Math.abs(offset.dot(axis)) -
+                box_projection(first, first_transform, axis) -
+                box_projection(second, second_transform, axis)
+            if gap > best_gap {
+                best_gap = gap
+                best_axis = axis
+            }
+        }
+        axis_index++
+    }
+
+    return BoxAxis3D(best_axis, best_gap)
+}
+
+func box_box_overlaps(
+    first:Box3D,
+    first_transform:Transform3D,
+    second:Box3D,
+    second_transform:Transform3D
+) bool {
+    return box_box_axis(first, first_transform, second, second_transform).gap <= 0.0
+}
+
+func box_box_distance(
+    first:Box3D,
+    first_transform:Transform3D,
+    second:Box3D,
+    second_transform:Transform3D
+) DistanceResult3D {
+    let separating_axis = box_box_axis(
+        first, first_transform, second, second_transform
+    )
+    if separating_axis.gap < 0.0 {
+        return DistanceResult3D(
+            box_support(first, first_transform, separating_axis.normal),
+            box_support(second, second_transform, separating_axis.normal.negated()),
+            separating_axis.normal, separating_axis.gap
+        )
+    }
+
+    var first_point = Math.Vec3()
+    var second_point = Math.Vec3()
+    var best_squared = 3.4028235e38
+    var vertex_index = 0
+    while vertex_index < 8 {
+        let vertex_first = box_vertex(first, first_transform, vertex_index)
+        let nearest_second = box_closest_point(second, second_transform, vertex_first)
+        let first_squared = vertex_first.subtract(nearest_second).length_squared()
+        if first_squared < best_squared {
+            first_point = vertex_first
+            second_point = nearest_second
+            best_squared = first_squared
+        }
+
+        let vertex_second = box_vertex(second, second_transform, vertex_index)
+        let nearest_first = box_closest_point(first, first_transform, vertex_second)
+        let second_squared = nearest_first.subtract(vertex_second).length_squared()
+        if second_squared < best_squared {
+            first_point = nearest_first
+            second_point = vertex_second
+            best_squared = second_squared
+        }
+        vertex_index++
+    }
+
+    var first_edge = 0
+    while first_edge < 12 {
+        let edge_first = box_edge(first, first_transform, first_edge)
+        var second_edge = 0
+        while second_edge < 12 {
+            let edge_second = box_edge(second, second_transform, second_edge)
+            let pair = closest_box_segments(edge_first, edge_second)
+            let squared = pair.first.subtract(pair.second).length_squared()
+            if squared < best_squared {
+                first_point = pair.first
+                second_point = pair.second
+                best_squared = squared
+            }
+            second_edge++
+        }
+        first_edge++
+    }
+
+    let separation = Math.sqrt(best_squared)
+    var normal = separating_axis.normal
+    if separation > 0.000001 {
+        normal = second_point.subtract(first_point).divide(separation)
+    }
+    return DistanceResult3D(first_point, second_point, normal, separation)
+}
+
+func box_axis(transform:Transform3D, index:int) Math.Vec3 {
+    if index == 0 { return transform.vector(Math.Vec3.right()) }
+    if index == 1 { return transform.vector(Math.Vec3.up()) }
+    return transform.vector(Math.Vec3(0.0, 0.0, 1.0))
+}
+
+func box_projection(box:Box3D, transform:Transform3D, axis:Math.Vec3) float {
+    let half = box.half_size()
+    return half.x * Math.abs(axis.dot(box_axis(transform, 0))) +
+        half.y * Math.abs(axis.dot(box_axis(transform, 1))) +
+        half.z * Math.abs(axis.dot(box_axis(transform, 2)))
+}
+
+func box_support(box:Box3D, transform:Transform3D, axis:Math.Vec3) Math.Vec3 {
+    let half = box.half_size()
+    return transform.point(Math.Vec3(
+        half.x * signed_geometry3d_axis(axis.dot(box_axis(transform, 0))),
+        half.y * signed_geometry3d_axis(axis.dot(box_axis(transform, 1))),
+        half.z * signed_geometry3d_axis(axis.dot(box_axis(transform, 2)))
+    ))
+}
+
+func box_closest_point(
+    box:Box3D,
+    transform:Transform3D,
+    point:Math.Vec3
+) Math.Vec3 {
+    let half = box.half_size()
+    return transform.point(transform.inverse_point(point).clamped(half.negated(), half))
+}
+
+func box_vertex(box:Box3D, transform:Transform3D, index:int) Math.Vec3 {
+    let half = box.half_size()
+    return transform.point(Math.Vec3(
+        half.x * box_vertex_sign(index % 2),
+        half.y * box_vertex_sign((index / 2) % 2),
+        half.z * box_vertex_sign((index / 4) % 2)
+    ))
+}
+
+func box_vertex_sign(bit:int) float {
+    if bit == 0 { return -1.0 }
+    return 1.0
+}
+
+func box_edge(box:Box3D, transform:Transform3D, index:int) BoxSegment3D {
+    let half = box.half_size()
+    let axis = index / 4
+    let side = index % 4
+    let first_sign = box_vertex_sign(side % 2)
+    let second_sign = box_vertex_sign((side / 2) % 2)
+    if axis == 0 {
+        return BoxSegment3D(
+            transform.point(Math.Vec3(-half.x, first_sign * half.y, second_sign * half.z)),
+            transform.point(Math.Vec3(half.x, first_sign * half.y, second_sign * half.z))
+        )
+    }
+    if axis == 1 {
+        return BoxSegment3D(
+            transform.point(Math.Vec3(first_sign * half.x, -half.y, second_sign * half.z)),
+            transform.point(Math.Vec3(first_sign * half.x, half.y, second_sign * half.z))
+        )
+    }
+    return BoxSegment3D(
+        transform.point(Math.Vec3(first_sign * half.x, second_sign * half.y, -half.z)),
+        transform.point(Math.Vec3(first_sign * half.x, second_sign * half.y, half.z))
+    )
+}
+
+func closest_box_segments(first:BoxSegment3D, second:BoxSegment3D) BoxSegmentPair3D {
+    let first_direction = first.second.subtract(first.first)
+    let second_direction = second.second.subtract(second.first)
+    let offset = first.first.subtract(second.first)
+    let a = first_direction.dot(first_direction)
+    let b = first_direction.dot(second_direction)
+    let c = second_direction.dot(second_direction)
+    let d = first_direction.dot(offset)
+    let e = second_direction.dot(offset)
+    let denominator = a * c - b * b
+    var first_fraction = 0.0
+    if denominator > 0.000000000001 {
+        first_fraction = Math.clamp((b * e - c * d) / denominator, 0.0, 1.0)
+    }
+    var second_fraction = (b * first_fraction + e) / c
+    if second_fraction < 0.0 {
+        second_fraction = 0.0
+        first_fraction = Math.clamp(-d / a, 0.0, 1.0)
+    } else if second_fraction > 1.0 {
+        second_fraction = 1.0
+        first_fraction = Math.clamp((b - d) / a, 0.0, 1.0)
+    }
+    return BoxSegmentPair3D(
+        first.first.add(first_direction.multiply(first_fraction)),
+        second.first.add(second_direction.multiply(second_fraction))
+    )
+}
