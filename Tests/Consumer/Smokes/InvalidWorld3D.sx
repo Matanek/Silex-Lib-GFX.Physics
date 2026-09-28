@@ -46,8 +46,12 @@ func main() {
     if selected("restitution") {
         world.create_rigid_body(Physics.RigidBody3DSettings() ..restitution = 1.1)
     }
+    if selected("sleep-threshold") {
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..sleep_threshold = -0.1)
+    }
     var body = world.create_rigid_body()
     if selected("material-mutation") { body.set_material(-1.0, 0.0) }
+    if selected("sleep-mutation") { body.set_sleep_threshold(-0.1) }
     if selected("delta") { world.step(-0.1) }
     if selected("impulse") { body.apply_impulse(Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0)) }
     if selected("stale") {

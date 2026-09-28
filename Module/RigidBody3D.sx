@@ -42,6 +42,8 @@ public struct RigidBody3DSettings {
     var friction:float
     var restitution:float
     var is_enabled:bool
+    var allow_sleep:bool
+    var sleep_threshold:float
 
     init() {
         self.body_type = BodyType3D.dynamic
@@ -57,6 +59,8 @@ public struct RigidBody3DSettings {
         self.friction = 0.6
         self.restitution = 0.0
         self.is_enabled = true
+        self.allow_sleep = true
+        self.sleep_threshold = 0.05
     }
 }
 
@@ -86,6 +90,10 @@ package class BodyState3D {
     var friction:float
     var restitution:float
     var is_enabled:bool
+    var allow_sleep:bool
+    var sleep_threshold:float
+    var awake:bool
+    var sleep_time:float
     var target:Transform3D?
     var target_remaining:float
 
@@ -95,9 +103,10 @@ package class BodyState3D {
             !finite_body3d_value(settings.density) || settings.density <= 0.0 ||
             !finite_body3d_value(settings.gravity_scale) ||
             !finite_body3d_value(settings.linear_damping) || settings.linear_damping < 0.0 ||
-            !finite_body3d_value(settings.angular_damping) || settings.angular_damping < 0.0
+            !finite_body3d_value(settings.angular_damping) || settings.angular_damping < 0.0 ||
+            !finite_body3d_value(settings.sleep_threshold) || settings.sleep_threshold < 0.0
         {
-            panic("GFX.Physics.RigidBody3DSettings requires finite motion, density and damping")
+            panic("GFX.Physics.RigidBody3DSettings requires finite motion, density, damping and sleep threshold")
         }
         validate_material3d(settings.friction, settings.restitution)
         if settings.body_type == BodyType3D.fixed &&
@@ -138,12 +147,23 @@ package class BodyState3D {
         self.friction = settings.friction
         self.restitution = settings.restitution
         self.is_enabled = settings.is_enabled
+        self.allow_sleep = settings.allow_sleep
+        self.sleep_threshold = settings.sleep_threshold
+        self.awake = settings.is_enabled && settings.body_type == BodyType3D.dynamic
+        self.sleep_time = 0.0
         self.target = null
         self.target_remaining = 0.0
     }
 
     func world_center() Math.Vec3 {
         return self.transform.point(self.mass_properties.local_center)
+    }
+
+    func wake() {
+        if self.body_type == BodyType3D.dynamic && self.is_enabled {
+            self.awake = true
+            self.sleep_time = 0.0
+        }
     }
 
     func inverse_inertia_times(world_vector:Math.Vec3) Math.Vec3 {
@@ -210,6 +230,12 @@ package class BodyStore3D {
         self.free_slots.append(id.slot)
         self.live_count--
     }
+
+    func wake_all() {
+        for slot in self.slots {
+            if var state = slot { state.wake() }
+        }
+    }
 }
 
 public class RigidBody3D {
@@ -240,6 +266,31 @@ public class RigidBody3D {
     func is_enabled() bool { return self.store.require(self.id).is_enabled }
     func friction() float { return self.store.require(self.id).friction }
     func restitution() float { return self.store.require(self.id).restitution }
+    func is_awake() bool { return self.store.require(self.id).awake }
+    func is_sleep_enabled() bool { return self.store.require(self.id).allow_sleep }
+    func sleep_threshold() float { return self.store.require(self.id).sleep_threshold }
+
+    func wake_up() {
+        self.store.require_mutable()
+        self.store.require(self.id).wake()
+    }
+
+    func set_sleep_enabled(enabled:bool) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.allow_sleep = enabled
+        if !enabled { state.wake() }
+    }
+
+    func set_sleep_threshold(threshold:float) {
+        if !finite_body3d_value(threshold) || threshold < 0.0 {
+            panic("GFX.Physics.RigidBody3D sleep threshold must be finite and non-negative")
+        }
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.sleep_threshold = threshold
+        state.wake()
+    }
 
     func set_material(friction:float, restitution:float) {
         validate_material3d(friction, restitution)
@@ -247,12 +298,15 @@ public class RigidBody3D {
         var state = self.store.require(self.id)
         state.friction = friction
         state.restitution = restitution
+        self.store.wake_all()
     }
 
     func set_enabled(enabled:bool) {
         self.store.require_mutable()
         var state = self.store.require(self.id)
         state.is_enabled = enabled
+        self.store.wake_all()
+        if !enabled { state.awake = false }
     }
 
     func set_transform(transform:Transform3D) {
@@ -261,6 +315,7 @@ public class RigidBody3D {
         state.transform = Transform3D(transform.position, transform.rotation)
         state.target = null
         state.target_remaining = 0.0
+        self.store.wake_all()
     }
 
     func set_linear_velocity(velocity:Math.Vec3) {
@@ -270,6 +325,7 @@ public class RigidBody3D {
         if state.body_type == BodyType3D.fixed { panic("GFX.Physics.RigidBody3D fixed body cannot move") }
         state.linear_velocity = velocity
         state.target = null
+        state.wake()
     }
 
     func set_angular_velocity(velocity:Math.Vec3) {
@@ -279,6 +335,7 @@ public class RigidBody3D {
         if state.body_type == BodyType3D.fixed { panic("GFX.Physics.RigidBody3D fixed body cannot rotate") }
         state.angular_velocity = velocity
         state.target = null
+        state.wake()
     }
 
     func set_mass_properties(properties:MassProperties3D) {
@@ -299,6 +356,7 @@ public class RigidBody3D {
         state.linear_velocity = state.linear_velocity.add(
             state.angular_velocity.cross(state.world_center().subtract(previous_center))
         )
+        state.wake()
     }
 
     private func dynamic_state() BodyState3D {
@@ -307,6 +365,7 @@ public class RigidBody3D {
         if state.body_type != BodyType3D.dynamic {
             panic("GFX.Physics.RigidBody3D force and impulse require a dynamic body")
         }
+        state.wake()
         return state
     }
 
@@ -377,6 +436,7 @@ public class RigidBody3D {
         state.angular_velocity = angular_velocity
         state.target = selected
         state.target_remaining = duration
+        self.store.wake_all()
     }
 }
 

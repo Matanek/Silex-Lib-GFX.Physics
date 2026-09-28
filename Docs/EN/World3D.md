@@ -51,6 +51,27 @@ the target exactly when a step covers the end of the duration.
 `set_enabled`, and `set_mass_properties` support direct changes. Only a
 dynamic body accepts a mass override.
 
+## Sleeping and waking
+
+Dynamic bodies allow sleep by default. Their `sleep_threshold` is 0.05 for
+linear and angular speed, and must be finite and non-negative. Use
+`allow_sleep`, `set_sleep_enabled`, `set_sleep_threshold`, `is_awake`, and
+`wake_up` to control this behavior. Fixed and kinematic bodies are not
+reported as awake. A free body can sleep without gravity; under gravity, a
+dynamic island needs contact with a fixed or kinematic body before it can
+sleep. All bodies in an island must remain below their thresholds together
+for 0.5 seconds of fixed steps. Their velocities then become zero and their
+poses stop drifting.
+
+A velocity, force, torque, impulse, mass, pose, or material command wakes the
+affected body; changing a support can wake other bodies in the world. A new
+collision and support removal also wake affected bodies. Waking one member
+propagates through contacts on the next step. `step(0)` changes neither sleep
+nor the latest contacts. Contacts between sleeping bodies remain observable,
+with zero impulse applied during the inactive step.
+
+## Gravity and integration
+
 Default gravity is `(0, -9.81, 0)`. `gravity_scale` is set per body at
 creation; linear and angular damping default to zero. Forces and torques
 accumulate until the next positive step, then clear. A zero step moves no
@@ -101,6 +122,6 @@ handle fails explicitly. A world refuses to destroy another world's body.
 `write_bodies` fills a caller-owned array with live bodies without promising
 creation order.
 
-The world does not yet provide sleeping, constraints, spatial
+The world does not yet provide constraints, spatial
 queries, or CCD. [Standalone geometry queries](Geometry3D.md) remain
 available for individual shapes.

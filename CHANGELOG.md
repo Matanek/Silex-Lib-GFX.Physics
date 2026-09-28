@@ -21,7 +21,10 @@ first in `CHANGELOG.fr.md`.
 - Nearly parallel box faces use multiple contact points, a solver shared by
   pairs, and impulses carried between steps. `Contact3D.write_points` exposes
   points and their impulses. A small stack remains stable at the tested fixed
-  step; sleeping and CCD remain to be delivered.
+  step; CCD remains to be delivered.
+- Added sleeping for dynamic bodies and contact islands, with wakeup from
+  commands, collisions, or support changes. Sleep timing and command wakeup
+  are compared with pinned Jolt in Debug and Release.
 - Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
 
 ## [0.7.0] - 2026-09-24

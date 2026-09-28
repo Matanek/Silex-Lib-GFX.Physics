@@ -21,7 +21,10 @@ puis traduits dans `CHANGELOG.md`.
 - Les appuis boîte/boîte presque parallèles disposent de plusieurs points de
   contact, d'un solveur commun aux paires et d'impulsions reprises entre deux
   pas. `Contact3D.write_points` expose les points et leurs impulsions. Un petit
-  empilement reste stable au pas fixe testé ; sommeil et CCD restent à livrer.
+  empilement reste stable au pas fixe testé ; le CCD reste à livrer.
+- Ajout du sommeil des corps dynamiques et de leurs îlots de contact, avec
+  réveil par commande, collision ou changement de support. Le délai de repos
+  et le réveil sont comparés à Jolt épinglé en Debug et Release.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

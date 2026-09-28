@@ -54,6 +54,28 @@ la durée. `set_transform`, `set_linear_velocity`,
 changements directs. La masse ne peut être remplacée que sur un corps
 dynamique.
 
+## Sommeil et réveil
+
+Un corps dynamique autorise le sommeil par défaut. Son
+`sleep_threshold` vaut 0,05 pour les vitesses linéaire et angulaire ; il
+doit être fini et positif ou nul. `allow_sleep`, `set_sleep_enabled`,
+`set_sleep_threshold`, `is_awake` et `wake_up` pilotent ce contrat. Un corps
+fixe ou cinématique n'est pas déclaré éveillé. Un corps libre sans gravité
+peut dormir ; sous gravité, un îlot dynamique doit rester au contact d'un
+corps fixe ou cinématique pour s'endormir. Tous les corps d'un même îlot
+atteignent ensemble un repos de 0,5 seconde au pas fixe avant de dormir.
+Leurs vitesses deviennent alors nulles et leur pose cesse de dériver.
+
+Une commande de vitesse, force, couple, impulsion, masse, pose ou matériau
+réveille le corps concerné ; une modification de support peut réveiller les
+autres corps du monde. Une collision nouvelle et le retrait d'un support
+réveillent les corps concernés. Lorsqu'un corps d'un îlot est réveillé, le
+réveil se propage par contact au pas suivant. `step(0)` ne modifie ni le
+sommeil ni les derniers contacts. Les contacts entre corps endormis restent
+observables, avec une impulsion appliquée nulle pendant le pas inactif.
+
+## Gravité et intégration
+
 La gravité par défaut vaut `(0, -9.81, 0)`. `gravity_scale` est fixé par
 corps à la création ; l'amortissement linéaire et angulaire est nul par
 défaut. Les forces et couples s'accumulent jusqu'au prochain pas positif,
@@ -109,6 +131,6 @@ les handles conservés, sans que ceux-ci maintiennent le monde vivant.
 `write_bodies` remplit un tableau fourni par le consommateur avec les corps
 vivants, sans promettre un ordre de création.
 
-Le monde ne fournit pas encore de sommeil, contraintes, requêtes
+Le monde ne fournit pas encore de contraintes, requêtes
 spatiales ni CCD. Les [requêtes géométriques autonomes](Geometry3D.md)
 restent disponibles pour les formes isolées.

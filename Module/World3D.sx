@@ -44,6 +44,7 @@ public class World3D {
         }
         self.store.require_mutable()
         self.current_gravity = gravity
+        self.store.wake_all()
     }
 
     func body_count() int { return self.store.live_count }
@@ -63,6 +64,14 @@ public class World3D {
         self.store.require_mutable()
         if !body.belongs_to(self.store) {
             panic("GFX.Physics.World3D cannot destroy a body owned by another world")
+        }
+        for contact in self.contacts {
+            if contact.first_body().same_body(body) {
+                self.store.require(contact.second_body().body_id()).wake()
+            }
+            if contact.second_body().same_body(body) {
+                self.store.require(contact.first_body().body_id()).wake()
+            }
         }
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
@@ -104,7 +113,11 @@ public class World3D {
                     match state.body_type {
                         fixed => {}
                         kinematic => { integrate_kinematic3d(state, delta) }
-                        dynamic => { integrate_dynamic3d(state, self.current_gravity, delta) }
+                        dynamic => {
+                            if state.awake {
+                                integrate_dynamic3d(state, self.current_gravity, delta)
+                            }
+                        }
                     }
                 }
                 state.force = Math.Vec3()
@@ -113,6 +126,7 @@ public class World3D {
             slot++
         }
         self.detect_and_resolve_contacts()
+        self.update_sleep(delta)
         self.store.locked = false
     }
 
@@ -163,11 +177,36 @@ public class World3D {
                                     let second_id = BodyId3D(
                                         second_slot, self.store.generations[second_slot]
                                     )
+                                    var had_previous = false
+                                    for previous in previous_contacts {
+                                        if previous.first_body().same_body(
+                                            RigidBody3D(self.store, first_id)
+                                        ) && previous.second_body().same_body(
+                                            RigidBody3D(self.store, second_id)
+                                        ) {
+                                            had_previous = true
+                                        }
+                                    }
+                                    if !had_previous ||
+                                        (first.body_type == BodyType3D.kinematic &&
+                                            (first.linear_velocity.length_squared() > 0.0 ||
+                                                first.angular_velocity.length_squared() > 0.0)) ||
+                                        (second.body_type == BodyType3D.kinematic &&
+                                            (second.linear_velocity.length_squared() > 0.0 ||
+                                                second.angular_velocity.length_squared() > 0.0))
+                                    {
+                                        first.wake()
+                                        second.wake()
+                                    } else {
+                                        if first.awake && !second.awake { second.wake() }
+                                        if second.awake && !first.awake { first.wake() }
+                                    }
+                                    let active = first.awake || second.awake
                                     pairs.append(ContactPairState3D(
                                         first, second,
                                         first_id, second_id,
                                         normal, distance.separation, point,
-                                        friction, restitution, constraints
+                                        friction, restitution, constraints, active
                                     ))
                                 }
                             }
@@ -179,6 +218,7 @@ public class World3D {
             first_slot++
         }
         for var pair in pairs {
+            if !pair.active { continue }
             for previous in previous_contacts {
                 if previous.first_body().same_body(
                     RigidBody3D(self.store, pair.first_id)
@@ -201,6 +241,10 @@ public class World3D {
                     selected_pair = pairs.count() - 1 - pair_index
                 }
                 var pair = pairs[selected_pair]
+                if !pair.active {
+                    pair_index++
+                    continue
+                }
                 var point_index = 0
                 while point_index < pair.constraints.count() {
                     var selected_point = point_index
@@ -229,9 +273,11 @@ public class World3D {
                     constraint.tangent_impulse
                 ))
             }
-            correct_contact3d(
-                pair.first, pair.second, pair.normal, pair.separation
-            )
+            if pair.active {
+                correct_contact3d(
+                    pair.first, pair.second, pair.normal, pair.separation
+                )
+            }
             self.contacts.append(Contact3D(
                 RigidBody3D(self.store, pair.first_id),
                 RigidBody3D(self.store, pair.second_id),
@@ -241,6 +287,110 @@ public class World3D {
             ))
         }
     }
+
+    private func update_sleep(delta:float) {
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if var state = self.store.slots[slot] {
+                if state.body_type == BodyType3D.dynamic && state.is_enabled && state.awake {
+                    if state.allow_sleep &&
+                        state.linear_velocity.length() <= state.sleep_threshold &&
+                        state.angular_velocity.length() <= state.sleep_threshold
+                    {
+                        state.sleep_time += delta
+                    } else {
+                        state.sleep_time = 0.0
+                    }
+                }
+            }
+            slot++
+        }
+        var handled:int[] = []
+        slot = 0
+        while slot < self.store.slots.count() {
+            if var state = self.store.slots[slot] {
+                if state.body_type == BodyType3D.dynamic && state.is_enabled &&
+                    state.awake && !contains_contact_slot3d(handled, slot)
+                {
+                    var members:int[] = [slot]
+                    var index = 0
+                    while index < members.count() {
+                        let current = members[index]
+                        for contact in self.contacts {
+                            let first_id = contact.first_body().body_id()
+                            let second_id = contact.second_body().body_id()
+                            var neighbor = -1
+                            if first_id.slot == current { neighbor = second_id.slot }
+                            if second_id.slot == current { neighbor = first_id.slot }
+                            if neighbor >= 0 &&
+                                !contains_contact_slot3d(members, neighbor)
+                            {
+                                if var connected = self.store.slots[neighbor] {
+                                    if connected.body_type == BodyType3D.dynamic &&
+                                        connected.is_enabled && connected.awake
+                                    {
+                                        members.append(neighbor)
+                                    }
+                                }
+                            }
+                        }
+                        index++
+                    }
+                    var ready = true
+                    var gravity_free = true
+                    var supported = false
+                    for member in members {
+                        handled.append(member)
+                        if var connected = self.store.slots[member] {
+                            if !connected.allow_sleep || connected.sleep_time < 0.5 {
+                                ready = false
+                            }
+                            if self.current_gravity.multiply(
+                                connected.gravity_scale
+                            ).length_squared() > 0.0 {
+                                gravity_free = false
+                            }
+                        }
+                        for contact in self.contacts {
+                            let first_id = contact.first_body().body_id()
+                            let second_id = contact.second_body().body_id()
+                            var other = -1
+                            if first_id.slot == member { other = second_id.slot }
+                            if second_id.slot == member { other = first_id.slot }
+                            if other >= 0 {
+                                if var support = self.store.slots[other] {
+                                    if support.body_type != BodyType3D.dynamic {
+                                        supported = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !supported && !gravity_free {
+                        for member in members {
+                            if var connected = self.store.slots[member] {
+                                connected.sleep_time = 0.0
+                            }
+                        }
+                    } else if ready {
+                        for member in members {
+                            if var connected = self.store.slots[member] {
+                                connected.awake = false
+                                connected.linear_velocity = Math.Vec3()
+                                connected.angular_velocity = Math.Vec3()
+                            }
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+    }
+}
+
+func contains_contact_slot3d(slots:int[], selected:int) bool {
+    for slot in slots { if slot == selected { return true } }
+    return false
 }
 
 func warm_contact_points3d(
@@ -292,13 +442,14 @@ class ContactPairState3D {
     let friction:float
     let restitution:float
     var constraints:ContactPointState3D[]
+    let active:bool
 
     init(
         first:BodyState3D, second:BodyState3D,
         first_id:BodyId3D, second_id:BodyId3D,
         normal:Math.Vec3, separation:float, point:Math.Vec3,
         friction:float, restitution:float,
-        constraints:ContactPointState3D[]
+        constraints:ContactPointState3D[], active:bool
     ) {
         self.first = first
         self.second = second
@@ -310,6 +461,7 @@ class ContactPairState3D {
         self.friction = friction
         self.restitution = restitution
         self.constraints = constraints
+        self.active = active
     }
 }
 
