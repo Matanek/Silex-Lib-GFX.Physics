@@ -26,6 +26,9 @@ public class World3D {
     private var store:BodyStore3D
     private var current_gravity:Math.Vec3
     private var contacts:Contact3D[]
+    private var contact_begins:Contact3D[]
+    private var contact_ends:Contact3D[]
+    private var pending_contact_ends:Contact3D[]
 
     drop { self.store.invalidate_all() }
 
@@ -36,6 +39,9 @@ public class World3D {
         self.store = BodyStore3D()
         self.current_gravity = settings.gravity
         self.contacts = []
+        self.contact_begins = []
+        self.contact_ends = []
+        self.pending_contact_ends = []
     }
 
     func gravity() Math.Vec3 { return self.current_gravity }
@@ -57,6 +63,16 @@ public class World3D {
         for contact in self.contacts { output.append(contact) }
     }
 
+    func write_contact_begin_events(output:&Contact3D[]) {
+        output.clear()
+        for contact in self.contact_begins { output.append(contact) }
+    }
+
+    func write_contact_end_events(output:&Contact3D[]) {
+        output.clear()
+        for contact in self.contact_ends { output.append(contact) }
+    }
+
     func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
         let id = self.store.append(settings)
         return RigidBody3D(self.store, id)
@@ -70,9 +86,11 @@ public class World3D {
         for contact in self.contacts {
             if contact.first_body().same_body(body) {
                 self.store.require(contact.second_body().body_id()).wake()
+                self.pending_contact_ends.append(contact)
             }
             if contact.second_body().same_body(body) {
                 self.store.require(contact.first_body().body_id()).wake()
+                self.pending_contact_ends.append(contact)
             }
         }
         self.store.destroy(body.body_id())
@@ -136,6 +154,12 @@ public class World3D {
         var previous_contacts:Contact3D[] = []
         for contact in self.contacts { previous_contacts.append(contact) }
         self.contacts.clear()
+        self.contact_begins.clear()
+        self.contact_ends.clear()
+        for contact in self.pending_contact_ends {
+            self.contact_ends.append(contact)
+        }
+        self.pending_contact_ends.clear()
         var pairs:ContactPairState3D[] = []
         var first_slot = 0
         while first_slot < self.store.slots.count() {
@@ -303,6 +327,24 @@ public class World3D {
                 pair.first_child_id, pair.second_child_id
             ))
         }
+        for contact in self.contacts {
+            var was_present = false
+            for previous in previous_contacts {
+                if same_contact_identity3d(previous, contact) {
+                    was_present = true
+                }
+            }
+            if !was_present { self.contact_begins.append(contact) }
+        }
+        for previous in previous_contacts {
+            var is_present = false
+            for contact in self.contacts {
+                if same_contact_identity3d(previous, contact) {
+                    is_present = true
+                }
+            }
+            if !is_present { self.contact_ends.append(previous) }
+        }
     }
 
     private func update_sleep(delta:float) {
@@ -403,6 +445,13 @@ public class World3D {
             slot++
         }
     }
+}
+
+func same_contact_identity3d(first:Contact3D, second:Contact3D) bool {
+    return first.first_body().same_body(second.first_body()) &&
+        first.second_body().same_body(second.second_body()) &&
+        first.first_child_id() == second.first_child_id() &&
+        first.second_child_id() == second.second_child_id()
 }
 
 func contains_contact_slot3d(slots:int[], selected:int) bool {

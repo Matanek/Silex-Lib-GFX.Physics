@@ -6,6 +6,9 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added 3D contact begin and end events read after a step as stable
+  `Contact3D` snapshots. Destruction queues an end for the next step;
+  recycled bodies and child IDs remain distinct.
 - Added immutable `Compound3D` to assemble spheres, boxes, and capsules on a
   fixed body. Distances, overlaps, rays, and contacts report the selected
   child ID. Dynamic compounds remain to be delivered.

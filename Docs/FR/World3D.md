@@ -131,6 +131,26 @@ détruire un corps retire les contacts courants qui le citent. Un snapshot
 conservé garde ses mesures, mais ses handles deviennent invalides avec leurs
 corps ou leur monde.
 
+## Début et fin des contacts
+
+Après chaque pas positif, `write_contact_begin_events(output)` et
+`write_contact_end_events(output)` copient des snapshots `Contact3D` dans des
+tableaux fournis par le consommateur. Le début est émis une fois pour une
+nouvelle paire de corps et sous-formes ; la persistance n'émet ni nouveau
+début ni fin. La fin est émise au premier pas positif où la paire disparaît.
+Une paire qui change d'enfant dans un composé produit une fin pour l'ancien
+ID et un début pour le nouveau.
+
+La destruction retire immédiatement le contact courant et programme sa fin
+pour le prochain pas positif ; la désactivation ou l'éloignement sont constatés
+à ce pas. `step(0)` conserve les événements du dernier pas et les fins encore
+en attente. Les snapshots copiés gardent point, normale, séparation et ID
+d'enfant après les pas suivants. Leurs handles permettent toujours
+`is_valid()` et `same_body()` ; les lectures d'état d'un corps détruit restent
+invalides. Le recyclage d'un emplacement ne confond pas l'ancien et le nouveau
+corps. Un corps endormi peut garder un contact et n'émet pas de fin pour le
+seul motif du sommeil.
+
 ## Propriété et durée de vie
 
 Chaque monde possède son stockage et ses corps. `RigidBody3D` est un handle

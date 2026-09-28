@@ -123,6 +123,24 @@ CCD or static friction guarantee.
 contacts that refer to it. A retained snapshot keeps its measurements, but
 its handles become invalid with their bodies or world.
 
+## Contact begin and end
+
+After each positive step, `write_contact_begin_events(output)` and
+`write_contact_end_events(output)` copy `Contact3D` snapshots into caller
+arrays. A begin occurs once for a new body and subshape pair; persistence
+produces neither a begin nor an end. An end occurs on the first positive step
+where the pair is absent. Moving from one compound child to another ends the
+old child ID and begins the new one.
+
+Destroying a body removes its current contact immediately and queues an end
+for the next positive step. Disabling or moving a body apart is observed at
+that step. `step(0)` retains the previous step's events and any pending ends.
+Copied snapshots retain their point, normal, separation, and child IDs across
+later steps. Their handles still support `is_valid()` and `same_body()`;
+reading the state of a destroyed body remains invalid. Reusing a slot cannot
+confuse the old body with the new one. A sleeping body may retain its contact
+and does not emit an end solely because it sleeps.
+
 ## Ownership and lifetime
 
 Each world owns its storage and bodies. `RigidBody3D` is a typed handle with

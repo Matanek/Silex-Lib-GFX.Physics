@@ -1,0 +1,117 @@
+use GFX.Physics
+use STD.Math
+
+func quiet_world() Physics.World3D {
+    return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+}
+
+test "entry persists then exits at positive step boundaries" {
+    var world = quiet_world()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 0)
+    assert(begins[0].first_body().same_body(fixed))
+    world.step(0.0)
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1)
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 0 && ends.count() == 0)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(4.0, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 0 && ends.count() == 1)
+    assert(ends[0].first_body().same_body(fixed))
+    assert(ends[0].separation() <= 0.000001)
+    world.step(1.0 / 60.0)
+    world.write_contact_end_events(ends)
+    assert(ends.count() == 0)
+}
+
+test "destroyed and recycled support keeps an old end and a new begin" {
+    var world = quiet_world()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1)
+    world.destroy_rigid_body(support)
+    assert(world.contact_count() == 0)
+    var replacement = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 1)
+    assert(ends[0].first_body().same_body(support))
+    assert(!ends[0].first_body().is_valid())
+    assert(begins[0].first_body().same_body(replacement))
+    assert(!begins[0].first_body().same_body(ends[0].first_body()))
+    var old_end = ends[0]
+    world.step(1.0 / 60.0)
+    world.write_contact_end_events(ends)
+    assert(ends.count() == 0)
+    assert(old_end.first_body().same_body(support))
+    assert(!old_end.first_body().is_valid())
+}
+
+test "switching compound children ends one identity and begins another" {
+    var compound = Physics.Compound3D([
+        Physics.CompoundChild3D(11,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(22,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    ])
+    var world = quiet_world()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(compound))
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(2.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && begins[0].first_child_id() == 22)
+    assert(ends.count() == 1 && ends[0].first_child_id() == 11)
+}
+
+test "disabling and re-enabling a support yields one end and new begin" {
+    var world = quiet_world()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    support.set_enabled(false)
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 0 && ends.count() == 1)
+    support.set_enabled(true)
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 0)
+}

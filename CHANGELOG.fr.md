@@ -6,6 +6,9 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout des événements de début et de fin de contact 3D, lus après un pas via
+  des snapshots `Contact3D` stables. La destruction programme la fin au pas
+  suivant ; le recyclage et les ID d'enfants restent distincts.
 - Ajout de `Compound3D` immuable pour assembler des sphères, boîtes et capsules
   sous un corps fixe. Les distances, recouvrements, rayons et contacts donnent
   l'identifiant de l'enfant retenu. Le composé dynamique reste à livrer.
