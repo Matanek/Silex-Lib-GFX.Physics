@@ -12,10 +12,14 @@ test "construct the first 3D shapes as finite values" {
     match sphere_shape {
         sphere(value) => { assert(value.radius == 2.0) }
         box(_) => { assert(false) }
+        capsule(_) => { assert(false) }
+        compound(_) => { assert(false) }
     }
     match box_shape {
         sphere(_) => { assert(false) }
         box(value) => { assert(value.size.x == 2.0) }
+        capsule(_) => { assert(false) }
+        compound(_) => { assert(false) }
     }
 }
 
