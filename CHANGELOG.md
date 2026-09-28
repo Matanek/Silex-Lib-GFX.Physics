@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added `PointConstraint3D` with two coincident local anchors and free
+  rotation, reaction force, runtime changes, and safe lifetime. It shares
+  contacts and sleep islands; a support and off-center pendulum are compared
+  with pinned Jolt in Debug and Release.
 - Added `DistanceConstraint3D` with local anchors between two bodies, a fixed
   length or rigid range, reaction force, runtime changes, and safe handle
   invalidation. It shares contact iterations and sleeping islands; the

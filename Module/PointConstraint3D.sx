@@ -1,0 +1,208 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use STD.Math
+
+public struct PointConstraint3DSettings {
+    var first_local_anchor:Math.Vec3
+    var second_local_anchor:Math.Vec3
+    var is_enabled:bool
+
+    init() {
+        self.first_local_anchor = Math.Vec3()
+        self.second_local_anchor = Math.Vec3()
+        self.is_enabled = true
+    }
+}
+
+package struct PointConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class PointConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    var first_local_anchor:Math.Vec3
+    var second_local_anchor:Math.Vec3
+    var is_enabled:bool
+    var impulse:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:PointConstraint3DSettings) {
+        validate_point_anchors3d(settings.first_local_anchor, settings.second_local_anchor)
+        self.first_id = first_id
+        self.second_id = second_id
+        self.first_local_anchor = settings.first_local_anchor
+        self.second_local_anchor = settings.second_local_anchor
+        self.is_enabled = settings.is_enabled
+    }
+}
+
+package class PointConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:PointConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:RigidBody3D, second:RigidBody3D,
+        settings:PointConstraint3DSettings) PointConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.PointConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.PointConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.PointConstraint3D requires a dynamic body")
+        }
+        var state = PointConstraintState3D(first.body_id(), second.body_id(), settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return PointConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:PointConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:PointConstraintId3D) PointConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.PointConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:PointConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_point_body_id3d(state.first_id, body_id) ||
+                    same_point_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_point_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class PointConstraint3D {
+    private var store:PointConstraintStore3D
+    private let id:PointConstraintId3D
+
+    package init(store:PointConstraintStore3D, id:PointConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:PointConstraintStore3D) bool {
+        return self.store == store
+    }
+    package func constraint_id() PointConstraintId3D { return self.id }
+    func first_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).first_id)
+    }
+    func second_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).second_id)
+    }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func first_local_anchor() Math.Vec3 {
+        return self.store.require(self.id).first_local_anchor
+    }
+    func second_local_anchor() Math.Vec3 {
+        return self.store.require(self.id).second_local_anchor
+    }
+    func anchor_error() Math.Vec3 {
+        var state = self.store.require(self.id)
+        var first = self.store.bodies.require(state.first_id)
+        var second = self.store.bodies.require(state.second_id)
+        return second.transform.point(state.second_local_anchor).subtract(
+            first.transform.point(state.first_local_anchor)
+        )
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.impulse.multiply(state.inverse_delta)
+    }
+    func set_anchors(first:Math.Vec3, second:Math.Vec3) {
+        validate_point_anchors3d(first, second)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.first_local_anchor = first
+        state.second_local_anchor = second
+        state.impulse = Math.Vec3()
+        state.inverse_delta = 0.0
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.is_enabled = enabled
+        state.impulse = Math.Vec3()
+        state.inverse_delta = 0.0
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
+}
+
+package func validate_point_anchors3d(first:Math.Vec3, second:Math.Vec3) {
+    if !finite_body3d_point(first) || !finite_body3d_point(second) {
+        panic("GFX.Physics.PointConstraint3D requires finite local anchors")
+    }
+}
+
+package func same_point_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}

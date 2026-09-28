@@ -97,8 +97,26 @@ and `set_enabled(enabled)` wake both bodies and clear the previous reaction.
 body invalidates its constraints as well. `distance_constraint_count()` counts
 live constraints. A zero step preserves poses and observations.
 
-This first family is rigid. Springs, motors, and other 3D joint families are
-not yet available. Very fast motion may still cross an obstacle because the
+## Connect two bodies at a point
+
+`create_point_constraint(first, second, settings)` makes two local anchors
+coincide in all three directions while leaving body orientations free.
+`PointConstraint3DSettings()` puts both anchors at their local origins by
+default; set `first_local_anchor` and `second_local_anchor` for the intended
+pivot. Anchors must be finite and at least one body must be dynamic. Collisions
+between linked bodies remain active: anchors that force the shapes to overlap
+can put the joint and contact response in opposition.
+
+`anchor_error()` returns the vector from the first world anchor to the second.
+`reaction_force()` reports the force on the second body during the last
+positive step. `set_anchors(first, second)` and `set_enabled(enabled)` wake
+the linked bodies and clear the stored reaction. A zero step preserves these
+observations. `destroy_point_constraint()` and destruction of a linked body
+invalidate the handle; `point_constraint_count()` counts live joints. Point
+joints share steps, contacts, and sleep islands with rigid distance joints.
+
+Both families are rigid. Springs, motors, and other 3D joint families remain
+to be delivered. Very fast motion may still cross an obstacle because the
 world has no CCD.
 
 ## Sleeping and waking
@@ -108,7 +126,7 @@ linear and angular speed, and must be finite and non-negative. Use
 `allow_sleep`, `set_sleep_enabled`, `set_sleep_threshold`, `is_awake`, and
 `wake_up` to control this behavior. Fixed and kinematic bodies are not
 reported as awake. A free body can sleep without gravity; under gravity, a
-dynamic island needs contact or an active distance constraint with a fixed or
+dynamic island needs contact or an active constraint with a fixed or
 kinematic body before it can
 sleep. All bodies in an island must remain below their thresholds together
 for 0.5 seconds of fixed steps. Their velocities then become zero and their
@@ -117,7 +135,7 @@ poses stop drifting.
 A velocity, force, torque, impulse, mass, pose, or material command wakes the
 affected body; changing a support can wake other bodies in the world. A new
 collision and support removal also wake affected bodies. Waking one member
-propagates through contacts or distance constraints on the next step. `step(0)` changes neither sleep
+propagates through contacts, distance constraints, or point constraints on the next step. `step(0)` changes neither sleep
 nor the latest contacts. Contacts between sleeping bodies remain observable,
 with zero impulse applied during the inactive step.
 

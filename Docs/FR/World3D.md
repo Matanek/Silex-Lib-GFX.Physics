@@ -101,9 +101,29 @@ précédente. `destroy_distance_constraint` invalide le handle ; détruire un
 corps lié invalide aussi ses contraintes. `distance_constraint_count()` compte
 les contraintes vivantes. Le pas nul conserve poses et observations.
 
-Cette première famille est rigide : ressorts, moteurs et autres articulations
-ne sont pas encore disponibles en 3D. Un choc très rapide peut encore traverser
-un obstacle, car le monde n'a pas de CCD.
+## Relier deux corps par un point
+
+`create_point_constraint(first, second, settings)` fait coïncider deux
+ancrages locaux dans les trois directions tout en laissant leurs orientations
+libres. `PointConstraint3DSettings()` place par défaut les deux ancrages à
+l'origine locale de chaque corps ; renseigner `first_local_anchor` et
+`second_local_anchor` pour viser un pivot réel. Les ancrages doivent être finis
+et au moins un corps doit être dynamique. Les collisions entre les corps liés
+restent actives : des ancrages qui imposent le chevauchement de leurs formes
+peuvent opposer articulation et contact.
+
+`anchor_error()` donne le vecteur allant du premier ancrage mondial au second.
+`reaction_force()` donne la force exercée sur le second corps pendant le dernier
+pas positif. `set_anchors(first, second)` et `set_enabled(enabled)` réveillent
+les corps liés et effacent la réaction mémorisée. Le pas nul conserve les
+observations. `destroy_point_constraint()` et la destruction d'un corps lié
+invalident le handle ; `point_constraint_count()` compte les articulations
+vivantes. L'articulation participe aux mêmes pas, contacts et îlots de sommeil
+que la distance rigide.
+
+Ces deux familles sont rigides. Ressorts, moteurs et autres articulations
+restent à livrer. Un choc très rapide peut encore traverser un obstacle, car
+le monde n'a pas de CCD.
 
 ## Sommeil et réveil
 
@@ -113,7 +133,7 @@ doit être fini et positif ou nul. `allow_sleep`, `set_sleep_enabled`,
 `set_sleep_threshold`, `is_awake` et `wake_up` pilotent ce contrat. Un corps
 fixe ou cinématique n'est pas déclaré éveillé. Un corps libre sans gravité
 peut dormir ; sous gravité, un îlot dynamique doit rester au contact d'un
-corps fixe ou cinématique, par contact ou contrainte de distance active, pour
+corps fixe ou cinématique, par contact ou contrainte active, pour
 s'endormir. Tous les corps d'un même îlot
 atteignent ensemble un repos de 0,5 seconde au pas fixe avant de dormir.
 Leurs vitesses deviennent alors nulles et leur pose cesse de dériver.
@@ -122,7 +142,7 @@ Une commande de vitesse, force, couple, impulsion, masse, pose ou matériau
 réveille le corps concerné ; une modification de support peut réveiller les
 autres corps du monde. Une collision nouvelle et le retrait d'un support
 réveillent les corps concernés. Lorsqu'un corps d'un îlot est réveillé, le
-réveil se propage par contact ou contrainte de distance au pas suivant. `step(0)` ne modifie ni le
+réveil se propage par contact ou contrainte de distance ou de point au pas suivant. `step(0)` ne modifie ni le
 sommeil ni les derniers contacts. Les contacts entre corps endormis restent
 observables, avec une impulsion appliquée nulle pendant le pas inactif.
 

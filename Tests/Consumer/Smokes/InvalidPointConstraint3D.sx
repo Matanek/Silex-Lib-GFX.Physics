@@ -1,0 +1,52 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func main() {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    if selected("anchor") {
+        var settings = Physics.PointConstraint3DSettings()
+        settings.first_local_anchor = Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0)
+        world.create_point_constraint(fixed, body, settings)
+    }
+    if selected("same") {
+        world.create_point_constraint(body, body)
+    }
+    if selected("fixed-fixed") {
+        var another = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed)
+        world.create_point_constraint(fixed, another)
+    }
+    if selected("foreign") {
+        var other = Physics.World3D()
+        var outside = other.create_rigid_body()
+        world.create_point_constraint(fixed, outside)
+    }
+    var joint = world.create_point_constraint(fixed, body)
+    if selected("mutation") {
+        joint.set_anchors(Math.Vec3(), Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0))
+    }
+    if selected("stale") {
+        world.destroy_point_constraint(joint)
+        world.create_point_constraint(fixed, body)
+        joint.anchor_error()
+    }
+    if selected("foreign-destroy") {
+        var other = Physics.World3D()
+        other.destroy_point_constraint(joint)
+    }
+    panic("invalid point constraint operation was accepted")
+}

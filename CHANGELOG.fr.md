@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `PointConstraint3D` : deux ancrages locaux coïncidents avec rotation
+  libre, réaction, mutation et durée de vie sûre. L'articulation partage les
+  contacts et le sommeil ; un appui et un pendule excentré sont comparés à Jolt
+  épinglé en Debug et Release.
 - Ajout de `DistanceConstraint3D` : ancrages locaux entre deux corps, longueur
   fixe ou plage rigide, force de réaction, mutation et invalidation sûre des
   handles. La contrainte partage les itérations des contacts et les îlots de

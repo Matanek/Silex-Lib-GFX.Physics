@@ -1,0 +1,165 @@
+use GFX.Physics
+use STD.Math
+
+func advance_point3d(world:Physics.World3D, steps:int) {
+    var index = 0
+    while index < steps {
+        world.step(1.0 / 60.0)
+        index++
+    }
+}
+
+test "a fixed point supports a dynamic body and reports the reaction" {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0))
+        ..allow_sleep = false)
+    var settings = Physics.PointConstraint3DSettings()
+    settings.second_local_anchor = Math.Vec3(0.0, 1.0, 0.0)
+    var joint = world.create_point_constraint(fixed, body, settings)
+    assert(world.point_constraint_count() == 1)
+    world.step(0.0)
+    assert(joint.reaction_force().nearly_equal(Math.Vec3(), 0.000001))
+    advance_point3d(world, 120)
+    assert(joint.anchor_error().length() < 0.002)
+    assert(Math.abs(joint.reaction_force().y - body.mass_properties().mass * 9.81) < 0.5)
+    assert(body.position().y > 0.99 && body.position().y < 1.01)
+    let reaction = joint.reaction_force()
+    world.step(0.0)
+    assert(joint.reaction_force().nearly_equal(reaction, 0.000001))
+    world.destroy_point_constraint(joint)
+    assert(!joint.is_valid() && world.point_constraint_count() == 0)
+}
+
+test "point anchors couple translation and free rotation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 1.0, 0.0))
+        ..allow_sleep = false)
+    var settings = Physics.PointConstraint3DSettings()
+    settings.second_local_anchor = Math.Vec3(0.0, 1.0, 0.0)
+    var joint = world.create_point_constraint(fixed, body, settings)
+    advance_point3d(world, 30)
+    assert(joint.anchor_error().length() < 0.003)
+    assert(Math.abs(body.rotation().z) > 0.01)
+}
+
+test "point mutation and activation reset reaction and preserve handles" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+        ..allow_sleep = false)
+    var settings = Physics.PointConstraint3DSettings()
+    settings.first_local_anchor = Math.Vec3(1.0, 0.0, 0.0)
+    settings.second_local_anchor = Math.Vec3(-1.0, 0.0, 0.0)
+    var joint = world.create_point_constraint(fixed, body, settings)
+    advance_point3d(world, 30)
+    assert(joint.anchor_error().length() < 0.003)
+    joint.set_enabled(false)
+    assert(joint.reaction_force().nearly_equal(Math.Vec3(), 0.000001))
+    body.set_linear_velocity(Math.Vec3(4.0, 0.0, 0.0))
+    world.step(0.25)
+    assert(joint.anchor_error().length() > 0.9)
+    joint.set_anchors(Math.Vec3(1.0, 0.0, 0.0), Math.Vec3(-1.0, 1.0, 0.0))
+    joint.set_enabled(true)
+    advance_point3d(world, 30)
+    assert(joint.anchor_error().length() < 0.003)
+    world.destroy_rigid_body(fixed)
+    assert(!joint.is_valid())
+}
+
+test "point and floor contacts share a step" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0))))
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 4.0, 0.0)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.15, 0.0))
+        ..allow_sleep = false)
+    var settings = Physics.PointConstraint3DSettings()
+    settings.second_local_anchor = Math.Vec3(0.0, 3.0, 0.0)
+    var joint = world.create_point_constraint(fixed, body, settings)
+    advance_point3d(world, 120)
+    assert(world.contact_count() >= 1)
+    assert(body.position().y > 0.99 && body.position().y < 1.01)
+    assert(joint.anchor_error().length() < 0.01)
+}
+
+test "unequal masses close a point while preserving their center" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var light = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0))
+        ..mass_properties = Physics.MassProperties3D(1.0, Math.Vec3(0.4))
+        ..allow_sleep = false)
+    var heavy = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+        ..mass_properties = Physics.MassProperties3D(4.0, Math.Vec3(1.6))
+        ..allow_sleep = false)
+    var settings = Physics.PointConstraint3DSettings()
+    settings.first_local_anchor = Math.Vec3(1.0, 0.0, 0.0)
+    settings.second_local_anchor = Math.Vec3(-1.0, 0.0, 0.0)
+    var joint = world.create_point_constraint(light, heavy, settings)
+    advance_point3d(world, 30)
+    assert(joint.anchor_error().length() < 0.003)
+    let center = (light.position().x + 4.0 * heavy.position().x) / 5.0
+    assert(Math.abs(center - 1.2) < 0.0001)
+}
+
+test "a supported point joint sleeps and wakes with its linked body" {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)))
+    var settings = Physics.PointConstraint3DSettings()
+    settings.second_local_anchor = Math.Vec3(0.0, 1.0, 0.0)
+    var joint = world.create_point_constraint(fixed, body, settings)
+    advance_point3d(world, 120)
+    assert(!body.is_awake())
+    body.apply_impulse(Math.Vec3(0.1, 0.0, 0.0))
+    world.step(1.0 / 60.0)
+    assert(body.is_awake())
+    assert(joint.anchor_error().length() < 0.01)
+}
+
+test "kinematic point motion wakes a sleeping body" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    var settings = Physics.PointConstraint3DSettings()
+    settings.first_local_anchor = Math.Vec3(1.0, 0.0, 0.0)
+    settings.second_local_anchor = Math.Vec3(-1.0, 0.0, 0.0)
+    var joint = world.create_point_constraint(anchor, body, settings)
+    advance_point3d(world, 60)
+    assert(!body.is_awake())
+    anchor.move_kinematic(Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)), 1.0)
+    world.step(1.0 / 60.0)
+    assert(body.is_awake())
+    assert(joint.anchor_error().length() < 0.01)
+}
+
+func orphan_point3d() Physics.PointConstraint3D {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    return world.create_point_constraint(fixed, body)
+}
+
+test "world lifetime invalidates retained point handles" {
+    var joint = orphan_point3d()
+    assert(!joint.is_valid())
+}
