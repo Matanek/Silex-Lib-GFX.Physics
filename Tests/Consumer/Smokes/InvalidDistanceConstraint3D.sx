@@ -1,0 +1,64 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func main() {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    if selected("negative") {
+        world.create_distance_constraint(fixed, body,
+            Physics.DistanceConstraint3DSettings(-1.0))
+    }
+    if selected("reversed") {
+        var settings = Physics.DistanceConstraint3DSettings(1.0)
+        settings.minimum_length = 2.0
+        world.create_distance_constraint(fixed, body, settings)
+    }
+    if selected("anchor") {
+        var settings = Physics.DistanceConstraint3DSettings(1.0)
+        settings.first_local_anchor = Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0)
+        world.create_distance_constraint(fixed, body, settings)
+    }
+    if selected("same") {
+        world.create_distance_constraint(body, body,
+            Physics.DistanceConstraint3DSettings(1.0))
+    }
+    if selected("fixed-fixed") {
+        var another = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed)
+        world.create_distance_constraint(fixed, another,
+            Physics.DistanceConstraint3DSettings(1.0))
+    }
+    if selected("foreign") {
+        var other = Physics.World3D()
+        var outside = other.create_rigid_body()
+        world.create_distance_constraint(fixed, outside,
+            Physics.DistanceConstraint3DSettings(1.0))
+    }
+    var joint = world.create_distance_constraint(
+        fixed, body, Physics.DistanceConstraint3DSettings(1.0))
+    if selected("mutation") { joint.set_limits(2.0, 1.0) }
+    if selected("stale") {
+        world.destroy_distance_constraint(joint)
+        world.create_distance_constraint(fixed, body,
+            Physics.DistanceConstraint3DSettings(1.0))
+        joint.current_length()
+    }
+    if selected("foreign-destroy") {
+        var other = Physics.World3D()
+        other.destroy_distance_constraint(joint)
+    }
+    panic("invalid distance constraint operation was accepted")
+}

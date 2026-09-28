@@ -1,0 +1,229 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public struct DistanceConstraint3DSettings {
+    var first_local_anchor:Math.Vec3
+    var second_local_anchor:Math.Vec3
+    var minimum_length:float
+    var maximum_length:float
+    var is_enabled:bool
+
+    init(length:float) {
+        self.first_local_anchor = Math.Vec3()
+        self.second_local_anchor = Math.Vec3()
+        self.minimum_length = length
+        self.maximum_length = length
+        self.is_enabled = true
+    }
+}
+
+package struct DistanceConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class DistanceConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    let first_local_anchor:Math.Vec3
+    let second_local_anchor:Math.Vec3
+    var minimum_length:float
+    var maximum_length:float
+    var is_enabled:bool
+    var axial_impulse:float = 0.0
+    var reaction_axis:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:DistanceConstraint3DSettings) {
+        validate_distance_limits3d(settings.minimum_length, settings.maximum_length)
+        if !finite_body3d_point(settings.first_local_anchor) ||
+            !finite_body3d_point(settings.second_local_anchor)
+        {
+            panic("GFX.Physics.DistanceConstraint3D requires finite local anchors")
+        }
+        self.first_id = first_id
+        self.second_id = second_id
+        self.first_local_anchor = settings.first_local_anchor
+        self.second_local_anchor = settings.second_local_anchor
+        self.minimum_length = settings.minimum_length
+        self.maximum_length = settings.maximum_length
+        self.is_enabled = settings.is_enabled
+    }
+}
+
+package class DistanceConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:DistanceConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:RigidBody3D, second:RigidBody3D,
+        settings:DistanceConstraint3DSettings) DistanceConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.DistanceConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.DistanceConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.DistanceConstraint3D requires a dynamic body")
+        }
+        var state = DistanceConstraintState3D(first.body_id(), second.body_id(), settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return DistanceConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:DistanceConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:DistanceConstraintId3D) DistanceConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.DistanceConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:DistanceConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_body_id3d(state.first_id, body_id) ||
+                    same_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class DistanceConstraint3D {
+    private var store:DistanceConstraintStore3D
+    private let id:DistanceConstraintId3D
+
+    package init(store:DistanceConstraintStore3D, id:DistanceConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:DistanceConstraintStore3D) bool {
+        return self.store == store
+    }
+    package func constraint_id() DistanceConstraintId3D { return self.id }
+    func first_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).first_id)
+    }
+    func second_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).second_id)
+    }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func minimum_length() float { return self.store.require(self.id).minimum_length }
+    func maximum_length() float { return self.store.require(self.id).maximum_length }
+    func first_local_anchor() Math.Vec3 {
+        return self.store.require(self.id).first_local_anchor
+    }
+    func second_local_anchor() Math.Vec3 {
+        return self.store.require(self.id).second_local_anchor
+    }
+    func current_length() float {
+        var state = self.store.require(self.id)
+        var first = self.store.bodies.require(state.first_id)
+        var second = self.store.bodies.require(state.second_id)
+        return second.transform.point(state.second_local_anchor).distance(
+            first.transform.point(state.first_local_anchor)
+        )
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.reaction_axis.multiply(state.axial_impulse * state.inverse_delta)
+    }
+    func set_limits(minimum:float, maximum:float) {
+        validate_distance_limits3d(minimum, maximum)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.minimum_length = minimum
+        state.maximum_length = maximum
+        state.axial_impulse = 0.0
+        state.reaction_axis = Math.Vec3()
+        state.inverse_delta = 0.0
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.is_enabled = enabled
+        state.axial_impulse = 0.0
+        state.reaction_axis = Math.Vec3()
+        state.inverse_delta = 0.0
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
+}
+
+package func validate_distance_limits3d(minimum:float, maximum:float) {
+    if !finite_body3d_value(minimum) || !finite_body3d_value(maximum) ||
+        minimum < 0.0 || maximum < minimum
+    {
+        panic("GFX.Physics.DistanceConstraint3D requires finite ordered non-negative limits")
+    }
+}
+
+package func same_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}

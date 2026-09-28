@@ -3,6 +3,10 @@ use GFX.Physics.ContactManifold3D.box_box_contact_points
 use GFX.Physics.ContactManifold3D.capsule_capsule_contact_points
 use GFX.Physics.Contact3D.Contact3D
 use GFX.Physics.Contact3D.ContactPoint3D
+use GFX.Physics.DistanceConstraint3D.DistanceConstraint3D
+use GFX.Physics.DistanceConstraint3D.DistanceConstraint3DSettings
+use GFX.Physics.DistanceConstraint3D.DistanceConstraintState3D
+use GFX.Physics.DistanceConstraint3D.DistanceConstraintStore3D
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.compound_child_transform
@@ -24,19 +28,24 @@ public struct World3DSettings {
 
 public class World3D {
     private var store:BodyStore3D
+    private var distance_constraints:DistanceConstraintStore3D
     private var current_gravity:Math.Vec3
     private var contacts:Contact3D[]
     private var contact_begins:Contact3D[]
     private var contact_ends:Contact3D[]
     private var pending_contact_ends:Contact3D[]
 
-    drop { self.store.invalidate_all() }
+    drop {
+        self.distance_constraints.invalidate_all()
+        self.store.invalidate_all()
+    }
 
     init(settings:World3DSettings = World3DSettings()) {
         if !finite_body3d_point(settings.gravity) {
             panic("GFX.Physics.World3D requires finite gravity")
         }
         self.store = BodyStore3D()
+        self.distance_constraints = DistanceConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
         self.contact_begins = []
@@ -56,6 +65,7 @@ public class World3D {
     }
 
     func body_count() int { return self.store.live_count }
+    func distance_constraint_count() int { return self.distance_constraints.live_count }
     func contact_count() int { return self.contacts.count() }
 
     func write_contacts(output:&Contact3D[]) {
@@ -78,6 +88,22 @@ public class World3D {
         return RigidBody3D(self.store, id)
     }
 
+    func create_distance_constraint(
+        first:RigidBody3D, second:RigidBody3D,
+        settings:DistanceConstraint3DSettings
+    ) DistanceConstraint3D {
+        let id = self.distance_constraints.append(first, second, settings)
+        return DistanceConstraint3D(self.distance_constraints, id)
+    }
+
+    func destroy_distance_constraint(constraint:DistanceConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.distance_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.distance_constraints.destroy(constraint.constraint_id())
+    }
+
     func destroy_rigid_body(body:RigidBody3D) {
         self.store.require_mutable()
         if !body.belongs_to(self.store) {
@@ -93,6 +119,7 @@ public class World3D {
                 self.pending_contact_ends.append(contact)
             }
         }
+        self.distance_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -126,6 +153,7 @@ public class World3D {
         self.store.require_mutable()
         if delta == 0.0 { return }
         self.store.locked = true
+        self.wake_distance_islands()
         var slot = 0
         while slot < self.store.slots.count() {
             if var state = self.store.slots[slot] {
@@ -145,12 +173,43 @@ public class World3D {
             }
             slot++
         }
-        self.detect_and_resolve_contacts()
+        self.detect_and_resolve_contacts(delta)
         self.update_sleep(delta)
         self.store.locked = false
     }
 
-    private func detect_and_resolve_contacts() {
+    private func wake_distance_islands() {
+        var pass = 0
+        while pass < self.distance_constraints.live_count {
+            for slot in self.distance_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            pass++
+        }
+    }
+
+    private func detect_and_resolve_contacts(delta:float) {
         var previous_contacts:Contact3D[] = []
         for contact in self.contacts { previous_contacts.append(contact) }
         self.contacts.clear()
@@ -279,6 +338,13 @@ public class World3D {
                 }
             }
         }
+        for slot in self.distance_constraints.slots {
+            if var constraint = slot {
+                constraint.axial_impulse = 0.0
+                constraint.reaction_axis = Math.Vec3()
+                constraint.inverse_delta = 0.0
+            }
+        }
         var iteration = 0
         while iteration < 12 {
             var pair_index = 0
@@ -305,6 +371,25 @@ public class World3D {
                     point_index++
                 }
                 pair_index++
+            }
+            var constraint_index = 0
+            while constraint_index < self.distance_constraints.slots.count() {
+                var selected = constraint_index
+                if iteration % 2 == 1 {
+                    selected = self.distance_constraints.slots.count() - 1 - constraint_index
+                }
+                if var constraint = self.distance_constraints.slots[selected] {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            solve_distance_velocity3d(first, second, constraint, delta)
+                        }
+                    }
+                }
+                constraint_index++
             }
             iteration++
         }
@@ -333,6 +418,23 @@ public class World3D {
                 pair.friction, pair.restitution, public_points,
                 pair.first_child_id, pair.second_child_id
             ))
+        }
+        var position_iteration = 0
+        while position_iteration < 4 {
+            for slot in self.distance_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            solve_distance_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
+            position_iteration++
         }
         for contact in self.contacts {
             var was_present = false
@@ -400,6 +502,30 @@ public class World3D {
                                 }
                             }
                         }
+                        for constraint_slot in self.distance_constraints.slots {
+                            if var constraint = constraint_slot {
+                                if constraint.is_enabled {
+                                    var neighbor = -1
+                                    if constraint.first_id.slot == current {
+                                        neighbor = constraint.second_id.slot
+                                    }
+                                    if constraint.second_id.slot == current {
+                                        neighbor = constraint.first_id.slot
+                                    }
+                                    if neighbor >= 0 &&
+                                        !contains_contact_slot3d(members, neighbor)
+                                    {
+                                        if var connected = self.store.slots[neighbor] {
+                                            if connected.body_type == BodyType3D.dynamic &&
+                                                connected.is_enabled && connected.awake
+                                            {
+                                                members.append(neighbor)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         index++
                     }
                     var ready = true
@@ -427,6 +553,28 @@ public class World3D {
                                 if var support = self.store.slots[other] {
                                     if support.body_type != BodyType3D.dynamic {
                                         supported = true
+                                    }
+                                }
+                            }
+                        }
+                        for constraint_slot in self.distance_constraints.slots {
+                            if var constraint = constraint_slot {
+                                if constraint.is_enabled {
+                                    var other = -1
+                                    if constraint.first_id.slot == member {
+                                        other = constraint.second_id.slot
+                                    }
+                                    if constraint.second_id.slot == member {
+                                        other = constraint.first_id.slot
+                                    }
+                                    if other >= 0 {
+                                        if var support = self.store.slots[other] {
+                                            if support.is_enabled &&
+                                                support.body_type != BodyType3D.dynamic
+                                            {
+                                                supported = true
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -741,6 +889,109 @@ func contact_relative_velocity3d(
         second.angular_velocity.cross(second_radius)
     )
     return second_velocity.subtract(first_velocity)
+}
+
+func distance_axis3d(
+    first:BodyState3D, second:BodyState3D,
+    constraint:DistanceConstraintState3D
+) Math.Vec3 {
+    let separation = second.transform.point(constraint.second_local_anchor).subtract(
+        first.transform.point(constraint.first_local_anchor)
+    )
+    if separation.length_squared() <= 0.000000000001 {
+        return Math.Vec3(1.0, 0.0, 0.0)
+    }
+    return separation.normalized()
+}
+
+func distance_error3d(length:float, constraint:DistanceConstraintState3D) float {
+    if length < constraint.minimum_length {
+        return length - constraint.minimum_length
+    }
+    if length > constraint.maximum_length {
+        return length - constraint.maximum_length
+    }
+    return 0.0
+}
+
+func solve_distance_velocity3d(
+    first:BodyState3D, second:BodyState3D,
+    constraint:DistanceConstraintState3D, delta:float
+) {
+    let first_point = first.transform.point(constraint.first_local_anchor)
+    let second_point = second.transform.point(constraint.second_local_anchor)
+    let length = first_point.distance(second_point)
+    let error = distance_error3d(length, constraint)
+    if length > constraint.minimum_length &&
+        length < constraint.maximum_length
+    {
+        return
+    }
+    let axis = distance_axis3d(first, second, constraint)
+    let first_radius = first_point.subtract(first.world_center())
+    let second_radius = second_point.subtract(second.world_center())
+    let inverse_mass = contact_inverse_mass3d(
+        first, second, first_radius, second_radius, axis
+    )
+    if inverse_mass <= 0.0 { return }
+    let speed = contact_relative_velocity3d(
+        first, second, first_radius, second_radius
+    ).dot(axis)
+    let bias = Math.max(-10.0, Math.min(10.0, 0.2 * error / delta))
+    let previous = constraint.axial_impulse
+    var accumulated = previous - (speed + bias) / inverse_mass
+    if constraint.minimum_length != constraint.maximum_length {
+        if length <= constraint.minimum_length {
+            accumulated = Math.max(0.0, accumulated)
+        } else {
+            accumulated = Math.min(0.0, accumulated)
+        }
+    }
+    constraint.axial_impulse = accumulated
+    constraint.reaction_axis = axis
+    constraint.inverse_delta = 1.0 / delta
+    apply_contact_impulse3d(
+        first, second, first_radius, second_radius,
+        axis.multiply(accumulated - previous)
+    )
+}
+
+func solve_distance_position3d(
+    first:BodyState3D, second:BodyState3D,
+    constraint:DistanceConstraintState3D
+) {
+    let first_point = first.transform.point(constraint.first_local_anchor)
+    let second_point = second.transform.point(constraint.second_local_anchor)
+    let error = distance_error3d(first_point.distance(second_point), constraint)
+    if Math.abs(error) < 0.00001 { return }
+    let axis = distance_axis3d(first, second, constraint)
+    let first_radius = first_point.subtract(first.world_center())
+    let second_radius = second_point.subtract(second.world_center())
+    let inverse_mass = contact_inverse_mass3d(
+        first, second, first_radius, second_radius, axis
+    )
+    if inverse_mass <= 0.0 { return }
+    let impulse = axis.multiply(-Math.max(-0.2, Math.min(0.2, error)) /
+        inverse_mass)
+    shift_distance_body3d(first, impulse.negated(), first_radius)
+    shift_distance_body3d(second, impulse, second_radius)
+}
+
+func shift_distance_body3d(
+    state:BodyState3D, impulse:Math.Vec3, radius:Math.Vec3
+) {
+    if state.inverse_mass == 0.0 { return }
+    let center = state.world_center().add(impulse.multiply(state.inverse_mass))
+    let rotation_vector = state.inverse_inertia_times(radius.cross(impulse))
+    var rotation = state.transform.rotation
+    let angle = rotation_vector.length()
+    if angle > 0.0 {
+        rotation = Math.Quat.angle_axis(angle, rotation_vector.divide(angle))
+            .multiply(rotation).normalized()
+    }
+    state.transform = Transform3D(
+        center.subtract(rotation.rotate(state.mass_properties.local_center)), rotation
+    )
 }
 
 func solve_contact_point3d(

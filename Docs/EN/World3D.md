@@ -59,6 +59,48 @@ the target exactly when a step covers the end of the duration.
 `set_enabled`, and `set_mass_properties` support direct changes. Only a
 dynamic body accepts a mass override.
 
+## Connect two bodies by distance
+
+`create_distance_constraint(first, second, settings)` connects two local
+anchors in the same world. `DistanceConstraint3DSettings(length)` initially
+sets an exact length; its `minimum_length` and `maximum_length` fields also
+allow a range. Lengths must be finite, non-negative, and ordered. At least one
+body must be dynamic; a fixed body can anchor the constraint to the world.
+Active constraints share velocity iterations with contacts and also correct
+position error.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D()
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 3.0, 0.0)))
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)))
+    var tether = world.create_distance_constraint(
+        anchor, weight, Physics.DistanceConstraint3DSettings(2.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(tether.current_length() - 2.0) < 0.01)
+}
+```
+
+`first_local_anchor` and `second_local_anchor` position the attachment points
+in each body's local frame. `current_length()` measures their world-space
+separation. `reaction_force()` reports the force applied to the second body
+during the last positive step, in mass × distance / second²; it is zero for an
+inactive constraint or a step with no impulse. `set_limits(minimum, maximum)`
+and `set_enabled(enabled)` wake both bodies and clear the previous reaction.
+`destroy_distance_constraint` invalidates the handle; destroying a linked
+body invalidates its constraints as well. `distance_constraint_count()` counts
+live constraints. A zero step preserves poses and observations.
+
+This first family is rigid. Springs, motors, and other 3D joint families are
+not yet available. Very fast motion may still cross an obstacle because the
+world has no CCD.
+
 ## Sleeping and waking
 
 Dynamic bodies allow sleep by default. Their `sleep_threshold` is 0.05 for
@@ -66,7 +108,8 @@ linear and angular speed, and must be finite and non-negative. Use
 `allow_sleep`, `set_sleep_enabled`, `set_sleep_threshold`, `is_awake`, and
 `wake_up` to control this behavior. Fixed and kinematic bodies are not
 reported as awake. A free body can sleep without gravity; under gravity, a
-dynamic island needs contact with a fixed or kinematic body before it can
+dynamic island needs contact or an active distance constraint with a fixed or
+kinematic body before it can
 sleep. All bodies in an island must remain below their thresholds together
 for 0.5 seconds of fixed steps. Their velocities then become zero and their
 poses stop drifting.
@@ -74,7 +117,7 @@ poses stop drifting.
 A velocity, force, torque, impulse, mass, pose, or material command wakes the
 affected body; changing a support can wake other bodies in the world. A new
 collision and support removal also wake affected bodies. Waking one member
-propagates through contacts on the next step. `step(0)` changes neither sleep
+propagates through contacts or distance constraints on the next step. `step(0)` changes neither sleep
 nor the latest contacts. Contacts between sleeping bodies remain observable,
 with zero impulse applied during the inactive step.
 
@@ -154,6 +197,6 @@ handle fails explicitly. A world refuses to destroy another world's body.
 `write_bodies` fills a caller-owned array with live bodies without promising
 creation order.
 
-The world does not yet provide constraints, spatial
-queries, or CCD. [Standalone geometry queries](Geometry3D.md) remain
+The world does not yet provide integrated spatial queries or CCD.
+[Standalone geometry queries](Geometry3D.md) remain
 available for individual shapes.

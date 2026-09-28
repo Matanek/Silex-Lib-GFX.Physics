@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added `DistanceConstraint3D` with local anchors between two bodies, a fixed
+  length or rigid range, reaction force, runtime changes, and safe handle
+  invalidation. It shares contact iterations and sleeping islands; the
+  suspended body case is compared with pinned Jolt in Debug and Release.
 - Fixed tilted box-to-box supports by clipping the incident face, excluding
   corners above the support, and reducing to four points. A contact's
   representative point is now the manifold centroid, avoiding a distant

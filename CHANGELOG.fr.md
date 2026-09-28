@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `DistanceConstraint3D` : ancrages locaux entre deux corps, longueur
+  fixe ou plage rigide, force de réaction, mutation et invalidation sûre des
+  handles. La contrainte partage les itérations des contacts et les îlots de
+  sommeil ; le cas suspendu est comparé à Jolt épinglé en Debug et Release.
 - Correction des appuis boîte–boîte inclinés : découpe de la face incidente,
   exclusion des coins au-dessus du support et réduction à quatre points. Le
   point représentatif d'un contact est le centroïde du manifold, ce qui évite

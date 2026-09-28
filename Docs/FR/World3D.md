@@ -62,6 +62,49 @@ la durée. `set_transform`, `set_linear_velocity`,
 changements directs. La masse ne peut être remplacée que sur un corps
 dynamique.
 
+## Relier deux corps par une distance
+
+`create_distance_constraint(first, second, settings)` relie deux ancrages
+locaux appartenant au même monde. `DistanceConstraint3DSettings(longueur)`
+impose d'abord une longueur exacte ; ses champs `minimum_length` et
+`maximum_length` permettent aussi une plage. Les longueurs sont finies,
+positives ou nulles et ordonnées. Au moins un corps doit être dynamique ; un
+corps fixe peut servir d'ancrage au monde. Les contraintes actives partagent
+les itérations de vitesse avec les contacts et corrigent également leur erreur
+de position.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D()
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 3.0, 0.0)))
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)))
+    var tether = world.create_distance_constraint(
+        anchor, weight, Physics.DistanceConstraint3DSettings(2.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(tether.current_length() - 2.0) < 0.01)
+}
+```
+
+`first_local_anchor` et `second_local_anchor` déplacent les points d'attache
+dans les repères locaux des corps. `current_length()` mesure leur écart
+mondial. `reaction_force()` donne la force exercée sur le second corps pendant
+le dernier pas positif, en masse × distance / seconde² ; elle vaut zéro pour
+une contrainte inactive ou un pas sans impulsion. `set_limits(minimum, maximum)`
+et `set_enabled(enabled)` réveillent les corps liés et effacent la réaction
+précédente. `destroy_distance_constraint` invalide le handle ; détruire un
+corps lié invalide aussi ses contraintes. `distance_constraint_count()` compte
+les contraintes vivantes. Le pas nul conserve poses et observations.
+
+Cette première famille est rigide : ressorts, moteurs et autres articulations
+ne sont pas encore disponibles en 3D. Un choc très rapide peut encore traverser
+un obstacle, car le monde n'a pas de CCD.
+
 ## Sommeil et réveil
 
 Un corps dynamique autorise le sommeil par défaut. Son
@@ -70,7 +113,8 @@ doit être fini et positif ou nul. `allow_sleep`, `set_sleep_enabled`,
 `set_sleep_threshold`, `is_awake` et `wake_up` pilotent ce contrat. Un corps
 fixe ou cinématique n'est pas déclaré éveillé. Un corps libre sans gravité
 peut dormir ; sous gravité, un îlot dynamique doit rester au contact d'un
-corps fixe ou cinématique pour s'endormir. Tous les corps d'un même îlot
+corps fixe ou cinématique, par contact ou contrainte de distance active, pour
+s'endormir. Tous les corps d'un même îlot
 atteignent ensemble un repos de 0,5 seconde au pas fixe avant de dormir.
 Leurs vitesses deviennent alors nulles et leur pose cesse de dériver.
 
@@ -78,7 +122,7 @@ Une commande de vitesse, force, couple, impulsion, masse, pose ou matériau
 réveille le corps concerné ; une modification de support peut réveiller les
 autres corps du monde. Une collision nouvelle et le retrait d'un support
 réveillent les corps concernés. Lorsqu'un corps d'un îlot est réveillé, le
-réveil se propage par contact au pas suivant. `step(0)` ne modifie ni le
+réveil se propage par contact ou contrainte de distance au pas suivant. `step(0)` ne modifie ni le
 sommeil ni les derniers contacts. Les contacts entre corps endormis restent
 observables, avec une impulsion appliquée nulle pendant le pas inactif.
 
@@ -166,6 +210,6 @@ les handles conservés, sans que ceux-ci maintiennent le monde vivant.
 `write_bodies` remplit un tableau fourni par le consommateur avec les corps
 vivants, sans promettre un ordre de création.
 
-Le monde ne fournit pas encore de contraintes, requêtes
-spatiales ni CCD. Les [requêtes géométriques autonomes](Geometry3D.md)
+Le monde ne fournit pas encore de requêtes spatiales intégrées ni de CCD.
+Les [requêtes géométriques autonomes](Geometry3D.md)
 restent disponibles pour les formes isolées.
