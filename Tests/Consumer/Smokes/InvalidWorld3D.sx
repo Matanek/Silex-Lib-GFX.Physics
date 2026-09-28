@@ -40,7 +40,14 @@ func main() {
             ..body_type = Physics.BodyType3D.kinematic
             ..mass_properties = Physics.MassProperties3D(1.0, Math.Vec3(1.0)))
     }
+    if selected("friction") {
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..friction = -0.1)
+    }
+    if selected("restitution") {
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..restitution = 1.1)
+    }
     var body = world.create_rigid_body()
+    if selected("material-mutation") { body.set_material(-1.0, 0.0) }
     if selected("delta") { world.step(-0.1) }
     if selected("impulse") { body.apply_impulse(Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0)) }
     if selected("stale") {

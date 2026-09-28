@@ -68,14 +68,24 @@ Après un pas positif, `contact_count()` compte les paires détectées et
 consommateur. Chaque `Contact3D` expose les deux handles, le point, la
 normale de réponse, la séparation mesurée avant correction et l'impulsion
 normale appliquée. Une séparation négative désigne une pénétration ; le pas
-ramène alors les corps dynamiques vers la tangence et annule la vitesse
+ramène alors les corps dynamiques vers la tangence et répond à la vitesse
 entrante au point de contact. Si une sphère commence à l'intérieur d'une
 boîte, la normale de réponse peut être opposée à celle de la requête
 `Geometry3D.distance`, afin de l'expulser par la face la plus proche.
 
+Chaque corps choisit `friction` (0,6 par défaut) et `restitution` (0 par
+défaut) dans `RigidBody3DSettings` ou avec `set_material`. La friction doit
+être finie et positive ou nulle ; la restitution doit être finie dans
+`[0, 1]`. Pour une paire, le monde utilise la moyenne géométrique des
+frictions et la plus grande restitution. Un choc de vitesse normale
+supérieure à 1 reçoit la restitution ; les chocs plus lents ne rebondissent
+pas. L'impulsion tangentielle reste bornée par la friction combinée fois
+l'impulsion normale. `Contact3D.friction()`, `restitution()` et
+`tangent_impulse()` exposent ces résultats du pas.
+
 La détection examine actuellement chaque paire de corps actifs dont au moins
 un est dynamique. Elle traite un point par paire et n'a ni cache de manifold,
-ni friction, ni restitution, ni CCD. Les empilements et contacts obliques
+ni friction statique persistante, ni CCD. Les empilements et contacts obliques
 peuvent encore dériver. `step(0)` conserve les dernières observations ;
 détruire un corps retire les contacts courants qui le citent. Un snapshot
 conservé garde ses mesures, mais ses handles deviennent invalides avec leurs

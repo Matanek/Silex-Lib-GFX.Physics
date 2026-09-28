@@ -39,6 +39,8 @@ public struct RigidBody3DSettings {
     var gravity_scale:float
     var linear_damping:float
     var angular_damping:float
+    var friction:float
+    var restitution:float
     var is_enabled:bool
 
     init() {
@@ -52,6 +54,8 @@ public struct RigidBody3DSettings {
         self.gravity_scale = 1.0
         self.linear_damping = 0.0
         self.angular_damping = 0.0
+        self.friction = 0.6
+        self.restitution = 0.0
         self.is_enabled = true
     }
 }
@@ -79,6 +83,8 @@ package class BodyState3D {
     var gravity_scale:float
     var linear_damping:float
     var angular_damping:float
+    var friction:float
+    var restitution:float
     var is_enabled:bool
     var target:Transform3D?
     var target_remaining:float
@@ -93,6 +99,7 @@ package class BodyState3D {
         {
             panic("GFX.Physics.RigidBody3DSettings requires finite motion, density and damping")
         }
+        validate_material3d(settings.friction, settings.restitution)
         if settings.body_type == BodyType3D.fixed &&
             (settings.linear_velocity.length_squared() > 0.0 ||
                 settings.angular_velocity.length_squared() > 0.0)
@@ -128,6 +135,8 @@ package class BodyState3D {
         self.gravity_scale = settings.gravity_scale
         self.linear_damping = settings.linear_damping
         self.angular_damping = settings.angular_damping
+        self.friction = settings.friction
+        self.restitution = settings.restitution
         self.is_enabled = settings.is_enabled
         self.target = null
         self.target_remaining = 0.0
@@ -229,6 +238,16 @@ public class RigidBody3D {
     func mass_properties() MassProperties3D { return self.store.require(self.id).mass_properties }
     func world_center_of_mass() Math.Vec3 { return self.store.require(self.id).world_center() }
     func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func friction() float { return self.store.require(self.id).friction }
+    func restitution() float { return self.store.require(self.id).restitution }
+
+    func set_material(friction:float, restitution:float) {
+        validate_material3d(friction, restitution)
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.friction = friction
+        state.restitution = restitution
+    }
 
     func set_enabled(enabled:bool) {
         self.store.require_mutable()
@@ -368,6 +387,14 @@ package func finite_body3d_value(value:float) bool {
 package func finite_body3d_point(value:Math.Vec3) bool {
     return finite_body3d_value(value.x) && finite_body3d_value(value.y) &&
         finite_body3d_value(value.z)
+}
+
+func validate_material3d(friction:float, restitution:float) {
+    if !finite_body3d_value(friction) || friction < 0.0 ||
+        !finite_body3d_value(restitution) || restitution < 0.0 || restitution > 1.0
+    {
+        panic("GFX.Physics.RigidBody3D material requires finite non-negative friction and restitution in [0, 1]")
+    }
 }
 
 package func require_dynamic_mass3d(properties:MassProperties3D) {

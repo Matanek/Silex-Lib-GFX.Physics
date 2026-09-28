@@ -1,0 +1,56 @@
+use GFX.Physics
+use STD.Math
+
+test "combine restitution and reverse a head-on sphere collision" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-0.5, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(2.0, 0.0, 0.0)
+        ..restitution = 1.0)
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.5, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(-2.0, 0.0, 0.0))
+    world.step(0.1)
+    assert(first.linear_velocity().nearly_equal(Math.Vec3(-2.0, 0.0, 0.0), 0.00001))
+    assert(second.linear_velocity().nearly_equal(Math.Vec3(2.0, 0.0, 0.0), 0.00001))
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].restitution() == 1.0)
+    assert(contacts[0].normal_impulse() > 0.0)
+    assert(contacts[0].tangent_impulse().nearly_equal(Math.Vec3(), 0.00001))
+    second.set_material(0.25, 0.5)
+    assert(second.friction() == 0.25 && second.restitution() == 0.5)
+}
+
+func sliding_speed(friction:float) float {
+    var world = Physics.World3D()
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0))
+        ..linear_velocity = Math.Vec3(2.0, 0.0, 0.0)
+        ..friction = friction)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0)))
+        ..friction = friction)
+    world.step(0.05)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(Math.abs(contacts[0].friction() - friction) < 0.00001)
+    assert(contacts[0].tangent_impulse().length() <=
+        friction * contacts[0].normal_impulse() + 0.00001)
+    if friction == 0.0 {
+        assert(contacts[0].tangent_impulse().nearly_equal(Math.Vec3(), 0.00001))
+    } else {
+        assert(contacts[0].tangent_impulse().length() > 0.0)
+    }
+    return sphere.linear_velocity().x
+}
+
+test "friction reduces sliding speed within its Coulomb limit" {
+    let frictionless = sliding_speed(0.0)
+    let rough = sliding_speed(1.0)
+    assert(Math.abs(frictionless - 2.0) < 0.00001)
+    assert(rough < frictionless && rough > 0.0)
+}

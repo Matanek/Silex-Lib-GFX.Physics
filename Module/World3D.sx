@@ -138,7 +138,7 @@ public class World3D {
                                     let point = distance.first_point.add(
                                         distance.second_point
                                     ).multiply(0.5)
-                                    let impulse = resolve_contact3d(
+                                    let impulses = resolve_contact3d(
                                         first, second, normal,
                                         distance.separation, point
                                     )
@@ -149,7 +149,9 @@ public class World3D {
                                         RigidBody3D(self.store, BodyId3D(
                                             second_slot, self.store.generations[second_slot]
                                         )),
-                                        normal, distance.separation, point, impulse
+                                        normal, distance.separation, point,
+                                        impulses.normal, impulses.tangent,
+                                        impulses.friction, impulses.restitution
                                     ))
                                 }
                             }
@@ -201,43 +203,118 @@ func inside_box3d(point:Math.Vec3, box:Box3D, transform:Transform3D) bool {
         Math.abs(local_point.z) <= half.z
 }
 
-func resolve_contact3d(
+struct ContactImpulse3D {
+    let normal:float
+    let tangent:Math.Vec3
+    let friction:float
+    let restitution:float
+
+    init(normal:float, tangent:Math.Vec3, friction:float, restitution:float) {
+        self.normal = normal
+        self.tangent = tangent
+        self.friction = friction
+        self.restitution = restitution
+    }
+}
+
+func contact_inverse_mass3d(
     first:BodyState3D,
     second:BodyState3D,
-    normal:Math.Vec3,
-    separation:float,
-    point:Math.Vec3
+    first_radius:Math.Vec3,
+    second_radius:Math.Vec3,
+    axis:Math.Vec3
 ) float {
-    let first_radius = point.subtract(first.world_center())
-    let second_radius = point.subtract(second.world_center())
+    let first_arm = first_radius.cross(axis)
+    let second_arm = second_radius.cross(axis)
+    return first.inverse_mass + second.inverse_mass +
+        first.inverse_inertia_times(first_arm).cross(first_radius).dot(axis) +
+        second.inverse_inertia_times(second_arm).cross(second_radius).dot(axis)
+}
+
+func apply_contact_impulse3d(
+    first:BodyState3D,
+    second:BodyState3D,
+    first_radius:Math.Vec3,
+    second_radius:Math.Vec3,
+    impulse:Math.Vec3
+) {
+    first.linear_velocity = first.linear_velocity.subtract(
+        impulse.multiply(first.inverse_mass)
+    )
+    second.linear_velocity = second.linear_velocity.add(
+        impulse.multiply(second.inverse_mass)
+    )
+    first.angular_velocity = first.angular_velocity.subtract(
+        first.inverse_inertia_times(first_radius.cross(impulse))
+    )
+    second.angular_velocity = second.angular_velocity.add(
+        second.inverse_inertia_times(second_radius.cross(impulse))
+    )
+}
+
+func contact_relative_velocity3d(
+    first:BodyState3D,
+    second:BodyState3D,
+    first_radius:Math.Vec3,
+    second_radius:Math.Vec3
+) Math.Vec3 {
     let first_velocity = first.linear_velocity.add(
         first.angular_velocity.cross(first_radius)
     )
     let second_velocity = second.linear_velocity.add(
         second.angular_velocity.cross(second_radius)
     )
-    let approach_speed = second_velocity.subtract(first_velocity).dot(normal)
-    let first_arm = first_radius.cross(normal)
-    let second_arm = second_radius.cross(normal)
-    let inverse_effective_mass = first.inverse_mass + second.inverse_mass +
-        first.inverse_inertia_times(first_arm).cross(first_radius).dot(normal) +
-        second.inverse_inertia_times(second_arm).cross(second_radius).dot(normal)
+    return second_velocity.subtract(first_velocity)
+}
+
+func resolve_contact3d(
+    first:BodyState3D,
+    second:BodyState3D,
+    normal:Math.Vec3,
+    separation:float,
+    point:Math.Vec3
+) ContactImpulse3D {
+    let first_radius = point.subtract(first.world_center())
+    let second_radius = point.subtract(second.world_center())
+    let approach_speed = contact_relative_velocity3d(
+        first, second, first_radius, second_radius
+    ).dot(normal)
+    let inverse_effective_mass = contact_inverse_mass3d(
+        first, second, first_radius, second_radius, normal
+    )
+    let friction = Math.sqrt(first.friction) * Math.sqrt(second.friction)
+    let restitution = Math.max(first.restitution, second.restitution)
     var magnitude = 0.0
+    var tangent_impulse = Math.Vec3()
     if approach_speed < 0.0 && inverse_effective_mass > 0.0 {
-        magnitude = -approach_speed / inverse_effective_mass
-        let impulse = normal.multiply(magnitude)
-        first.linear_velocity = first.linear_velocity.subtract(
-            impulse.multiply(first.inverse_mass)
+        var bounce = 0.0
+        if approach_speed < -1.0 { bounce = restitution }
+        magnitude = -(1.0 + bounce) * approach_speed / inverse_effective_mass
+        apply_contact_impulse3d(
+            first, second, first_radius, second_radius,
+            normal.multiply(magnitude)
         )
-        second.linear_velocity = second.linear_velocity.add(
-            impulse.multiply(second.inverse_mass)
+        let after_normal = contact_relative_velocity3d(
+            first, second, first_radius, second_radius
         )
-        first.angular_velocity = first.angular_velocity.subtract(
-            first.inverse_inertia_times(first_radius.cross(impulse))
-        )
-        second.angular_velocity = second.angular_velocity.add(
-            second.inverse_inertia_times(second_radius.cross(impulse))
-        )
+        let sliding = after_normal.subtract(normal.multiply(after_normal.dot(normal)))
+        let sliding_speed = sliding.length()
+        if sliding_speed > 0.000001 && friction > 0.0 {
+            let tangent = sliding.divide(sliding_speed)
+            let tangent_inverse_mass = contact_inverse_mass3d(
+                first, second, first_radius, second_radius, tangent
+            )
+            if tangent_inverse_mass > 0.0 {
+                let tangent_magnitude = Math.min(
+                    sliding_speed / tangent_inverse_mass,
+                    friction * magnitude
+                )
+                tangent_impulse = tangent.multiply(-tangent_magnitude)
+                apply_contact_impulse3d(
+                    first, second, first_radius, second_radius, tangent_impulse
+                )
+            }
+        }
     }
     if separation < 0.0 {
         let total_inverse_mass = first.inverse_mass + second.inverse_mass
@@ -253,7 +330,7 @@ func resolve_contact3d(
             )
         }
     }
-    return magnitude
+    return ContactImpulse3D(magnitude, tangent_impulse, friction, restitution)
 }
 
 func integrate_kinematic3d(state:BodyState3D, delta:float) {

@@ -64,13 +64,22 @@ After a positive step, `contact_count()` counts detected pairs and
 Each `Contact3D` exposes the two handles, point, response normal, separation
 measured before correction, and applied normal impulse. Negative separation
 means penetration; the step then moves dynamic bodies back toward tangency
-and cancels incoming velocity at the contact point. If a sphere starts inside
+and responds to incoming velocity at the contact point. If a sphere starts inside
 a box, the response normal can be opposite to the `Geometry3D.distance`
 query normal so the sphere exits through the nearest face.
 
+Each body selects `friction` (0.6 by default) and `restitution` (0 by
+default) in `RigidBody3DSettings` or through `set_material`. Friction must
+be finite and non-negative; restitution must be finite in `[0, 1]`. A pair
+uses the geometric mean of friction and the greater restitution. A normal
+impact faster than 1 receives restitution; slower impacts do not bounce.
+Tangential impulse is bounded by combined friction times normal impulse.
+`Contact3D.friction()`, `restitution()`, and `tangent_impulse()` expose these
+step results.
+
 Detection currently examines every pair of enabled bodies with at least one
 dynamic body. It handles one point per pair and has no manifold cache,
-friction, restitution, or CCD. Stacks and oblique contacts can still drift.
+persistent static friction, or CCD. Stacks and oblique contacts can still drift.
 `step(0)` preserves the last observations; destroying a body removes current
 contacts that refer to it. A retained snapshot keeps its measurements, but
 its handles become invalid with their bodies or world.

@@ -14,8 +14,11 @@ puis traduits dans `CHANGELOG.md`.
   dynamiques, masse et inertie des sphères/boîtes, forces, couples, impulsions,
   mouvement libre et handles invalidés à la destruction.
 - Première réponse aux contacts sphère/boîte dans `World3D` : impulsion normale,
-  correction de pénétration et observations de paire après le pas. La friction,
-  la restitution, la persistance du manifold et le CCD restent à livrer.
+  correction de pénétration et observations de paire après le pas.
+- Ajout de la friction et de la restitution par corps et dans les observations
+  de contact. Le glissement est borné par la limite de Coulomb ; la restitution
+  s'applique aux chocs suffisamment rapides. La persistance du manifold, le
+  sommeil et le CCD restent à livrer.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

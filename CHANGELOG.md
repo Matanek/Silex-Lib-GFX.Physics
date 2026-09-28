@@ -14,8 +14,10 @@ first in `CHANGELOG.fr.md`.
   sphere/box mass and inertia, forces, torques, impulses, free motion, and
   handles invalidated on destruction.
 - Added an initial sphere/box contact response in `World3D`: normal impulse,
-  penetration correction, and pair observations after stepping. Friction,
-  restitution, manifold persistence, and CCD remain to be delivered.
+  penetration correction, and pair observations after stepping.
+- Added per-body friction and restitution with contact observations. Sliding
+  stays within a Coulomb impulse limit; restitution applies to sufficiently
+  fast impacts. Manifold persistence, sleeping, and CCD remain to be delivered.
 - Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
 
 ## [0.7.0] - 2026-09-24

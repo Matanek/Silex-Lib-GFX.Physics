@@ -8,6 +8,9 @@ public class Contact3D {
     private var contact_separation:float
     private var contact_point:Math.Vec3
     private var applied_normal_impulse:float
+    private var applied_tangent_impulse:Math.Vec3
+    private var combined_friction:float
+    private var combined_restitution:float
 
     package init(
         first:RigidBody3D,
@@ -15,7 +18,10 @@ public class Contact3D {
         normal:Math.Vec3,
         separation:float,
         point:Math.Vec3,
-        normal_impulse:float
+        normal_impulse:float,
+        tangent_impulse:Math.Vec3,
+        friction:float,
+        restitution:float
     ) {
         self.first = first
         self.second = second
@@ -23,6 +29,9 @@ public class Contact3D {
         self.contact_separation = separation
         self.contact_point = point
         self.applied_normal_impulse = normal_impulse
+        self.applied_tangent_impulse = tangent_impulse
+        self.combined_friction = friction
+        self.combined_restitution = restitution
     }
 
     func first_body() RigidBody3D { return self.first }
@@ -31,4 +40,7 @@ public class Contact3D {
     func separation() float { return self.contact_separation }
     func point() Math.Vec3 { return self.contact_point }
     func normal_impulse() float { return self.applied_normal_impulse }
+    func tangent_impulse() Math.Vec3 { return self.applied_tangent_impulse }
+    func friction() float { return self.combined_friction }
+    func restitution() float { return self.combined_restitution }
 }
