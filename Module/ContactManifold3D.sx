@@ -1,4 +1,5 @@
 use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.Transform3D.Transform3D
 use STD.Math
 
@@ -46,6 +47,49 @@ package func box_box_contact_points(
         }
     }
     if points.count() == 0 { points.append(witness) }
+    return points
+}
+
+package func capsule_capsule_contact_points(
+    first:Capsule3D, first_transform:Transform3D,
+    second:Capsule3D, second_transform:Transform3D,
+    normal:Math.Vec3, witness:Math.Vec3
+) Math.Vec3[] {
+    var points:Math.Vec3[] = []
+    let first_axis = first_transform.vector(Math.Vec3.up())
+    let second_axis = second_transform.vector(Math.Vec3.up())
+    if Math.abs(first_axis.dot(second_axis)) < 0.95 ||
+        Math.abs(first_axis.dot(normal)) > 0.1
+    {
+        points.append(witness)
+        return points
+    }
+    let second_low = second_transform.position.subtract(
+        second_axis.multiply(second.half_height)
+    ).subtract(first_transform.position).dot(first_axis)
+    let second_high = second_transform.position.add(
+        second_axis.multiply(second.half_height)
+    ).subtract(first_transform.position).dot(first_axis)
+    let lower = Math.max(-first.half_height, Math.min(second_low, second_high))
+    let upper = Math.min(first.half_height, Math.max(second_low, second_high))
+    if upper - lower < 0.01 {
+        points.append(witness)
+        return points
+    }
+    let offsets:float[] = [lower, upper]
+    for offset in offsets {
+        let first_center = first_transform.position.add(first_axis.multiply(offset))
+        let second_fraction = Math.clamp(
+            first_center.subtract(second_transform.position).dot(second_axis),
+            -second.half_height, second.half_height
+        )
+        let second_center = second_transform.position.add(
+            second_axis.multiply(second_fraction)
+        )
+        points.append(first_center.add(normal.multiply(first.radius)).add(
+            second_center.subtract(normal.multiply(second.radius))
+        ).multiply(0.5))
+    }
     return points
 }
 

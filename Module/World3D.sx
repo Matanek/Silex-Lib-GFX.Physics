@@ -1,5 +1,6 @@
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.ContactManifold3D.box_box_contact_points
+use GFX.Physics.ContactManifold3D.capsule_capsule_contact_points
 use GFX.Physics.Contact3D.Contact3D
 use GFX.Physics.Contact3D.ContactPoint3D
 use GFX.Physics.Geometry3D.Geometry3D
@@ -150,7 +151,7 @@ public class World3D {
                                     ShapePlacement3D(first.shape, first.transform),
                                     ShapePlacement3D(second.shape, second.transform)
                                 )
-                                if distance.separation <= 0.0 {
+                                if distance.separation <= 0.000001 {
                                     let normal = contact_normal3d(
                                         first, second, distance.normal
                                     )
@@ -481,9 +482,23 @@ func contact_points3d(
                     )
                 }
                 sphere(_) => {}
+                capsule(_) => {}
             }
         }
         sphere(_) => {}
+        capsule(first_capsule) => {
+            match second.shape {
+                capsule(second_capsule) => {
+                    return capsule_capsule_contact_points(
+                        first_capsule, first.transform,
+                        second_capsule, second.transform,
+                        normal, witness
+                    )
+                }
+                sphere(_) => {}
+                box(_) => {}
+            }
+        }
     }
     return [witness]
 }
@@ -502,6 +517,7 @@ func contact_normal3d(
                     }
                 }
                 sphere(_) => {}
+                capsule(_) => {}
             }
         }
         box(box) => {
@@ -511,7 +527,23 @@ func contact_normal3d(
                         return geometric_normal.negated()
                     }
                 }
+                capsule(_) => {
+                    if inside_box3d(second.transform.position, box, first.transform) {
+                        return geometric_normal.negated()
+                    }
+                }
                 box(_) => {}
+            }
+        }
+        capsule(_) => {
+            match second.shape {
+                box(box) => {
+                    if inside_box3d(first.transform.position, box, second.transform) {
+                        return geometric_normal.negated()
+                    }
+                }
+                sphere(_) => {}
+                capsule(_) => {}
             }
         }
     }

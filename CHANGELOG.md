@@ -25,6 +25,9 @@ first in `CHANGELOG.fr.md`.
 - Added sleeping for dynamic bodies and contact islands, with wakeup from
   commands, collisions, or support changes. Sleep timing and command wakeup
   are compared with pinned Jolt in Debug and Release.
+- Added vertical `Capsule3D` with mass and inertia, standalone distance,
+  overlap and ray queries, and initial contacts with spheres, boxes, and
+  capsules. Three capsule/box witnesses are compared with Jolt in Debug and Release.
 - Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
 
 ## [0.7.0] - 2026-09-24

@@ -41,9 +41,9 @@ reference without learning its internal slot or generation.
 Collision geometry is also available without creating a world:
 
 The [standalone 3D convex geometry](Geometry3D.md) exposes spheres, oriented
-boxes, rigid poses, and distance, overlap, and ray queries. The
-[3D world](World3D.md) moves bodies and responds to initial sphere/box
-contacts; stable multiple contacts are still under development.
+boxes, capsules, rigid poses, and distance, overlap, and ray queries. The
+[3D world](World3D.md) moves bodies, resolves initial multiple contact points,
+and sleeps small resting islands.
 
 ```silex
 let capsule = Physics.ShapePlacement2D(

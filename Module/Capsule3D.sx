@@ -1,0 +1,18 @@
+public struct Capsule3D {
+    let radius:float
+    let half_height:float
+
+    init(radius:float = 0.5, half_height:float = 0.5) {
+        if !finite_capsule3d_value(radius) || radius <= 0.0 ||
+            !finite_capsule3d_value(half_height) || half_height <= 0.0
+        {
+            panic("GFX.Physics.Capsule3D requires finite positive radius and half-height")
+        }
+        self.radius = radius
+        self.half_height = half_height
+    }
+}
+
+func finite_capsule3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

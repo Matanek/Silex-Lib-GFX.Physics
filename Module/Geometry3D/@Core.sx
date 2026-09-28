@@ -1,4 +1,5 @@
 use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
@@ -100,6 +101,12 @@ public struct Geometry3D {
                             second_box, second.transform()
                         )
                     }
+                    capsule(second_capsule) => {
+                        return sphere_capsule_distance(
+                            first_sphere, first.transform(),
+                            second_capsule, second.transform()
+                        )
+                    }
                 }
             }
             box(first_box) => {
@@ -114,6 +121,34 @@ public struct Geometry3D {
                         return box_box_distance(
                             first_box, first.transform(),
                             second_box, second.transform()
+                        )
+                    }
+                    capsule(second_capsule) => {
+                        return reversed_distance(capsule_box_distance(
+                            second_capsule, second.transform(),
+                            first_box, first.transform()
+                        ))
+                    }
+                }
+            }
+            capsule(first_capsule) => {
+                match second.shape() {
+                    sphere(second_sphere) => {
+                        return reversed_distance(sphere_capsule_distance(
+                            second_sphere, second.transform(),
+                            first_capsule, first.transform()
+                        ))
+                    }
+                    box(second_box) => {
+                        return capsule_box_distance(
+                            first_capsule, first.transform(),
+                            second_box, second.transform()
+                        )
+                    }
+                    capsule(second_capsule) => {
+                        return capsule_capsule_distance(
+                            first_capsule, first.transform(),
+                            second_capsule, second.transform()
                         )
                     }
                 }
@@ -135,9 +170,11 @@ public struct Geometry3D {
                         )
                     }
                     sphere(_) => {}
+                    capsule(_) => {}
                 }
             }
             sphere(_) => {}
+            capsule(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
     }
@@ -149,6 +186,9 @@ public struct Geometry3D {
             }
             box(box) => {
                 return ray_box_cast(ray, box, target.transform())
+            }
+            capsule(capsule) => {
+                return ray_capsule_cast(ray, capsule, target.transform())
             }
         }
     }

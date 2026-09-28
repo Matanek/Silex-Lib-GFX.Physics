@@ -1,7 +1,7 @@
 # Simuler des corps rigides en 3D
 
 `World3D` simule des corps fixes, cinématiques et dynamiques sans fenêtre,
-scène, renderer ni ECS. Il accepte les sphères et boîtes de `Shape3D` et
+scène, renderer ni ECS. Il accepte les sphères, boîtes et capsules de `Shape3D` et
 fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points ; un mouvement rapide
 peut encore traverser un obstacle.
@@ -37,7 +37,7 @@ secondes et rejette une durée négative ou non finie.
 
 Par défaut, un corps est dynamique, porte une sphère de rayon 0,5 et reçoit
 une densité de 1. La masse et les trois moments d'inertie principaux sont
-calculés pour la sphère ou la boîte homogène. `MassProperties3D` permet de
+calculés pour la sphère, la boîte ou la capsule homogène. `MassProperties3D` permet de
 fixer une masse positive, un centre local et trois moments locaux positifs ;
 les axes principaux coïncident alors avec les axes locaux de la forme.
 L'inertie est orientée dans le monde pour les couples et impulsions. Une
@@ -109,10 +109,13 @@ l'impulsion normale. `Contact3D.friction()`, `restitution()` et
 `tangent_impulse()` exposent ces résultats du pas.
 
 La détection examine actuellement chaque paire de corps actifs dont au moins
-un est dynamique. Pour deux faces de boîtes presque alignées, elle collecte
+un est dynamique. Une séparation positive inférieure à `10⁻⁶` peut conserver
+une paire au repos malgré l'arrondi numérique ; les requêtes autonomes gardent
+la séparation mesurée. Pour deux faces de boîtes presque alignées, elle collecte
 jusqu'à huit points distincts et résout les paires ensemble. Les impulsions
 des points proches sont reprises au pas suivant tant que les mêmes handles et
-la même orientation de contact subsistent. Les autres configurations gardent
+la même orientation de contact subsistent. Deux capsules presque parallèles
+peuvent conserver deux points latéraux ; les autres configurations gardent
 un seul point. Un petit empilement reste stable au pas fixe testé, mais les
 appuis inclinés ou glissants peuvent dériver ; il n'y a ni CCD ni garantie de
 friction statique. `step(0)` conserve les dernières observations ;

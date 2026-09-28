@@ -25,6 +25,9 @@ puis traduits dans `CHANGELOG.md`.
 - Ajout du sommeil des corps dynamiques et de leurs îlots de contact, avec
   réveil par commande, collision ou changement de support. Le délai de repos
   et le réveil sont comparés à Jolt épinglé en Debug et Release.
+- Ajout de `Capsule3D` verticale avec masse et inertie, requêtes autonomes de
+  distance, recouvrement et rayon, et premiers contacts avec sphères, boîtes
+  et capsules. Trois témoins capsule/boîte sont comparés à Jolt en Debug et Release.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

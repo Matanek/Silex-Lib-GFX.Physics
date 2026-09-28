@@ -1,7 +1,7 @@
 # Simulate rigid bodies in 3D
 
 `World3D` simulates fixed, kinematic, and dynamic bodies without a window,
-scene, renderer, or ECS. It accepts `Shape3D` spheres and boxes and provides
+scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, and capsules and provides
 a contact response between these shapes. Boxes resting on nearly parallel
 faces use multiple points; fast motion can still pass through an obstacle.
 
@@ -36,7 +36,7 @@ takes seconds and rejects negative or non-finite values.
 
 Bodies are dynamic by default, with a radius 0.5 sphere and density 1. Mass
 and the three principal moments of inertia are derived for a homogeneous
-sphere or box. `MassProperties3D` can specify positive mass, a local center,
+sphere, box, or capsule. `MassProperties3D` can specify positive mass, a local center,
 and three positive local moments; the principal axes then align with the
 shape's local axes. Inertia is rotated into world coordinates for torque and
 impulses. A force or impulse with a world application point also creates a
@@ -102,10 +102,13 @@ Tangential impulse is bounded by combined friction times normal impulse.
 step results.
 
 Detection currently examines every pair of enabled bodies with at least one
-dynamic body. For two nearly aligned box faces, it gathers up to eight distinct
-points and solves the pairs together. Nearby point impulses carry into the
-next step while the same handles and contact orientation remain. Other
-configurations still use one point. A small stack stays stable with the tested
+dynamic body. A positive separation below `10⁻⁶` may retain a resting pair
+despite rounding; standalone queries keep the measured separation. For two
+nearly aligned box faces, it gathers up to eight distinct points and solves
+the pairs together. Nearby point impulses carry into the next step while the
+same handles and contact orientation remain. Nearly parallel capsules can
+retain two lateral points; other configurations still use one point. A small
+stack stays stable with the tested
 fixed step, while inclined or sliding supports may still drift; there is no
 CCD or static friction guarantee.
 `step(0)` preserves the last observations; destroying a body removes current

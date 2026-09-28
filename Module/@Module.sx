@@ -2,6 +2,7 @@ public use GFX.Physics.TileMapCollider2D.TileMapCollider2D
 public use GFX.Physics.TileMapCollider2D.TileCollisionRect2D
 public use GFX.Physics.Box2D.Box2D
 public use GFX.Physics.Box3D.Box3D
+public use GFX.Physics.Capsule3D.Capsule3D
 public use GFX.Physics.Capsule2D.Capsule2D
 public use GFX.Physics.Chain2D.Chain2D
 public use GFX.Physics.Circle2D.Circle2D

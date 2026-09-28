@@ -481,5 +481,24 @@ package func shape_mass_properties3d(shape:Shape3D, density:float) MassPropertie
                 scale * (value.size.x * value.size.x + value.size.y * value.size.y)
             ))
         }
+        capsule(value) => {
+            let radius_squared = value.radius * value.radius
+            let cylinder_length = 2.0 * value.half_height
+            let cylinder_mass = density * Math.pi() * radius_squared * cylinder_length
+            let caps_mass = density * (4.0 / 3.0) * Math.pi() *
+                radius_squared * value.radius
+            let axial = 0.5 * cylinder_mass * radius_squared +
+                0.4 * caps_mass * radius_squared
+            let transverse = cylinder_mass *
+                (3.0 * radius_squared + cylinder_length * cylinder_length) / 12.0 +
+                caps_mass * (
+                    0.4 * radius_squared + value.half_height * value.half_height +
+                    0.75 * value.half_height * value.radius
+                )
+            return MassProperties3D(
+                cylinder_mass + caps_mass,
+                Math.Vec3(transverse, axial, transverse)
+            )
+        }
     }
 }

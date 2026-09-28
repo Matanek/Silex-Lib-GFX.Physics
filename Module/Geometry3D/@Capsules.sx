@@ -1,0 +1,256 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+struct CapsuleAxis3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+
+    init(first:Math.Vec3, second:Math.Vec3) {
+        self.first = first
+        self.second = second
+    }
+}
+
+struct CapsuleAxisPair3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+
+    init(first:Math.Vec3, second:Math.Vec3) {
+        self.first = first
+        self.second = second
+    }
+}
+
+func capsule_axis3d(capsule:Capsule3D, transform:Transform3D) CapsuleAxis3D {
+    return CapsuleAxis3D(
+        transform.point(Math.Vec3(0.0, -capsule.half_height, 0.0)),
+        transform.point(Math.Vec3(0.0, capsule.half_height, 0.0))
+    )
+}
+
+func closest_capsule_axis_point3d(axis:CapsuleAxis3D, point:Math.Vec3) Math.Vec3 {
+    let direction = axis.second.subtract(axis.first)
+    let fraction = Math.clamp(
+        point.subtract(axis.first).dot(direction) / direction.length_squared(),
+        0.0, 1.0
+    )
+    return axis.first.add(direction.multiply(fraction))
+}
+
+func capsule_witness3d(
+    first_axis_point:Math.Vec3,
+    second_axis_point:Math.Vec3,
+    first_radius:float,
+    second_radius:float
+) DistanceResult3D {
+    let offset = second_axis_point.subtract(first_axis_point)
+    let length = offset.length()
+    var normal = Math.Vec3.right()
+    if length > 0.0 { normal = offset.divide(length) }
+    return DistanceResult3D(
+        first_axis_point.add(normal.multiply(first_radius)),
+        second_axis_point.subtract(normal.multiply(second_radius)),
+        normal, length - first_radius - second_radius
+    )
+}
+
+func sphere_capsule_distance(
+    sphere:Sphere3D, sphere_transform:Transform3D,
+    capsule:Capsule3D, capsule_transform:Transform3D
+) DistanceResult3D {
+    let axis = capsule_axis3d(capsule, capsule_transform)
+    let closest = closest_capsule_axis_point3d(axis, sphere_transform.position)
+    return capsule_witness3d(
+        sphere_transform.position, closest, sphere.radius, capsule.radius
+    )
+}
+
+func closest_capsule_axes3d(first:CapsuleAxis3D, second:CapsuleAxis3D) CapsuleAxisPair3D {
+    let first_direction = first.second.subtract(first.first)
+    let second_direction = second.second.subtract(second.first)
+    let offset = first.first.subtract(second.first)
+    let a = first_direction.dot(first_direction)
+    let b = first_direction.dot(second_direction)
+    let c = second_direction.dot(second_direction)
+    let d = first_direction.dot(offset)
+    let e = second_direction.dot(offset)
+    let denominator = a * c - b * b
+    var first_fraction = 0.0
+    if denominator > 0.000000000001 {
+        first_fraction = Math.clamp((b * e - c * d) / denominator, 0.0, 1.0)
+    }
+    var second_fraction = (b * first_fraction + e) / c
+    if second_fraction < 0.0 {
+        second_fraction = 0.0
+        first_fraction = Math.clamp(-d / a, 0.0, 1.0)
+    } else if second_fraction > 1.0 {
+        second_fraction = 1.0
+        first_fraction = Math.clamp((b - d) / a, 0.0, 1.0)
+    }
+    return CapsuleAxisPair3D(
+        first.first.add(first_direction.multiply(first_fraction)),
+        second.first.add(second_direction.multiply(second_fraction))
+    )
+}
+
+func capsule_capsule_distance(
+    first:Capsule3D, first_transform:Transform3D,
+    second:Capsule3D, second_transform:Transform3D
+) DistanceResult3D {
+    let axes = closest_capsule_axes3d(
+        capsule_axis3d(first, first_transform),
+        capsule_axis3d(second, second_transform)
+    )
+    return capsule_witness3d(
+        axes.first, axes.second, first.radius, second.radius
+    )
+}
+
+func capsule_box_distance(
+    capsule:Capsule3D, capsule_transform:Transform3D,
+    box:Box3D, box_transform:Transform3D
+) DistanceResult3D {
+    let axis = capsule_axis3d(capsule, capsule_transform)
+    let first = box_transform.inverse_point(axis.first)
+    let second = box_transform.inverse_point(axis.second)
+    let direction = second.subtract(first)
+    let half = box.half_size()
+    var lower = 0.0
+    var upper = 1.0
+    var iteration = 0
+    while iteration < 48 {
+        let left = lower + (upper - lower) / 3.0
+        let right = upper - (upper - lower) / 3.0
+        let left_point = first.add(direction.multiply(left))
+        let right_point = first.add(direction.multiply(right))
+        let left_gap = left_point.subtract(
+            left_point.clamped(half.negated(), half)
+        ).length_squared()
+        let right_gap = right_point.subtract(
+            right_point.clamped(half.negated(), half)
+        ).length_squared()
+        if left_gap < right_gap { upper = right } else { lower = left }
+        iteration++
+    }
+    let local_axis = first.add(direction.multiply((lower + upper) * 0.5))
+    let local_box = local_axis.clamped(half.negated(), half)
+    let offset = local_box.subtract(local_axis)
+    let length = offset.length()
+    if length > 0.0 {
+        let normal = box_transform.vector(offset.divide(length))
+        let axis_point = box_transform.point(local_axis)
+        return DistanceResult3D(
+            axis_point.add(normal.multiply(capsule.radius)),
+            box_transform.point(local_box), normal, length - capsule.radius
+        )
+    }
+    var face_distance = half.x - Math.abs(local_axis.x)
+    var local_normal = Math.Vec3(signed_geometry3d_axis(local_axis.x), 0.0, 0.0)
+    let y_distance = half.y - Math.abs(local_axis.y)
+    if y_distance < face_distance {
+        face_distance = y_distance
+        local_normal = Math.Vec3(0.0, signed_geometry3d_axis(local_axis.y), 0.0)
+    }
+    let z_distance = half.z - Math.abs(local_axis.z)
+    if z_distance < face_distance {
+        face_distance = z_distance
+        local_normal = Math.Vec3(0.0, 0.0, signed_geometry3d_axis(local_axis.z))
+    }
+    let normal = box_transform.vector(local_normal)
+    return DistanceResult3D(
+        box_transform.point(local_axis).add(normal.multiply(capsule.radius)),
+        box_transform.point(local_axis.add(local_normal.multiply(face_distance))),
+        normal, -face_distance - capsule.radius
+    )
+}
+
+func best_capsule_hit3d(
+    current:CastResult3D, ray:Ray3D, transform:Transform3D,
+    fraction:float, local_normal:Math.Vec3
+) CastResult3D {
+    if fraction < 0.0 || fraction > 1.0 ||
+        (current.hit && fraction >= current.fraction)
+    {
+        return current
+    }
+    return CastResult3D(
+        ray.origin.add(ray.translation.multiply(fraction)),
+        transform.vector(local_normal), fraction
+    )
+}
+
+func capsule_cap_hit3d(
+    ray:Ray3D, transform:Transform3D,
+    local_origin:Math.Vec3, local_direction:Math.Vec3,
+    center:Math.Vec3, radius:float, half_height:float,
+    upper:bool, current:CastResult3D
+) CastResult3D {
+    let offset = local_origin.subtract(center)
+    let a = local_direction.length_squared()
+    let b = offset.dot(local_direction)
+    let c = offset.length_squared() - radius * radius
+    let discriminant = b * b - a * c
+    if discriminant < 0.0 { return current }
+    let root = Math.sqrt(discriminant)
+    var selected = current
+    var index = 0
+    while index < 2 {
+        var fraction = (-b - root) / a
+        if index == 1 { fraction = (-b + root) / a }
+        let point = local_origin.add(local_direction.multiply(fraction))
+        if (upper && point.y >= half_height) ||
+            (!upper && point.y <= -half_height)
+        {
+            selected = best_capsule_hit3d(
+                selected, ray, transform, fraction,
+                point.subtract(center).divide(radius)
+            )
+        }
+        index++
+    }
+    return selected
+}
+
+func ray_capsule_cast(
+    ray:Ray3D, capsule:Capsule3D, transform:Transform3D
+) CastResult3D {
+    let origin = transform.inverse_point(ray.origin)
+    let direction = transform.inverse_vector(ray.translation)
+    var result = CastResult3D()
+    let a = direction.x * direction.x + direction.z * direction.z
+    if a > 0.0 {
+        let b = origin.x * direction.x + origin.z * direction.z
+        let c = origin.x * origin.x + origin.z * origin.z -
+            capsule.radius * capsule.radius
+        let discriminant = b * b - a * c
+        if discriminant >= 0.0 {
+            let root = Math.sqrt(discriminant)
+            var index = 0
+            while index < 2 {
+                var fraction = (-b - root) / a
+                if index == 1 { fraction = (-b + root) / a }
+                let point = origin.add(direction.multiply(fraction))
+                if Math.abs(point.y) <= capsule.half_height {
+                    result = best_capsule_hit3d(
+                        result, ray, transform, fraction,
+                        Math.Vec3(point.x, 0.0, point.z).divide(capsule.radius)
+                    )
+                }
+                index++
+            }
+        }
+    }
+    result = capsule_cap_hit3d(
+        ray, transform, origin, direction,
+        Math.Vec3(0.0, capsule.half_height, 0.0),
+        capsule.radius, capsule.half_height, true, result
+    )
+    return capsule_cap_hit3d(
+        ray, transform, origin, direction,
+        Math.Vec3(0.0, -capsule.half_height, 0.0),
+        capsule.radius, capsule.half_height, false, result
+    )
+}

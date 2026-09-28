@@ -1,6 +1,6 @@
 # Géométrie convexe 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -11,6 +11,7 @@ use STD.Math
 
 let sphere = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
 let box = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 1.0, 3.0)))
+let capsule = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
 let pose = Physics.Transform3D(
     position:Math.Vec3(2.0, 3.0, 4.0),
     rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.up())
@@ -30,7 +31,9 @@ let hit = Physics.Geometry3D.ray_cast(
 
 `Box3D` reçoit les dimensions complètes, centrées sur l'origine locale ;
 `half_size()` retourne les demi-dimensions. `Sphere3D` reçoit un rayon positif.
-Les deux formes refusent les valeurs non finies ou non positives. Une
+`Capsule3D(radius, half_height)` entoure un segment local vertical de longueur
+`2 × half_height` ; sa hauteur totale vaut `2 × (half_height + radius)`.
+Les trois formes refusent les valeurs non finies ou non positives. Une
 `Transform3D` conserve une position finie et un quaternion unitaire. Ses
 opérations `point` et `vector` appliquent la rotation ; `point` ajoute aussi la
 translation. `inverse_point` et `inverse_vector` défont ces opérations.
@@ -43,8 +46,8 @@ ne corrigent pas silencieusement un quaternion invalide.
 
 ## Résultats des requêtes
 
-`Geometry3D.distance(first, second)` accepte toute paire de sphères et boîtes,
-y compris les boîtes orientées. `DistanceResult3D.separation` est positive
+`Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
+et capsules, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.
@@ -63,7 +66,8 @@ le point et la normale extérieure de la forme. Depuis l'intérieur d'une
 forme, le premier passage sortant est retourné. Un rayon manqué a `hit = false`.
 
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
-arêtes. Il n'alloue pas de cache persistant ; la future détection des
-collisions du monde devra sélectionner les paires candidates avant ces requêtes
-fines. Les autres familles de formes, les casts de formes et les requêtes sur
+arêtes. Les capsules utilisent le segment axial et les rayons testent aussi
+leurs hémisphères. Les requêtes n'allouent pas de cache persistant ; le monde
+sélectionne les paires candidates avant ces requêtes fines. Les autres familles
+de formes, les casts de formes et les requêtes sur
 le monde restent à livrer.
