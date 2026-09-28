@@ -6,6 +6,9 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added immutable `Compound3D` to assemble spheres, boxes, and capsules on a
+  fixed body. Distances, overlaps, rays, and contacts report the selected
+  child ID. Dynamic compounds remain to be delivered.
 - Added `Sphere3D`, `Box3D`, `Shape3D`, and `Transform3D` values as the first
   standalone 3D geometry primitives. Invalid dimensions, poses, and rotations
   are rejected. `Geometry3D` provides signed distances, overlaps, and rays for

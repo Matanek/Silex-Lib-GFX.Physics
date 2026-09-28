@@ -6,6 +6,14 @@ fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points ; un mouvement rapide
 peut encore traverser un obstacle.
 
+Un `Compound3D` immuable peut aussi servir de forme à un corps **fixe**. Le
+monde teste ses enfants primitifs et expose `Contact3D.first_child_id()` et
+`second_child_id()` pour l'enfant retenu ; `-1` désigne une forme primitive.
+Le contact retient actuellement l'enfant dont la séparation signée est la
+plus petite, avec un seul manifold par paire de corps. Un composé dynamique
+ou cinématique est refusé. La masse d'un composé dynamique, les mutations et
+les terrains restent à livrer.
+
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.
 

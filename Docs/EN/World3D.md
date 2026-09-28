@@ -5,6 +5,14 @@ scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, and capsules and p
 a contact response between these shapes. Boxes resting on nearly parallel
 faces use multiple points; fast motion can still pass through an obstacle.
 
+An immutable `Compound3D` may also be the shape of a **fixed** body. The
+world tests its primitive children and exposes `Contact3D.first_child_id()`
+and `second_child_id()` for the selected child; `-1` denotes a primitive.
+The contact currently selects the child with the smallest signed separation,
+with one manifold per body pair. Dynamic and kinematic compounds are
+rejected. Dynamic compound mass, mutation, and terrain support remain to be
+delivered.
+
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.
 

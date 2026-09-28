@@ -1,6 +1,6 @@
 # Standalone 3D convex geometry
 
-`GFX.Physics` provides spheres, boxes, capsules, and rigid poses as Silex values. They
+`GFX.Physics` provides spheres, boxes, capsules, fixed compounds, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
 The [3D world](World3D.md) uses these first shapes for free body motion.
 
@@ -68,3 +68,38 @@ Capsules use their axial segment; ray queries also test their hemispheres.
 The queries retain no cache; the world selects candidate pairs before these
 narrow queries. Other shape families,
 shape casts, and world queries remain to be delivered.
+
+## Static compound
+
+`Compound3D` takes a nonempty array of `CompoundChild3D(id, shape,
+transform)`. Each child has a unique nonnegative integer ID and a local pose.
+Children may be spheres, boxes, or capsules; nested compounds are rejected.
+The constructor copies the child list, which cannot be changed afterward.
+The effective pose applies the child pose, then the compound pose.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+var compound = Physics.Compound3D([
+    Physics.CompoundChild3D(22,
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+])
+let target = Physics.ShapePlacement3D(
+    Physics.Shape3D.compound(compound)
+)
+let probe = Physics.ShapePlacement3D(
+    Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+    Physics.Transform3D(position:Math.Vec3(4.0, 0.0, 0.0))
+)
+let result = Physics.Geometry3D.distance(probe, target)
+assert(result.second_child_id == 22)
+```
+
+Distance and overlap visit the children and select the smallest signed
+separation. `first_child_id` and `second_child_id` identify the selected
+children, or are `-1` for a primitive. For rays, `child_id` identifies the
+first child hit, or is `-1` for a miss or primitive target. Ties keep the
+first child in the supplied order. Both operands of a standalone query may
+be compounds. See the [3D world](World3D.md) for body support.

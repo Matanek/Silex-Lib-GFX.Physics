@@ -5,6 +5,7 @@ use GFX.Physics.Contact3D.Contact3D
 use GFX.Physics.Contact3D.ContactPoint3D
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.RigidBody3D.BodyId3D
 use GFX.Physics.RigidBody3D.BodyState3D
 use GFX.Physics.RigidBody3D.BodyStore3D
@@ -152,14 +153,22 @@ public class World3D {
                                     ShapePlacement3D(second.shape, second.transform)
                                 )
                                 if distance.separation <= 0.000001 {
+                                    let first_contact_shape = contact_placement3d(
+                                        first, distance.first_child_id
+                                    )
+                                    let second_contact_shape = contact_placement3d(
+                                        second, distance.second_child_id
+                                    )
                                     let normal = contact_normal3d(
-                                        first, second, distance.normal
+                                        first_contact_shape, second_contact_shape,
+                                        distance.normal
                                     )
                                     let point = distance.first_point.add(
                                         distance.second_point
                                     ).multiply(0.5)
                                     let points = contact_points3d(
-                                        first, second, normal, point
+                                        first_contact_shape, second_contact_shape,
+                                        normal, point
                                     )
                                     let friction = Math.sqrt(first.friction) *
                                         Math.sqrt(second.friction)
@@ -184,7 +193,10 @@ public class World3D {
                                             RigidBody3D(self.store, first_id)
                                         ) && previous.second_body().same_body(
                                             RigidBody3D(self.store, second_id)
-                                        ) {
+                                        ) && previous.first_child_id() ==
+                                            distance.first_child_id &&
+                                            previous.second_child_id() ==
+                                                distance.second_child_id {
                                             had_previous = true
                                         }
                                     }
@@ -207,7 +219,8 @@ public class World3D {
                                         first, second,
                                         first_id, second_id,
                                         normal, distance.separation, point,
-                                        friction, restitution, constraints, active
+                                        friction, restitution, constraints, active,
+                                        distance.first_child_id, distance.second_child_id
                                     ))
                                 }
                             }
@@ -225,7 +238,9 @@ public class World3D {
                     RigidBody3D(self.store, pair.first_id)
                 ) && previous.second_body().same_body(
                     RigidBody3D(self.store, pair.second_id)
-                ) && previous.normal().dot(pair.normal) > 0.95 {
+                ) && previous.first_child_id() == pair.first_child_id &&
+                    previous.second_child_id() == pair.second_child_id &&
+                    previous.normal().dot(pair.normal) > 0.95 {
                     warm_contact_points3d(
                         pair.first, pair.second, pair.normal, pair.friction,
                         pair.constraints, previous
@@ -284,7 +299,8 @@ public class World3D {
                 RigidBody3D(self.store, pair.second_id),
                 pair.normal, pair.separation, pair.point,
                 normal_impulse, tangent_impulse,
-                pair.friction, pair.restitution, public_points
+                pair.friction, pair.restitution, public_points,
+                pair.first_child_id, pair.second_child_id
             ))
         }
     }
@@ -444,13 +460,16 @@ class ContactPairState3D {
     let restitution:float
     var constraints:ContactPointState3D[]
     let active:bool
+    let first_child_id:int
+    let second_child_id:int
 
     init(
         first:BodyState3D, second:BodyState3D,
         first_id:BodyId3D, second_id:BodyId3D,
         normal:Math.Vec3, separation:float, point:Math.Vec3,
         friction:float, restitution:float,
-        constraints:ContactPointState3D[], active:bool
+        constraints:ContactPointState3D[], active:bool,
+        first_child_id:int, second_child_id:int
     ) {
         self.first = first
         self.second = second
@@ -463,40 +482,68 @@ class ContactPairState3D {
         self.restitution = restitution
         self.constraints = constraints
         self.active = active
+        self.first_child_id = first_child_id
+        self.second_child_id = second_child_id
     }
 }
 
+func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {
+    match state.shape {
+        compound(compound) => {
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                if child.id == child_id {
+                    return ShapePlacement3D(
+                        child.shape,
+                        compound_child_transform(state.transform, child)
+                    )
+                }
+                index++
+            }
+            panic("GFX.Physics.World3D contact child id is missing")
+        }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+    }
+    return ShapePlacement3D(state.shape, state.transform)
+}
+
 func contact_points3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:ShapePlacement3D,
+    second:ShapePlacement3D,
     normal:Math.Vec3,
     witness:Math.Vec3
 ) Math.Vec3[] {
-    match first.shape {
+    match first.shape() {
         box(first_box) => {
-            match second.shape {
+            match second.shape() {
                 box(second_box) => {
                     return box_box_contact_points(
-                        first_box, first.transform, second_box, second.transform,
+                        first_box, first.transform(), second_box, second.transform(),
                         normal, witness
                     )
                 }
                 sphere(_) => {}
                 capsule(_) => {}
+                compound(_) => {}
             }
         }
         sphere(_) => {}
+        compound(_) => {}
         capsule(first_capsule) => {
-            match second.shape {
+            match second.shape() {
                 capsule(second_capsule) => {
                     return capsule_capsule_contact_points(
-                        first_capsule, first.transform,
-                        second_capsule, second.transform,
+                        first_capsule, first.transform(),
+                        second_capsule, second.transform(),
                         normal, witness
                     )
                 }
                 sphere(_) => {}
                 box(_) => {}
+                compound(_) => {}
             }
         }
     }
@@ -504,48 +551,52 @@ func contact_points3d(
 }
 
 func contact_normal3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:ShapePlacement3D,
+    second:ShapePlacement3D,
     geometric_normal:Math.Vec3
 ) Math.Vec3 {
-    match first.shape {
+    match first.shape() {
         sphere(_) => {
-            match second.shape {
+            match second.shape() {
                 box(box) => {
-                    if inside_box3d(first.transform.position, box, second.transform) {
+                    if inside_box3d(first.transform().position, box, second.transform()) {
                         return geometric_normal.negated()
                     }
                 }
                 sphere(_) => {}
                 capsule(_) => {}
+                compound(_) => {}
             }
         }
         box(box) => {
-            match second.shape {
+            match second.shape() {
                 sphere(_) => {
-                    if inside_box3d(second.transform.position, box, first.transform) {
+                    if inside_box3d(second.transform().position, box, first.transform()) {
                         return geometric_normal.negated()
                     }
                 }
                 capsule(_) => {
-                    if inside_box3d(second.transform.position, box, first.transform) {
+                    if inside_box3d(second.transform().position, box, first.transform()) {
                         return geometric_normal.negated()
                     }
                 }
                 box(_) => {}
+                compound(_) => {}
             }
         }
         capsule(_) => {
-            match second.shape {
+            match second.shape() {
                 box(box) => {
-                    if inside_box3d(first.transform.position, box, second.transform) {
+                    if inside_box3d(first.transform().position, box, second.transform()) {
                         return geometric_normal.negated()
                     }
                 }
                 sphere(_) => {}
                 capsule(_) => {}
+                compound(_) => {}
             }
         }
+        compound(_) => {}
     }
     return geometric_normal
 }

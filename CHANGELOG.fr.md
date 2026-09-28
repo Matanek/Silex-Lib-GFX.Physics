@@ -6,6 +6,9 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `Compound3D` immuable pour assembler des sphères, boîtes et capsules
+  sous un corps fixe. Les distances, recouvrements, rayons et contacts donnent
+  l'identifiant de l'enfant retenu. Le composé dynamique reste à livrer.
 - Ajout des valeurs `Sphere3D`, `Box3D`, `Shape3D` et `Transform3D` pour amorcer
   la géométrie 3D autonome. Les dimensions, poses et rotations invalides sont
   rejetées. `Geometry3D` fournit les distances signées, recouvrements et rayons

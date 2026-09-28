@@ -1,5 +1,7 @@
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Compound3D.Compound3D
+use GFX.Physics.Compound3D.CompoundChild3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
@@ -44,17 +46,23 @@ public struct DistanceResult3D {
     let second_point:Math.Vec3
     let normal:Math.Vec3
     let separation:float
+    let first_child_id:int
+    let second_child_id:int
 
     init(
         first_point:Math.Vec3,
         second_point:Math.Vec3,
         normal:Math.Vec3,
-        separation:float
+        separation:float,
+        first_child_id:int = -1,
+        second_child_id:int = -1
     ) {
         self.first_point = first_point
         self.second_point = second_point
         self.normal = normal
         self.separation = separation
+        self.first_child_id = first_child_id
+        self.second_child_id = second_child_id
     }
 }
 
@@ -63,19 +71,22 @@ public struct CastResult3D {
     let point:Math.Vec3
     let normal:Math.Vec3
     let fraction:float
+    let child_id:int
 
     init() {
         self.hit = false
         self.point = Math.Vec3()
         self.normal = Math.Vec3()
         self.fraction = 0.0
+        self.child_id = -1
     }
 
-    init(point:Math.Vec3, normal:Math.Vec3, fraction:float) {
+    init(point:Math.Vec3, normal:Math.Vec3, fraction:float, child_id:int = -1) {
         self.hit = true
         self.point = point
         self.normal = normal
         self.fraction = fraction
+        self.child_id = child_id
     }
 }
 
@@ -86,6 +97,24 @@ public struct Geometry3D {
         first:ShapePlacement3D,
         second:ShapePlacement3D
     ) DistanceResult3D {
+        match first.shape() {
+            compound(first_compound) => {
+                return compound_first_distance(first_compound, first.transform(), second)
+            }
+            sphere(_) => {}
+            box(_) => {}
+            capsule(_) => {}
+        }
+        match second.shape() {
+            compound(second_compound) => {
+                return reversed_distance(compound_first_distance(
+                    second_compound, second.transform(), first
+                ))
+            }
+            sphere(_) => {}
+            box(_) => {}
+            capsule(_) => {}
+        }
         match first.shape() {
             sphere(first_sphere) => {
                 match second.shape() {
@@ -107,6 +136,7 @@ public struct Geometry3D {
                             second_capsule, second.transform()
                         )
                     }
+                    compound(_) => {}
                 }
             }
             box(first_box) => {
@@ -129,6 +159,7 @@ public struct Geometry3D {
                             first_box, first.transform()
                         ))
                     }
+                    compound(_) => {}
                 }
             }
             capsule(first_capsule) => {
@@ -151,9 +182,12 @@ public struct Geometry3D {
                             second_capsule, second.transform()
                         )
                     }
+                    compound(_) => {}
                 }
             }
+            compound(_) => {}
         }
+        panic("GFX.Physics.Geometry3D unsupported shape pair")
     }
 
     static func overlaps(
@@ -171,10 +205,12 @@ public struct Geometry3D {
                     }
                     sphere(_) => {}
                     capsule(_) => {}
+                    compound(_) => {}
                 }
             }
             sphere(_) => {}
             capsule(_) => {}
+            compound(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
     }
@@ -189,6 +225,9 @@ public struct Geometry3D {
             }
             capsule(capsule) => {
                 return ray_capsule_cast(ray, capsule, target.transform())
+            }
+            compound(compound) => {
+                return compound_ray_cast(ray, compound, target.transform())
             }
         }
     }
@@ -258,8 +297,59 @@ func sphere_box_distance(
 func reversed_distance(result:DistanceResult3D) DistanceResult3D {
     return DistanceResult3D(
         result.second_point, result.first_point,
-        result.normal.negated(), result.separation
+        result.normal.negated(), result.separation,
+        result.second_child_id, result.first_child_id
     )
+}
+
+package func compound_child_transform(
+    parent:Transform3D, child:CompoundChild3D
+) Transform3D {
+    return Transform3D(
+        parent.point(child.transform.position),
+        parent.rotation.multiply(child.transform.rotation)
+    )
+}
+
+func compound_first_distance(
+    compound:Compound3D, transform:Transform3D, other:ShapePlacement3D
+) DistanceResult3D {
+    var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
+    var index = 0
+    while index < compound.child_count() {
+        let child = compound.child(index)
+        let placement = ShapePlacement3D(
+            child.shape, compound_child_transform(transform, child)
+        )
+        let distance = Geometry3D.distance(placement, other)
+        if index == 0 || distance.separation < best.separation {
+            best = DistanceResult3D(
+                distance.first_point, distance.second_point,
+                distance.normal, distance.separation,
+                child.id, distance.second_child_id
+            )
+        }
+        index++
+    }
+    return best
+}
+
+func compound_ray_cast(
+    ray:Ray3D, compound:Compound3D, transform:Transform3D
+) CastResult3D {
+    var best = CastResult3D()
+    var index = 0
+    while index < compound.child_count() {
+        let child = compound.child(index)
+        let hit = Geometry3D.ray_cast(ray, ShapePlacement3D(
+            child.shape, compound_child_transform(transform, child)
+        ))
+        if hit.hit && (!best.hit || hit.fraction < best.fraction) {
+            best = CastResult3D(hit.point, hit.normal, hit.fraction, child.id)
+        }
+        index++
+    }
+    return best
 }
 
 func ray_sphere_cast(

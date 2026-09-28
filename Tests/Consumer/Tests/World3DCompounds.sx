@@ -1,0 +1,148 @@
+use GFX.Physics
+use STD.Math
+
+func two_spheres() Physics.Compound3D {
+    return Physics.Compound3D([
+        Physics.CompoundChild3D(11,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(22,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    ])
+}
+
+func rotated_compound() Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(
+        Physics.Shape3D.compound(two_spheres()),
+        Physics.Transform3D(rotation:Math.Quat.angle_axis(
+            Math.half_pi(), Math.Vec3.up()
+        ))
+    )
+}
+
+test "composed rotation preserves child ids in distance and ray queries" {
+    let compound = rotated_compound()
+    let probe = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -3.25))
+    )
+    let result = Physics.Geometry3D.distance(probe, compound)
+    assert(Math.abs(result.separation - 0.25) < 0.00001)
+    assert(result.first_child_id == -1)
+    assert(result.second_child_id == 22)
+    let reverse = Physics.Geometry3D.distance(compound, probe)
+    assert(Math.abs(reverse.separation - result.separation) < 0.00001)
+    assert(reverse.first_child_id == 22)
+    assert(reverse.second_child_id == -1)
+    let ray = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(0.0, 0.0, -5.0),
+            Math.Vec3(0.0, 0.0, 5.0)), compound
+    )
+    assert(ray.hit)
+    assert(Math.abs(ray.fraction - 0.5) < 0.00001)
+    assert(ray.child_id == 22)
+}
+
+test "fixed compound contact reports the selected child" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(two_spheres())
+        ..transform = Physics.Transform3D(rotation:Math.Quat.angle_axis(
+            Math.half_pi(), Math.Vec3.up())))
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -3.25))
+        ..linear_velocity = Math.Vec3(0.0, 0.0, 1.0))
+    world.step(0.3)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts[0].first_child_id() == 22)
+    assert(contacts[0].second_child_id() == -1)
+    assert(moving.linear_velocity().z < 0.1)
+    world.destroy_rigid_body(fixed)
+    assert(world.contact_count() == 0)
+    var replacement = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(two_spheres())
+        ..transform = Physics.Transform3D(rotation:Math.Quat.angle_axis(
+            Math.half_pi(), Math.Vec3.up())))
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -3.0)))
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    world.write_contacts(contacts)
+    assert(contacts[0].first_child_id() == 22)
+    assert(contacts[0].first_body().same_body(replacement))
+}
+
+test "compound pairs retain both child ids across primitive families" {
+    let first = Physics.ShapePlacement3D(Physics.Shape3D.compound(
+        Physics.Compound3D([
+            Physics.CompoundChild3D(7,
+                Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))),
+                Physics.Transform3D(position:Math.Vec3(0.0, 0.0, 2.0))),
+            Physics.CompoundChild3D(8,
+                Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5)),
+                Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -2.0)))
+        ])
+    ))
+    let second = Physics.ShapePlacement3D(Physics.Shape3D.compound(
+        Physics.Compound3D([
+            Physics.CompoundChild3D(31,
+                Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+                Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -3.0)))
+        ])
+    ))
+    let distance = Physics.Geometry3D.distance(first, second)
+    assert(Math.abs(distance.separation - 0.25) < 0.00001)
+    assert(distance.first_child_id == 8)
+    assert(distance.second_child_id == 31)
+    assert(!Physics.Geometry3D.overlaps(first, second))
+    let ray = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(0.0, 0.0, 4.0),
+            Math.Vec3(0.0, 0.0, -8.0)), first
+    )
+    assert(ray.hit)
+    assert(ray.child_id == 7)
+}
+
+test "compound owns its child list and box child uses box response" {
+    var children:Physics.CompoundChild3D[] = [
+        Physics.CompoundChild3D(5,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    ]
+    var compound = Physics.Compound3D(children)
+    children.append(Physics.CompoundChild3D(6,
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5))))
+    assert(compound.child_count() == 1)
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(compound))
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings())
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    assert(sphere.position().x > 0.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts[0].first_child_id() == 5)
+}
+
+test "contact identity changes when the same pair reaches another child" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(two_spheres()))
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.9, 0.0, 0.0)))
+    world.step(0.01)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 11)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(2.9, 0.0, 0.0)))
+    world.step(0.01)
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 22)
+}

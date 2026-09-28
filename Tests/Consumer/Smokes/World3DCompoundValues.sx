@@ -1,0 +1,32 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var compound = Physics.Compound3D([
+        Physics.CompoundChild3D(11,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(22,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    ])
+    let target = Physics.ShapePlacement3D(
+        Physics.Shape3D.compound(compound),
+        Physics.Transform3D(rotation:Math.Quat.angle_axis(
+            Math.half_pi(), Math.Vec3.up()
+        ))
+    )
+    let probe = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(0.0, 0.0, -3.25))
+    )
+    let result = Physics.Geometry3D.distance(probe, target)
+    assert(Math.abs(result.separation - 0.25) < 0.00001)
+    assert(result.second_child_id == 22)
+    let hit = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(0.0, 0.0, -5.0),
+            Math.Vec3(0.0, 0.0, 5.0)), target
+    )
+    assert(hit.hit && Math.abs(hit.fraction - 0.5) < 0.00001)
+    assert(hit.child_id == 22)
+}

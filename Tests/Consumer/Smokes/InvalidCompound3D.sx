@@ -1,0 +1,43 @@
+use GFX.Physics
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func sphere() Physics.Shape3D {
+    return Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+}
+
+func main() {
+    if selected("empty") { Physics.Compound3D([]) }
+    if selected("negative-id") { Physics.CompoundChild3D(-1, sphere()) }
+    if selected("duplicate-id") {
+        Physics.Compound3D([
+            Physics.CompoundChild3D(2, sphere()),
+            Physics.CompoundChild3D(2, sphere())
+        ])
+    }
+    if selected("nested") {
+        Physics.CompoundChild3D(3, Physics.Shape3D.compound(
+            Physics.Compound3D([Physics.CompoundChild3D(2, sphere())])
+        ))
+    }
+    if selected("dynamic") || selected("kinematic") {
+        var world = Physics.World3D()
+        var kind = Physics.BodyType3D.dynamic
+        if selected("kinematic") { kind = Physics.BodyType3D.kinematic }
+        world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = kind
+            ..shape = Physics.Shape3D.compound(
+                Physics.Compound3D([Physics.CompoundChild3D(2, sphere())])
+            ))
+    }
+    panic("invalid compound was accepted")
+}

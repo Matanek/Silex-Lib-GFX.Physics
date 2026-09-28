@@ -1,6 +1,6 @@
 # Géométrie convexe 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes, des capsules et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules, des composés fixes et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -71,3 +71,40 @@ leurs hémisphères. Les requêtes n'allouent pas de cache persistant ; le monde
 sélectionne les paires candidates avant ces requêtes fines. Les autres familles
 de formes, les casts de formes et les requêtes sur
 le monde restent à livrer.
+
+## Composé statique
+
+`Compound3D` prend un tableau non vide de `CompoundChild3D(id, shape,
+transform)`. Chaque enfant possède un identifiant entier positif ou nul,
+unique dans le composé, et une pose locale. Les enfants peuvent être des
+sphères, boîtes ou capsules ; un composé imbriqué est rejeté. La liste est
+copiée à la construction et ne peut plus être modifiée. La pose effective
+applique d'abord la pose de l'enfant, puis celle du composé.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+var compound = Physics.Compound3D([
+    Physics.CompoundChild3D(22,
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+])
+let target = Physics.ShapePlacement3D(
+    Physics.Shape3D.compound(compound)
+)
+let probe = Physics.ShapePlacement3D(
+    Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+    Physics.Transform3D(position:Math.Vec3(4.0, 0.0, 0.0))
+)
+let result = Physics.Geometry3D.distance(probe, target)
+assert(result.second_child_id == 22)
+```
+
+Distance et recouvrement parcourent les enfants et retiennent la plus petite
+séparation signée. `first_child_id` et `second_child_id` donnent les enfants
+sélectionnés, ou `-1` pour une forme primitive. Pour un rayon, `child_id`
+identifie le premier enfant touché, ou vaut `-1` en cas d'échec ou de cible
+primitive. Les égalités conservent le premier enfant dans l'ordre fourni.
+Un composé peut participer aux requêtes autonomes des deux côtés ; sa prise
+en charge comme corps est décrite dans le [monde 3D](World3D.md).

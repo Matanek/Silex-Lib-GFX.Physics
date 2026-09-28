@@ -1,0 +1,45 @@
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+
+public struct CompoundChild3D {
+    let id:int
+    let shape:Shape3D
+    let transform:Transform3D
+
+    init(id:int, shape:Shape3D, transform:Transform3D = Transform3D()) {
+        if id < 0 { panic("GFX.Physics.CompoundChild3D requires a non-negative id") }
+        match shape {
+            compound(_) => {
+                panic("GFX.Physics.CompoundChild3D cannot contain a compound")
+            }
+            sphere(_) => {}
+            box(_) => {}
+            capsule(_) => {}
+        }
+        self.id = id
+        self.shape = shape
+        self.transform = transform
+    }
+}
+
+public class Compound3D {
+    private var children:CompoundChild3D[]
+
+    init(children:CompoundChild3D[]) {
+        if children.count() == 0 {
+            panic("GFX.Physics.Compound3D requires at least one child")
+        }
+        self.children = []
+        for child in children {
+            for existing in self.children {
+                if child.id == existing.id {
+                    panic("GFX.Physics.Compound3D requires unique child ids")
+                }
+            }
+            self.children.append(child)
+        }
+    }
+
+    func child_count() int { return self.children.count() }
+    func child(index:int) CompoundChild3D { return self.children[index] }
+}

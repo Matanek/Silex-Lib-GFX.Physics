@@ -24,6 +24,8 @@ public class Contact3D {
     private var combined_friction:float
     private var combined_restitution:float
     private var manifold_points:ContactPoint3D[]
+    private var first_child:int
+    private var second_child:int
 
     package init(
         first:RigidBody3D,
@@ -35,7 +37,9 @@ public class Contact3D {
         tangent_impulse:Math.Vec3,
         friction:float,
         restitution:float,
-        points:ContactPoint3D[]
+        points:ContactPoint3D[],
+        first_child_id:int = -1,
+        second_child_id:int = -1
     ) {
         self.first = first
         self.second = second
@@ -47,6 +51,8 @@ public class Contact3D {
         self.combined_friction = friction
         self.combined_restitution = restitution
         self.manifold_points = points
+        self.first_child = first_child_id
+        self.second_child = second_child_id
     }
 
     func first_body() RigidBody3D { return self.first }
@@ -58,6 +64,8 @@ public class Contact3D {
     func tangent_impulse() Math.Vec3 { return self.applied_tangent_impulse }
     func friction() float { return self.combined_friction }
     func restitution() float { return self.combined_restitution }
+    func first_child_id() int { return self.first_child }
+    func second_child_id() int { return self.second_child }
     func point_count() int { return self.manifold_points.count() }
     func write_points(output:&ContactPoint3D[]) {
         output.clear()
