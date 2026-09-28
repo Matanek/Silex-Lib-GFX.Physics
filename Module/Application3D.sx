@@ -1,0 +1,383 @@
+use GFX.Application
+use GFX.Application.FrameTime
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Application.Time as TimePlugin
+use GFX.ECS
+use GFX.ECS.Entity
+use GFX.Physics.Contact3D.Contact3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.Transform3D.Transform3D as PhysicsTransform3D
+use GFX.Physics.World3D.World3D
+use GFX.Physics.World3D.World3DSettings
+use GFX.Scene3D.Transform as SceneTransform3D
+use STD.Math
+
+public class Physics3DStep {
+    private var before_callbacks:func(Application, float)[] = []
+    private var after_callbacks:func(Application, float)[] = []
+
+    static func before_step(application:Application, callback:func(Application, float)) {
+        var host = application
+        host.add_plugin(Physics3DStepPlugin())
+        var resources = host.resources()
+        var step = resources.get_mut<Physics3DStep>()
+        step.before_callbacks.append(callback)
+    }
+
+    static func after_step(application:Application, callback:func(Application, float)) {
+        var host = application
+        host.add_plugin(Physics3DStepPlugin())
+        var resources = host.resources()
+        var step = resources.get_mut<Physics3DStep>()
+        step.after_callbacks.append(callback)
+    }
+
+    package func dispatch_before(application:Application, delta:float) {
+        let count = self.before_callbacks.count()
+        var index = 0
+        while index < count {
+            let callback = self.before_callbacks[index]
+            callback(application, delta)
+            index++
+        }
+    }
+
+    package func dispatch_after(application:Application, delta:float) {
+        let count = self.after_callbacks.count()
+        var index = 0
+        while index < count {
+            let callback = self.after_callbacks[index]
+            callback(application, delta)
+            index++
+        }
+    }
+}
+
+struct Physics3DStepPlugin:PluginProtocol {
+    func id() str { return "GFX.Physics.Step3D" }
+    func build(application:&Application) {
+        application.add_resource(Physics3DStep())
+    }
+}
+
+public struct PhysicsBody3D {
+    private let creation_settings:RigidBody3DSettings
+    private var current_body:RigidBody3D?
+
+    init(settings:RigidBody3DSettings = RigidBody3DSettings()) {
+        self.creation_settings = settings
+        self.current_body = null
+    }
+
+    func settings() RigidBody3DSettings { return self.creation_settings }
+    func is_bound() bool {
+        if let body = self.current_body { return body.is_valid() }
+        return false
+    }
+    func body() RigidBody3D? {
+        if let body = self.current_body {
+            if body.is_valid() { return body }
+        }
+        return null
+    }
+
+    package func bind(body:RigidBody3D) { self.current_body = body }
+    package func unbind() { self.current_body = null }
+}
+
+public class Physics3DFrameEvents {
+    private var steps:int = 0
+    private var begins:Contact3D[] = []
+    private var ends:Contact3D[] = []
+    private var scratch_begins:Contact3D[] = []
+    private var scratch_ends:Contact3D[] = []
+
+    func fixed_step_count() int { return self.steps }
+    func contact_begin_count() int { return self.begins.count() }
+    func contact_end_count() int { return self.ends.count() }
+    func contact_begin(index:int) Contact3D { return self.begins[index] }
+    func contact_end(index:int) Contact3D { return self.ends[index] }
+
+    package func begin_frame() {
+        self.steps = 0
+        self.begins.clear()
+        self.ends.clear()
+    }
+
+    package func capture(world:&World3D) {
+        self.steps++
+        world.write_contact_begin_events(self.scratch_begins)
+        world.write_contact_end_events(self.scratch_ends)
+        for contact in self.scratch_begins { self.begins.append(contact) }
+        for contact in self.scratch_ends { self.ends.append(contact) }
+    }
+}
+
+struct Physics3DBinding {
+    let entity:Entity
+    var body:RigidBody3D
+    var seen:bool
+    var suspended:bool
+    var restore_enabled:bool
+}
+
+class Physics3DRuntime {
+    let fixed_delta:float
+    let maximum_catch_up_steps:int
+    var accumulator:float = 0.0
+    var bindings:Physics3DBinding[] = []
+
+    init(fixed_delta:float, maximum_catch_up_steps:int) {
+        self.fixed_delta = fixed_delta
+        self.maximum_catch_up_steps = maximum_catch_up_steps
+    }
+
+    func find(entity:Entity) int {
+        var index = 0
+        while index < self.bindings.count() {
+            let candidate = self.bindings[index].entity
+            if candidate.index == entity.index && candidate.generation == entity.generation {
+                return index
+            }
+            index++
+        }
+        return -1
+    }
+
+    func take_body(index:int) RigidBody3D {
+        var body = self.bindings[index].body
+        var current = index
+        while current + 1 < self.bindings.count() {
+            self.bindings.swap(current, current + 1)
+            current++
+        }
+        self.bindings.take_last()
+        return body
+    }
+
+    func reconcile_activation(world:@ECS.World, physics:&World3D) {
+        var index = self.bindings.count() - 1
+        while index >= 0 {
+            let entity = self.bindings[index].entity
+            var body = self.bindings[index].body
+            if !world.has<PhysicsBody3D>(entity) ||
+                !world.has<SceneTransform3D>(entity) ||
+                !world.get<PhysicsBody3D>(entity).is_bound()
+            {
+                self.take_body(index)
+                if body.is_valid() { physics.destroy_rigid_body(body) }
+            } else if !world.is_enabled(entity) {
+                if !self.bindings[index].suspended {
+                    self.bindings[index].restore_enabled = body.is_enabled()
+                    self.bindings[index].suspended = true
+                    body.set_enabled(false)
+                }
+            } else if self.bindings[index].suspended {
+                body.set_enabled(self.bindings[index].restore_enabled)
+                self.bindings[index].suspended = false
+            }
+            index--
+        }
+    }
+}
+
+public struct Plugin:PluginProtocol {
+    struct Settings {
+        var world:World3DSettings
+        var fixed_delta:float
+        var maximum_catch_up_steps:int
+
+        init(
+            world:World3DSettings = World3DSettings(),
+            fixed_delta:float = 1.0 / 60.0,
+            maximum_catch_up_steps:int = 4
+        ) {
+            self.world = world
+            self.fixed_delta = fixed_delta
+            self.maximum_catch_up_steps = maximum_catch_up_steps
+        }
+    }
+
+    private let settings:Settings
+
+    init(settings:Settings = Plugin.Settings()) { self.settings = settings }
+    func id() str { return "GFX.Physics.Plugin3D" }
+
+    func build(host:&Application) {
+        require_application3d_settings(self.settings)
+        host.add_plugin(ECS.Plugin())
+        if !host.inherits_plugin(self.id()) { host.extend_bundles(self) }
+        host.add_plugin(TimePlugin())
+        host.add_resource(World3D(self.settings.world))
+        host.add_resource(Physics3DFrameEvents())
+        host.add_plugin(Physics3DStepPlugin())
+        host.add_resource(Physics3DRuntime(
+            self.settings.fixed_delta, self.settings.maximum_catch_up_steps
+        ))
+        host.add_system(Schedule.post_update, clear_physics3d_events,
+            process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, reconcile_physics3d_activation,
+            process_mode:GFX.Application.ProcessMode.always)
+        host.add_system(Schedule.post_update, reconcile_physics3d_bodies)
+        host.add_system(Schedule.post_update, update_application_physics3d)
+        host.add_after_system(Schedule.shutdown, stop_application_physics3d)
+    }
+}
+
+func clear_physics3d_events(events:&Physics3DFrameEvents) { events.begin_frame() }
+
+func reconcile_physics3d_activation(
+    world:@ECS.World, physics:&World3D, runtime:&Physics3DRuntime
+) {
+    runtime.reconcile_activation(world, physics)
+}
+
+func reconcile_physics3d_bodies(
+    physics:&World3D,
+    runtime:&Physics3DRuntime,
+    bodies:ECS.Query<(Entity, &PhysicsBody3D, &SceneTransform3D)>
+) {
+    var index = 0
+    while index < runtime.bindings.count() {
+        runtime.bindings[index].seen = false
+        index++
+    }
+    for (entity, component, transform) in bodies {
+        validate_scene3d_pose(transform)
+        var binding = runtime.find(entity)
+        if binding >= 0 && !component.is_bound() {
+            var previous = runtime.take_body(binding)
+            physics.destroy_rigid_body(previous)
+            binding = -1
+        }
+        if binding < 0 {
+            var settings = component.settings()
+            settings.transform = scene_to_physics3d(transform)
+            var body = physics.create_rigid_body(settings)
+            component.bind(body)
+            runtime.bindings.append(Physics3DBinding(
+                entity:entity, body:body, seen:true,
+                suspended:false, restore_enabled:true
+            ))
+            binding = runtime.bindings.count() - 1
+        }
+        runtime.bindings[binding].seen = true
+    }
+    index = runtime.bindings.count() - 1
+    while index >= 0 {
+        if !runtime.bindings[index].seen && !runtime.bindings[index].suspended {
+            var body = runtime.take_body(index)
+            if body.is_valid() { physics.destroy_rigid_body(body) }
+        }
+        index--
+    }
+}
+
+func update_application_physics3d(application:Application) {
+    var time_resources = application.resources()
+    let delta = time_resources.get<FrameTime>().delta
+    var physics_resources = application.resources()
+    var runtime_resources = application.resources()
+    var event_resources = application.resources()
+    var world_resources = application.resources()
+    var physics = physics_resources.get_mut<World3D>()
+    var runtime = runtime_resources.get_mut<Physics3DRuntime>()
+    var events = event_resources.get_mut<Physics3DFrameEvents>()
+    var world = world_resources.get_mut<ECS.World>()
+    runtime.accumulator += Math.max(0.0, delta)
+    var step = 0
+    while runtime.accumulator >= runtime.fixed_delta &&
+        step < runtime.maximum_catch_up_steps
+    {
+        synchronize_physics3d_targets(world, runtime)
+        {
+            var resources = application.resources()
+            resources.get_mut<Physics3DStep>().dispatch_before(
+                application, runtime.fixed_delta
+            )
+        }
+        runtime.reconcile_activation(application.resources().get<ECS.World>(), physics)
+        synchronize_physics3d_targets(world, runtime)
+        physics.step(runtime.fixed_delta)
+        events.capture(physics)
+        synchronize_physics3d_results(world, runtime)
+        {
+            var resources = application.resources()
+            resources.get_mut<Physics3DStep>().dispatch_after(
+                application, runtime.fixed_delta
+            )
+        }
+        runtime.reconcile_activation(application.resources().get<ECS.World>(), physics)
+        runtime.accumulator -= runtime.fixed_delta
+        step++
+    }
+    if step == 0 { synchronize_physics3d_results(world, runtime) }
+}
+
+func synchronize_physics3d_results(world:&ECS.World, runtime:@Physics3DRuntime) {
+    for binding in runtime.bindings {
+        var body = binding.body
+        if !binding.suspended && body.body_type() == BodyType3D.dynamic {
+            let position = body.position()
+            let rotation = body.rotation()
+            world.update<SceneTransform3D>(binding.entity,
+                func(transform:&SceneTransform3D) {
+                    transform.position = position
+                    transform.rotation = rotation
+                })
+        }
+    }
+}
+
+func synchronize_physics3d_targets(world:@ECS.World, runtime:@Physics3DRuntime) {
+    for binding in runtime.bindings {
+        if binding.suspended { continue }
+        var body = binding.body
+        if !body.is_enabled() { continue }
+        let transform = world.get<SceneTransform3D>(binding.entity)
+        validate_scene3d_pose(transform)
+        let target = scene_to_physics3d(transform)
+        if body.body_type() == BodyType3D.fixed {
+            if target.position != body.position() || target.rotation != body.rotation() {
+                body.set_transform(target)
+            }
+        } else if body.body_type() == BodyType3D.kinematic {
+            if target.position != body.position() || target.rotation != body.rotation() {
+                body.move_kinematic(target, runtime.fixed_delta)
+            }
+        }
+    }
+}
+
+func stop_application_physics3d(physics:&World3D, runtime:&Physics3DRuntime) {
+    while !runtime.bindings.is_empty() {
+        var body = runtime.take_body(runtime.bindings.count() - 1)
+        if body.is_valid() { physics.destroy_rigid_body(body) }
+    }
+}
+
+func scene_to_physics3d(transform:SceneTransform3D) PhysicsTransform3D {
+    return PhysicsTransform3D(transform.position, transform.rotation)
+}
+
+func validate_scene3d_pose(transform:SceneTransform3D) {
+    if !transform.scale.nearly_equal(Math.Vec3(1.0), 0.00001) {
+        panic("GFX.Physics Physics3D requires unit Scene3D scale")
+    }
+    scene_to_physics3d(transform)
+}
+
+func require_application3d_settings(settings:Plugin.Settings) {
+    if settings.fixed_delta != settings.fixed_delta ||
+        settings.fixed_delta <= 0.0 ||
+        settings.fixed_delta + settings.fixed_delta == settings.fixed_delta
+    {
+        panic("GFX.Physics Physics3D fixed delta must be finite and positive")
+    }
+    if settings.maximum_catch_up_steps < 1 {
+        panic("GFX.Physics Physics3D maximum catch-up steps must be positive")
+    }
+}

@@ -30,6 +30,8 @@ assert(!body.is_valid())
 [`World settings and counters`](WorldSettings.md) documents creation choices,
 runtime tuning, explicit substeps, wake policies, and logical scene counters.
 See [Use pixels or centimeters](Units.md) to convert application coordinates.
+See [Application and Scene3D integration](Application3D.md) for the optional
+fixed-step 3D plugin and ECS body binding.
 See [Find a game object](ApplicationIdentity.md) to associate application keys with physics objects.
 See [Owning world and lifetime](WorldOwnership.md) for explicit world composition.
 

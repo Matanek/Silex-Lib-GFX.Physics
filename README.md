@@ -1,10 +1,10 @@
 # GFX.Physics
 
-`GFX.Physics` provides an optional native Silex 2D physics simulation and
-standalone 3D convex geometry queries and a first 3D rigid-body world. They
-are independent from windows, renderers, scenes, and ECS worlds.
-The 3D world has an initial sphere/box contact response with friction and
-restitution; persistent manifolds, sleeping, and CCD remain under development.
+`GFX.Physics` provides optional native Silex 2D and 3D physics simulations.
+Their worlds work without windows or renderers; Application plugins connect
+them to ECS and Scene2D or Scene3D when requested. The 3D world supports
+spheres, boxes, capsules, fixed compounds, contact events and sleeping.
+CCD and other shape families remain under development.
 
 ```text
 silex install GFX.Physics

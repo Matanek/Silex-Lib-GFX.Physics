@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `Plugins.Physics3D`, `Components.PhysicsBody3D` et des événements
+  agrégés par frame pour relier le monde 3D à Application/ECS et aux poses
+  Scene3D. Pas fixe, pause, rattrapage et coexistence 2D/3D sont vérifiés
+  sans fenêtre ; une démonstration Scene3D est fournie dans Silex-Examples.
 - Ajout des événements de début et de fin de contact 3D, lus après un pas via
   des snapshots `Contact3D` stables. La destruction programme la fin au pas
   suivant ; le recyclage et les ID d'enfants restent distincts.

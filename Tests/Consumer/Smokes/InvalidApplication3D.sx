@@ -1,0 +1,47 @@
+use GFX.Application
+use GFX.Components
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func main() {
+    if selected("fixed-delta") {
+        var application = Application()
+            ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+                ..fixed_delta = 0.0))
+        application.prepare()
+    }
+    if selected("catch-up") {
+        var application = Application()
+            ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+                ..maximum_catch_up_steps = 0))
+        application.prepare()
+    }
+    if selected("scale") {
+        var application = Application()..add_plugin(Plugins.Physics3D())
+        application.prepare()
+        {
+            var resources = application.resources()
+            var world = resources.get_mut<Resources.World>()
+            world.spawn(ECS.EntityRecipe()
+                ..with(Components.Transform3D(scale:Math.Vec3(2.0)))
+                ..with(Components.PhysicsBody3D()))
+        }
+        application.run_schedule(Application.Schedule.update)
+        application.run_schedule(Application.Schedule.post_update)
+    }
+    panic("invalid Physics3D integration was accepted")
+}

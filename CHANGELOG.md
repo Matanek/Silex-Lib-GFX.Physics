@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added `Plugins.Physics3D`, `Components.PhysicsBody3D`, and frame-aggregated
+  events to connect the 3D world to Application/ECS and Scene3D poses.
+  Fixed stepping, pause, catch-up, and 2D/3D coexistence are verified
+  headlessly; Silex-Examples includes a Scene3D demonstration.
 - Added 3D contact begin and end events read after a step as stable
   `Contact3D` snapshots. Destruction queues an end for the next step;
   recycled bodies and child IDs remain distinct.

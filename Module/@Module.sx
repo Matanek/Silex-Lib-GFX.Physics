@@ -106,17 +106,25 @@ public use GFX.Physics.Application2D.Physics2DFrameEvents
 public use GFX.Physics.Application2D.Physics2DStep
 public use GFX.Physics.Application2D.PhysicsBody2D
 public use GFX.Physics.Application2D.Plugin as Physics2DPlugin
+public use GFX.Physics.Application3D.Physics3DFrameEvents
+public use GFX.Physics.Application3D.Physics3DStep
+public use GFX.Physics.Application3D.PhysicsBody3D
+public use GFX.Physics.Application3D.Plugin as Physics3DPlugin
 
 contribute GFX.Components {
     public use GFX.Physics.RigidBody2D.RigidBody2D
     public use GFX.Physics.Application2D.PhysicsBody2D
+    public use GFX.Physics.Application3D.PhysicsBody3D
 }
 
 contribute GFX.Resources {
     public use GFX.Physics.World2D.World2D
     public use GFX.Physics.Application2D.Physics2DFrameEvents
+    public use GFX.Physics.World3D.World3D
+    public use GFX.Physics.Application3D.Physics3DFrameEvents
 }
 
 contribute GFX.Plugins {
     public use GFX.Physics.Application2D.Plugin as Physics2D
+    public use GFX.Physics.Application3D.Plugin as Physics3D
 }

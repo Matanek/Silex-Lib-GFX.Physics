@@ -1,0 +1,378 @@
+use GFX.Application
+use GFX.Components
+use GFX.ECS
+use GFX.Physics
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+func run_frame(application:Application, delta:float) {
+    var resources = application.resources()
+    var time = resources.get_mut<Resources.FrameTime>()
+    time.delta = delta
+    application.run_schedule(Application.Schedule.update)
+    application.run_schedule(Application.Schedule.post_update)
+}
+
+class StepCounts3D {
+    var before:int = 0
+    var after:int = 0
+}
+
+func count_before(application:Application, delta:float) {
+    assert(delta > 0.0)
+    var resources = application.resources()
+    var counts = resources.get_mut<StepCounts3D>()
+    counts.before++
+}
+
+func count_after(application:Application, delta:float) {
+    assert(delta > 0.0)
+    var resources = application.resources()
+    var counts = resources.get_mut<StepCounts3D>()
+    counts.after++
+}
+
+struct Probe3DPlugin:Application.Plugin {
+    func id() str { return "Physics3DProbe" }
+    func build(host:&Application) {
+        host.add_resource(StepCounts3D())
+        Physics.Physics3DStep.before_step(host, count_before)
+        Physics.Physics3DStep.after_step(host, count_after)
+    }
+}
+
+test "Physics3D plugin advances ECS bodies at a fixed step and pauses" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1
+            ..maximum_catch_up_steps = 2))
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0)
+                ..allow_sleep = false)))
+    }
+    run_frame(application, 0.1)
+    var resources = application.resources()
+    var position = Math.Vec3()
+    {
+        let transform = resources.get<Resources.World>()
+            .get<Components.Transform3D>(entity)
+        position = transform.position
+    }
+    assert(Math.abs(position.x - 0.1) < 0.00001)
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 1)
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    run_frame(application, 10.0)
+    assert(resources.get<Resources.World>()
+        .get<Components.Transform3D>(entity).position == position)
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 0)
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.resume()
+    }
+    run_frame(application, 0.1)
+    assert(Math.abs(resources.get<Resources.World>()
+        .get<Components.Transform3D>(entity).position.x - 0.2) < 0.00001)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "fixed and kinematic scene poses drive their physical bodies" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1))
+    application.prepare()
+    var fixed_entity = ECS.Entity()
+    var kinematic_entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        fixed_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0)))
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..body_type = Physics.BodyType3D.fixed)))
+        kinematic_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..body_type = Physics.BodyType3D.kinematic)))
+    }
+    run_frame(application, 0.1)
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        world.update<Components.Transform3D>(fixed_entity,
+            func(transform:&Components.Transform3D) {
+                transform.position = Math.Vec3(-3.0, 0.0, 0.0)
+            })
+        world.update<Components.Transform3D>(kinematic_entity,
+            func(transform:&Components.Transform3D) {
+                transform.position = Math.Vec3(3.0, 0.0, 0.0)
+            })
+    }
+    run_frame(application, 0.1)
+    {
+        var resources = application.resources()
+        let world = resources.get<Resources.World>()
+        let fixed_component = world.get<Components.PhysicsBody3D>(fixed_entity)
+        let kinematic_component = world.get<Components.PhysicsBody3D>(kinematic_entity)
+        if let fixed = fixed_component.body() {
+            assert(Math.abs(fixed.position().x + 3.0) < 0.00001)
+        } else { panic("missing fixed body") }
+        if let kinematic = kinematic_component.body() {
+            assert(Math.abs(kinematic.position().x - 3.0) < 0.00001)
+        } else { panic("missing kinematic body") }
+    }
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "catch-up retains its remainder and aggregates contact events" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1
+            ..maximum_catch_up_steps = 2))
+    application.prepare()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..body_type = Physics.BodyType3D.fixed)))
+        world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..allow_sleep = false)))
+    }
+    run_frame(application, 0.3)
+    var resources = application.resources()
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 2)
+    assert(resources.get<Resources.Physics3DFrameEvents>().contact_begin_count() == 1)
+    run_frame(application, 0.0)
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 1)
+    assert(resources.get<Resources.Physics3DFrameEvents>().contact_begin_count() == 0)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "Physics2D and Physics3D retain separate worlds and clocks" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()
+            ..world = (Physics.World2DSettings() ..gravity = Math.Vec2())
+            ..fixed_delta = 0.1))
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.2))
+    application.prepare()
+    var entity3d = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform2D())
+            ..with(Components.PhysicsBody2D(Physics.RigidBody2DSettings()
+                ..velocity = Math.Vec2(1.0, 0.0)
+                ..gravity_scale = 0.0)))
+        entity3d = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0))))
+    }
+    run_frame(application, 0.2)
+    var resources = application.resources()
+    assert(resources.get<Resources.Physics2DFrameEvents>().fixed_step_count() == 2)
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 1)
+    assert(resources.get<Resources.World2D>().body_count() == 1)
+    assert(resources.get<Resources.World3D>().body_count() == 1)
+    assert(Math.abs(resources.get<Resources.World>()
+        .get<Components.Transform3D>(entity3d).position.x - 0.2) < 0.00001)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "physics callbacks run once per actual catch-up step" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..fixed_delta = 0.1
+            ..maximum_catch_up_steps = 2))
+        ..add_plugin(Probe3DPlugin())
+    application.prepare()
+    run_frame(application, 0.2)
+    var resources = application.resources()
+    assert(resources.get<StepCounts3D>().before == 2)
+    assert(resources.get<StepCounts3D>().after == 2)
+    run_frame(application, 0.0)
+    assert(resources.get<StepCounts3D>().before == 2)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "removing a component during pause queues an end for resume" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1))
+    application.prepare()
+    var fixed_entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        fixed_entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..body_type = Physics.BodyType3D.fixed)))
+        world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..allow_sleep = false)))
+    }
+    run_frame(application, 0.1)
+    var resources = application.resources()
+    assert(resources.get<Resources.Physics3DFrameEvents>().contact_begin_count() == 1)
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.remove<Components.PhysicsBody3D>(fixed_entity)
+    }
+    run_frame(application, 0.1)
+    assert(resources.get<Resources.World3D>().body_count() == 1)
+    assert(resources.get<Resources.Physics3DFrameEvents>().fixed_step_count() == 0)
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.resume()
+    }
+    run_frame(application, 0.1)
+    assert(resources.get<Resources.Physics3DFrameEvents>().contact_end_count() == 1)
+    assert(!resources.get<Resources.Physics3DFrameEvents>()
+        .contact_end(0).first_body().is_valid())
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "dynamic physics owns its scene pose after an external ECS edit" {
+    var application = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1))
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0))))
+    }
+    run_frame(application, 0.1)
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        world.update<Components.Transform3D>(entity,
+            func(transform:&Components.Transform3D) {
+                transform.position = Math.Vec3(100.0, 0.0, 0.0)
+            })
+    }
+    run_frame(application, 0.1)
+    var resources = application.resources()
+    assert(Math.abs(resources.get<Resources.World>()
+        .get<Components.Transform3D>(entity).position.x - 0.2) < 0.00001)
+    application.run_schedule(Application.Schedule.shutdown)
+}
+
+test "two Application contexts keep independent Physics3D resources" {
+    var first = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.1))
+    var second = Application()
+        ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()
+            ..world = (Physics.World3DSettings() ..gravity = Math.Vec3())
+            ..fixed_delta = 0.2))
+    first.prepare()
+    second.prepare()
+    run_frame(first, 0.1)
+    run_frame(second, 0.1)
+    assert(first.resources().get<Resources.Physics3DFrameEvents>()
+        .fixed_step_count() == 1)
+    assert(second.resources().get<Resources.Physics3DFrameEvents>()
+        .fixed_step_count() == 0)
+    run_frame(second, 0.1)
+    assert(second.resources().get<Resources.Physics3DFrameEvents>()
+        .fixed_step_count() == 1)
+    first.run_schedule(Application.Schedule.shutdown)
+    second.run_schedule(Application.Schedule.shutdown)
+}
+
+test "disabled ECS bodies preserve their handle and authored enabled state" {
+    var application = Application()..add_plugin(Plugins.Physics3D())
+    application.prepare()
+    var entity = ECS.Entity()
+    {
+        var resources = application.resources()
+        var world = resources.get_mut<Resources.World>()
+        entity = world.spawn(ECS.EntityRecipe()
+            ..with(Components.Transform3D())
+            ..with(Components.PhysicsBody3D(Physics.RigidBody3DSettings()
+                ..is_enabled = false)))
+    }
+    run_frame(application, 0.0)
+    var resources = application.resources()
+    var body:Physics.RigidBody3D? = null
+    {
+        let component = resources.get<Resources.World>()
+            .get<Components.PhysicsBody3D>(entity)
+        if let bound = component.body() { body = bound }
+        else { panic("expected bound PhysicsBody3D") }
+    }
+    if body == null { panic("expected bound PhysicsBody3D") }
+    var bound = body!
+    assert(!bound.is_enabled())
+    {
+        var simulation = resources.get_mut<Application.Simulation>()
+        simulation.pause()
+    }
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+    }
+    run_frame(application, 0.1)
+    assert(bound.is_valid() && !bound.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, true)
+    }
+    run_frame(application, 0.1)
+    assert(bound.is_valid() && !bound.is_enabled())
+    bound.set_enabled(true)
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+    }
+    run_frame(application, 0.1)
+    assert(!bound.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, true)
+    }
+    run_frame(application, 0.1)
+    assert(bound.is_valid() && bound.is_enabled())
+    {
+        var world = resources.get_mut<Resources.World>()
+        world.enable(entity, false)
+        world.destroy(entity)
+    }
+    run_frame(application, 0.1)
+    assert(!bound.is_valid())
+    application.run_schedule(Application.Schedule.shutdown)
+}
