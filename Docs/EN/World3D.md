@@ -2,8 +2,8 @@
 
 `World3D` simulates fixed, kinematic, and dynamic bodies without a window,
 scene, renderer, or ECS. It accepts `Shape3D` spheres and boxes and provides
-a first contact response between these shapes. Multiple contacts are not yet
-stabilized; fast motion can pass through an obstacle.
+a contact response between these shapes. Boxes resting on nearly parallel
+faces use multiple points; fast motion can still pass through an obstacle.
 
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.
@@ -57,14 +57,17 @@ accumulate until the next positive step, then clear. A zero step moves no
 body and preserves those accumulations. Integration uses semi implicit
 velocity and keeps a normalized quaternion; results depend on step size.
 
-## Read a first contact
+## Read contacts
 
 After a positive step, `contact_count()` counts detected pairs and
 `write_contacts(output)` copies their observations to a caller-owned array.
-Each `Contact3D` exposes the two handles, point, response normal, separation
-measured before correction, and applied normal impulse. Negative separation
-means penetration; the step then moves dynamic bodies back toward tangency
-and responds to incoming velocity at the contact point. If a sphere starts inside
+Each `Contact3D` exposes the two handles, a representative point, response
+normal, separation measured before correction, and the sum of applied normal
+impulses. `point_count()` and `write_points(output)` expose the manifold;
+each `ContactPoint3D` contains a world position and its normal and tangential
+impulses. Negative separation means penetration; the step then moves dynamic
+bodies back toward tangency and responds to incoming velocity at the contact
+points. If a sphere starts inside
 a box, the response normal can be opposite to the `Geometry3D.distance`
 query normal so the sphere exits through the nearest face.
 
@@ -78,8 +81,12 @@ Tangential impulse is bounded by combined friction times normal impulse.
 step results.
 
 Detection currently examines every pair of enabled bodies with at least one
-dynamic body. It handles one point per pair and has no manifold cache,
-persistent static friction, or CCD. Stacks and oblique contacts can still drift.
+dynamic body. For two nearly aligned box faces, it gathers up to eight distinct
+points and solves the pairs together. Nearby point impulses carry into the
+next step while the same handles and contact orientation remain. Other
+configurations still use one point. A small stack stays stable with the tested
+fixed step, while inclined or sliding supports may still drift; there is no
+CCD or static friction guarantee.
 `step(0)` preserves the last observations; destroying a body removes current
 contacts that refer to it. A retained snapshot keeps its measurements, but
 its handles become invalid with their bodies or world.
@@ -94,6 +101,6 @@ handle fails explicitly. A world refuses to destroy another world's body.
 `write_bodies` fills a caller-owned array with live bodies without promising
 creation order.
 
-The world does not yet provide materials, sleeping, constraints, spatial
+The world does not yet provide sleeping, constraints, spatial
 queries, or CCD. [Standalone geometry queries](Geometry3D.md) remain
 available for individual shapes.

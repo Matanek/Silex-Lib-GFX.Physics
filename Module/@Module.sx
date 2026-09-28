@@ -28,6 +28,7 @@ public use GFX.Physics.Geometry3D.Geometry3D
 public use GFX.Physics.Geometry3D.Ray3D
 public use GFX.Physics.Geometry3D.ShapePlacement3D
 public use GFX.Physics.Contact3D.Contact3D
+public use GFX.Physics.Contact3D.ContactPoint3D
 public use GFX.Physics.BodyTransform2D.BodyTransform2D
 public use GFX.Physics.BodyTransformBuffer2D.BodyTransformBuffer2D
 public use GFX.Physics.Events2D.BodyMoveEvent2D

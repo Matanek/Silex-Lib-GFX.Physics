@@ -1,0 +1,136 @@
+use GFX.Physics
+use STD.Math
+
+func fixed_ground(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0))))
+}
+
+func unit_box(world:Physics.World3D, position:Math.Vec3) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(position:position))
+}
+
+test "four face points support a box and retain a balanced impulse" {
+    var world = Physics.World3D()
+    fixed_ground(world)
+    var box = unit_box(world, Math.Vec3(0.0, 1.0, 0.0))
+    world.step(1.0 / 60.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].point_count() == 4)
+    var points:Physics.ContactPoint3D[] = []
+    contacts[0].write_points(points)
+    assert(points.count() == 4)
+    var impulse_sum = 0.0
+    for point in points {
+        assert(Math.abs(Math.abs(point.position.x) - 0.5) < 0.0001)
+        assert(Math.abs(Math.abs(point.position.z) - 0.5) < 0.0001)
+        assert(Math.abs(point.position.y - 0.5) < 0.01)
+        assert(point.normal_impulse >= 0.0)
+        impulse_sum += point.normal_impulse
+    }
+    var first_index = 0
+    while first_index < points.count() {
+        var second_index = first_index + 1
+        while second_index < points.count() {
+            assert(points[first_index].position.distance(
+                points[second_index].position
+            ) > 0.9)
+            second_index++
+        }
+        first_index++
+    }
+    assert(Math.abs(impulse_sum - contacts[0].normal_impulse()) < 0.00001)
+    var step = 1
+    while step < 120 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(Math.abs(box.position().y - 1.0) < 0.01)
+    assert(Math.abs(box.position().x) < 0.01)
+    assert(Math.abs(box.position().z) < 0.01)
+    assert(box.linear_velocity().length() < 0.01)
+    assert(box.angular_velocity().length() < 0.01)
+    assert(Math.abs(box.rotation().x) < 0.01)
+    assert(Math.abs(box.rotation().z) < 0.01)
+    assert(contacts[0].point_count() == 4)
+}
+
+test "two boxes settle on a fixed floor without lateral escape" {
+    var world = Physics.World3D()
+    fixed_ground(world)
+    var lower = unit_box(world, Math.Vec3(0.0, 1.0, 0.0))
+    var upper = unit_box(world, Math.Vec3(0.0, 2.0, 0.0))
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(world.contact_count() == 2)
+    assert(Math.abs(lower.position().y - 1.0) < 0.02)
+    assert(Math.abs(upper.position().y - 2.0) < 0.03)
+    assert(Math.abs(lower.position().x) < 0.01)
+    assert(Math.abs(upper.position().x) < 0.01)
+    assert(Math.abs(lower.position().z) < 0.01)
+    assert(Math.abs(upper.position().z) < 0.01)
+    assert(lower.linear_velocity().length() < 0.01)
+    assert(upper.linear_velocity().length() < 0.01)
+}
+
+test "a yawed and offset face keeps four distinct support points" {
+    var world = Physics.World3D()
+    fixed_ground(world)
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(
+            position:Math.Vec3(1.0, 1.0, 0.5),
+            rotation:Math.Quat.angle_axis(0.2, Math.Vec3.up())
+        ))
+    world.step(1.0 / 60.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].point_count() == 4)
+    var points:Physics.ContactPoint3D[] = []
+    contacts[0].write_points(points)
+    for point in points {
+        assert(Math.abs(point.position.y - 0.5) < 0.01)
+        assert(Math.abs(point.position.x - 1.0) < 0.7)
+        assert(Math.abs(point.position.z - 0.5) < 0.7)
+    }
+    var step = 1
+    while step < 120 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(Math.abs(box.position().y - 1.0) < 0.02)
+    assert(Math.abs(box.position().x - 1.0) < 0.02)
+    assert(Math.abs(box.position().z - 0.5) < 0.02)
+    assert(box.linear_velocity().length() < 0.02)
+}
+
+test "body recycling cannot reuse a previous manifold" {
+    var world = Physics.World3D()
+    fixed_ground(world)
+    var first = unit_box(world, Math.Vec3(0.0, 1.0, 0.0))
+    world.step(1.0 / 60.0)
+    var old_contacts:Physics.Contact3D[] = []
+    world.write_contacts(old_contacts)
+    assert(old_contacts.count() == 1)
+    world.destroy_rigid_body(first)
+    assert(world.contact_count() == 0)
+    var replacement = unit_box(world, Math.Vec3(0.0, 1.0, 0.0))
+    assert(!old_contacts[0].second_body().same_body(replacement))
+    world.step(1.0 / 60.0)
+    var new_contacts:Physics.Contact3D[] = []
+    world.write_contacts(new_contacts)
+    assert(new_contacts.count() == 1)
+    assert(new_contacts[0].second_body().same_body(replacement))
+    assert(new_contacts[0].point_count() == 4)
+    assert(new_contacts[0].normal_impulse() > 0.0)
+    assert(old_contacts[0].point_count() == 4)
+}

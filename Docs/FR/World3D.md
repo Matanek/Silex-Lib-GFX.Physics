@@ -2,9 +2,9 @@
 
 `World3D` simule des corps fixes, cinématiques et dynamiques sans fenêtre,
 scène, renderer ni ECS. Il accepte les sphères et boîtes de `Shape3D` et
-fournit une première réponse aux contacts entre ces formes. Les contacts
-multiples ne sont pas encore stabilisés ; un mouvement rapide peut traverser
-un obstacle.
+fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
+des faces presque parallèles utilisent plusieurs points ; un mouvement rapide
+peut encore traverser un obstacle.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.
@@ -61,15 +61,18 @@ puis sont effacés. Un pas nul ne déplace aucun corps et conserve ces
 accumulations. L'intégration utilise une vitesse semi implicite et maintient
 un quaternion normalisé ; les résultats dépendent de la taille du pas.
 
-## Lire un premier contact
+## Lire les contacts
 
 Après un pas positif, `contact_count()` compte les paires détectées et
 `write_contacts(output)` copie leurs observations dans un tableau du
-consommateur. Chaque `Contact3D` expose les deux handles, le point, la
-normale de réponse, la séparation mesurée avant correction et l'impulsion
-normale appliquée. Une séparation négative désigne une pénétration ; le pas
+consommateur. Chaque `Contact3D` expose les deux handles, un point
+représentatif, la normale de réponse, la séparation mesurée avant correction
+et la somme des impulsions normales appliquées. `point_count()` et
+`write_points(output)` donnent les points du manifold ; chaque
+`ContactPoint3D` contient une position dans le monde et ses impulsions normale
+et tangentielle. Une séparation négative désigne une pénétration ; le pas
 ramène alors les corps dynamiques vers la tangence et répond à la vitesse
-entrante au point de contact. Si une sphère commence à l'intérieur d'une
+entrante aux points de contact. Si une sphère commence à l'intérieur d'une
 boîte, la normale de réponse peut être opposée à celle de la requête
 `Geometry3D.distance`, afin de l'expulser par la face la plus proche.
 
@@ -84,9 +87,13 @@ l'impulsion normale. `Contact3D.friction()`, `restitution()` et
 `tangent_impulse()` exposent ces résultats du pas.
 
 La détection examine actuellement chaque paire de corps actifs dont au moins
-un est dynamique. Elle traite un point par paire et n'a ni cache de manifold,
-ni friction statique persistante, ni CCD. Les empilements et contacts obliques
-peuvent encore dériver. `step(0)` conserve les dernières observations ;
+un est dynamique. Pour deux faces de boîtes presque alignées, elle collecte
+jusqu'à huit points distincts et résout les paires ensemble. Les impulsions
+des points proches sont reprises au pas suivant tant que les mêmes handles et
+la même orientation de contact subsistent. Les autres configurations gardent
+un seul point. Un petit empilement reste stable au pas fixe testé, mais les
+appuis inclinés ou glissants peuvent dériver ; il n'y a ni CCD ni garantie de
+friction statique. `step(0)` conserve les dernières observations ;
 détruire un corps retire les contacts courants qui le citent. Un snapshot
 conservé garde ses mesures, mais ses handles deviennent invalides avec leurs
 corps ou leur monde.
@@ -102,6 +109,6 @@ les handles conservés, sans que ceux-ci maintiennent le monde vivant.
 `write_bodies` remplit un tableau fourni par le consommateur avec les corps
 vivants, sans promettre un ordre de création.
 
-Le monde ne fournit pas encore de matériaux, sommeil, contraintes, requêtes
+Le monde ne fournit pas encore de sommeil, contraintes, requêtes
 spatiales ni CCD. Les [requêtes géométriques autonomes](Geometry3D.md)
 restent disponibles pour les formes isolées.

@@ -1,0 +1,123 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+struct BoxFace3D {
+    let axis:int
+    let sign:float
+    let alignment:float
+    let corners:Math.Vec3[]
+
+    init(axis:int, sign:float, alignment:float, corners:Math.Vec3[]) {
+        self.axis = axis
+        self.sign = sign
+        self.alignment = alignment
+        self.corners = corners
+    }
+}
+
+package func box_box_contact_points(
+    first:Box3D,
+    first_transform:Transform3D,
+    second:Box3D,
+    second_transform:Transform3D,
+    normal:Math.Vec3,
+    witness:Math.Vec3
+) Math.Vec3[] {
+    let first_face = box_face3d(first, first_transform, normal)
+    let second_face = box_face3d(second, second_transform, normal.negated())
+    var points:Math.Vec3[] = []
+    if first_face.alignment < 0.95 || second_face.alignment < 0.95 {
+        points.append(witness)
+        return points
+    }
+    for corner in first_face.corners {
+        if let projected = project_contact_corner3d(
+            corner, second, second_transform, second_face
+        ) {
+            append_unique_contact3d(points, corner.add(projected).multiply(0.5))
+        }
+    }
+    for corner in second_face.corners {
+        if let projected = project_contact_corner3d(
+            corner, first, first_transform, first_face
+        ) {
+            append_unique_contact3d(points, corner.add(projected).multiply(0.5))
+        }
+    }
+    if points.count() == 0 { points.append(witness) }
+    return points
+}
+
+func box_face3d(box:Box3D, transform:Transform3D, normal:Math.Vec3) BoxFace3D {
+    var selected_axis = 0
+    var alignment = 0.0
+    var sign = 1.0
+    var axis = 0
+    while axis < 3 {
+        let projection = transform.vector(box_axis3d(axis)).dot(normal)
+        if Math.abs(projection) > alignment {
+            alignment = Math.abs(projection)
+            selected_axis = axis
+            if projection < 0.0 { sign = -1.0 } else { sign = 1.0 }
+        }
+        axis++
+    }
+    let half = box.half_size()
+    var corners:Math.Vec3[] = []
+    var index = 0
+    while index < 4 {
+        var local_point = Math.Vec3()
+        let first_sign = corner_sign3d(index % 2)
+        let second_sign = corner_sign3d(index / 2)
+        if selected_axis == 0 {
+            local_point = Math.Vec3(sign * half.x, first_sign * half.y, second_sign * half.z)
+        } else if selected_axis == 1 {
+            local_point = Math.Vec3(first_sign * half.x, sign * half.y, second_sign * half.z)
+        } else {
+            local_point = Math.Vec3(first_sign * half.x, second_sign * half.y, sign * half.z)
+        }
+        corners.append(transform.point(local_point))
+        index++
+    }
+    return BoxFace3D(selected_axis, sign, alignment, corners)
+}
+
+func project_contact_corner3d(
+    corner:Math.Vec3,
+    box:Box3D,
+    transform:Transform3D,
+    face:BoxFace3D
+) Math.Vec3? {
+    let local_point = transform.inverse_point(corner)
+    let half = box.half_size()
+    let tolerance = 0.0001
+    if face.axis != 0 && Math.abs(local_point.x) > half.x + tolerance { return null }
+    if face.axis != 1 && Math.abs(local_point.y) > half.y + tolerance { return null }
+    if face.axis != 2 && Math.abs(local_point.z) > half.z + tolerance { return null }
+    if face.axis == 0 {
+        return transform.point(Math.Vec3(face.sign * half.x, local_point.y, local_point.z))
+    }
+    if face.axis == 1 {
+        return transform.point(Math.Vec3(local_point.x, face.sign * half.y, local_point.z))
+    }
+    return transform.point(Math.Vec3(local_point.x, local_point.y, face.sign * half.z))
+}
+
+func append_unique_contact3d(points:&Math.Vec3[], point:Math.Vec3) {
+    for existing in points {
+        if existing.distance(point) < 0.0001 { return }
+    }
+    points.append(point)
+}
+
+func box_axis3d(axis:int) Math.Vec3 {
+    if axis == 0 { return Math.Vec3.right() }
+    if axis == 1 { return Math.Vec3.up() }
+    return Math.Vec3.back()
+}
+
+func corner_sign3d(bit:int) float {
+    if bit == 0 { return -1.0 }
+    return 1.0
+}

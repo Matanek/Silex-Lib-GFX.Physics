@@ -17,8 +17,11 @@ puis traduits dans `CHANGELOG.md`.
   correction de pénétration et observations de paire après le pas.
 - Ajout de la friction et de la restitution par corps et dans les observations
   de contact. Le glissement est borné par la limite de Coulomb ; la restitution
-  s'applique aux chocs suffisamment rapides. La persistance du manifold, le
-  sommeil et le CCD restent à livrer.
+  s'applique aux chocs suffisamment rapides.
+- Les appuis boîte/boîte presque parallèles disposent de plusieurs points de
+  contact, d'un solveur commun aux paires et d'impulsions reprises entre deux
+  pas. `Contact3D.write_points` expose les points et leurs impulsions. Un petit
+  empilement reste stable au pas fixe testé ; sommeil et CCD restent à livrer.
 - Ajout du composant ECS `TileMapCollider2D` : un corps fixe par carte, des rectangles solides fusionnés, une reconstruction sur édition et l’intégration au cycle d’activation des corps.
 
 ## [0.7.0] - 2026-09-24

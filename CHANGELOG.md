@@ -17,7 +17,11 @@ first in `CHANGELOG.fr.md`.
   penetration correction, and pair observations after stepping.
 - Added per-body friction and restitution with contact observations. Sliding
   stays within a Coulomb impulse limit; restitution applies to sufficiently
-  fast impacts. Manifold persistence, sleeping, and CCD remain to be delivered.
+  fast impacts.
+- Nearly parallel box faces use multiple contact points, a solver shared by
+  pairs, and impulses carried between steps. `Contact3D.write_points` exposes
+  points and their impulses. A small stack remains stable at the tested fixed
+  step; sleeping and CCD remain to be delivered.
 - Added the `TileMapCollider2D` ECS component: one fixed body per map, merged solid rectangles, rebuilds on edits and integration with body activation.
 
 ## [0.7.0] - 2026-09-24

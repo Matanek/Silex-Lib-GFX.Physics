@@ -1,6 +1,18 @@
 use GFX.Physics.RigidBody3D.RigidBody3D
 use STD.Math
 
+public struct ContactPoint3D {
+    let position:Math.Vec3
+    let normal_impulse:float
+    let tangent_impulse:Math.Vec3
+
+    package init(position:Math.Vec3, normal_impulse:float, tangent_impulse:Math.Vec3) {
+        self.position = position
+        self.normal_impulse = normal_impulse
+        self.tangent_impulse = tangent_impulse
+    }
+}
+
 public class Contact3D {
     private var first:RigidBody3D
     private var second:RigidBody3D
@@ -11,6 +23,7 @@ public class Contact3D {
     private var applied_tangent_impulse:Math.Vec3
     private var combined_friction:float
     private var combined_restitution:float
+    private var manifold_points:ContactPoint3D[]
 
     package init(
         first:RigidBody3D,
@@ -21,7 +34,8 @@ public class Contact3D {
         normal_impulse:float,
         tangent_impulse:Math.Vec3,
         friction:float,
-        restitution:float
+        restitution:float,
+        points:ContactPoint3D[]
     ) {
         self.first = first
         self.second = second
@@ -32,6 +46,7 @@ public class Contact3D {
         self.applied_tangent_impulse = tangent_impulse
         self.combined_friction = friction
         self.combined_restitution = restitution
+        self.manifold_points = points
     }
 
     func first_body() RigidBody3D { return self.first }
@@ -43,4 +58,9 @@ public class Contact3D {
     func tangent_impulse() Math.Vec3 { return self.applied_tangent_impulse }
     func friction() float { return self.combined_friction }
     func restitution() float { return self.combined_restitution }
+    func point_count() int { return self.manifold_points.count() }
+    func write_points(output:&ContactPoint3D[]) {
+        output.clear()
+        for point in self.manifold_points { output.append(point) }
+    }
 }
