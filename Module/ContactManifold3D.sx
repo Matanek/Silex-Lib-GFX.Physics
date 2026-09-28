@@ -27,27 +27,126 @@ package func box_box_contact_points(
 ) Math.Vec3[] {
     let first_face = box_face3d(first, first_transform, normal)
     let second_face = box_face3d(second, second_transform, normal.negated())
+    if first_face.alignment >= second_face.alignment &&
+        first_face.alignment >= 0.7
+    {
+        return clipped_box_face3d(
+            first, first_transform, first_face,
+            second_face.corners, witness
+        )
+    }
+    if second_face.alignment >= 0.7 {
+        return clipped_box_face3d(
+            second, second_transform, second_face,
+            first_face.corners, witness
+        )
+    }
+    return [witness]
+}
+
+func clipped_box_face3d(
+    reference:Box3D,
+    reference_transform:Transform3D,
+    reference_face:BoxFace3D,
+    incident:Math.Vec3[],
+    witness:Math.Vec3
+) Math.Vec3[] {
+    let half = reference.half_size()
+    let first_side = (reference_face.axis + 1) % 3
+    let second_side = (reference_face.axis + 2) % 3
+    var polygon = clip_box_face3d(
+        incident, reference_transform, first_side,
+        component3d(half, first_side)
+    )
+    polygon = clip_box_face3d(
+        polygon, reference_transform, first_side,
+        -component3d(half, first_side), false
+    )
+    polygon = clip_box_face3d(
+        polygon, reference_transform, second_side,
+        component3d(half, second_side)
+    )
+    polygon = clip_box_face3d(
+        polygon, reference_transform, second_side,
+        -component3d(half, second_side), false
+    )
+    let outward = reference_transform.vector(
+        box_axis3d(reference_face.axis)
+    ).multiply(reference_face.sign)
     var points:Math.Vec3[] = []
-    if first_face.alignment < 0.95 || second_face.alignment < 0.95 {
-        points.append(witness)
-        return points
-    }
-    for corner in first_face.corners {
-        if let projected = project_contact_corner3d(
-            corner, second, second_transform, second_face
-        ) {
-            append_unique_contact3d(points, corner.add(projected).multiply(0.5))
-        }
-    }
-    for corner in second_face.corners {
-        if let projected = project_contact_corner3d(
-            corner, first, first_transform, first_face
-        ) {
-            append_unique_contact3d(points, corner.add(projected).multiply(0.5))
+    for vertex in polygon {
+        let local_vertex = reference_transform.inverse_point(vertex)
+        let depth = reference_face.sign * component3d(local_vertex, reference_face.axis) -
+            component3d(half, reference_face.axis)
+        if depth <= 0.0001 {
+            append_unique_contact3d(
+                points, vertex.subtract(outward.multiply(depth * 0.5))
+            )
         }
     }
     if points.count() == 0 { points.append(witness) }
+    if points.count() > 4 {
+        let first_axis = reference_transform.vector(box_axis3d(first_side))
+        let second_axis = reference_transform.vector(box_axis3d(second_side))
+        var reduced:Math.Vec3[] = []
+        var index = 0
+        while index < 4 {
+            let first_sign = corner_sign3d(index % 2)
+            let second_sign = corner_sign3d(index / 2)
+            let direction = first_axis.multiply(first_sign).add(
+                second_axis.multiply(second_sign)
+            )
+            var best = points[0]
+            var best_projection = best.dot(direction)
+            for candidate in points {
+                let projection = candidate.dot(direction)
+                if projection > best_projection {
+                    best = candidate
+                    best_projection = projection
+                }
+            }
+            append_unique_contact3d(reduced, best)
+            index++
+        }
+        return reduced
+    }
     return points
+}
+
+func clip_box_face3d(
+    polygon:Math.Vec3[],
+    transform:Transform3D,
+    axis:int,
+    limit:float,
+    keep_less:bool = true
+) Math.Vec3[] {
+    var result:Math.Vec3[] = []
+    if polygon.is_empty() { return result }
+    var previous = polygon[polygon.count() - 1]
+    var previous_value = component3d(transform.inverse_point(previous), axis)
+    var previous_inside = previous_value <= limit
+    if !keep_less { previous_inside = previous_value >= limit }
+    for current in polygon {
+        let current_value = component3d(transform.inverse_point(current), axis)
+        var current_inside = current_value <= limit
+        if !keep_less { current_inside = current_value >= limit }
+        if current_inside != previous_inside {
+            let fraction = (limit - previous_value) /
+                (current_value - previous_value)
+            result.append(previous.add(current.subtract(previous).multiply(fraction)))
+        }
+        if current_inside { result.append(current) }
+        previous = current
+        previous_value = current_value
+        previous_inside = current_inside
+    }
+    return result
+}
+
+func component3d(value:Math.Vec3, axis:int) float {
+    if axis == 0 { return value.x }
+    if axis == 1 { return value.y }
+    return value.z
 }
 
 package func capsule_capsule_contact_points(
@@ -110,10 +209,11 @@ func box_face3d(box:Box3D, transform:Transform3D, normal:Math.Vec3) BoxFace3D {
     let half = box.half_size()
     var corners:Math.Vec3[] = []
     var index = 0
+    let winding:int[] = [0, 1, 3, 2]
     while index < 4 {
         var local_point = Math.Vec3()
-        let first_sign = corner_sign3d(index % 2)
-        let second_sign = corner_sign3d(index / 2)
+        let first_sign = corner_sign3d(winding[index] % 2)
+        let second_sign = corner_sign3d(winding[index] / 2)
         if selected_axis == 0 {
             local_point = Math.Vec3(sign * half.x, first_sign * half.y, second_sign * half.z)
         } else if selected_axis == 1 {
@@ -125,27 +225,6 @@ func box_face3d(box:Box3D, transform:Transform3D, normal:Math.Vec3) BoxFace3D {
         index++
     }
     return BoxFace3D(selected_axis, sign, alignment, corners)
-}
-
-func project_contact_corner3d(
-    corner:Math.Vec3,
-    box:Box3D,
-    transform:Transform3D,
-    face:BoxFace3D
-) Math.Vec3? {
-    let local_point = transform.inverse_point(corner)
-    let half = box.half_size()
-    let tolerance = 0.0001
-    if face.axis != 0 && Math.abs(local_point.x) > half.x + tolerance { return null }
-    if face.axis != 1 && Math.abs(local_point.y) > half.y + tolerance { return null }
-    if face.axis != 2 && Math.abs(local_point.z) > half.z + tolerance { return null }
-    if face.axis == 0 {
-        return transform.point(Math.Vec3(face.sign * half.x, local_point.y, local_point.z))
-    }
-    if face.axis == 1 {
-        return transform.point(Math.Vec3(local_point.x, face.sign * half.y, local_point.z))
-    }
-    return transform.point(Math.Vec3(local_point.x, local_point.y, face.sign * half.z))
 }
 
 func append_unique_contact3d(points:&Math.Vec3[], point:Math.Vec3) {

@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fixed tilted box-to-box supports by clipping the incident face, excluding
+  corners above the support, and reducing to four points. A contact's
+  representative point is now the manifold centroid, avoiding a distant
+  marker on a large floor.
 - Added `Plugins.Physics3D`, `Components.PhysicsBody3D`, and frame-aggregated
   events to connect the 3D world to Application/ECS and Scene3D poses.
   Fixed stepping, pause, catch-up, and 2D/3D coexistence are verified

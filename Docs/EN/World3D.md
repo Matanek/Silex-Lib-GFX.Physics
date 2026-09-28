@@ -90,9 +90,10 @@ velocity and keeps a normalized quaternion; results depend on step size.
 
 After a positive step, `contact_count()` counts detected pairs and
 `write_contacts(output)` copies their observations to a caller-owned array.
-Each `Contact3D` exposes the two handles, a representative point, response
-normal, separation measured before correction, and the sum of applied normal
-impulses. `point_count()` and `write_points(output)` expose the manifold;
+Each `Contact3D` exposes the two handles, the centroid of its manifold points
+as a representative point, response normal, separation measured before
+correction, and the sum of applied normal impulses. `point_count()` and
+`write_points(output)` expose the manifold;
 each `ContactPoint3D` contains a world position and its normal and tangential
 impulses. Negative separation means penetration; the step then moves dynamic
 bodies back toward tangency and responds to incoming velocity at the contact
@@ -112,13 +113,15 @@ step results.
 Detection currently examines every pair of enabled bodies with at least one
 dynamic body. A positive separation below `10⁻⁶` may retain a resting pair
 despite rounding; standalone queries keep the measured separation. For two
-nearly aligned box faces, it gathers up to eight distinct points and solves
-the pairs together. Nearby point impulses carry into the next step while the
-same handles and contact orientation remain. Nearly parallel capsules can
+boxes, it clips the incident face to the reference face bounds, discards
+points above that face, and keeps up to four distributed supports. This bounded
+work runs for each contacting box pair at every step. Nearby point impulses
+carry into the next step while the same handles and contact orientation
+remain. Nearly parallel capsules can
 retain two lateral points; other configurations still use one point. A small
-stack stays stable with the tested
-fixed step, while inclined or sliding supports may still drift; there is no
-CCD or static friction guarantee.
+stack and initially tilted boxes on a flat floor stabilize with the tested
+fixed step. Edge-to-edge contacts and sliding supports may still drift; there
+is no CCD or static friction guarantee.
 `step(0)` preserves the last observations; destroying a body removes current
 contacts that refer to it. A retained snapshot keeps its measurements, but
 its handles become invalid with their bodies or world.

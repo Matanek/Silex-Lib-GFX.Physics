@@ -95,9 +95,10 @@ un quaternion normalisé ; les résultats dépendent de la taille du pas.
 
 Après un pas positif, `contact_count()` compte les paires détectées et
 `write_contacts(output)` copie leurs observations dans un tableau du
-consommateur. Chaque `Contact3D` expose les deux handles, un point
-représentatif, la normale de réponse, la séparation mesurée avant correction
-et la somme des impulsions normales appliquées. `point_count()` et
+consommateur. Chaque `Contact3D` expose les deux handles, le centroïde des
+points du manifold comme point représentatif, la normale de réponse, la
+séparation mesurée avant correction et la somme des impulsions normales
+appliquées. `point_count()` et
 `write_points(output)` donnent les points du manifold ; chaque
 `ContactPoint3D` contient une position dans le monde et ses impulsions normale
 et tangentielle. Une séparation négative désigne une pénétration ; le pas
@@ -119,13 +120,16 @@ l'impulsion normale. `Contact3D.friction()`, `restitution()` et
 La détection examine actuellement chaque paire de corps actifs dont au moins
 un est dynamique. Une séparation positive inférieure à `10⁻⁶` peut conserver
 une paire au repos malgré l'arrondi numérique ; les requêtes autonomes gardent
-la séparation mesurée. Pour deux faces de boîtes presque alignées, elle collecte
-jusqu'à huit points distincts et résout les paires ensemble. Les impulsions
-des points proches sont reprises au pas suivant tant que les mêmes handles et
+la séparation mesurée. Pour deux boîtes, elle découpe la face incidente contre
+les bords de la face de référence, écarte les points au-dessus de celle-ci et
+garde jusqu'à quatre appuis répartis. Ce travail borné est effectué pour
+chaque paire de boîtes en contact à chaque pas. Les impulsions des points
+proches sont reprises au pas suivant tant que les mêmes handles et
 la même orientation de contact subsistent. Deux capsules presque parallèles
 peuvent conserver deux points latéraux ; les autres configurations gardent
-un seul point. Un petit empilement reste stable au pas fixe testé, mais les
-appuis inclinés ou glissants peuvent dériver ; il n'y a ni CCD ni garantie de
+un seul point. Un petit empilement et des boîtes initialement inclinées sur un
+sol plat se stabilisent au pas fixe testé. Les contacts arête contre arête et
+les appuis glissants peuvent encore dériver ; il n'y a ni CCD ni garantie de
 friction statique. `step(0)` conserve les dernières observations ;
 détruire un corps retire les contacts courants qui le citent. Un snapshot
 conservé garde ses mesures, mais ses handles deviennent invalides avec leurs

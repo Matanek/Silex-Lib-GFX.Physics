@@ -187,13 +187,20 @@ public class World3D {
                                         first_contact_shape, second_contact_shape,
                                         distance.normal
                                     )
-                                    let point = distance.first_point.add(
+                                    var point = distance.first_point.add(
                                         distance.second_point
                                     ).multiply(0.5)
                                     let points = contact_points3d(
                                         first_contact_shape, second_contact_shape,
                                         normal, point
                                     )
+                                    if !points.is_empty() {
+                                        point = Math.Vec3()
+                                        for candidate in points {
+                                            point = point.add(candidate)
+                                        }
+                                        point = point.divide(points.count() as float)
+                                    }
                                     let friction = Math.sqrt(first.friction) *
                                         Math.sqrt(second.friction)
                                     let restitution = Math.max(

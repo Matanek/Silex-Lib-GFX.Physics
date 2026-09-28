@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Correction des appuis boîte–boîte inclinés : découpe de la face incidente,
+  exclusion des coins au-dessus du support et réduction à quatre points. Le
+  point représentatif d'un contact est le centroïde du manifold, ce qui évite
+  un marqueur éloigné sur un grand sol.
 - Ajout de `Plugins.Physics3D`, `Components.PhysicsBody3D` et des événements
   agrégés par frame pour relier le monde 3D à Application/ECS et aux poses
   Scene3D. Pas fixe, pause, rattrapage et coexistence 2D/3D sont vérifiés
