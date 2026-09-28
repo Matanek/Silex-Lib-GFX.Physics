@@ -23,6 +23,9 @@ use GFX.Physics.RigidBody3D.RigidBody3DSettings
 use GFX.Physics.RigidBody3D.finite_body3d_point
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Geometry3D.Ray3D
+use GFX.Physics.WorldQuery3D.WorldRayHit3D
+use GFX.Physics.WorldQuery3D.WorldOverlap3D
 use STD.Math
 
 public struct World3DSettings {
@@ -166,6 +169,107 @@ public class World3D {
                     self.store,
                     BodyId3D(slot, self.store.generations[slot])
                 ))
+            }
+            slot++
+        }
+    }
+
+    private func ignored_query_slot(ignore_body:RigidBody3D?) int {
+        if let excluded = ignore_body {
+            if !excluded.belongs_to(self.store) || !excluded.is_valid() {
+                panic("GFX.Physics.World3D query requires a live ignored body from this world")
+            }
+            return excluded.body_id().slot
+        }
+        return -1
+    }
+
+    func ray_cast(ray:Ray3D, ignore_body:RigidBody3D? = null) WorldRayHit3D? {
+        let ignored_slot = self.ignored_query_slot(ignore_body)
+        var nearest:WorldRayHit3D? = null
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if slot != ignored_slot {
+                if var state = self.store.slots[slot] {
+                    if state.is_enabled {
+                        let hit = Geometry3D.ray_cast(
+                            ray, ShapePlacement3D(state.shape, state.transform)
+                        )
+                        if hit.hit {
+                            if let previous = nearest {
+                                if hit.fraction < previous.fraction() {
+                                    nearest = WorldRayHit3D(RigidBody3D(
+                                        self.store, BodyId3D(slot, self.store.generations[slot])
+                                    ), hit)
+                                }
+                            } else {
+                                nearest = WorldRayHit3D(RigidBody3D(
+                                    self.store, BodyId3D(slot, self.store.generations[slot])
+                                ), hit)
+                            }
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+        return nearest
+    }
+
+    func write_ray_hits(
+        ray:Ray3D, output:&WorldRayHit3D[], ignore_body:RigidBody3D? = null
+    ) {
+        let ignored_slot = self.ignored_query_slot(ignore_body)
+        output.clear()
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if slot != ignored_slot {
+                if var state = self.store.slots[slot] {
+                    if state.is_enabled {
+                        let hit = Geometry3D.ray_cast(
+                            ray, ShapePlacement3D(state.shape, state.transform)
+                        )
+                        if hit.hit {
+                            output.append(WorldRayHit3D(RigidBody3D(
+                                self.store, BodyId3D(slot, self.store.generations[slot])
+                            ), hit))
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+        var index = 1
+        while index < output.count() {
+            var current = index
+            while current > 0 && output[current - 1].fraction() > output[current].fraction() {
+                output.swap(current - 1, current)
+                current--
+            }
+            index++
+        }
+    }
+
+    func write_overlaps(
+        query:ShapePlacement3D, output:&WorldOverlap3D[],
+        ignore_body:RigidBody3D? = null
+    ) {
+        let ignored_slot = self.ignored_query_slot(ignore_body)
+        output.clear()
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if slot != ignored_slot {
+                if var state = self.store.slots[slot] {
+                    if state.is_enabled {
+                        let target = ShapePlacement3D(state.shape, state.transform)
+                        if Geometry3D.overlaps(query, target) {
+                            let distance = Geometry3D.distance(query, target)
+                            output.append(WorldOverlap3D(RigidBody3D(
+                                self.store, BodyId3D(slot, self.store.generations[slot])
+                            ), distance.first_child_id, distance.second_child_id))
+                        }
+                    }
+                }
             }
             slot++
         }

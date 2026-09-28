@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added `World3D` queries for the nearest ray hit, sorted multiple hits, and
+  shape overlaps, with body/child identity, one-body exclusion, and snapshots
+  safe after destruction. A selection case is compared with pinned Jolt in
+  Debug and Release.
 - Added `PointConstraint3D` with two coincident local anchors and free
   rotation, reaction force, runtime changes, and safe lifetime. It shares
   contacts and sleep islands; a support and off-center pendulum are compared

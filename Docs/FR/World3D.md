@@ -125,6 +125,28 @@ Ces deux familles sont rigides. Ressorts, moteurs et autres articulations
 restent à livrer. Un choc très rapide peut encore traverser un obstacle, car
 le monde n'a pas de CCD.
 
+## Interroger les corps du monde
+
+`ray_cast(ray, ignore_body)` retourne le premier impact de `Ray3D`, ou `null`.
+`write_ray_hits(ray, output, ignore_body)` remplit un tableau réutilisable avec
+un impact par corps, classé par fraction croissante. Pour un composé, cet
+impact est celui de son enfant le plus proche ; `child_id()` donne son ID et
+vaut `-1` pour une primitive. Chaque `WorldRayHit3D` expose aussi `body()`,
+`point()`, `normal()` et `fraction()` entre 0 et 1.
+
+`write_overlaps(query, output, ignore_body)` sélectionne les corps qui
+recouvrent une `ShapePlacement3D`. Chaque `WorldOverlap3D` donne `body()`,
+`query_child_id()` et `body_child_id()` ; les résultats suivent l'ordre des
+emplacements du monde. Les corps désactivés sont exclus des deux requêtes.
+L'argument facultatif `ignore_body` écarte un corps vivant du même monde,
+par exemple l'émetteur d'un rayon. Un corps étranger ou détruit est refusé.
+
+Les points, normales, fractions et ID copiés restent lisibles après les pas
+suivants ou la destruction. Le handle `body()` garde son identité, mais
+`is_valid()` devient faux lorsque son corps ou son monde disparaît. Les
+catégories de filtrage et les capteurs seront ajoutés séparément ; les
+requêtes présentes ne modifient pas les contacts.
+
 ## Sommeil et réveil
 
 Un corps dynamique autorise le sommeil par défaut. Son

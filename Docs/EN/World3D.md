@@ -119,6 +119,27 @@ Both families are rigid. Springs, motors, and other 3D joint families remain
 to be delivered. Very fast motion may still cross an obstacle because the
 world has no CCD.
 
+## Query bodies in the world
+
+`ray_cast(ray, ignore_body)` returns the nearest `Ray3D` hit or `null`.
+`write_ray_hits(ray, output, ignore_body)` fills a reusable array with one
+hit per body, ordered by increasing fraction. For a compound, that hit comes
+from its nearest child; `child_id()` gives its ID and is `-1` for a primitive.
+Each `WorldRayHit3D` also exposes `body()`, `point()`, `normal()`, and a
+`fraction()` between 0 and 1.
+
+`write_overlaps(query, output, ignore_body)` selects bodies overlapping a
+`ShapePlacement3D`. Each `WorldOverlap3D` provides `body()`,
+`query_child_id()`, and `body_child_id()`; results follow world slot order.
+Disabled bodies are excluded from both queries. The optional `ignore_body`
+excludes a live body from the same world, such as the ray's emitter. A foreign
+or destroyed body is rejected.
+
+Copied points, normals, fractions, and IDs remain readable after later steps
+or destruction. The `body()` handle keeps its identity, but `is_valid()`
+becomes false when that body or its world is destroyed. Category filtering
+and sensors will be added separately; these queries do not change contacts.
+
 ## Sleeping and waking
 
 Dynamic bodies allow sleep by default. Their `sleep_threshold` is 0.05 for

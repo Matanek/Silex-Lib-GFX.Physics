@@ -1,0 +1,106 @@
+use GFX.Physics
+use STD.Math
+
+test "world ray selects the nearest body and writes ordered hits" {
+    var world = Physics.World3D()
+    var far = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(4.0, 0.0, 0.0)))
+    var near = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    var disabled = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.0, 0.0))
+        ..is_enabled = false)
+    let ray = Physics.Ray3D(Math.Vec3(), Math.Vec3(6.0, 0.0, 0.0))
+    var first = world.ray_cast(ray)
+    assert(first != null)
+    assert(first!.body().same_body(near))
+    assert(Math.abs(first!.fraction() - 0.25) < 0.00001)
+    var hits:Physics.WorldRayHit3D[] = []
+    world.write_ray_hits(ray, hits)
+    assert(hits.count() == 2)
+    assert(hits[0].body().same_body(near))
+    assert(hits[1].body().same_body(far))
+    assert(hits[0].fraction() < hits[1].fraction())
+    world.write_ray_hits(ray, hits, near)
+    assert(hits.count() == 1 && hits[0].body().same_body(far))
+    assert(disabled.is_valid())
+}
+
+test "world ray retains a compound child identity and a snapshot" {
+    var world = Physics.World3D()
+    var compound = Physics.Compound3D([
+        Physics.CompoundChild3D(11,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(22,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(4.0, 0.0, 0.0)))
+    ])
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(compound))
+    let ray = Physics.Ray3D(Math.Vec3(), Math.Vec3(6.0, 0.0, 0.0))
+    var hit = world.ray_cast(ray)
+    assert(hit != null)
+    assert(hit!.body().same_body(body) && hit!.child_id() == 11)
+    assert(Math.abs(hit!.fraction() - 0.25) < 0.00001)
+    let point = hit!.point()
+    world.destroy_rigid_body(body)
+    var replacement = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    assert(!hit!.body().is_valid())
+    assert(!hit!.body().same_body(replacement))
+    assert(hit!.point().nearly_equal(point, 0.000001))
+}
+
+test "world overlaps report matching bodies and compound children" {
+    var world = Physics.World3D()
+    var far = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(5.0, 0.0, 0.0)))
+    var compound = Physics.Compound3D([
+        Physics.CompoundChild3D(31,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))),
+            Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(32,
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0)))
+    ])
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(compound))
+    let query = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.6)),
+        Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    var overlaps:Physics.WorldOverlap3D[] = []
+    world.write_overlaps(query, overlaps)
+    assert(overlaps.count() == 1)
+    assert(overlaps[0].body().same_body(fixed))
+    assert(overlaps[0].query_child_id() == -1)
+    assert(overlaps[0].body_child_id() == 31)
+    var retained = overlaps[0]
+    world.write_overlaps(query, overlaps, fixed)
+    assert(overlaps.count() == 0)
+    world.destroy_rigid_body(fixed)
+    assert(!retained.body().is_valid() && retained.body_child_id() == 31)
+    assert(far.is_valid())
+}
+
+test "world ray from inside and empty overlap are explicit" {
+    var world = Physics.World3D()
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    var hit = world.ray_cast(Physics.Ray3D(Math.Vec3(), Math.Vec3(2.0, 0.0, 0.0)))
+    assert(hit != null)
+    assert(hit!.body().same_body(box))
+    assert(Math.abs(hit!.fraction() - 0.5) < 0.00001)
+    var overlaps:Physics.WorldOverlap3D[] = []
+    world.write_overlaps(Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(10.0, 0.0, 0.0))), overlaps)
+    assert(overlaps.count() == 0)
+}

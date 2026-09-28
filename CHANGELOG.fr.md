@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout des requêtes sur `World3D` : premier rayon, impacts multiples triés et
+  recouvrements de formes, avec identité de corps/enfant, exclusion d'un corps
+  et snapshots sûrs après destruction. Un cas de sélection est comparé à Jolt
+  épinglé en Debug et Release.
 - Ajout de `PointConstraint3D` : deux ancrages locaux coïncidents avec rotation
   libre, réaction, mutation et durée de vie sûre. L'articulation partage les
   contacts et le sommeil ; un appui et un pendule excentré sont comparés à Jolt
