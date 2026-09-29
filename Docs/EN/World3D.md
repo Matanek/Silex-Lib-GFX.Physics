@@ -3,7 +3,8 @@
 `World3D` simulates fixed, kinematic, and dynamic bodies without a window,
 scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, and capsules and provides
 a contact response between these shapes. Boxes resting on nearly parallel
-faces use multiple points; fast motion can still pass through an obstacle.
+faces use multiple points. Dynamic bodies can opt into linear continuous
+collision for fast motion.
 
 An immutable `Compound3D` may also be the shape of a **fixed** body. The
 world tests its primitive children and exposes `Contact3D.first_child_id()`
@@ -116,8 +117,8 @@ invalidate the handle; `point_constraint_count()` counts live joints. Point
 joints share steps, contacts, and sleep islands with rigid distance joints.
 
 Both families are rigid. Springs, motors, and other 3D joint families remain
-to be delivered. Very fast motion may still cross an obstacle because the
-world has no CCD.
+to be delivered. Very fast motion can still cross an obstacle when continuous
+collision is disabled, which is the default.
 
 ## Query bodies in the world
 
@@ -141,6 +142,31 @@ becomes false when that body or its world is destroyed. The optional
 `QueryFilter3D` selects categories through `mask_bits` and includes sensors by
 default; `include_sensors:false` excludes them. A body's contact mask does not
 affect queries, and queries do not change contacts.
+
+## Linear continuous collision
+
+`RigidBody3DSettings.continuous_collision = true` enables a sweep for a dynamic
+body during each positive step; fixed or kinematic bodies with this setting
+are rejected. `set_continuous_collision` changes it at
+runtime. It is disabled by default. The world finds the first impact along
+relative translation before building contacts. A fast body can therefore
+reach a thin wall instead of crossing it. Pair filters also apply to the
+sweep. Fixed, kinematic, and dynamic targets take part, and the usual contact
+solver responds afterward. A pair already overlapping at the start of a step
+uses the ordinary discrete response.
+
+When a sensor is crossed completely within one step, the world emits a
+transient begin and end in that step, without persistent contact or physical
+response. This is an explicit policy difference: the pinned Jolt witness
+reports no event for this fast crossing, while the engines agree on a slow
+traversal.
+
+The sweep considers translations with start-of-step orientations. It does not
+guarantee an impact caused only by fast rotation or exact timing for multiple
+successive impacts in one step. Rotation, grazing contacts, and interactions
+between multiple continuous bodies still need qualification. The impact time
+places the first contact; the solver does not replay the remaining step time
+after that impact.
 
 ## Sleeping and waking
 
@@ -215,7 +241,7 @@ remain. Nearly parallel capsules can
 retain two lateral points; other configurations still use one point. A small
 stack and initially tilted boxes on a flat floor stabilize with the tested
 fixed step. Edge-to-edge contacts and sliding supports may still drift; there
-is no CCD or static friction guarantee.
+is only optional linear CCD and no static friction guarantee.
 `step(0)` preserves the last observations; destroying a body removes current
 contacts that refer to it. A retained snapshot keeps its measurements, but
 its handles become invalid with their bodies or world.

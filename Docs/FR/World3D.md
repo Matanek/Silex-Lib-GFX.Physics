@@ -3,8 +3,8 @@
 `World3D` simule des corps fixes, cinématiques et dynamiques sans fenêtre,
 scène, renderer ni ECS. Il accepte les sphères, boîtes et capsules de `Shape3D` et
 fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
-des faces presque parallèles utilisent plusieurs points ; un mouvement rapide
-peut encore traverser un obstacle.
+des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
+des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
 Un `Compound3D` immuable peut aussi servir de forme à un corps **fixe**. Le
 monde teste ses enfants primitifs et expose `Contact3D.first_child_id()` et
@@ -122,8 +122,8 @@ vivantes. L'articulation participe aux mêmes pas, contacts et îlots de sommeil
 que la distance rigide.
 
 Ces deux familles sont rigides. Ressorts, moteurs et autres articulations
-restent à livrer. Un choc très rapide peut encore traverser un obstacle, car
-le monde n'a pas de CCD.
+restent à livrer. Un choc très rapide peut encore traverser un obstacle quand
+le balayage continu est désactivé, ce qui est le réglage par défaut.
 
 ## Interroger les corps du monde
 
@@ -149,6 +149,31 @@ Les points, normales, fractions et ID copiés restent lisibles après les pas
 suivants ou la destruction. Le handle `body()` garde son identité, mais
 `is_valid()` devient faux lorsque son corps ou son monde disparaît. Ces
 requêtes ne modifient pas les contacts.
+
+## Collision continue linéaire
+
+`RigidBody3DSettings.continuous_collision = true` active le balayage du corps
+dynamique pendant chaque pas positif ; un corps fixe ou cinématique avec ce
+réglage est refusé. `set_continuous_collision` le change à
+l'exécution. Le réglage est désactivé par défaut. Le monde cherche le premier
+impact le long de la translation relative avant de construire les contacts.
+Un corps rapide peut ainsi atteindre un mur mince au lieu de le traverser ;
+les filtres de paires s'appliquent aussi à cette recherche. Le même chemin
+traite les obstacles fixes, cinématiques et dynamiques, puis laisse le solveur
+répondre au contact. Une paire déjà recouvrante au début du pas suit la
+résolution discrète habituelle.
+
+Pour un capteur entièrement traversé dans un seul pas, le monde émet un début
+et une fin transitoires dans ce pas, sans contact persistant ni réponse. Ce
+choix est explicite : le témoin Jolt épinglé ne rapporte aucun événement dans
+ce cas rapide, alors qu'il s'accorde avec Silex sur la traversée lente.
+
+La recherche ne balaie que les translations avec les orientations du début
+de pas. Elle ne garantit pas l'impact créé uniquement par une rotation rapide,
+ni la chronologie exacte de plusieurs chocs successifs dans un même pas. La
+rotation, les appuis rasants et les interactions entre plusieurs corps continus
+restent à qualifier. Le temps d'impact sert à placer le premier contact ; le
+solveur ne rejoue pas le temps restant du pas après ce choc.
 
 ## Sommeil et réveil
 
@@ -229,8 +254,8 @@ la même orientation de contact subsistent. Deux capsules presque parallèles
 peuvent conserver deux points latéraux ; les autres configurations gardent
 un seul point. Un petit empilement et des boîtes initialement inclinées sur un
 sol plat se stabilisent au pas fixe testé. Les contacts arête contre arête et
-les appuis glissants peuvent encore dériver ; il n'y a ni CCD ni garantie de
-friction statique. `step(0)` conserve les dernières observations ;
+les appuis glissants peuvent encore dériver ; le CCD linéaire reste optionnel
+et la friction statique n'est pas garantie. `step(0)` conserve les dernières observations ;
 détruire un corps retire les contacts courants qui le citent. Un snapshot
 conservé garde ses mesures, mais ses handles deviennent invalides avec leurs
 corps ou leur monde.

@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout d'un balayage linéaire optionnel des corps dynamiques pour arrêter une
+  sphère rapide sur un mur mince et signaler les traversées complètes de
+  capteurs dans un pas. L'arrêt est comparé à Jolt épinglé en Debug et Release ;
+  l'absence d'événement Jolt sur le capteur rapide est documentée.
 - Ajout de filtres de paires par catégories, masques et groupes, et de filtres
   de requêtes indépendants. Les corps capteurs émettent des événements de
   recouvrement sans réponse physique ; une traversée est comparée à Jolt
@@ -51,7 +55,8 @@ puis traduits dans `CHANGELOG.md`.
 - Les appuis boîte/boîte presque parallèles disposent de plusieurs points de
   contact, d'un solveur commun aux paires et d'impulsions reprises entre deux
   pas. `Contact3D.write_points` expose les points et leurs impulsions. Un petit
-  empilement reste stable au pas fixe testé ; le CCD reste à livrer.
+  empilement reste stable au pas fixe testé ; la collision continue linéaire
+  est désormais optionnelle et ne couvre pas la rotation.
 - Ajout du sommeil des corps dynamiques et de leurs îlots de contact, avec
   réveil par commande, collision ou changement de support. Le délai de repos
   et le réveil sont comparés à Jolt épinglé en Debug et Release.

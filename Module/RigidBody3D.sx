@@ -44,6 +44,7 @@ public struct RigidBody3DSettings {
     var restitution:float
     var collision_filter:CollisionFilter3D
     var is_sensor:bool
+    var continuous_collision:bool
     var is_enabled:bool
     var allow_sleep:bool
     var sleep_threshold:float
@@ -63,6 +64,7 @@ public struct RigidBody3DSettings {
         self.restitution = 0.0
         self.collision_filter = CollisionFilter3D()
         self.is_sensor = false
+        self.continuous_collision = false
         self.is_enabled = true
         self.allow_sleep = true
         self.sleep_threshold = 0.05
@@ -96,6 +98,7 @@ package class BodyState3D {
     var restitution:float
     var collision_filter:CollisionFilter3D
     var is_sensor:bool
+    var continuous_collision:bool
     var is_enabled:bool
     var allow_sleep:bool
     var sleep_threshold:float
@@ -135,6 +138,9 @@ package class BodyState3D {
         if settings.body_type != BodyType3D.dynamic && settings.mass_properties != null {
             panic("GFX.Physics.RigidBody3DSettings mass override requires a dynamic body")
         }
+        if settings.body_type != BodyType3D.dynamic && settings.continuous_collision {
+            panic("GFX.Physics continuous collision requires a dynamic body")
+        }
         self.body_type = settings.body_type
         self.shape = settings.shape
         self.transform = Transform3D(settings.transform.position, settings.transform.rotation)
@@ -165,6 +171,7 @@ package class BodyState3D {
         self.restitution = settings.restitution
         self.collision_filter = settings.collision_filter
         self.is_sensor = settings.is_sensor
+        self.continuous_collision = settings.continuous_collision
         self.is_enabled = settings.is_enabled
         self.allow_sleep = settings.allow_sleep
         self.sleep_threshold = settings.sleep_threshold
@@ -289,6 +296,9 @@ public class RigidBody3D {
         return self.store.require(self.id).collision_filter
     }
     func is_sensor() bool { return self.store.require(self.id).is_sensor }
+    func continuous_collision() bool {
+        return self.store.require(self.id).continuous_collision
+    }
     func is_awake() bool { return self.store.require(self.id).awake }
     func is_sleep_enabled() bool { return self.store.require(self.id).allow_sleep }
     func sleep_threshold() float { return self.store.require(self.id).sleep_threshold }
@@ -336,6 +346,16 @@ public class RigidBody3D {
         var state = self.store.require(self.id)
         state.is_sensor = enabled
         self.store.wake_all()
+    }
+
+    func set_continuous_collision(enabled:bool) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        if enabled && state.body_type != BodyType3D.dynamic {
+            panic("GFX.Physics continuous collision requires a dynamic body")
+        }
+        state.continuous_collision = enabled
+        state.wake()
     }
 
     func set_enabled(enabled:bool) {

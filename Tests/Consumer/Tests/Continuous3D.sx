@@ -1,0 +1,146 @@
+use GFX.Physics
+use STD.Math
+
+func thin_wall(world:Physics.World3D, body_type:Physics.BodyType3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = body_type
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.1, 4.0, 4.0))))
+}
+
+func fast_sphere(world:Physics.World3D, continuous:bool) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(120.0, 0.0, 0.0)
+        ..continuous_collision = continuous
+        ..allow_sleep = false)
+}
+
+test "continuous sphere stops at a thin fixed wall" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var wall = thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x + 0.3) < 0.001)
+    assert(Math.abs(bullet.linear_velocity().x) < 0.001)
+    var begins:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1 && begins[0].first_body().same_body(wall))
+    assert(begins[0].normal_impulse() > 0.0)
+}
+
+test "discrete sphere still crosses the thin wall" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, false)
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x - 1.0) < 0.001)
+    assert(world.contact_count() == 0)
+}
+
+test "continuous motion follows a translating kinematic wall" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var wall = thin_wall(world, Physics.BodyType3D.kinematic)
+    wall.set_linear_velocity(Math.Vec3(6.0, 0.0, 0.0))
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    assert(Math.abs(wall.position().x - 0.1) < 0.001)
+    assert(Math.abs(bullet.position().x + 0.2) < 0.001)
+    assert(world.contact_count() == 1)
+}
+
+test "continuous motion transfers momentum to a dynamic target" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var target = thin_wall(world, Physics.BodyType3D.dynamic)
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    assert(bullet.position().x < 0.0)
+    assert(target.linear_velocity().x > 0.0)
+    assert(world.contact_count() == 1)
+}
+
+test "continuous motion obeys pair filters" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var wall = thin_wall(world, Physics.BodyType3D.fixed)
+    wall.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0))
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x - 1.0) < 0.001)
+    assert(world.contact_count() == 0)
+}
+
+test "fast continuous crossing emits one sensor begin and end" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..is_sensor = true)
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 1)
+    assert(begins[0].is_sensor() && ends[0].is_sensor())
+    assert(begins[0].first_body().same_body(sensor))
+    assert(begins[0].second_body().same_body(bullet))
+    assert(world.contact_count() == 0)
+    assert(Math.abs(bullet.position().x - 1.0) < 0.001)
+    assert(Math.abs(bullet.linear_velocity().x - 120.0) < 0.001)
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 0 && ends.count() == 0)
+}
+
+test "oblique continuous approach preserves tangent velocity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, true)
+    bullet.set_linear_velocity(Math.Vec3(120.0, 12.0, 0.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x + 0.3) < 0.001)
+    assert(Math.abs(bullet.linear_velocity().x) < 0.001)
+    assert(bullet.linear_velocity().y > 0.0)
+}
+
+test "parallel motion beside a thin wall has no false impact" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, true)
+    bullet.set_transform(Physics.Transform3D(
+        position:Math.Vec3(-0.31, -1.0, 0.0)))
+    bullet.set_linear_velocity(Math.Vec3(0.0, 120.0, 0.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x + 0.31) < 0.001)
+    assert(world.contact_count() == 0)
+}
+
+test "continuous motion selects the first wall rather than creation order" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var far = thin_wall(world, Physics.BodyType3D.fixed)
+    far.set_transform(Physics.Transform3D(position:Math.Vec3(0.6, 0.0, 0.0)))
+    var near = thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, true)
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x + 0.3) < 0.001)
+    var begins:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1 && begins[0].first_body().same_body(near))
+}
+
+test "runtime continuous switch changes the next step" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    thin_wall(world, Physics.BodyType3D.fixed)
+    var bullet = fast_sphere(world, false)
+    world.step(1.0 / 60.0)
+    assert(bullet.position().x > 0.9)
+    bullet.set_transform(Physics.Transform3D(
+        position:Math.Vec3(-1.0, 0.0, 0.0)))
+    bullet.set_continuous_collision(true)
+    assert(bullet.continuous_collision())
+    world.step(1.0 / 60.0)
+    assert(Math.abs(bullet.position().x + 0.3) < 0.001)
+    assert(world.contact_count() == 1)
+}

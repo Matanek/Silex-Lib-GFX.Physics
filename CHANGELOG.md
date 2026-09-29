@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added an optional linear sweep for dynamic bodies to stop a fast sphere at
+  a thin wall and report complete one-step sensor crossings. The wall stop
+  is compared with pinned Jolt in Debug and Release; Jolt's missing fast
+  sensor event is documented.
 - Added pair filters with categories, masks, and groups, plus independent
   query filters. Sensor bodies emit overlap events without physical response;
   one complete passage is compared with pinned Jolt in Debug and Release.
@@ -50,7 +54,8 @@ first in `CHANGELOG.fr.md`.
 - Nearly parallel box faces use multiple contact points, a solver shared by
   pairs, and impulses carried between steps. `Contact3D.write_points` exposes
   points and their impulses. A small stack remains stable at the tested fixed
-  step; CCD remains to be delivered.
+  step; linear continuous collision is now optional and does not cover
+  rotation.
 - Added sleeping for dynamic bodies and contact islands, with wakeup from
   commands, collisions, or support changes. Sleep timing and command wakeup
   are compared with pinned Jolt in Debug and Release.

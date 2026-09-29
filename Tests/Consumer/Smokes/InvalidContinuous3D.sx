@@ -1,0 +1,8 @@
+use GFX.Physics
+
+func main() {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..continuous_collision = true)
+}
