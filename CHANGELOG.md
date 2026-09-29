@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Isotropic inertia tensors (cubes, spheres or custom masses) apply their
+  scalar factor directly, avoiding redundant rotations. Solver helpers borrow
+  bodies during iterations to avoid repeatedly managing owned references.
+  Inertia rounding changes slightly and can change chaotic trajectories.
+
 - Reduce 3D contact and sleep overhead: build islands by joining contacts and
   constraints, use SAT separation alone for box position correction, and skip
   ineffective impulse calculations on fixed and kinematic bodies. Solver

@@ -116,3 +116,22 @@ test "invalidate bodies when world lifetime ends" {
     world.write_bodies(bodies)
     assert(bodies.count() == 1 && bodies[0].same_body(current))
 }
+
+
+test "isotropic inertia preserves world impulses under arbitrary rotation and mutation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(1.234, Math.Vec3(1.0, 2.0, 3.0).normalized())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation:rotation)
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(4.0)))
+    body.apply_angular_impulse(Math.Vec3(4.0, 8.0, -12.0))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(1.0, 2.0, -3.0), 0.00001))
+    body.set_angular_velocity(Math.Vec3())
+    body.apply_impulse(Math.Vec3(2.0, 0.0, 0.0), Math.Vec3(0.0, 1.0, 0.0))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, -0.5), 0.00001))
+    // The same body must return to a rotated tensor after changing its mass.
+    body.set_mass_properties(Physics.MassProperties3D(2.0, Math.Vec3(1.0, 2.0, 4.0)))
+    body.set_angular_velocity(Math.Vec3())
+    body.apply_angular_impulse(rotation.rotate(Math.Vec3(1.0, 2.0, 4.0)))
+    assert(body.angular_velocity().nearly_equal(rotation.rotate(Math.Vec3(1.0)), 0.00001))
+}

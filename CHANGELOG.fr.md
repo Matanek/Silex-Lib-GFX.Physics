@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les tenseurs d’inertie isotropes (cubes, sphères ou masses personnalisées)
+  appliquent directement leur facteur scalaire, sans rotations inutiles.
+  Les auxiliaires de résolution empruntent les corps pendant les itérations
+  pour éviter la gestion répétée de références propriétaires. Les arrondis
+  de l’inertie changent légèrement et peuvent modifier une trajectoire chaotique.
+
 - Réduction du coût des contacts et du sommeil 3D : construction des îlots par
   union des contacts et contraintes, séparation SAT seule pendant la correction
   des boîtes et suppression des calculs d’impulsion sans effet sur les corps

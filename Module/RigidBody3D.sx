@@ -194,6 +194,12 @@ package class BodyState3D {
 
     func inverse_inertia_times(world_vector:Math.Vec3) Math.Vec3 {
         if self.body_type != BodyType3D.dynamic { return Math.Vec3() }
+        // A scalar inertia tensor is invariant under rotation (cubes/spheres,
+        // or any custom mass properties with equal principal moments).
+        if self.inverse_inertia.x == self.inverse_inertia.y &&
+            self.inverse_inertia.y == self.inverse_inertia.z {
+            return world_vector.multiply(self.inverse_inertia.x)
+        }
         let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
         return self.transform.rotation.rotate(local_vector.multiply(self.inverse_inertia))
     }

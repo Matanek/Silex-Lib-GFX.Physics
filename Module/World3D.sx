@@ -1084,8 +1084,8 @@ class SleepIslands3D {
 }
 
 func warm_contact_points3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:&BodyState3D,
+    second:&BodyState3D,
     normal:Math.Vec3,
     friction:float,
     constraints:ContactPointState3D[],
@@ -1322,8 +1322,8 @@ class ContactPointState3D {
 }
 
 func contact_inverse_mass3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:@BodyState3D,
+    second:@BodyState3D,
     first_radius:Math.Vec3,
     second_radius:Math.Vec3,
     axis:Math.Vec3
@@ -1336,8 +1336,8 @@ func contact_inverse_mass3d(
 }
 
 func apply_contact_impulse3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:&BodyState3D,
+    second:&BodyState3D,
     first_radius:Math.Vec3,
     second_radius:Math.Vec3,
     impulse:Math.Vec3
@@ -1361,8 +1361,8 @@ func apply_contact_impulse3d(
 }
 
 func contact_relative_velocity3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:@BodyState3D,
+    second:@BodyState3D,
     first_radius:Math.Vec3,
     second_radius:Math.Vec3
 ) Math.Vec3 {
@@ -1376,7 +1376,7 @@ func contact_relative_velocity3d(
 }
 
 func distance_axis3d(
-    first:BodyState3D, second:BodyState3D,
+    first:@BodyState3D, second:@BodyState3D,
     constraint:DistanceConstraintState3D
 ) Math.Vec3 {
     let separation = second.transform.point(constraint.second_local_anchor).subtract(
@@ -1399,7 +1399,7 @@ func distance_error3d(length:float, constraint:DistanceConstraintState3D) float 
 }
 
 func solve_distance_velocity3d(
-    first:BodyState3D, second:BodyState3D,
+    first:&BodyState3D, second:&BodyState3D,
     constraint:DistanceConstraintState3D, delta:float
 ) {
     let first_point = first.transform.point(constraint.first_local_anchor)
@@ -1490,7 +1490,7 @@ func shift_distance_body3d(
 }
 
 func point_effective_column3d(
-    first:BodyState3D, second:BodyState3D,
+    first:@BodyState3D, second:@BodyState3D,
     first_radius:Math.Vec3, second_radius:Math.Vec3,
     axis:Math.Vec3
 ) Math.Vec3 {
@@ -1502,7 +1502,7 @@ func point_effective_column3d(
 }
 
 func point_inverse_mass3d(
-    first:BodyState3D, second:BodyState3D,
+    first:@BodyState3D, second:@BodyState3D,
     first_radius:Math.Vec3, second_radius:Math.Vec3
 ) Math.Mat3 {
     return Math.Mat3(
@@ -1519,7 +1519,7 @@ func point_inverse_mass3d(
 }
 
 func solve_point_velocity3d(
-    first:BodyState3D, second:BodyState3D,
+    first:&BodyState3D, second:&BodyState3D,
     constraint:PointConstraintState3D, delta:float
 ) {
     let first_point = first.transform.point(constraint.first_local_anchor)
@@ -1564,8 +1564,8 @@ func solve_point_position3d(
 }
 
 func solve_contact_point3d(
-    first:BodyState3D,
-    second:BodyState3D,
+    first:&BodyState3D,
+    second:&BodyState3D,
     normal:Math.Vec3,
     friction:float,
     constraint:ContactPointState3D,
