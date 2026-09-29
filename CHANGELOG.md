@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added a damped spring to `DistanceConstraint3D`, configurable by frequency
+  and damping ratio at creation or while simulating. Exact lengths and soft
+  range limits are tested; free oscillation is compared with pinned Jolt in
+  Debug and Release.
 - Fixed spurious tangential velocity after a fast face-on, four-point impact
   by settling multi-point normal support before friction. The 3D scene's
   projectile no longer drifts upward after hitting the wall.

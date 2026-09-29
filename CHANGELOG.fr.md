@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout d'un ressort amorti à `DistanceConstraint3D`, réglable en fréquence
+  et taux d'amortissement à la création ou pendant la simulation. La longueur
+  exacte et les bornes souples d'une plage sont vérifiées ; une oscillation
+  libre est comparée à Jolt épinglé en Debug et Release.
 - Correction d'une vitesse tangentielle parasite après un choc frontal rapide
   contre une face à quatre points : le support normal multi-points est
   stabilisé avant la friction. Le projectile de la scène 3D ne dérive plus

@@ -10,6 +10,8 @@ public struct DistanceConstraint3DSettings {
     var second_local_anchor:Math.Vec3
     var minimum_length:float
     var maximum_length:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
     var is_enabled:bool
 
     init(length:float) {
@@ -17,6 +19,8 @@ public struct DistanceConstraint3DSettings {
         self.second_local_anchor = Math.Vec3()
         self.minimum_length = length
         self.maximum_length = length
+        self.spring_hertz = 0.0
+        self.spring_damping_ratio = 0.0
         self.is_enabled = true
     }
 }
@@ -37,6 +41,8 @@ package class DistanceConstraintState3D {
     let second_local_anchor:Math.Vec3
     var minimum_length:float
     var maximum_length:float
+    var spring_hertz:float
+    var spring_damping_ratio:float
     var is_enabled:bool
     var axial_impulse:float = 0.0
     var reaction_axis:Math.Vec3 = Math.Vec3()
@@ -44,6 +50,7 @@ package class DistanceConstraintState3D {
 
     init(first_id:BodyId3D, second_id:BodyId3D, settings:DistanceConstraint3DSettings) {
         validate_distance_limits3d(settings.minimum_length, settings.maximum_length)
+        validate_distance_spring3d(settings.spring_hertz, settings.spring_damping_ratio)
         if !finite_body3d_point(settings.first_local_anchor) ||
             !finite_body3d_point(settings.second_local_anchor)
         {
@@ -55,6 +62,8 @@ package class DistanceConstraintState3D {
         self.second_local_anchor = settings.second_local_anchor
         self.minimum_length = settings.minimum_length
         self.maximum_length = settings.maximum_length
+        self.spring_hertz = settings.spring_hertz
+        self.spring_damping_ratio = settings.spring_damping_ratio
         self.is_enabled = settings.is_enabled
     }
 }
@@ -174,6 +183,10 @@ public class DistanceConstraint3D {
     func is_enabled() bool { return self.store.require(self.id).is_enabled }
     func minimum_length() float { return self.store.require(self.id).minimum_length }
     func maximum_length() float { return self.store.require(self.id).maximum_length }
+    func spring_hertz() float { return self.store.require(self.id).spring_hertz }
+    func spring_damping_ratio() float {
+        return self.store.require(self.id).spring_damping_ratio
+    }
     func first_local_anchor() Math.Vec3 {
         return self.store.require(self.id).first_local_anchor
     }
@@ -204,6 +217,18 @@ public class DistanceConstraint3D {
         self.store.bodies.require(state.first_id).wake()
         self.store.bodies.require(state.second_id).wake()
     }
+    func set_spring(hertz:float, damping_ratio:float) {
+        validate_distance_spring3d(hertz, damping_ratio)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.spring_hertz = hertz
+        state.spring_damping_ratio = damping_ratio
+        state.axial_impulse = 0.0
+        state.reaction_axis = Math.Vec3()
+        state.inverse_delta = 0.0
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
     func set_enabled(enabled:bool) {
         self.store.bodies.require_mutable()
         var state = self.store.require(self.id)
@@ -221,6 +246,14 @@ package func validate_distance_limits3d(minimum:float, maximum:float) {
         minimum < 0.0 || maximum < minimum
     {
         panic("GFX.Physics.DistanceConstraint3D requires finite ordered non-negative limits")
+    }
+}
+
+package func validate_distance_spring3d(hertz:float, damping_ratio:float) {
+    if !finite_body3d_value(hertz) || !finite_body3d_value(damping_ratio) ||
+        hertz < 0.0 || damping_ratio < 0.0
+    {
+        panic("GFX.Physics.DistanceConstraint3D requires finite non-negative spring frequency and damping ratio")
     }
 }
 

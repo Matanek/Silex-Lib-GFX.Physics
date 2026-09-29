@@ -1399,9 +1399,19 @@ func solve_distance_velocity3d(
     let speed = contact_relative_velocity3d(
         first, second, first_radius, second_radius
     ).dot(axis)
-    let bias = Math.max(-10.0, Math.min(10.0, 0.2 * error / delta))
+    var bias = Math.max(-10.0, Math.min(10.0, 0.2 * error / delta))
+    var softness = 0.0
+    if constraint.spring_hertz > 0.0 {
+        let effective_mass = 1.0 / inverse_mass
+        let omega = 2.0 * Math.pi() * constraint.spring_hertz
+        let stiffness = effective_mass * omega * omega
+        let damping = 2.0 * effective_mass * constraint.spring_damping_ratio * omega
+        softness = 1.0 / (delta * (damping + delta * stiffness))
+        bias = delta * stiffness * softness * error
+    }
     let previous = constraint.axial_impulse
-    var accumulated = previous - (speed + bias) / inverse_mass
+    var accumulated = previous - (speed + bias + softness * previous) /
+        (inverse_mass + softness)
     if constraint.minimum_length != constraint.maximum_length {
         if length <= constraint.minimum_length {
             accumulated = Math.max(0.0, accumulated)
@@ -1422,6 +1432,7 @@ func solve_distance_position3d(
     first:BodyState3D, second:BodyState3D,
     constraint:DistanceConstraintState3D
 ) {
+    if constraint.spring_hertz > 0.0 { return }
     let first_point = first.transform.point(constraint.first_local_anchor)
     let second_point = second.transform.point(constraint.second_local_anchor)
     let error = distance_error3d(first_point.distance(second_point), constraint)

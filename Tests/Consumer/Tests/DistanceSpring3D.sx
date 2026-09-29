@@ -1,0 +1,135 @@
+use GFX.Physics
+use STD.Math
+
+func advance_spring3d(world:Physics.World3D, steps:int) {
+    var index = 0
+    while index < steps {
+        world.step(1.0 / 60.0)
+        index++
+    }
+}
+
+func make_spring_world3d(damping:float) SpringSample3D {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+        ..allow_sleep = false
+        ..linear_damping = 0.0
+        ..angular_damping = 0.0)
+    var settings = Physics.DistanceConstraint3DSettings(2.0)
+    settings.spring_hertz = 2.0
+    settings.spring_damping_ratio = damping
+    var joint = world.create_distance_constraint(anchor, weight, settings)
+    return SpringSample3D(world, joint)
+}
+
+struct SpringSample3D {
+    var world:Physics.World3D
+    var joint:Physics.DistanceConstraint3D
+
+    init(world:Physics.World3D, joint:Physics.DistanceConstraint3D) {
+        self.world = world
+        self.joint = joint
+    }
+}
+
+test "distance spring oscillates around its target and damping removes overshoot" {
+    var oscillating = make_spring_world3d(0.1)
+    var world = oscillating.world
+    var joint = oscillating.joint
+    advance_spring3d(world, 12)
+    assert(joint.current_length() < 2.0)
+    advance_spring3d(world, 120)
+    assert(Math.abs(joint.current_length() - 2.0) < 0.03)
+
+    var damped = make_spring_world3d(1.0)
+    var damped_world = damped.world
+    var damped_joint = damped.joint
+    advance_spring3d(damped_world, 12)
+    assert(damped_joint.current_length() > 2.0)
+    advance_spring3d(damped_world, 120)
+    assert(Math.abs(damped_joint.current_length() - 2.0) < 0.01)
+}
+
+test "spring mutation returns to rigid length and clears the last reaction" {
+    var sample = make_spring_world3d(0.2)
+    var world = sample.world
+    var joint = sample.joint
+    advance_spring3d(world, 4)
+    assert(joint.spring_hertz() == 2.0)
+    assert(joint.spring_damping_ratio() == 0.2)
+    assert(joint.reaction_force().length() > 0.0)
+    joint.set_spring(0.0, 0.0)
+    assert(joint.reaction_force().nearly_equal(Math.Vec3(), 0.000001))
+    advance_spring3d(world, 1)
+    assert(Math.abs(joint.current_length() - 2.0) < 0.002)
+    joint.set_spring(1.0, 0.5)
+    assert(joint.spring_hertz() == 1.0)
+    joint.set_enabled(false)
+    assert(joint.reaction_force().nearly_equal(Math.Vec3(), 0.000001))
+}
+
+test "soft upper limit allows transient stretch and coexists with floor contact" {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0))))
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 4.0, 0.0)))
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.15, 0.0))
+        ..allow_sleep = false)
+    var settings = Physics.DistanceConstraint3DSettings(3.0)
+    settings.minimum_length = 2.0
+    settings.spring_hertz = 2.0
+    settings.spring_damping_ratio = 0.5
+    var joint = world.create_distance_constraint(anchor, weight, settings)
+    advance_spring3d(world, 180)
+    assert(world.contact_count() > 0)
+    assert(weight.position().y >= 0.99)
+    assert(joint.current_length() > 2.9)
+    assert(floor.is_valid())
+    world.destroy_rigid_body(anchor)
+    assert(!joint.is_valid())
+}
+
+test "unequal masses keep their center while the spring moves both bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var light = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(1.0, Math.Vec3(0.4))
+        ..allow_sleep = false
+        ..linear_damping = 0.0)
+    var heavy = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(3.0, 0.0, 0.0))
+        ..mass_properties = Physics.MassProperties3D(4.0, Math.Vec3(1.6))
+        ..allow_sleep = false
+        ..linear_damping = 0.0)
+    var settings = Physics.DistanceConstraint3DSettings(2.0)
+    settings.spring_hertz = 2.0
+    settings.spring_damping_ratio = 0.5
+    var joint = world.create_distance_constraint(light, heavy, settings)
+    advance_spring3d(world, 6)
+    let center = (light.position().x + 4.0 * heavy.position().x) / 5.0
+    assert(Math.abs(center - 2.4) < 0.0001)
+    assert(light.position().x > 0.0 && heavy.position().x < 3.0)
+    assert(joint.current_length() > 2.0)
+}
+
+test "changing spring settings wakes a sleeping linked body" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+    var joint = world.create_distance_constraint(anchor, weight,
+        Physics.DistanceConstraint3DSettings(2.0))
+    advance_spring3d(world, 60)
+    assert(!weight.is_awake())
+    joint.set_spring(2.0, 0.7)
+    assert(weight.is_awake())
+    joint.set_enabled(false)
+    assert(joint.reaction_force().nearly_equal(Math.Vec3(), 0.000001))
+}

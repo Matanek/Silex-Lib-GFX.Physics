@@ -67,8 +67,8 @@ anchors in the same world. `DistanceConstraint3DSettings(length)` initially
 sets an exact length; its `minimum_length` and `maximum_length` fields also
 allow a range. Lengths must be finite, non-negative, and ordered. At least one
 body must be dynamic; a fixed body can anchor the constraint to the world.
-Active constraints share velocity iterations with contacts and also correct
-position error.
+Active constraints share velocity iterations with contacts. At zero frequency,
+they also correct position error directly.
 
 ```silex
 use GFX.Physics
@@ -88,12 +88,28 @@ func main() {
 }
 ```
 
+`spring_hertz` sets a distance spring frequency in hertz; zero retains the
+rigid constraint. `spring_damping_ratio` is zero for weak damping, one for
+critical damping, and may exceed one. Both values must be finite and
+non-negative. The spring can act on an exact length or the boundaries of a
+range; within a range it is inactive. Direct rigid position correction is
+disabled while the spring is active to preserve its elasticity. For example:
+
+```silex
+var settings = Physics.DistanceConstraint3DSettings(2.0)
+settings.spring_hertz = 2.0
+settings.spring_damping_ratio = 0.7
+var tether = world.create_distance_constraint(anchor, weight, settings)
+tether.set_spring(3.0, 1.0)
+```
+
 `first_local_anchor` and `second_local_anchor` position the attachment points
 in each body's local frame. `current_length()` measures their world-space
 separation. `reaction_force()` reports the force applied to the second body
 during the last positive step, in mass × distance / second²; it is zero for an
-inactive constraint or a step with no impulse. `set_limits(minimum, maximum)`
-and `set_enabled(enabled)` wake both bodies and clear the previous reaction.
+inactive constraint or a step with no impulse. `set_limits(minimum, maximum)`,
+`set_spring(hertz, damping_ratio)`, and `set_enabled(enabled)` wake both bodies
+and clear the previous reaction.
 `destroy_distance_constraint` invalidates the handle; destroying a linked
 body invalidates its constraints as well. `distance_constraint_count()` counts
 live constraints. A zero step preserves poses and observations.

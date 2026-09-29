@@ -60,5 +60,16 @@ func main() {
         var other = Physics.World3D()
         other.destroy_distance_constraint(joint)
     }
+    if selected("negative-hertz") {
+        var settings = Physics.DistanceConstraint3DSettings(1.0)
+        settings.spring_hertz = -1.0
+        world.create_distance_constraint(fixed, body, settings)
+    }
+    if selected("nan-damping") {
+        var settings = Physics.DistanceConstraint3DSettings(1.0)
+        settings.spring_damping_ratio = Math.sqrt(-1.0)
+        world.create_distance_constraint(fixed, body, settings)
+    }
+    if selected("negative-damping-mutation") { joint.set_spring(2.0, -0.1) }
     panic("invalid distance constraint operation was accepted")
 }

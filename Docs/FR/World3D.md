@@ -70,8 +70,8 @@ impose d'abord une longueur exacte ; ses champs `minimum_length` et
 `maximum_length` permettent aussi une plage. Les longueurs sont finies,
 positives ou nulles et ordonnées. Au moins un corps doit être dynamique ; un
 corps fixe peut servir d'ancrage au monde. Les contraintes actives partagent
-les itérations de vitesse avec les contacts et corrigent également leur erreur
-de position.
+les itérations de vitesse avec les contacts. À fréquence nulle, leur erreur
+de position est aussi corrigée directement.
 
 ```silex
 use GFX.Physics
@@ -91,14 +91,31 @@ func main() {
 }
 ```
 
+`spring_hertz` règle un ressort de distance en hertz ; zéro conserve la
+contrainte rigide. `spring_damping_ratio` vaut zéro pour une oscillation peu
+amortie, un pour l'amortissement critique et peut dépasser un. Les deux
+valeurs doivent être finies et positives ou nulles. Le ressort peut agir sur
+une longueur exacte ou sur les bornes d'une plage ; dans une plage, il reste
+inactif entre les bornes. La correction rigide de position est désactivée
+quand le ressort est actif afin de conserver son élasticité. Par exemple :
+
+```silex
+var settings = Physics.DistanceConstraint3DSettings(2.0)
+settings.spring_hertz = 2.0
+settings.spring_damping_ratio = 0.7
+var tether = world.create_distance_constraint(anchor, weight, settings)
+tether.set_spring(3.0, 1.0)
+```
+
 `first_local_anchor` et `second_local_anchor` déplacent les points d'attache
 dans les repères locaux des corps. `current_length()` mesure leur écart
 mondial. `reaction_force()` donne la force exercée sur le second corps pendant
 le dernier pas positif, en masse × distance / seconde² ; elle vaut zéro pour
-une contrainte inactive ou un pas sans impulsion. `set_limits(minimum, maximum)`
-et `set_enabled(enabled)` réveillent les corps liés et effacent la réaction
-précédente. `destroy_distance_constraint` invalide le handle ; détruire un
-corps lié invalide aussi ses contraintes. `distance_constraint_count()` compte
+une contrainte inactive ou un pas sans impulsion. `set_limits(minimum, maximum)`,
+`set_spring(hertz, damping_ratio)` et `set_enabled(enabled)` réveillent les corps
+liés et effacent la réaction précédente. `destroy_distance_constraint` invalide
+le handle ; détruire un corps lié invalide aussi ses contraintes.
+`distance_constraint_count()` compte
 les contraintes vivantes. Le pas nul conserve poses et observations.
 
 ## Relier deux corps par un point

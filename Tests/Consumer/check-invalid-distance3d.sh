@@ -32,6 +32,9 @@ for mode in debug release; do
     check_failure "$binary" mutation "requires finite ordered non-negative limits"
     check_failure "$binary" stale "no longer refers to a live constraint"
     check_failure "$binary" foreign-destroy "cannot destroy a constraint owned by another world"
+    check_failure "$binary" negative-hertz "requires finite non-negative spring frequency and damping ratio"
+    check_failure "$binary" nan-damping "requires finite non-negative spring frequency and damping ratio"
+    check_failure "$binary" negative-damping-mutation "requires finite non-negative spring frequency and damping ratio"
     rm -f "$binary"
 done
-echo "distance3d rejected 18 invalid creation and mutation cases"
+echo "distance3d rejected 24 invalid creation and mutation cases"
