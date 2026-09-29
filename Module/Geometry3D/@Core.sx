@@ -386,3 +386,28 @@ func signed_geometry3d_axis(value:float) float {
     if value < 0.0 { return -1.0 }
     return 1.0
 }
+
+// World contact generation and position correction only consume distances at
+// or below the contact tolerance. Public distance queries still compute exact
+// separated witnesses (including every box edge pair).
+package func contact_distance3d(
+    first:ShapePlacement3D, second:ShapePlacement3D
+) DistanceResult3D {
+    match first.shape() {
+        box(first_box) => {
+            match second.shape() {
+                box(second_box) => {
+                    return box_box_distance(first_box, first.transform(),
+                        second_box, second.transform(), true)
+                }
+                sphere(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+            }
+        }
+        sphere(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    return Geometry3D.distance(first, second)
+}

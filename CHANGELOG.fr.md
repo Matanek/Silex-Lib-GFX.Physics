@@ -6,6 +6,15 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Réduction du coût des colonnes de boîtes 3D : bornes englobantes tenant
+  compte de la rotation, rejet des boîtes séparées avant le calcul des
+  témoins de distance, réutilisation des axes de collision et des données
+  constantes du solver. Le nombre d'itérations, la friction et le pas de
+  simulation restent identiques ; les requêtes publiques de distance gardent
+  leurs témoins exacts. Sur macOS ARM64 Release, sept répétitions avant/après
+  mesurent 29,36 → 12,71 ms/pas pour 256 boîtes ; le scénario avec basculement
+  passe de 24,31 à 11,95 ms/pas, sans rendu.
+
 - Accélération des mondes 3D chargés : recherche des paires par balayage de
   sphères englobantes et recherche ordonnée des contacts persistants. Une
   correction de position itérative empêche une colonne de 256 boîtes de

@@ -12,6 +12,7 @@ use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
 use GFX.Physics.PointConstraint3D.PointConstraintState3D
 use GFX.Physics.PointConstraint3D.PointConstraintStore3D
 use GFX.Physics.Geometry3D.Geometry3D
+use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.RigidBody3D.BodyId3D
@@ -600,7 +601,7 @@ public class World3D {
                                     (first.body_type == BodyType3D.kinematic ||
                                         second.body_type == BodyType3D.kinematic)))
                         {
-                            let distance = Geometry3D.distance(
+                            let distance = contact_distance3d(
                                 ShapePlacement3D(first.shape, first.transform),
                                 ShapePlacement3D(second.shape, second.transform)
                             )
@@ -875,7 +876,7 @@ public class World3D {
                     let second_shape = contact_placement3d(
                         pair.second, pair.second_child_id
                     )
-                    let distance = Geometry3D.distance(first_shape, second_shape)
+                    let distance = contact_distance3d(first_shape, second_shape)
                     if distance.separation < 0.0 {
                         correct_contact3d(
                             pair.first, pair.second,
@@ -1155,8 +1156,8 @@ func warm_contact_points3d(
                     maximum
                 )
             }
-            let first_radius = constraint.point.subtract(first.world_center())
-            let second_radius = constraint.point.subtract(second.world_center())
+            let first_radius = constraint.first_radius
+            let second_radius = constraint.second_radius
             apply_contact_impulse3d(
                 first, second, first_radius, second_radius,
                 normal.multiply(constraint.normal_impulse).add(
@@ -1336,6 +1337,9 @@ class ContactPointState3D {
     var normal_impulse:float
     var tangent_impulse:Math.Vec3
     var bounce_speed:float
+    let first_radius:Math.Vec3
+    let second_radius:Math.Vec3
+    let normal_inverse_mass:float
 
     init(
         point:Math.Vec3,
@@ -1350,6 +1354,12 @@ class ContactPointState3D {
         self.bounce_speed = 0.0
         let first_radius = point.subtract(first.world_center())
         let second_radius = point.subtract(second.world_center())
+        // Poses and inertia stay fixed throughout all velocity iterations.
+        self.first_radius = first_radius
+        self.second_radius = second_radius
+        self.normal_inverse_mass = contact_inverse_mass3d(
+            first, second, first_radius, second_radius, normal
+        )
         let approach_speed = contact_relative_velocity3d(
             first, second, first_radius, second_radius
         ).dot(normal)
@@ -1605,14 +1615,12 @@ func solve_contact_point3d(
     constraint:ContactPointState3D,
     apply_friction:bool = true
 ) {
-    let first_radius = constraint.point.subtract(first.world_center())
-    let second_radius = constraint.point.subtract(second.world_center())
+    let first_radius = constraint.first_radius
+    let second_radius = constraint.second_radius
     let approach_speed = contact_relative_velocity3d(
         first, second, first_radius, second_radius
     ).dot(normal)
-    let inverse_effective_mass = contact_inverse_mass3d(
-        first, second, first_radius, second_radius, normal
-    )
+    let inverse_effective_mass = constraint.normal_inverse_mass
     if inverse_effective_mass <= 0.0 { return }
     let previous_normal = constraint.normal_impulse
     constraint.normal_impulse = Math.max(
@@ -1737,15 +1745,15 @@ struct BroadProxy3D {
     let slot:int
     let position:Math.Vec3
     let radius:float
-    let lower:float
-    let upper:float
+    let lower:Math.Vec3
+    let upper:Math.Vec3
 
-    init(slot:int, position:Math.Vec3, radius:float) {
+    init(slot:int, position:Math.Vec3, radius:float, extent:Math.Vec3) {
         self.slot = slot
         self.position = position
         self.radius = radius
-        self.lower = position.x - radius
-        self.upper = position.x + radius
+        self.lower = position.subtract(extent)
+        self.upper = position.add(extent)
     }
 }
 
@@ -1760,8 +1768,8 @@ struct BroadPair3D {
 }
 
 func broad_proxy_before3d(first:@BroadProxy3D, second:@BroadProxy3D) bool {
-    if first.lower < second.lower { return true }
-    if first.lower > second.lower { return false }
+    if first.lower.x < second.lower.x { return true }
+    if first.lower.x > second.lower.x { return false }
     return first.slot < second.slot
 }
 
@@ -1771,14 +1779,37 @@ func broad_pair_before3d(first:@BroadPair3D, second:@BroadPair3D) bool {
     return first.second < second.second
 }
 
+// Tight world-axis bounds reject separated boxes before exact distance queries.
+// Other shapes keep their conservative sphere bounds, including child offsets.
+func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec3 {
+    match shape {
+        box(box) => {
+            let half = box.half_size()
+            let x = transform.vector(Math.Vec3(half.x, 0.0, 0.0))
+            let y = transform.vector(Math.Vec3(0.0, half.y, 0.0))
+            let z = transform.vector(Math.Vec3(0.0, 0.0, half.z))
+            return Math.Vec3(
+                Math.abs(x.x) + Math.abs(y.x) + Math.abs(z.x),
+                Math.abs(x.y) + Math.abs(y.y) + Math.abs(z.y),
+                Math.abs(x.z) + Math.abs(y.z) + Math.abs(z.z)
+            )
+        }
+        sphere(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    return Math.Vec3(radius)
+}
+
 func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     var proxies:BroadProxy3D[] = []
     var slot = 0
     while slot < store.slots.count() {
         if var body = store.slots[slot] {
             if body.is_enabled {
+                let radius = shape_bounding_radius3d(body.shape)
                 proxies.append(BroadProxy3D(slot, body.transform.position,
-                    shape_bounding_radius3d(body.shape)))
+                    radius, broad_extent3d(body.shape, body.transform, radius)))
             }
         }
         slot++
@@ -1790,9 +1821,13 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     for proxy in proxies {
         var next_active:BroadProxy3D[] = []
         for previous in active {
-            if previous.upper + 0.000001 >= proxy.lower {
+            if previous.upper.x + 0.000001 >= proxy.lower.x {
                 next_active.append(previous)
-                if bounding_spheres_overlap3d(previous.position, previous.radius,
+                if previous.upper.y + 0.000001 >= proxy.lower.y &&
+                    proxy.upper.y + 0.000001 >= previous.lower.y &&
+                    previous.upper.z + 0.000001 >= proxy.lower.z &&
+                    proxy.upper.z + 0.000001 >= previous.lower.z &&
+                    bounding_spheres_overlap3d(previous.position, previous.radius,
                     proxy.position, proxy.radius) {
                     if previous.slot < proxy.slot {
                         pairs.append(BroadPair3D(previous.slot, proxy.slot))

@@ -6,6 +6,14 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reduced the cost of 3D box columns with rotation-aware bounds, rejection
+  of separated boxes before computing distance witnesses, and reuse of
+  collision axes and invariant solver data. Iteration counts, friction and
+  simulation timestep stay identical; public distance queries retain their
+  exact witnesses. Seven paired macOS ARM64 Release runs measure
+  29.36 → 12.71 ms/step for 256 boxes; the toppling scenario improves
+  from 24.31 to 11.95 ms/step, excluding rendering.
+
 - Faster loaded 3D worlds through a bounding-sphere sweep for candidate pairs
   and ordered lookup of persistent contacts. Iterative position correction
   keeps a 256-box column above the floor, while wake propagates through

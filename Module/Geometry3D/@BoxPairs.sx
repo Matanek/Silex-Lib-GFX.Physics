@@ -32,6 +32,33 @@ struct BoxAxis3D {
     }
 }
 
+// The six box axes are invariant across all fifteen separating-axis tests.
+struct BoxBasis3D {
+    let x:Math.Vec3
+    let y:Math.Vec3
+    let z:Math.Vec3
+    let half:Math.Vec3
+
+    init(box:Box3D, transform:Transform3D) {
+        self.x = box_axis(transform, 0)
+        self.y = box_axis(transform, 1)
+        self.z = box_axis(transform, 2)
+        self.half = box.half_size()
+    }
+
+    func axis(index:int) Math.Vec3 {
+        if index == 0 { return self.x }
+        if index == 1 { return self.y }
+        return self.z
+    }
+
+    func projection(axis:Math.Vec3) float {
+        return self.half.x * Math.abs(axis.dot(self.x)) +
+            self.half.y * Math.abs(axis.dot(self.y)) +
+            self.half.z * Math.abs(axis.dot(self.z))
+    }
+}
+
 func box_box_axis(
     first:Box3D,
     first_transform:Transform3D,
@@ -39,19 +66,21 @@ func box_box_axis(
     second_transform:Transform3D
 ) BoxAxis3D {
     let offset = second_transform.position.subtract(first_transform.position)
+    let first_basis = BoxBasis3D(first, first_transform)
+    let second_basis = BoxBasis3D(second, second_transform)
     var best_gap = -3.4028235e38
     var best_axis = Math.Vec3.right()
     var axis_index = 0
     while axis_index < 15 {
         var axis = Math.Vec3()
         if axis_index < 3 {
-            axis = box_axis(first_transform, axis_index)
+            axis = first_basis.axis(axis_index)
         } else if axis_index < 6 {
-            axis = box_axis(second_transform, axis_index - 3)
+            axis = second_basis.axis(axis_index - 3)
         } else {
             let cross_index = axis_index - 6
-            axis = box_axis(first_transform, cross_index / 3).cross(
-                box_axis(second_transform, cross_index % 3)
+            axis = first_basis.axis(cross_index / 3).cross(
+                second_basis.axis(cross_index % 3)
             )
         }
         let squared = axis.length_squared()
@@ -59,8 +88,8 @@ func box_box_axis(
             axis = axis.divide(Math.sqrt(squared))
             if offset.dot(axis) < 0.0 { axis = axis.negated() }
             let gap = Math.abs(offset.dot(axis)) -
-                box_projection(first, first_transform, axis) -
-                box_projection(second, second_transform, axis)
+                first_basis.projection(axis) -
+                second_basis.projection(axis)
             if gap > best_gap {
                 best_gap = gap
                 best_axis = axis
@@ -85,12 +114,16 @@ func box_box_distance(
     first:Box3D,
     first_transform:Transform3D,
     second:Box3D,
-    second_transform:Transform3D
+    second_transform:Transform3D,
+    contact_only:bool = false
 ) DistanceResult3D {
     let separating_axis = box_box_axis(
         first, first_transform, second, second_transform
     )
-    if separating_axis.gap < 0.0 {
+    // Contacts need exact witnesses only within the contact tolerance.
+    // A positive SAT gap is a lower bound on Euclidean separation.
+    if separating_axis.gap < 0.0 ||
+        (contact_only && separating_axis.gap > 0.000001) {
         return DistanceResult3D(
             box_support(first, first_transform, separating_axis.normal),
             box_support(second, second_transform, separating_axis.normal.negated()),
@@ -153,13 +186,6 @@ func box_axis(transform:Transform3D, index:int) Math.Vec3 {
     if index == 0 { return transform.vector(Math.Vec3.right()) }
     if index == 1 { return transform.vector(Math.Vec3.up()) }
     return transform.vector(Math.Vec3(0.0, 0.0, 1.0))
-}
-
-func box_projection(box:Box3D, transform:Transform3D, axis:Math.Vec3) float {
-    let half = box.half_size()
-    return half.x * Math.abs(axis.dot(box_axis(transform, 0))) +
-        half.y * Math.abs(axis.dot(box_axis(transform, 1))) +
-        half.z * Math.abs(axis.dot(box_axis(transform, 2)))
 }
 
 func box_support(box:Box3D, transform:Transform3D, axis:Math.Vec3) Math.Vec3 {
