@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La recherche de paires 3D parcourt directement les intervalles triés,
+  sans reconstruire un tableau actif pour chaque corps. Les paires, leur
+  ordre et les tolérances de contact sont conservés.
+
 - Les tenseurs d’inertie isotropes (cubes, sphères ou masses personnalisées)
   appliquent directement leur facteur scalaire, sans rotations inutiles.
   Les auxiliaires de résolution empruntent les corps pendant les itérations

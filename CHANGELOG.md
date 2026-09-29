@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- The 3D broad phase walks sorted intervals directly instead of rebuilding
+  an active array for each body. Candidate pairs, their order and contact
+  tolerances are preserved.
+
 - Isotropic inertia tensors (cubes, spheres or custom masses) apply their
   scalar factor directly, avoiding redundant rotations. Solver helpers borrow
   bodies during iterations to avoid repeatedly managing owned references.

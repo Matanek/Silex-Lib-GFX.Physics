@@ -1772,29 +1772,31 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     }
     Sort.sort<BroadProxy3D>(&proxies[0:proxies.count()],
         broad_proxy_before3d)
-    var active:BroadProxy3D[] = []
     var pairs:BroadPair3D[] = []
-    for proxy in proxies {
-        var next_active:BroadProxy3D[] = []
-        for previous in active {
-            if previous.upper.x + 0.000001 >= proxy.lower.x {
-                next_active.append(previous)
-                if previous.upper.y + 0.000001 >= proxy.lower.y &&
-                    proxy.upper.y + 0.000001 >= previous.lower.y &&
-                    previous.upper.z + 0.000001 >= proxy.lower.z &&
-                    proxy.upper.z + 0.000001 >= previous.lower.z &&
-                    bounding_spheres_overlap3d(previous.position, previous.radius,
+    // The proxies are sorted by their lower X bound. Walk each overlapping
+    // interval directly instead of copying the active set for every proxy.
+    var first_index = 0
+    while first_index < proxies.count() {
+        let previous = proxies[first_index]
+        var second_index = first_index + 1
+        while second_index < proxies.count() {
+            let proxy = proxies[second_index]
+            if previous.upper.x + 0.000001 < proxy.lower.x { break }
+            if previous.upper.y + 0.000001 >= proxy.lower.y &&
+                proxy.upper.y + 0.000001 >= previous.lower.y &&
+                previous.upper.z + 0.000001 >= proxy.lower.z &&
+                proxy.upper.z + 0.000001 >= previous.lower.z &&
+                bounding_spheres_overlap3d(previous.position, previous.radius,
                     proxy.position, proxy.radius) {
-                    if previous.slot < proxy.slot {
-                        pairs.append(BroadPair3D(previous.slot, proxy.slot))
-                    } else {
-                        pairs.append(BroadPair3D(proxy.slot, previous.slot))
-                    }
+                if previous.slot < proxy.slot {
+                    pairs.append(BroadPair3D(previous.slot, proxy.slot))
+                } else {
+                    pairs.append(BroadPair3D(proxy.slot, previous.slot))
                 }
             }
+            second_index++
         }
-        next_active.append(proxy)
-        active = next_active
+        first_index++
     }
     Sort.sort<BroadPair3D>(&pairs[0:pairs.count()], broad_pair_before3d)
     return pairs

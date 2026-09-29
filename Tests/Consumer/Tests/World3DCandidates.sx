@@ -91,3 +91,33 @@ test "box candidate pruning preserves the positive contact tolerance on every ax
         axis++
     }
 }
+
+test "a long collider overlaps separated short intervals without duplicate pairs" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var bodies:Physics.RigidBody3D[] = []
+    var index = 0
+    while index < 20 {
+        bodies.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2))
+            ..transform = Physics.Transform3D(position:Math.Vec3(
+                -19.0 + index as float * 2.0, 0.55, 0.0))))
+        index++
+    }
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(50.0, 1.0, 1.0)))
+        ..is_sensor = true)
+    world.step(1.0 / 60.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == bodies.count())
+    index = 0
+    for contact in contacts {
+        assert(contact.first_body().same_body(bodies[index]))
+        assert(contact.second_body().same_body(floor))
+        index++
+    }
+    bodies[9].set_enabled(false)
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 19)
+}
