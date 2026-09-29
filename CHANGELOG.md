@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Faster loaded 3D worlds through a bounding-sphere sweep for candidate pairs
+  and ordered lookup of persistent contacts. Iterative position correction
+  keeps a 256-box column above the floor, while wake propagates through
+  existing contacts. On macOS ARM64, 1,024 bin spheres improve from 27.82 to
+  a median 11.67 ms per physics step without rendering; 256 boxes require
+  28.80 ms per step.
 - Added a damped spring to `DistanceConstraint3D`, configurable by frequency
   and damping ratio at creation or while simulating. Exact lengths and soft
   range limits are tested; free oscillation is compared with pinned Jolt in

@@ -104,3 +104,37 @@ test "scene sized boxes settle on a broad floor" {
         assert(Math.abs(point.z - center.z) < 0.6)
     }
 }
+
+test "a 128-box column does not sink through its floor" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(24.0, 0.5, 24.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, -0.25, 0.0)))
+    var bodies:Physics.RigidBody3D[] = []
+    var index = 0
+    while index < 128 {
+        let column = index % 4
+        let row = (index / 4) % 4
+        let layer = index / 16
+        bodies.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.3)))
+            ..transform = Physics.Transform3D(position:Math.Vec3(
+                (column as float - 1.5) * 0.31 + layer as float * 0.025,
+                0.16 + layer as float * 0.31,
+                (row as float - 1.5) * 0.31
+            ))
+            ..allow_sleep = false
+            ..friction = 0.6))
+        index++
+    }
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 60.0)
+        step++
+    }
+    assert(world.contact_count() > 0)
+    for body in bodies {
+        assert(body.position().y >= 0.14)
+    }
+}

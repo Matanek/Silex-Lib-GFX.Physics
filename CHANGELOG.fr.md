@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Accélération des mondes 3D chargés : recherche des paires par balayage de
+  sphères englobantes et recherche ordonnée des contacts persistants. Une
+  correction de position itérative empêche une colonne de 256 boîtes de
+  s'enfoncer dans le sol ; le réveil suit aussi les contacts existants. Sur
+  macOS ARM64, 1 024 sphères en bac passent de 27,82 à 11,67 ms par pas
+  médian sans rendu ; 256 boîtes demandent 28,80 ms par pas.
 - Ajout d'un ressort amorti à `DistanceConstraint3D`, réglable en fréquence
   et taux d'amortissement à la création ou pendant la simulation. La longueur
   exacte et les bornes souples d'une plage sont vérifiées ; une oscillation
