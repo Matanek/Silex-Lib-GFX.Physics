@@ -6,6 +6,9 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Added pair filters with categories, masks, and groups, plus independent
+  query filters. Sensor bodies emit overlap events without physical response;
+  one complete passage is compared with pinned Jolt in Debug and Release.
 - Added `World3D` queries for the nearest ray hit, sorted multiple hits, and
   shape overlaps, with body/child identity, one-body exclusion, and snapshots
   safe after destruction. A selection case is compared with pinned Jolt in

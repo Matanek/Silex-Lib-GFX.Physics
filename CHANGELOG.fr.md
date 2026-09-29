@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de filtres de paires par catégories, masques et groupes, et de filtres
+  de requêtes indépendants. Les corps capteurs émettent des événements de
+  recouvrement sans réponse physique ; une traversée est comparée à Jolt
+  épinglé en Debug et Release.
 - Ajout des requêtes sur `World3D` : premier rayon, impacts multiples triés et
   recouvrements de formes, avec identité de corps/enfant, exclusion d'un corps
   et snapshots sûrs après destruction. Un cas de sélection est comparé à Jolt

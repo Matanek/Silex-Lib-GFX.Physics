@@ -1,0 +1,5 @@
+use GFX.Physics
+
+func main() {
+    Physics.CollisionFilter3D(category_bits:0)
+}

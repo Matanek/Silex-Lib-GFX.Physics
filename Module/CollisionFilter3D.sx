@@ -1,0 +1,41 @@
+public struct CollisionFilter3D {
+    let category_bits:uint64
+    let mask_bits:uint64
+    let group_index:int
+
+    init(
+        category_bits:uint64 = 1,
+        mask_bits:uint64 = 0xffff_ffff_ffff_ffff,
+        group_index:int = 0
+    ) {
+        if category_bits == 0 {
+            panic("GFX.Physics.CollisionFilter3D requires at least one category bit")
+        }
+        self.category_bits = category_bits
+        self.mask_bits = mask_bits
+        self.group_index = group_index
+    }
+
+    func allows(other:CollisionFilter3D) bool {
+        if self.group_index != 0 && self.group_index == other.group_index {
+            return self.group_index > 0
+        }
+        return (self.mask_bits & other.category_bits) != 0 &&
+            (other.mask_bits & self.category_bits) != 0
+    }
+}
+
+public struct QueryFilter3D {
+    let mask_bits:uint64
+    let include_sensors:bool
+
+    init(mask_bits:uint64 = 0xffff_ffff_ffff_ffff, include_sensors:bool = true) {
+        self.mask_bits = mask_bits
+        self.include_sensors = include_sensors
+    }
+
+    func allows(collision_filter:CollisionFilter3D, is_sensor:bool) bool {
+        return (self.mask_bits & collision_filter.category_bits) != 0 &&
+            (self.include_sensors || !is_sensor)
+    }
+}

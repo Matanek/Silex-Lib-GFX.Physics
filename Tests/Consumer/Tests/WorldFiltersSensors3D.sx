@@ -1,0 +1,195 @@
+use GFX.Physics
+use STD.Math
+
+test "symmetric masks end and restore a 3D contact" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(
+            category_bits:0x1, mask_bits:0x2))
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0))
+        ..collision_filter = Physics.CollisionFilter3D(
+            category_bits:0x2, mask_bits:0x1))
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1 && !begins[0].is_sensor())
+    moving.set_collision_filter(Physics.CollisionFilter3D(
+        category_bits:0x2, mask_bits:0x0))
+    world.step(1.0 / 60.0)
+    world.write_contact_end_events(ends)
+    assert(world.contact_count() == 0 && ends.count() == 1)
+    let ray = Physics.Ray3D(Math.Vec3(-2.0, 0.0, 0.0), Math.Vec3(4.0, 0.0, 0.0))
+    var hits:Physics.WorldRayHit3D[] = []
+    world.write_ray_hits(ray, hits, null, Physics.QueryFilter3D(mask_bits:0x2))
+    assert(hits.count() == 1 && hits[0].body().same_body(moving))
+    moving.set_collision_filter(Physics.CollisionFilter3D(
+        category_bits:0x2, mask_bits:0x1))
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1 && begins[0].first_body().same_body(fixed))
+}
+
+test "a fixed sensor reports traversal without changing motion" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true)
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0)
+        ..allow_sleep = false)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    var begin_count = 0
+    var end_count = 0
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 60.0)
+        world.write_contact_begin_events(begins)
+        world.write_contact_end_events(ends)
+        begin_count += begins.count()
+        end_count += ends.count()
+        for contact in begins {
+            assert(contact.is_sensor())
+            assert(contact.normal_impulse() == 0.0)
+            assert(contact.tangent_impulse().length_squared() == 0.0)
+            assert(contact.point_count() == 0)
+            assert(contact.first_body().same_body(sensor))
+        }
+        step++
+    }
+    assert(begin_count == 1 && end_count == 1)
+    assert(world.contact_count() == 0)
+    assert(Math.abs(moving.position().x - 2.0) < 0.001)
+    assert(Math.abs(moving.linear_velocity().x - 1.0) < 0.00001)
+}
+
+test "changing sensor mode ends one pair and begins another" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true)
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 1 && begins[0].is_sensor())
+    fixed.set_sensor(false)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 1)
+    assert(!begins[0].is_sensor() && ends[0].is_sensor())
+    fixed.set_sensor(true)
+    moving.set_transform(Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 1)
+    assert(begins[0].is_sensor() && !ends[0].is_sensor())
+}
+
+test "query mask and sensor inclusion are independent of contact masks" {
+    var world = Physics.World3D()
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true
+        ..collision_filter = Physics.CollisionFilter3D(
+            category_bits:0x4, mask_bits:0x0))
+    var solid = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0))
+        ..collision_filter = Physics.CollisionFilter3D(
+            category_bits:0x2, mask_bits:0x0))
+    let ray = Physics.Ray3D(Math.Vec3(-2.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0))
+    var hits:Physics.WorldRayHit3D[] = []
+    world.write_ray_hits(ray, hits, null, Physics.QueryFilter3D(mask_bits:0x4))
+    assert(hits.count() == 1 && hits[0].body().same_body(sensor))
+    world.write_ray_hits(ray, hits, null,
+        Physics.QueryFilter3D(mask_bits:0x6, include_sensors:false))
+    assert(hits.count() == 1 && hits[0].body().same_body(solid))
+    var first = world.ray_cast(ray, null,
+        Physics.QueryFilter3D(mask_bits:0x6, include_sensors:false))
+    assert(first != null && first!.body().same_body(solid))
+    var overlaps:Physics.WorldOverlap3D[] = []
+    let probe = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.25)))
+    world.write_overlaps(probe, overlaps, null,
+        Physics.QueryFilter3D(mask_bits:0x4, include_sensors:true))
+    assert(overlaps.count() == 1 && overlaps[0].body().same_body(sensor))
+    world.write_overlaps(probe, overlaps, null,
+        Physics.QueryFilter3D(mask_bits:0x4, include_sensors:false))
+    assert(overlaps.count() == 0)
+}
+
+test "destroying and recycling a sensor preserves event identity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    world.destroy_rigid_body(sensor)
+    var replacement = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true)
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(begins.count() == 1 && ends.count() == 1)
+    assert(begins[0].is_sensor() && ends[0].is_sensor())
+    assert(begins[0].first_body().same_body(replacement))
+    assert(ends[0].first_body().same_body(sensor))
+    assert(!ends[0].first_body().is_valid())
+}
+
+test "group index overrides category masks with its sign" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(
+            mask_bits:0x0, group_index:7))
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0))
+        ..collision_filter = Physics.CollisionFilter3D(
+            mask_bits:0x0, group_index:7))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    fixed.set_collision_filter(Physics.CollisionFilter3D(
+        mask_bits:0x0, group_index:-7))
+    moving.set_collision_filter(Physics.CollisionFilter3D(
+        mask_bits:0x0, group_index:-7))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 0)
+}
+
+test "disabling a sensor ends overlap and enabling begins it again" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..is_sensor = true)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    sensor.set_enabled(false)
+    world.step(1.0 / 60.0)
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_end_events(ends)
+    assert(world.contact_count() == 0 && ends.count() == 1 && ends[0].is_sensor())
+    sensor.set_enabled(true)
+    world.step(1.0 / 60.0)
+    var begins:Physics.Contact3D[] = []
+    world.write_contact_begin_events(begins)
+    assert(world.contact_count() == 1 && begins.count() == 1 && begins[0].is_sensor())
+}

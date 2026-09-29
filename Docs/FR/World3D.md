@@ -127,25 +127,28 @@ le monde n'a pas de CCD.
 
 ## Interroger les corps du monde
 
-`ray_cast(ray, ignore_body)` retourne le premier impact de `Ray3D`, ou `null`.
-`write_ray_hits(ray, output, ignore_body)` remplit un tableau réutilisable avec
+`ray_cast(ray, ignore_body, filter)` retourne le premier impact de `Ray3D`, ou `null`.
+`write_ray_hits(ray, output, ignore_body, filter)` remplit un tableau réutilisable avec
 un impact par corps, classé par fraction croissante. Pour un composé, cet
 impact est celui de son enfant le plus proche ; `child_id()` donne son ID et
 vaut `-1` pour une primitive. Chaque `WorldRayHit3D` expose aussi `body()`,
 `point()`, `normal()` et `fraction()` entre 0 et 1.
 
-`write_overlaps(query, output, ignore_body)` sélectionne les corps qui
+`write_overlaps(query, output, ignore_body, filter)` sélectionne les corps qui
 recouvrent une `ShapePlacement3D`. Chaque `WorldOverlap3D` donne `body()`,
 `query_child_id()` et `body_child_id()` ; les résultats suivent l'ordre des
 emplacements du monde. Les corps désactivés sont exclus des deux requêtes.
 L'argument facultatif `ignore_body` écarte un corps vivant du même monde,
 par exemple l'émetteur d'un rayon. Un corps étranger ou détruit est refusé.
 
+Le `QueryFilter3D` facultatif sélectionne les catégories par `mask_bits` et
+inclut les capteurs par défaut ; `include_sensors:false` les écarte. Le masque
+de contact d'un corps ne change pas les résultats des requêtes.
+
 Les points, normales, fractions et ID copiés restent lisibles après les pas
 suivants ou la destruction. Le handle `body()` garde son identité, mais
-`is_valid()` devient faux lorsque son corps ou son monde disparaît. Les
-catégories de filtrage et les capteurs seront ajoutés séparément ; les
-requêtes présentes ne modifient pas les contacts.
+`is_valid()` devient faux lorsque son corps ou son monde disparaît. Ces
+requêtes ne modifient pas les contacts.
 
 ## Sommeil et réveil
 
@@ -178,6 +181,17 @@ accumulations. L'intégration utilise une vitesse semi implicite et maintient
 un quaternion normalisé ; les résultats dépendent de la taille du pas.
 
 ## Lire les contacts
+
+Chaque `RigidBody3DSettings` accepte un `collision_filter` et `is_sensor`.
+`CollisionFilter3D(category_bits, mask_bits, group_index)` demande au moins
+un bit de catégorie ; deux corps se rencontrent si chacun accepte la catégorie
+de l'autre. Un même `group_index` non nul l'emporte : positif pour autoriser,
+négatif pour interdire. `set_collision_filter` et `set_sensor` appliquent les
+changements au prochain pas positif. Un capteur détecte le recouvrement sans
+impulsion ni correction de position ; `Contact3D.is_sensor()` le signale et
+son manifold est vide. La mutation du mode capteur termine l'ancienne paire
+et en commence une nouvelle au pas suivant. Les capteurs ne propagent pas le
+sommeil entre corps.
 
 Après un pas positif, `contact_count()` compte les paires détectées et
 `write_contacts(output)` copie leurs observations dans un tableau du

@@ -26,6 +26,7 @@ use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.Geometry3D.Ray3D
 use GFX.Physics.WorldQuery3D.WorldRayHit3D
 use GFX.Physics.WorldQuery3D.WorldOverlap3D
+use GFX.Physics.CollisionFilter3D.QueryFilter3D
 use STD.Math
 
 public struct World3DSettings {
@@ -184,14 +185,19 @@ public class World3D {
         return -1
     }
 
-    func ray_cast(ray:Ray3D, ignore_body:RigidBody3D? = null) WorldRayHit3D? {
+    func ray_cast(
+        ray:Ray3D, ignore_body:RigidBody3D? = null,
+        filter:QueryFilter3D = QueryFilter3D()
+    ) WorldRayHit3D? {
         let ignored_slot = self.ignored_query_slot(ignore_body)
         var nearest:WorldRayHit3D? = null
         var slot = 0
         while slot < self.store.slots.count() {
             if slot != ignored_slot {
                 if var state = self.store.slots[slot] {
-                    if state.is_enabled {
+                    if state.is_enabled && filter.allows(
+                        state.collision_filter, state.is_sensor
+                    ) {
                         let hit = Geometry3D.ray_cast(
                             ray, ShapePlacement3D(state.shape, state.transform)
                         )
@@ -217,7 +223,8 @@ public class World3D {
     }
 
     func write_ray_hits(
-        ray:Ray3D, output:&WorldRayHit3D[], ignore_body:RigidBody3D? = null
+        ray:Ray3D, output:&WorldRayHit3D[], ignore_body:RigidBody3D? = null,
+        filter:QueryFilter3D = QueryFilter3D()
     ) {
         let ignored_slot = self.ignored_query_slot(ignore_body)
         output.clear()
@@ -225,7 +232,9 @@ public class World3D {
         while slot < self.store.slots.count() {
             if slot != ignored_slot {
                 if var state = self.store.slots[slot] {
-                    if state.is_enabled {
+                    if state.is_enabled && filter.allows(
+                        state.collision_filter, state.is_sensor
+                    ) {
                         let hit = Geometry3D.ray_cast(
                             ray, ShapePlacement3D(state.shape, state.transform)
                         )
@@ -252,7 +261,8 @@ public class World3D {
 
     func write_overlaps(
         query:ShapePlacement3D, output:&WorldOverlap3D[],
-        ignore_body:RigidBody3D? = null
+        ignore_body:RigidBody3D? = null,
+        filter:QueryFilter3D = QueryFilter3D()
     ) {
         let ignored_slot = self.ignored_query_slot(ignore_body)
         output.clear()
@@ -260,7 +270,9 @@ public class World3D {
         while slot < self.store.slots.count() {
             if slot != ignored_slot {
                 if var state = self.store.slots[slot] {
-                    if state.is_enabled {
+                    if state.is_enabled && filter.allows(
+                        state.collision_filter, state.is_sensor
+                    ) {
                         let target = ShapePlacement3D(state.shape, state.transform)
                         if Geometry3D.overlaps(query, target) {
                             let distance = Geometry3D.distance(query, target)
@@ -381,8 +393,12 @@ public class World3D {
                     while second_slot < self.store.slots.count() {
                         if var second = self.store.slots[second_slot] {
                             if second.is_enabled &&
+                                first.collision_filter.allows(second.collision_filter) &&
                                 (first.body_type == BodyType3D.dynamic ||
-                                    second.body_type == BodyType3D.dynamic)
+                                    second.body_type == BodyType3D.dynamic ||
+                                    ((first.is_sensor || second.is_sensor) &&
+                                        (first.body_type == BodyType3D.kinematic ||
+                                            second.body_type == BodyType3D.kinematic)))
                             {
                                 let distance = Geometry3D.distance(
                                     ShapePlacement3D(first.shape, first.transform),
@@ -402,10 +418,14 @@ public class World3D {
                                     var point = distance.first_point.add(
                                         distance.second_point
                                     ).multiply(0.5)
-                                    let points = contact_points3d(
-                                        first_contact_shape, second_contact_shape,
-                                        normal, point
-                                    )
+                                    let sensor_pair = first.is_sensor || second.is_sensor
+                                    var points:Math.Vec3[] = []
+                                    if !sensor_pair {
+                                        points = contact_points3d(
+                                            first_contact_shape, second_contact_shape,
+                                            normal, point
+                                        )
+                                    }
                                     if !points.is_empty() {
                                         point = Math.Vec3()
                                         for candidate in points {
@@ -413,11 +433,15 @@ public class World3D {
                                         }
                                         point = point.divide(points.count() as float)
                                     }
-                                    let friction = Math.sqrt(first.friction) *
-                                        Math.sqrt(second.friction)
-                                    let restitution = Math.max(
-                                        first.restitution, second.restitution
-                                    )
+                                    var friction = 0.0
+                                    var restitution = 0.0
+                                    if !sensor_pair {
+                                        friction = Math.sqrt(first.friction) *
+                                            Math.sqrt(second.friction)
+                                        restitution = Math.max(
+                                            first.restitution, second.restitution
+                                        )
+                                    }
                                     var constraints:ContactPointState3D[] = []
                                     for candidate in points {
                                         constraints.append(ContactPointState3D(
@@ -439,31 +463,36 @@ public class World3D {
                                         ) && previous.first_child_id() ==
                                             distance.first_child_id &&
                                             previous.second_child_id() ==
-                                                distance.second_child_id {
+                                                distance.second_child_id &&
+                                            previous.is_sensor() == sensor_pair {
                                             had_previous = true
                                         }
                                     }
-                                    if !had_previous ||
-                                        (first.body_type == BodyType3D.kinematic &&
-                                            (first.linear_velocity.length_squared() > 0.0 ||
-                                                first.angular_velocity.length_squared() > 0.0)) ||
-                                        (second.body_type == BodyType3D.kinematic &&
-                                            (second.linear_velocity.length_squared() > 0.0 ||
-                                                second.angular_velocity.length_squared() > 0.0))
-                                    {
-                                        first.wake()
-                                        second.wake()
-                                    } else {
-                                        if first.awake && !second.awake { second.wake() }
-                                        if second.awake && !first.awake { first.wake() }
+                                    if !sensor_pair {
+                                        if !had_previous ||
+                                            (first.body_type == BodyType3D.kinematic &&
+                                                (first.linear_velocity.length_squared() > 0.0 ||
+                                                    first.angular_velocity.length_squared() > 0.0)) ||
+                                            (second.body_type == BodyType3D.kinematic &&
+                                                (second.linear_velocity.length_squared() > 0.0 ||
+                                                    second.angular_velocity.length_squared() > 0.0))
+                                        {
+                                            first.wake()
+                                            second.wake()
+                                        } else {
+                                            if first.awake && !second.awake { second.wake() }
+                                            if second.awake && !first.awake { first.wake() }
+                                        }
                                     }
-                                    let active = first.awake || second.awake
+                                    let active = !sensor_pair &&
+                                        (first.awake || second.awake)
                                     pairs.append(ContactPairState3D(
                                         first, second,
                                         first_id, second_id,
                                         normal, distance.separation, point,
                                         friction, restitution, constraints, active,
-                                        distance.first_child_id, distance.second_child_id
+                                        distance.first_child_id, distance.second_child_id,
+                                        sensor_pair
                                     ))
                                 }
                             }
@@ -481,7 +510,8 @@ public class World3D {
                     RigidBody3D(self.store, pair.first_id)
                 ) && previous.second_body().same_body(
                     RigidBody3D(self.store, pair.second_id)
-                ) && previous.first_child_id() == pair.first_child_id &&
+                ) && !previous.is_sensor() &&
+                    previous.first_child_id() == pair.first_child_id &&
                     previous.second_child_id() == pair.second_child_id &&
                     previous.normal().dot(pair.normal) > 0.95 {
                     warm_contact_points3d(
@@ -594,7 +624,7 @@ public class World3D {
                 pair.normal, pair.separation, pair.point,
                 normal_impulse, tangent_impulse,
                 pair.friction, pair.restitution, public_points,
-                pair.first_child_id, pair.second_child_id
+                pair.first_child_id, pair.second_child_id, pair.is_sensor
             ))
         }
         var position_iteration = 0
@@ -676,6 +706,7 @@ public class World3D {
                     while index < members.count() {
                         let current = members[index]
                         for contact in self.contacts {
+                            if contact.is_sensor() { continue }
                             let first_id = contact.first_body().body_id()
                             let second_id = contact.second_body().body_id()
                             var neighbor = -1
@@ -759,6 +790,7 @@ public class World3D {
                             }
                         }
                         for contact in self.contacts {
+                            if contact.is_sensor() { continue }
                             let first_id = contact.first_body().body_id()
                             let second_id = contact.second_body().body_id()
                             var other = -1
@@ -843,7 +875,8 @@ func same_contact_identity3d(first:Contact3D, second:Contact3D) bool {
     return first.first_body().same_body(second.first_body()) &&
         first.second_body().same_body(second.second_body()) &&
         first.first_child_id() == second.first_child_id() &&
-        first.second_child_id() == second.second_child_id()
+        first.second_child_id() == second.second_child_id() &&
+        first.is_sensor() == second.is_sensor()
 }
 
 func contains_contact_slot3d(slots:int[], selected:int) bool {
@@ -903,6 +936,7 @@ class ContactPairState3D {
     let active:bool
     let first_child_id:int
     let second_child_id:int
+    let is_sensor:bool
 
     init(
         first:BodyState3D, second:BodyState3D,
@@ -910,7 +944,7 @@ class ContactPairState3D {
         normal:Math.Vec3, separation:float, point:Math.Vec3,
         friction:float, restitution:float,
         constraints:ContactPointState3D[], active:bool,
-        first_child_id:int, second_child_id:int
+        first_child_id:int, second_child_id:int, is_sensor:bool
     ) {
         self.first = first
         self.second = second
@@ -925,6 +959,7 @@ class ContactPairState3D {
         self.active = active
         self.first_child_id = first_child_id
         self.second_child_id = second_child_id
+        self.is_sensor = is_sensor
     }
 }
 

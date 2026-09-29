@@ -21,6 +21,8 @@ public use GFX.Physics.PointConstraint3D.PointConstraint3D
 public use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
 public use GFX.Physics.WorldQuery3D.WorldRayHit3D
 public use GFX.Physics.WorldQuery3D.WorldOverlap3D
+public use GFX.Physics.CollisionFilter3D.CollisionFilter3D
+public use GFX.Physics.CollisionFilter3D.QueryFilter3D
 public use GFX.Physics.CollisionFilter2D.CollisionFilter2D
 public use GFX.Physics.CollisionResponse.CollisionResponse
 public use GFX.Physics.BroadPhase2D.AABB2D

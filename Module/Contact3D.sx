@@ -26,6 +26,7 @@ public class Contact3D {
     private var manifold_points:ContactPoint3D[]
     private var first_child:int
     private var second_child:int
+    private var sensor_pair:bool
 
     package init(
         first:RigidBody3D,
@@ -39,7 +40,8 @@ public class Contact3D {
         restitution:float,
         points:ContactPoint3D[],
         first_child_id:int = -1,
-        second_child_id:int = -1
+        second_child_id:int = -1,
+        is_sensor:bool = false
     ) {
         self.first = first
         self.second = second
@@ -53,6 +55,7 @@ public class Contact3D {
         self.manifold_points = points
         self.first_child = first_child_id
         self.second_child = second_child_id
+        self.sensor_pair = is_sensor
     }
 
     func first_body() RigidBody3D { return self.first }
@@ -66,6 +69,7 @@ public class Contact3D {
     func restitution() float { return self.combined_restitution }
     func first_child_id() int { return self.first_child }
     func second_child_id() int { return self.second_child }
+    func is_sensor() bool { return self.sensor_pair }
     func point_count() int { return self.manifold_points.count() }
     func write_points(output:&ContactPoint3D[]) {
         output.clear()

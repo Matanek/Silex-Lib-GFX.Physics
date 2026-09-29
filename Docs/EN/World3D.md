@@ -121,14 +121,14 @@ world has no CCD.
 
 ## Query bodies in the world
 
-`ray_cast(ray, ignore_body)` returns the nearest `Ray3D` hit or `null`.
-`write_ray_hits(ray, output, ignore_body)` fills a reusable array with one
+`ray_cast(ray, ignore_body, filter)` returns the nearest `Ray3D` hit or `null`.
+`write_ray_hits(ray, output, ignore_body, filter)` fills a reusable array with one
 hit per body, ordered by increasing fraction. For a compound, that hit comes
 from its nearest child; `child_id()` gives its ID and is `-1` for a primitive.
 Each `WorldRayHit3D` also exposes `body()`, `point()`, `normal()`, and a
 `fraction()` between 0 and 1.
 
-`write_overlaps(query, output, ignore_body)` selects bodies overlapping a
+`write_overlaps(query, output, ignore_body, filter)` selects bodies overlapping a
 `ShapePlacement3D`. Each `WorldOverlap3D` provides `body()`,
 `query_child_id()`, and `body_child_id()`; results follow world slot order.
 Disabled bodies are excluded from both queries. The optional `ignore_body`
@@ -137,8 +137,10 @@ or destroyed body is rejected.
 
 Copied points, normals, fractions, and IDs remain readable after later steps
 or destruction. The `body()` handle keeps its identity, but `is_valid()`
-becomes false when that body or its world is destroyed. Category filtering
-and sensors will be added separately; these queries do not change contacts.
+becomes false when that body or its world is destroyed. The optional
+`QueryFilter3D` selects categories through `mask_bits` and includes sensors by
+default; `include_sensors:false` excludes them. A body's contact mask does not
+affect queries, and queries do not change contacts.
 
 ## Sleeping and waking
 
@@ -169,6 +171,16 @@ body and preserves those accumulations. Integration uses semi implicit
 velocity and keeps a normalized quaternion; results depend on step size.
 
 ## Read contacts
+
+Each `RigidBody3DSettings` accepts `collision_filter` and `is_sensor`.
+`CollisionFilter3D(category_bits, mask_bits, group_index)` requires at least
+one category bit. Two bodies interact when each mask accepts the other's
+category. Matching nonzero group indices override masks: positive allows the
+pair, negative prevents it. `set_collision_filter` and `set_sensor` take
+effect on the next positive step. Sensors report overlap without impulse or
+position correction; `Contact3D.is_sensor()` identifies them and their
+manifold is empty. Changing sensor mode ends the old pair and begins a new
+one on the next step. Sensor contacts do not connect sleep islands.
 
 After a positive step, `contact_count()` counts detected pairs and
 `write_contacts(output)` copies their observations to a caller-owned array.
