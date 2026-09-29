@@ -411,3 +411,39 @@ package func contact_distance3d(
     }
     return Geometry3D.distance(first, second)
 }
+
+package struct ContactSeparation3D {
+    let normal:Math.Vec3
+    let separation:float
+
+    init(normal:Math.Vec3, separation:float) {
+        self.normal = normal
+        self.separation = separation
+    }
+}
+
+// Position correction consumes only negative separation and its normal.
+// SAT supplies both for boxes; separated/tangent pairs need no witnesses.
+package func contact_separation3d(
+    first:ShapePlacement3D, second:ShapePlacement3D
+) ContactSeparation3D {
+    match first.shape() {
+        box(first_box) => {
+            match second.shape() {
+                box(second_box) => {
+                    let axis = box_box_axis(first_box, first.transform(),
+                        second_box, second.transform())
+                    return ContactSeparation3D(axis.normal, axis.gap)
+                }
+                sphere(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+            }
+        }
+        sphere(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    let distance = Geometry3D.distance(first, second)
+    return ContactSeparation3D(distance.normal, distance.separation)
+}

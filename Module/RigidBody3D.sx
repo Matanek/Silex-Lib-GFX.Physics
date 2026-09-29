@@ -193,6 +193,7 @@ package class BodyState3D {
     }
 
     func inverse_inertia_times(world_vector:Math.Vec3) Math.Vec3 {
+        if self.body_type != BodyType3D.dynamic { return Math.Vec3() }
         let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
         return self.transform.rotation.rotate(local_vector.multiply(self.inverse_inertia))
     }

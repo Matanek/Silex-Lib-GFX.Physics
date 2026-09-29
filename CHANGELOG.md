@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reduce 3D contact and sleep overhead: build islands by joining contacts and
+  constraints, use SAT separation alone for box position correction, and skip
+  ineffective impulse calculations on fixed and kinematic bodies. Solver
+  iteration counts and simulation frequency are preserved.
+
 - Reduced the cost of 3D box columns with rotation-aware bounds, rejection
   of separated boxes before computing distance witnesses, and reuse of
   collision axes and invariant solver data. Iteration counts, friction and

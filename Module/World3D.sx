@@ -13,6 +13,7 @@ use GFX.Physics.PointConstraint3D.PointConstraintState3D
 use GFX.Physics.PointConstraint3D.PointConstraintStore3D
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Geometry3D.contact_separation3d
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.RigidBody3D.BodyId3D
@@ -876,7 +877,7 @@ public class World3D {
                     let second_shape = contact_placement3d(
                         pair.second, pair.second_child_id
                     )
-                    let distance = contact_distance3d(first_shape, second_shape)
+                    let distance = contact_separation3d(first_shape, second_shape)
                     if distance.separation < 0.0 {
                         correct_contact3d(
                             pair.first, pair.second,
@@ -941,180 +942,31 @@ public class World3D {
             slot++
         }
         if !sleep_candidate { return }
-        var handled:int[] = []
-        slot = 0
-        while slot < self.store.slots.count() {
-            if var state = self.store.slots[slot] {
-                if state.body_type == BodyType3D.dynamic && state.is_enabled &&
-                    state.awake && !contains_contact_slot3d(handled, slot)
-                {
-                    var members:int[] = [slot]
-                    var index = 0
-                    while index < members.count() {
-                        let current = members[index]
-                        for contact in self.contacts {
-                            if contact.is_sensor() { continue }
-                            let first_id = contact.first_body().body_id()
-                            let second_id = contact.second_body().body_id()
-                            var neighbor = -1
-                            if first_id.slot == current { neighbor = second_id.slot }
-                            if second_id.slot == current { neighbor = first_id.slot }
-                            if neighbor >= 0 &&
-                                !contains_contact_slot3d(members, neighbor)
-                            {
-                                if var connected = self.store.slots[neighbor] {
-                                    if connected.body_type == BodyType3D.dynamic &&
-                                        connected.is_enabled && connected.awake
-                                    {
-                                        members.append(neighbor)
-                                    }
-                                }
-                            }
-                        }
-                        for constraint_slot in self.distance_constraints.slots {
-                            if var constraint = constraint_slot {
-                                if constraint.is_enabled {
-                                    var neighbor = -1
-                                    if constraint.first_id.slot == current {
-                                        neighbor = constraint.second_id.slot
-                                    }
-                                    if constraint.second_id.slot == current {
-                                        neighbor = constraint.first_id.slot
-                                    }
-                                    if neighbor >= 0 &&
-                                        !contains_contact_slot3d(members, neighbor)
-                                    {
-                                        if var connected = self.store.slots[neighbor] {
-                                            if connected.body_type == BodyType3D.dynamic &&
-                                                connected.is_enabled && connected.awake
-                                            {
-                                                members.append(neighbor)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        for constraint_slot in self.point_constraints.slots {
-                            if var constraint = constraint_slot {
-                                if constraint.is_enabled {
-                                    var neighbor = -1
-                                    if constraint.first_id.slot == current {
-                                        neighbor = constraint.second_id.slot
-                                    }
-                                    if constraint.second_id.slot == current {
-                                        neighbor = constraint.first_id.slot
-                                    }
-                                    if neighbor >= 0 &&
-                                        !contains_contact_slot3d(members, neighbor)
-                                    {
-                                        if var connected = self.store.slots[neighbor] {
-                                            if connected.body_type == BodyType3D.dynamic &&
-                                                connected.is_enabled && connected.awake
-                                            {
-                                                members.append(neighbor)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        index++
-                    }
-                    var ready = true
-                    var gravity_free = true
-                    var supported = false
-                    for member in members {
-                        handled.append(member)
-                        if var connected = self.store.slots[member] {
-                            if !connected.allow_sleep || connected.sleep_time < 0.5 {
-                                ready = false
-                            }
-                            if self.current_gravity.multiply(
-                                connected.gravity_scale
-                            ).length_squared() > 0.0 {
-                                gravity_free = false
-                            }
-                        }
-                        for contact in self.contacts {
-                            if contact.is_sensor() { continue }
-                            let first_id = contact.first_body().body_id()
-                            let second_id = contact.second_body().body_id()
-                            var other = -1
-                            if first_id.slot == member { other = second_id.slot }
-                            if second_id.slot == member { other = first_id.slot }
-                            if other >= 0 {
-                                if var support = self.store.slots[other] {
-                                    if support.body_type != BodyType3D.dynamic {
-                                        supported = true
-                                    }
-                                }
-                            }
-                        }
-                        for constraint_slot in self.distance_constraints.slots {
-                            if var constraint = constraint_slot {
-                                if constraint.is_enabled {
-                                    var other = -1
-                                    if constraint.first_id.slot == member {
-                                        other = constraint.second_id.slot
-                                    }
-                                    if constraint.second_id.slot == member {
-                                        other = constraint.first_id.slot
-                                    }
-                                    if other >= 0 {
-                                        if var support = self.store.slots[other] {
-                                            if support.is_enabled &&
-                                                support.body_type != BodyType3D.dynamic
-                                            {
-                                                supported = true
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        for constraint_slot in self.point_constraints.slots {
-                            if var constraint = constraint_slot {
-                                if constraint.is_enabled {
-                                    var other = -1
-                                    if constraint.first_id.slot == member {
-                                        other = constraint.second_id.slot
-                                    }
-                                    if constraint.second_id.slot == member {
-                                        other = constraint.first_id.slot
-                                    }
-                                    if other >= 0 {
-                                        if var support = self.store.slots[other] {
-                                            if support.is_enabled &&
-                                                support.body_type != BodyType3D.dynamic
-                                            {
-                                                supported = true
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if !supported && !gravity_free {
-                        for member in members {
-                            if var connected = self.store.slots[member] {
-                                connected.sleep_time = 0.0
-                            }
-                        }
-                    } else if ready {
-                        for member in members {
-                            if var connected = self.store.slots[member] {
-                                connected.awake = false
-                                connected.linear_velocity = Math.Vec3()
-                                connected.angular_velocity = Math.Vec3()
-                            }
-                        }
-                    }
+        // Build connectivity once. Fixed supports do not join separate islands.
+        var islands = SleepIslands3D(self.store)
+        for contact in self.contacts {
+            if !contact.is_sensor() {
+                islands.connect(contact.first_body().body_id().slot,
+                    contact.second_body().body_id().slot, self.store)
+            }
+        }
+        for constraint_slot in self.distance_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
                 }
             }
-            slot++
         }
+        for constraint_slot in self.point_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
+                }
+            }
+        }
+        islands.apply(self.store, self.current_gravity)
     }
 }
 
@@ -1126,9 +978,109 @@ func same_contact_identity3d(first:Contact3D, second:Contact3D) bool {
         first.is_sensor() == second.is_sensor()
 }
 
-func contains_contact_slot3d(slots:int[], selected:int) bool {
-    for slot in slots { if slot == selected { return true } }
-    return false
+// Rebuilt from the current contacts/constraints only when sleep is eligible.
+// Union by size and path compression keep traversal proportional to the graph.
+class SleepIslands3D {
+    var parents:int[] = []
+    var sizes:int[] = []
+    var supports:bool[] = []
+
+    init(store:@BodyStore3D) {
+        var slot = 0
+        while slot < store.slots.count() {
+            var parent = -1
+            if let body = store.slots[slot] {
+                if body.is_enabled && body.awake &&
+                    body.body_type == BodyType3D.dynamic { parent = slot }
+            }
+            self.parents.append(parent)
+            self.sizes.append(1)
+            self.supports.append(false)
+            slot++
+        }
+    }
+
+    func root(slot:int) int {
+        var current = slot
+        while self.parents[current] != current {
+            let parent = self.parents[current]
+            self.parents[current] = self.parents[parent]
+            current = self.parents[current]
+        }
+        return current
+    }
+
+    func connect(first:int, second:int, store:@BodyStore3D) {
+        let first_active = self.parents[first] >= 0
+        let second_active = self.parents[second] >= 0
+        if first_active && second_active {
+            var first_root = self.root(first)
+            var second_root = self.root(second)
+            if first_root == second_root { return }
+            if self.sizes[first_root] < self.sizes[second_root] {
+                let previous = first_root
+                first_root = second_root
+                second_root = previous
+            }
+            self.parents[second_root] = first_root
+            self.sizes[first_root] += self.sizes[second_root]
+        } else if first_active {
+            if let support = store.slots[second] {
+                if support.is_enabled && support.body_type != BodyType3D.dynamic {
+                    self.supports[first] = true
+                }
+            }
+        } else if second_active {
+            if let support = store.slots[first] {
+                if support.is_enabled && support.body_type != BodyType3D.dynamic {
+                    self.supports[second] = true
+                }
+            }
+        }
+    }
+
+    func apply(store:@BodyStore3D, gravity:Math.Vec3) {
+        var ready:bool[] = []
+        var gravity_free:bool[] = []
+        var supported:bool[] = []
+        var slot = 0
+        while slot < self.parents.count() {
+            ready.append(true)
+            gravity_free.append(true)
+            supported.append(false)
+            slot++
+        }
+        slot = 0
+        while slot < self.parents.count() {
+            if self.parents[slot] >= 0 {
+                let root = self.root(slot)
+                if let body = store.slots[slot] {
+                    if !body.allow_sleep || body.sleep_time < 0.5 { ready[root] = false }
+                    if gravity.multiply(body.gravity_scale).length_squared() > 0.0 {
+                        gravity_free[root] = false
+                    }
+                }
+                if self.supports[slot] { supported[root] = true }
+            }
+            slot++
+        }
+        slot = 0
+        while slot < self.parents.count() {
+            if self.parents[slot] >= 0 {
+                let root = self.root(slot)
+                if var body = store.slots[slot] {
+                    if !supported[root] && !gravity_free[root] {
+                        body.sleep_time = 0.0
+                    } else if ready[root] {
+                        body.awake = false
+                        body.linear_velocity = Math.Vec3()
+                        body.angular_velocity = Math.Vec3()
+                    }
+                }
+            }
+            slot++
+        }
+    }
 }
 
 func warm_contact_points3d(
@@ -1390,18 +1342,22 @@ func apply_contact_impulse3d(
     second_radius:Math.Vec3,
     impulse:Math.Vec3
 ) {
-    first.linear_velocity = first.linear_velocity.subtract(
-        impulse.multiply(first.inverse_mass)
-    )
-    second.linear_velocity = second.linear_velocity.add(
-        impulse.multiply(second.inverse_mass)
-    )
-    first.angular_velocity = first.angular_velocity.subtract(
-        first.inverse_inertia_times(first_radius.cross(impulse))
-    )
-    second.angular_velocity = second.angular_velocity.add(
-        second.inverse_inertia_times(second_radius.cross(impulse))
-    )
+    if first.inverse_mass > 0.0 {
+        first.linear_velocity = first.linear_velocity.subtract(
+            impulse.multiply(first.inverse_mass)
+        )
+        first.angular_velocity = first.angular_velocity.subtract(
+            first.inverse_inertia_times(first_radius.cross(impulse))
+        )
+    }
+    if second.inverse_mass > 0.0 {
+        second.linear_velocity = second.linear_velocity.add(
+            impulse.multiply(second.inverse_mass)
+        )
+        second.angular_velocity = second.angular_velocity.add(
+            second.inverse_inertia_times(second_radius.cross(impulse))
+        )
+    }
 }
 
 func contact_relative_velocity3d(

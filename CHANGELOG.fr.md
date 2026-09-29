@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Réduction du coût des contacts et du sommeil 3D : construction des îlots par
+  union des contacts et contraintes, séparation SAT seule pendant la correction
+  des boîtes et suppression des calculs d’impulsion sans effet sur les corps
+  fixes ou cinématiques. Le solver conserve ses itérations et sa cadence.
+
 - Réduction du coût des colonnes de boîtes 3D : bornes englobantes tenant
   compte de la rotation, rejet des boîtes séparées avant le calcul des
   témoins de distance, réutilisation des axes de collision et des données

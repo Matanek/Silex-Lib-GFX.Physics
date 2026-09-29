@@ -173,3 +173,27 @@ test "recycled support cannot preserve an old sleeping pair" {
     advance(world, 120)
     assert(!box.is_awake())
 }
+
+test "a common fixed support and a sensor do not join independent sleep islands" {
+    var world = Physics.World3D()
+    ground(world)
+    var quiet = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-1.5, 1.0, 0.0)))
+    var active = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.5, 1.0, 0.0))
+        ..allow_sleep = false)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(4.0))
+        ..is_sensor = true
+        ..gravity_scale = 0.0
+        ..allow_sleep = false)
+    advance(world, 120)
+    assert(!quiet.is_awake())
+    assert(active.is_awake())
+    assert(world.contact_count() >= 4)
+    active.set_sleep_enabled(true)
+    advance(world, 60)
+    assert(!quiet.is_awake() && !active.is_awake())
+}
