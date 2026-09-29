@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Correction d'une vitesse tangentielle parasite après un choc frontal rapide
+  contre une face à quatre points : le support normal multi-points est
+  stabilisé avant la friction. Le projectile de la scène 3D ne dérive plus
+  vers le haut après l'impact.
 - Ajout d'un balayage linéaire optionnel des corps dynamiques pour arrêter une
   sphère rapide sur un mur mince et signaler les traversées complètes de
   capteurs dans un pas. L'arrêt est comparé à Jolt épinglé en Debug et Release ;

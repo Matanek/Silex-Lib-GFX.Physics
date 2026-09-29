@@ -707,6 +707,23 @@ public class World3D {
                 constraint.inverse_delta = 0.0
             }
         }
+        // A multi-point face must settle its normal support before friction
+        // reacts to transient angular slip from individual point updates.
+        var normal_iteration = 0
+        while normal_iteration < 4 {
+            for var pair in pairs {
+                if pair.active && pair.friction > 0.0 && pair.constraints.count() > 1
+                {
+                    for constraint in pair.constraints {
+                        solve_contact_point3d(
+                            pair.first, pair.second, pair.normal, pair.friction,
+                            constraint, false
+                        )
+                    }
+                }
+            }
+            normal_iteration++
+        }
         var iteration = 0
         while iteration < 12 {
             var pair_index = 0
@@ -1518,7 +1535,8 @@ func solve_contact_point3d(
     second:BodyState3D,
     normal:Math.Vec3,
     friction:float,
-    constraint:ContactPointState3D
+    constraint:ContactPointState3D,
+    apply_friction:bool = true
 ) {
     let first_radius = constraint.point.subtract(first.world_center())
     let second_radius = constraint.point.subtract(second.world_center())
@@ -1542,7 +1560,7 @@ func solve_contact_point3d(
             normal.multiply(normal_delta)
         )
     }
-    if friction > 0.0 {
+    if apply_friction && friction > 0.0 {
         let after_normal = contact_relative_velocity3d(
             first, second, first_radius, second_radius
         )

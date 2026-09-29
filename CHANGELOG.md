@@ -6,6 +6,9 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fixed spurious tangential velocity after a fast face-on, four-point impact
+  by settling multi-point normal support before friction. The 3D scene's
+  projectile no longer drifts upward after hitting the wall.
 - Added an optional linear sweep for dynamic bodies to stop a fast sphere at
   a thin wall and report complete one-step sensor crossings. The wall stop
   is compared with pinned Jolt in Debug and Release; Jolt's missing fast
