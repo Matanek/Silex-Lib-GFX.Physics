@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les contacts 3D mémorisent leurs identités de corps, réutilisent la recherche
+  du contact précédent pour le warm start et lisent ses points sans tableau
+  temporaire. Une fusion linéaire des contacts triés produit les événements
+  de début et de fin, en conservant leur ordre et leurs identités.
+
 - La recherche de paires 3D parcourt directement les intervalles triés,
   sans reconstruire un tableau actif pour chaque corps. Les paires, leur
   ordre et les tolérances de contact sont conservés.

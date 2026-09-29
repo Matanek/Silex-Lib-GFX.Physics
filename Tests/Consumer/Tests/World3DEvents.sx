@@ -1,6 +1,65 @@
 use GFX.Physics
 use STD.Math
 
+test "contact transitions merge interleaved pairs and exhausted tails" {
+    var world = quiet_world()
+    var moving:Physics.RigidBody3D[] = []
+    var index = 0
+    while index < 7 {
+        let x = index as float * 4.0
+        world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+            ..transform = Physics.Transform3D(position:Math.Vec3(x, 0.0, 0.0)))
+        moving.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+            ..transform = Physics.Transform3D(position:Math.Vec3(x + 0.9, 0.0, 0.0))
+            ..is_enabled = index == 1 || index == 3 || index == 5))
+        index++
+    }
+    var begins:Physics.Contact3D[] = []
+    var ends:Physics.Contact3D[] = []
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    assert(begins.count() == 3)
+    index = 0
+    while index < 7 {
+        moving[index].set_enabled(index == 0 || index == 3 || index == 4 || index == 6)
+        index++
+    }
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(world.contact_count() == 4 && begins.count() == 3 && ends.count() == 2)
+    assert(begins[0].second_body().same_body(moving[0]))
+    assert(begins[1].second_body().same_body(moving[4]))
+    assert(begins[2].second_body().same_body(moving[6]))
+    assert(ends[0].second_body().same_body(moving[1]))
+    assert(ends[1].second_body().same_body(moving[5]))
+    index = 0
+    while index < 7 {
+        moving[index].set_enabled(index == 1 || index == 3 || index == 5)
+        index++
+    }
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(world.contact_count() == 3 && begins.count() == 2 && ends.count() == 3)
+    assert(begins[0].second_body().same_body(moving[1]))
+    assert(begins[1].second_body().same_body(moving[5]))
+    assert(ends[0].second_body().same_body(moving[0]))
+    assert(ends[1].second_body().same_body(moving[4]))
+    assert(ends[2].second_body().same_body(moving[6]))
+    for body in moving { body.set_enabled(false) }
+    world.step(1.0 / 60.0)
+    world.write_contact_begin_events(begins)
+    world.write_contact_end_events(ends)
+    assert(world.contact_count() == 0 && begins.count() == 0 && ends.count() == 3)
+    assert(ends[0].second_body().same_body(moving[1]))
+    assert(ends[1].second_body().same_body(moving[3]))
+    assert(ends[2].second_body().same_body(moving[5]))
+}
+
 func quiet_world() Physics.World3D {
     return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
 }

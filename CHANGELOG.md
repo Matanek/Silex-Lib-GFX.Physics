@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D contacts cache body identities, reuse the previous-contact lookup for
+  warm starting, and read its points without a temporary array. A linear
+  merge of sorted contacts emits begin and end events while preserving
+  their order and identities.
+
 - The 3D broad phase walks sorted intervals directly instead of rebuilding
   an active array for each body. Candidate pairs, their order and contact
   tolerances are preserved.

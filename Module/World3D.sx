@@ -143,11 +143,11 @@ public class World3D {
         }
         for contact in self.contacts {
             if contact.first_body().same_body(body) {
-                self.store.require(contact.second_body().body_id()).wake()
+                self.store.require(contact.second_body_id()).wake()
                 self.pending_contact_ends.append(contact)
             }
             if contact.second_body().same_body(body) {
-                self.store.require(contact.first_body().body_id()).wake()
+                self.store.require(contact.first_body_id()).wake()
                 self.pending_contact_ends.append(contact)
             }
         }
@@ -557,8 +557,8 @@ public class World3D {
             changed = false
             for contact in self.contacts {
                 if contact.is_sensor() { continue }
-                var first = self.store.require(contact.first_body().body_id())
-                var second = self.store.require(contact.second_body().body_id())
+                var first = self.store.require(contact.first_body_id())
+                var second = self.store.require(contact.second_body_id())
                 if !first.is_enabled || !second.is_enabled { continue }
                 if first.body_type == BodyType3D.dynamic && first.awake &&
                     second.body_type == BodyType3D.dynamic && !second.awake
@@ -694,7 +694,7 @@ public class World3D {
                                     normal, distance.separation, point,
                                     friction, restitution, constraints, active,
                                     distance.first_child_id, distance.second_child_id,
-                                    sensor_pair
+                                    sensor_pair, previous_index
                                 ))
                             }
                         }
@@ -704,9 +704,7 @@ public class World3D {
         }
         for var pair in pairs {
             if !pair.active { continue }
-            let previous_index = contact_index_at_pair3d(
-                previous_contacts, pair.first_id, pair.second_id
-            )
+            let previous_index = pair.previous_index
             if previous_index >= 0 {
                 var previous = previous_contacts[previous_index]
                 if !previous.is_sensor() &&
@@ -890,35 +888,42 @@ public class World3D {
             }
             position_iteration++
         }
-        for contact in self.contacts {
-            var was_present = false
-            let previous_index = contact_index_at_pair3d(
-                previous_contacts,
-                contact.first_body().body_id(),
-                contact.second_body().body_id()
-            )
-            if previous_index >= 0 {
+        // Both snapshots are ordered by body-slot pair. Merge once to emit
+        // transitions instead of searching each complete array again.
+        var current_index = 0
+        var previous_index = 0
+        while current_index < self.contacts.count() ||
+            previous_index < previous_contacts.count() {
+            if previous_index >= previous_contacts.count() {
+                self.contact_begins.append(self.contacts[current_index])
+                current_index++
+            } else if current_index >= self.contacts.count() {
+                self.contact_ends.append(previous_contacts[previous_index])
+                previous_index++
+            } else {
+                var current = self.contacts[current_index]
                 var previous = previous_contacts[previous_index]
-                if same_contact_identity3d(previous, contact) {
-                    was_present = true
+                let current_first = current.first_body_id().slot
+                let current_second = current.second_body_id().slot
+                let previous_first = previous.first_body_id().slot
+                let previous_second = previous.second_body_id().slot
+                if current_first < previous_first ||
+                    (current_first == previous_first && current_second < previous_second) {
+                    self.contact_begins.append(current)
+                    current_index++
+                } else if previous_first < current_first ||
+                    (previous_first == current_first && previous_second < current_second) {
+                    self.contact_ends.append(previous)
+                    previous_index++
+                } else {
+                    if !same_contact_identity3d(previous, current) {
+                        self.contact_begins.append(current)
+                        self.contact_ends.append(previous)
+                    }
+                    current_index++
+                    previous_index++
                 }
             }
-            if !was_present { self.contact_begins.append(contact) }
-        }
-        for previous in previous_contacts {
-            var is_present = false
-            let contact_index = contact_index_at_pair3d(
-                self.contacts,
-                previous.first_body().body_id(),
-                previous.second_body().body_id()
-            )
-            if contact_index >= 0 {
-                var contact = self.contacts[contact_index]
-                if same_contact_identity3d(previous, contact) {
-                    is_present = true
-                }
-            }
-            if !is_present { self.contact_ends.append(previous) }
         }
     }
 
@@ -946,8 +951,8 @@ public class World3D {
         var islands = SleepIslands3D(self.store)
         for contact in self.contacts {
             if !contact.is_sensor() {
-                islands.connect(contact.first_body().body_id().slot,
-                    contact.second_body().body_id().slot, self.store)
+                islands.connect(contact.first_body_id().slot,
+                    contact.second_body_id().slot, self.store)
             }
         }
         for constraint_slot in self.distance_constraints.slots {
@@ -1091,13 +1096,11 @@ func warm_contact_points3d(
     constraints:ContactPointState3D[],
     previous:Contact3D
 ) {
-    var old_points:ContactPoint3D[] = []
-    previous.write_points(old_points)
-    if old_points.count() != constraints.count() { return }
+    if previous.point_count() != constraints.count() { return }
     var index = 0
     while index < constraints.count() {
         var constraint = constraints[index]
-        let old = old_points[index]
+        let old = previous.manifold_point(index)
         if old.position.distance(constraint.point) < 0.1 {
             constraint.normal_impulse = old.normal_impulse
             constraint.tangent_impulse = old.tangent_impulse
@@ -1136,6 +1139,7 @@ class ContactPairState3D {
     let first_child_id:int
     let second_child_id:int
     let is_sensor:bool
+    let previous_index:int
 
     init(
         first:BodyState3D, second:BodyState3D,
@@ -1143,7 +1147,7 @@ class ContactPairState3D {
         normal:Math.Vec3, separation:float, point:Math.Vec3,
         friction:float, restitution:float,
         constraints:ContactPointState3D[], active:bool,
-        first_child_id:int, second_child_id:int, is_sensor:bool
+        first_child_id:int, second_child_id:int, is_sensor:bool, previous_index:int
     ) {
         self.first = first
         self.second = second
@@ -1159,6 +1163,7 @@ class ContactPairState3D {
         self.first_child_id = first_child_id
         self.second_child_id = second_child_id
         self.is_sensor = is_sensor
+        self.previous_index = previous_index
     }
 }
 
@@ -1811,8 +1816,8 @@ func contact_index_at_pair3d(
     while lower < upper {
         let middle = lower + (upper - lower) / 2
         let candidate = contacts[middle]
-        let first_slot = candidate.first_body().body_id().slot
-        let second_slot = candidate.second_body().body_id().slot
+        let first_slot = candidate.first_body_id().slot
+        let second_slot = candidate.second_body_id().slot
         if first_slot < first.slot ||
             (first_slot == first.slot && second_slot < second.slot) {
             lower = middle + 1
@@ -1822,8 +1827,8 @@ func contact_index_at_pair3d(
     }
     if lower < contacts.count() {
         let candidate = contacts[lower]
-        let first_id = candidate.first_body().body_id()
-        let second_id = candidate.second_body().body_id()
+        let first_id = candidate.first_body_id()
+        let second_id = candidate.second_body_id()
         if first_id.slot == first.slot &&
             first_id.generation == first.generation &&
             second_id.slot == second.slot &&
