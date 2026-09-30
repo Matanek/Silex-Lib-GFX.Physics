@@ -6,6 +6,13 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le solveur 3D exploite la masse tangentielle scalaire et l'absence de couple
+  normal des sphères centrées à inertie isotrope. Les sphères à centre de masse
+  décalé ou inertie anisotrope conservent la réponse générale. Une grille
+  spatiale privée recherche les voisins des mondes denses ; les grandes formes
+  et coordonnées hors grille gardent une recherche conservative. Les paires
+  restent ordonnées, sans changer cadence, itérations ni seuils de sommeil.
+
 - Le warm start 3D reprojette la friction dans le plan tangent courant quand
   la normale tourne, pour éviter une composante artificielle de support.
   Les paires de sphères utilisent directement leurs centres et rayons pendant

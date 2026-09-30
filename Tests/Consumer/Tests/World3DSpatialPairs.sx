@@ -1,0 +1,55 @@
+use GFX.Physics
+use STD.Math
+
+func verify_sphere_pairs(world:Physics.World3D, bodies:Physics.RigidBody3D[], radii:float[]) {
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    var expected = 0
+    var first = 0
+    while first < bodies.count() {
+        var second = first + 1
+        while second < bodies.count() {
+            let separation = bodies[first].position().distance(bodies[second].position()) -
+                radii[first] - radii[second]
+            if separation <= 0.000001 {
+                assert(expected < contacts.count())
+                assert(contacts[expected].first_body().same_body(bodies[first]))
+                assert(contacts[expected].second_body().same_body(bodies[second]))
+                expected++
+            }
+            second++
+        }
+        first++
+    }
+    assert(expected == contacts.count() && expected > 100)
+}
+
+test "dense spatial pairs match exhaustive geometry including negative and remote cells" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var bodies:Physics.RigidBody3D[] = []
+    var radii:float[] = []
+    var index = 0
+    while index < 160 {
+        var position = Math.Vec3(
+            ((index * 17) % 13 - 6) as float * 0.17 + 0.013,
+            ((index * 7) % 11 - 5) as float * 0.17,
+            ((index * 5) % 7 - 3) as float * 0.19)
+        var radius = 0.11 + (index % 5) as float * 0.03
+        var kind = Physics.BodyType3D.dynamic
+        if index == 0 { radius = 3.0; kind = Physics.BodyType3D.fixed }
+        if index == 1 || index == 2 { position = Math.Vec3(1000000000000.0, 0.0, 0.0) }
+        bodies.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = kind
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(radius))
+            ..transform = Physics.Transform3D(position:position)
+            ..is_sensor = true))
+        radii.append(radius)
+        index++
+    }
+    world.step(0.01)
+    verify_sphere_pairs(world, bodies, radii)
+    bodies[5].set_transform(Physics.Transform3D(position:Math.Vec3(-20.0, 2.0, -3.0)))
+    bodies[9].set_transform(Physics.Transform3D(position:Math.Vec3(0.1, -0.1, 0.1)))
+    world.step(0.01)
+    verify_sphere_pairs(world, bodies, radii)
+}

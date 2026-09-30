@@ -773,6 +773,12 @@ public class World3D {
                     pair_index++
                     continue
                 }
+                if pair.direct_spheres {
+                    solve_sphere_point3d(pair.first, pair.second, pair.normal,
+                        pair.friction, pair.constraints[0])
+                    pair_index++
+                    continue
+                }
                 var point_index = 0
                 while point_index < pair.constraints.count() {
                     var selected_point = point_index
@@ -1162,6 +1168,7 @@ class ContactPairState3D {
     let previous_index:int
     let first_sphere_radius:float
     let second_sphere_radius:float
+    let direct_spheres:bool
 
     init(
         first:BodyState3D, second:BodyState3D,
@@ -1188,6 +1195,14 @@ class ContactPairState3D {
         self.previous_index = previous_index
         self.first_sphere_radius = primitive_sphere_radius3d(first.shape)
         self.second_sphere_radius = primitive_sphere_radius3d(second.shape)
+        self.direct_spheres = self.first_sphere_radius > 0.0 &&
+            self.second_sphere_radius > 0.0 &&
+            first.mass_properties.local_center.length_squared() == 0.0 &&
+            second.mass_properties.local_center.length_squared() == 0.0 &&
+            first.inverse_inertia.x == first.inverse_inertia.y &&
+            first.inverse_inertia.y == first.inverse_inertia.z &&
+            second.inverse_inertia.x == second.inverse_inertia.y &&
+            second.inverse_inertia.y == second.inverse_inertia.z
     }
 }
 
@@ -1614,6 +1629,52 @@ func solve_point_position3d(
     shift_distance_body3d(second, impulse, second_radius)
 }
 
+// A centered isotropic sphere has no normal torque and one tangent mass.
+func solve_sphere_point3d(
+    first:BodyState3D, second:BodyState3D, normal:Math.Vec3,
+    friction:float, constraint:ContactPointState3D
+) {
+    let inverse_mass = first.inverse_mass + second.inverse_mass
+    if inverse_mass <= 0.0 { return }
+    let first_arm = constraint.first_radius.dot(normal)
+    let second_arm = constraint.second_radius.dot(normal)
+    let relative = second.linear_velocity.subtract(first.linear_velocity).add(
+        second.angular_velocity.multiply(second_arm).subtract(
+            first.angular_velocity.multiply(first_arm)).cross(normal))
+    let approach = relative.dot(normal)
+    let previous_normal = constraint.normal_impulse
+    let normal_impulse = Math.max(0.0,
+        previous_normal + (constraint.bounce_speed - approach) / inverse_mass)
+    constraint.normal_impulse = normal_impulse
+    let previous_tangent = constraint.tangent_impulse
+    var tangent_impulse = previous_tangent
+    if friction > 0.0 {
+        let sliding = relative.subtract(normal.multiply(approach))
+        let inverse_tangent = inverse_mass +
+            first_arm * first_arm * first.inverse_inertia.x +
+            second_arm * second_arm * second.inverse_inertia.x
+        tangent_impulse = previous_tangent.subtract(sliding.divide(inverse_tangent))
+        let maximum = friction * normal_impulse
+        let tangent_length = tangent_impulse.length()
+        if tangent_length > maximum {
+            tangent_impulse = tangent_impulse.multiply(maximum / tangent_length)
+        }
+    }
+    constraint.tangent_impulse = tangent_impulse
+    let tangent_delta = tangent_impulse.subtract(previous_tangent)
+    let impulse = normal.multiply(normal_impulse - previous_normal).add(tangent_delta)
+    if first.inverse_mass > 0.0 {
+        first.linear_velocity = first.linear_velocity.subtract(impulse.multiply(first.inverse_mass))
+        first.angular_velocity = first.angular_velocity.subtract(
+            normal.cross(tangent_delta).multiply(first_arm * first.inverse_inertia.x))
+    }
+    if second.inverse_mass > 0.0 {
+        second.linear_velocity = second.linear_velocity.add(impulse.multiply(second.inverse_mass))
+        second.angular_velocity = second.angular_velocity.add(
+            normal.cross(tangent_delta).multiply(second_arm * second.inverse_inertia.x))
+    }
+}
+
 func solve_contact_point3d(
     first:&BodyState3D,
     second:&BodyState3D,
@@ -1808,6 +1869,103 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
     return Math.Vec3(radius)
 }
 
+struct GridEntry3D {
+    let proxy:int
+    let x:int
+    let y:int
+    let z:int
+    let next:int
+    init(proxy:int, x:int, y:int, z:int, next:int) {
+        self.proxy = proxy
+        self.x = x
+        self.y = y
+        self.z = z
+        self.next = next
+    }
+}
+
+func grid_bucket3d(x:int, y:int, z:int, count:int) int {
+    let value = (x * 73856093 + y * 19349663 + z * 83492791) % count
+    if value < 0 { return value + count }
+    return value
+}
+
+func append_broad_pair3d(first:BroadProxy3D, second:BroadProxy3D, pairs:&BroadPair3D[]) {
+    if first.upper.x + 0.000001 < second.lower.x ||
+        second.upper.x + 0.000001 < first.lower.x ||
+        first.upper.y + 0.000001 < second.lower.y ||
+        second.upper.y + 0.000001 < first.lower.y ||
+        first.upper.z + 0.000001 < second.lower.z ||
+        second.upper.z + 0.000001 < first.lower.z { return }
+    if !bounding_spheres_overlap3d(first.position, first.radius,
+        second.position, second.radius) { return }
+    if first.slot < second.slot {
+        pairs.append(BroadPair3D(first.slot, second.slot))
+    } else {
+        pairs.append(BroadPair3D(second.slot, first.slot))
+    }
+}
+
+func grid_pairs3d(proxies:@BroadProxy3D[], cell_size:float) BroadPair3D[] {
+    var heads:int[] = []
+    let bucket_count = proxies.count() * 2 + 1
+    var bucket = 0
+    while bucket < bucket_count { heads.append(-1); bucket++ }
+    var entries:GridEntry3D[] = []
+    var large:int[] = []
+    var pairs:BroadPair3D[] = []
+    var index = 0
+    while index < proxies.count() {
+        let proxy = proxies[index]
+        let scaled = proxy.position.divide(cell_size)
+        if proxy.radius * 2.0 + 0.000002 <= cell_size &&
+            Math.abs(scaled.x) < 1000000000.0 &&
+            Math.abs(scaled.y) < 1000000000.0 &&
+            Math.abs(scaled.z) < 1000000000.0 {
+            let x = Math.floor(scaled.x) as int
+            let y = Math.floor(scaled.y) as int
+            let z = Math.floor(scaled.z) as int
+            var dx = -1
+            while dx <= 1 {
+                var dy = -1
+                while dy <= 1 {
+                    var dz = -1
+                    while dz <= 1 {
+                        let nx = x + dx
+                        let ny = y + dy
+                        let nz = z + dz
+                        var entry_index = heads[grid_bucket3d(nx, ny, nz, bucket_count)]
+                        while entry_index >= 0 {
+                            let entry = entries[entry_index]
+                            if entry.x == nx && entry.y == ny && entry.z == nz {
+                                append_broad_pair3d(proxies[entry.proxy], proxy, pairs)
+                            }
+                            entry_index = entry.next
+                        }
+                        dz++
+                    }
+                    dy++
+                }
+                dx++
+            }
+            for other in large { append_broad_pair3d(proxies[other], proxy, pairs) }
+            let slot = grid_bucket3d(x, y, z, bucket_count)
+            entries.append(GridEntry3D(index, x, y, z, heads[slot]))
+            heads[slot] = entries.count() - 1
+        } else {
+            var other = 0
+            while other < index {
+                append_broad_pair3d(proxies[other], proxy, pairs)
+                other++
+            }
+            large.append(index)
+        }
+        index++
+    }
+    Sort.sort<BroadPair3D>(&pairs[0:pairs.count()], broad_pair_before3d)
+    return pairs
+}
+
 func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     var proxies:BroadProxy3D[] = []
     var slot = 0
@@ -1820,6 +1978,19 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
             }
         }
         slot++
+    }
+    if proxies.count() >= 128 {
+        var dynamic_radius = 0.0
+        for proxy in proxies {
+            if let body = store.slots[proxy.slot] {
+                if body.body_type == BodyType3D.dynamic {
+                    dynamic_radius = Math.max(dynamic_radius, proxy.radius)
+                }
+            }
+        }
+        if dynamic_radius > 0.0 && dynamic_radius < 1000000.0 {
+            return grid_pairs3d(proxies, dynamic_radius * 2.0 + 0.000002)
+        }
     }
     Sort.sort<BroadProxy3D>(&proxies[0:proxies.count()],
         broad_proxy_before3d)

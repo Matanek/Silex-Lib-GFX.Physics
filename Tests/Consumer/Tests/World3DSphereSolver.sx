@@ -1,0 +1,59 @@
+use GFX.Physics
+use STD.Math
+
+func oblique_spheres(inertia:Math.Vec3, expected_speed:float, expected_spin:float) {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-0.51, -0.01, 0.0))
+        ..linear_velocity = Math.Vec3(1.0, 1.0, 0.0)
+        ..mass_properties = Physics.MassProperties3D(2.0, inertia)
+        ..friction = 1.0)
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.51, 0.01, 0.0))
+        ..linear_velocity = Math.Vec3(-1.0, -1.0, 0.0)
+        ..mass_properties = Physics.MassProperties3D(2.0, inertia)
+        ..friction = 1.0)
+    world.step(0.01)
+    assert(first.linear_velocity().nearly_equal(Math.Vec3(0.0, expected_speed, 0.0), 0.00001))
+    assert(second.linear_velocity().nearly_equal(Math.Vec3(0.0, -expected_speed, 0.0), 0.00001))
+    assert(first.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, expected_spin), 0.00001))
+    assert(second.angular_velocity().nearly_equal(first.angular_velocity(), 0.00001))
+    let momentum = first.linear_velocity().add(second.linear_velocity()).multiply(2.0)
+    assert(momentum.length() < 0.00001)
+    // The initial angular momentum around the contact is -2 along Z.
+    let angular = first.position().cross(first.linear_velocity().multiply(2.0)).add(
+        second.position().cross(second.linear_velocity().multiply(2.0))).add(
+        first.angular_velocity().add(second.angular_velocity()).multiply(inertia))
+    assert(angular.nearly_equal(Math.Vec3(0.0, 0.0, -2.0), 0.00001))
+}
+
+test "isotropic sphere friction conserves momentum and reaches rolling contact" {
+    oblique_spheres(Math.Vec3(0.2), 5.0 / 7.0, -10.0 / 7.0)
+}
+
+test "anisotropic sphere inertia retains the general contact response" {
+    oblique_spheres(Math.Vec3(0.2, 0.3, 0.4), 5.0 / 9.0, -10.0 / 9.0)
+}
+
+test "offset sphere centers retain normal contact torque" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-0.51, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0)
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(0.2), Math.Vec3(0.0, 0.1, 0.0))
+        ..friction = 0.0)
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.51, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(-1.0, 0.0, 0.0)
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(0.2), Math.Vec3(0.0, 0.1, 0.0))
+        ..friction = 0.0)
+    world.step(0.01)
+    assert(Math.abs(first.linear_velocity().x - 1.0 / 11.0) < 0.00001)
+    assert(Math.abs(second.linear_velocity().x + 1.0 / 11.0) < 0.00001)
+    assert(Math.abs(first.angular_velocity().z + 10.0 / 11.0) < 0.00001)
+    assert(Math.abs(second.angular_velocity().z - 10.0 / 11.0) < 0.00001)
+}

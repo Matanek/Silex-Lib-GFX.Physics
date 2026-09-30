@@ -6,6 +6,13 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- The 3D solver uses scalar tangent mass and zero normal torque for centered
+  spheres with isotropic inertia. Offset centers of mass and anisotropic sphere
+  inertia retain the general response. A private spatial grid finds neighbors
+  in dense worlds, with conservative fallback for oversized shapes and
+  coordinates outside the grid. Pair ordering, timestep, iteration counts and
+  sleep thresholds are preserved.
+
 - 3D warm starting reprojects friction onto the current tangent plane when
   the normal turns, avoiding an artificial support component. Sphere pairs
   use their centers and radii directly during detection and position correction,
