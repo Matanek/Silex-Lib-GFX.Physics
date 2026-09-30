@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D warm starting reprojects friction onto the current tangent plane when
+  the normal turns, avoiding an artificial support component. Sphere pairs
+  use their centers and radii directly during detection and position correction,
+  without rebuilding unnecessary placements and witnesses each iteration.
+  Other shapes retain the general path; timestep and iteration counts are unchanged.
+
 - 3D contacts cache body identities, reuse the previous-contact lookup for
   warm starting, and read its points without a temporary array. A linear
   merge of sorted contacts emits begin and end events while preserving

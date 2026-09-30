@@ -12,6 +12,8 @@ use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
 use GFX.Physics.PointConstraint3D.PointConstraintState3D
 use GFX.Physics.PointConstraint3D.PointConstraintStore3D
 use GFX.Physics.Geometry3D.Geometry3D
+use GFX.Physics.Geometry3D.DistanceResult3D
+use GFX.Physics.Geometry3D.sphere_centers_distance3d
 use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.contact_separation3d
 use GFX.Physics.Geometry3D.ShapePlacement3D
@@ -602,33 +604,43 @@ public class World3D {
                                     (first.body_type == BodyType3D.kinematic ||
                                         second.body_type == BodyType3D.kinematic)))
                         {
-                            let distance = contact_distance3d(
-                                ShapePlacement3D(first.shape, first.transform),
-                                ShapePlacement3D(second.shape, second.transform)
-                            )
+                            let first_radius = primitive_sphere_radius3d(first.shape)
+                            let second_radius = primitive_sphere_radius3d(second.shape)
+                            let sphere_pair = first_radius > 0.0 && second_radius > 0.0
+                            var distance = DistanceResult3D(
+                                Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
+                            if sphere_pair {
+                                distance = sphere_centers_distance3d(
+                                    first.transform.position, first_radius,
+                                    second.transform.position, second_radius)
+                            } else {
+                                distance = contact_distance3d(
+                                    ShapePlacement3D(first.shape, first.transform),
+                                    ShapePlacement3D(second.shape, second.transform))
+                            }
                             if distance.separation <= 0.000001 {
-                                let first_contact_shape = contact_placement3d(
-                                    first, distance.first_child_id
-                                )
-                                let second_contact_shape = contact_placement3d(
-                                    second, distance.second_child_id
-                                )
-                                let normal = contact_normal3d(
-                                    first_contact_shape, second_contact_shape,
-                                    distance.normal
-                                )
+                                var normal = distance.normal
                                 var point = distance.first_point.add(
                                     distance.second_point
                                 ).multiply(0.5)
                                 let sensor_pair = first.is_sensor || second.is_sensor
                                 var points:Math.Vec3[] = []
-                                if !sensor_pair {
-                                    points = contact_points3d(
-                                        first_contact_shape, second_contact_shape,
-                                        normal, point
-                                    )
+                                if sphere_pair {
+                                    if !sensor_pair { points.append(point) }
+                                } else {
+                                    let first_contact_shape = contact_placement3d(
+                                        first, distance.first_child_id)
+                                    let second_contact_shape = contact_placement3d(
+                                        second, distance.second_child_id)
+                                    normal = contact_normal3d(
+                                        first_contact_shape, second_contact_shape, normal)
+                                    if !sensor_pair {
+                                        points = contact_points3d(
+                                            first_contact_shape, second_contact_shape,
+                                            normal, point)
+                                    }
                                 }
-                                if !points.is_empty() {
+                                if !sphere_pair && !points.is_empty() {
                                     point = Math.Vec3()
                                     for candidate in points {
                                         point = point.add(candidate)
@@ -869,6 +881,10 @@ public class World3D {
                 pair_index--
                 var pair = pairs[pair_index]
                 if pair.active {
+                    if pair.first_sphere_radius > 0.0 && pair.second_sphere_radius > 0.0 {
+                        correct_sphere_pair3d(pair)
+                        continue
+                    }
                     let first_shape = contact_placement3d(
                         pair.first, pair.first_child_id
                     )
@@ -1103,7 +1119,11 @@ func warm_contact_points3d(
         let old = previous.manifold_point(index)
         if old.position.distance(constraint.point) < 0.1 {
             constraint.normal_impulse = old.normal_impulse
-            constraint.tangent_impulse = old.tangent_impulse
+            // The previous impulse belongs to the previous tangent plane.
+            // Reproject when the normal rotates so friction cannot add support.
+            constraint.tangent_impulse = old.tangent_impulse.subtract(
+                normal.multiply(old.tangent_impulse.dot(normal))
+            )
             let tangent_length = constraint.tangent_impulse.length()
             let maximum = friction * constraint.normal_impulse
             if tangent_length > maximum {
@@ -1140,6 +1160,8 @@ class ContactPairState3D {
     let second_child_id:int
     let is_sensor:bool
     let previous_index:int
+    let first_sphere_radius:float
+    let second_sphere_radius:float
 
     init(
         first:BodyState3D, second:BodyState3D,
@@ -1164,7 +1186,31 @@ class ContactPairState3D {
         self.second_child_id = second_child_id
         self.is_sensor = is_sensor
         self.previous_index = previous_index
+        self.first_sphere_radius = primitive_sphere_radius3d(first.shape)
+        self.second_sphere_radius = primitive_sphere_radius3d(second.shape)
     }
+}
+
+func primitive_sphere_radius3d(shape:Shape3D) float {
+    match shape {
+        sphere(sphere) => { return sphere.radius }
+        box(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    return 0.0
+}
+
+func correct_sphere_pair3d(pair:ContactPairState3D) {
+    // Position iterations only need center separation. No shape placement,
+    // witnesses, child lookup or sphere orientation participates in this case.
+    let offset = pair.second.transform.position.subtract(pair.first.transform.position)
+    let length = offset.length()
+    let separation = length - pair.first_sphere_radius - pair.second_sphere_radius
+    if separation >= 0.0 { return }
+    var normal = Math.Vec3.right()
+    if length > 0.0 { normal = offset.divide(length) }
+    correct_contact3d(pair.first, pair.second, normal, separation)
 }
 
 func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {

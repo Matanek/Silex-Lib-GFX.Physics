@@ -6,6 +6,13 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le warm start 3D reprojette la friction dans le plan tangent courant quand
+  la normale tourne, pour éviter une composante artificielle de support.
+  Les paires de sphères utilisent directement leurs centres et rayons pendant
+  la détection et les corrections de position, sans reconstruire les placements
+  et témoins inutiles à chaque itération. Les autres formes conservent leur
+  chemin général ; cadence et nombre d'itérations restent identiques.
+
 - Les contacts 3D mémorisent leurs identités de corps, réutilisent la recherche
   du contact précédent pour le warm start et lisent ses points sans tableau
   temporaire. Une fusion linéaire des contacts triés produit les événements

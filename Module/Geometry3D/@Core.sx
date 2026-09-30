@@ -239,15 +239,23 @@ func sphere_sphere_distance(
     second:Sphere3D,
     second_transform:Transform3D
 ) DistanceResult3D {
-    let offset = second_transform.position.subtract(first_transform.position)
+    return sphere_centers_distance3d(first_transform.position, first.radius,
+        second_transform.position, second.radius)
+}
+
+package func sphere_centers_distance3d(
+    first_position:Math.Vec3, first_radius:float,
+    second_position:Math.Vec3, second_radius:float
+) DistanceResult3D {
+    let offset = second_position.subtract(first_position)
     let length = offset.length()
     var normal = Math.Vec3.right()
     if length > 0.0 { normal = offset.divide(length) }
     return DistanceResult3D(
-        first_transform.position.add(normal.multiply(first.radius)),
-        second_transform.position.subtract(normal.multiply(second.radius)),
+        first_position.add(normal.multiply(first_radius)),
+        second_position.subtract(normal.multiply(second_radius)),
         normal,
-        length - first.radius - second.radius
+        length - first_radius - second_radius
     )
 }
 
