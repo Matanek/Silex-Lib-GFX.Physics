@@ -20,7 +20,7 @@ velocity = result.clip_velocity(velocity)
 
 Create `mover` once and reuse it. `half_height` is half the cylindrical segment:
 the total height here is 1.7 m. `position` is the capsule centre, not its feet or
-eyes. The result also exposes `ground_normal` and `stepped`. `clip_velocity`
+eyes. The result also exposes `ground_normal`, `stepped`, and `support()`. `clip_velocity`
 removes velocity into encountered surfaces without adding artificial stair velocity.
 
 The [executable consumer](../../Tests/Consumer/Tests/CharacterMover3D.sx) covers
@@ -47,12 +47,20 @@ passes; a capsule deeply enclosed in geometry is not guaranteed to escape.
 ## Current scope
 
 The mover is virtual and registers no rigid body. It reads current poses of
-enabled boxes, spheres, capsules and compound children. Encountered bodies are
-treated as stationary obstacles for that call: the mover does not push them or
-carry the character along with moving supports yet. Update the world before
-moving the character when obstacles move.
+enabled boxes, spheres, capsules and compound children. A kinematic support
+keeps the character's point in its local frame between calls: translation and
+rotation carry the capsule, even away from the centre of rotation. Call
+`world.step(delta)` before `calculate_move`, and reuse the same mover with the
+returned `grounded` state. The supplied translation remains the character's
+own intent; the application does not add platform velocity. Jumping, removing
+or disabling the support, or excluding it with the query filter ends the carry.
+`result.support()` returns the body that supported this move, or `null`. As
+with any body handle, check `is_valid()` before reusing it after possible
+destruction.
 
-The capsule retains its shape and vertical axis. Physical characters, shape
-changes, character-to-character interactions and moving supports remain to be
-implemented. The package imposes no jump or camera behavior. Do not share one
-instance concurrently between threads.
+Other encountered bodies remain obstacles at their current poses. The mover
+does not push dynamic bodies or follow them as moving supports. The capsule
+retains its shape and vertical axis. Physical characters, shape changes, and
+character-to-character interactions remain to be implemented. The package
+imposes no jump or camera behavior. Do not share one instance concurrently
+between threads.

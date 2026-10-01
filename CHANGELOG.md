@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` now follows a kinematic support through translation or
+  rotation using its previous pose and body identity. The result exposes the
+  supporting body through `support()`; jumping, removal, disabling, and query
+  filtering end the carry without residual motion.
+
 - Capsule sliding no longer stalls on tilted faces and their edges when
   the projection residual is below the tangential movement threshold. Contact
   detection and plane clipping now use the same threshold. Stair lookahead also

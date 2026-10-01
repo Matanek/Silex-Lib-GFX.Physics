@@ -22,7 +22,7 @@ velocity = result.clip_velocity(velocity)
 Créer `mover` une fois, puis réutiliser l'instance. `half_height` est la moitié
 de la partie cylindrique : ici la hauteur totale vaut 1,7 m. `position` est le
 centre de la capsule, pas la position des pieds ou des yeux. Le résultat expose
-également `ground_normal` et `stepped`. `clip_velocity` retire la vitesse dirigée
+également `ground_normal`, `stepped` et `support()`. `clip_velocity` retire la vitesse dirigée
 vers les surfaces rencontrées, sans ajouter la vitesse d'une marche artificielle.
 
 Le [consommateur exécutable](../../Tests/Consumer/Tests/CharacterMover3D.sx)
@@ -50,12 +50,21 @@ capsule profondément enfermée dans une géométrie ne garantit pas une sortie.
 ## Portée actuelle
 
 Le contrôleur est virtuel et n'enregistre aucun corps rigide. Il lit les poses
-courantes des boîtes, sphères, capsules et enfants de composés activés. Les corps
-rencontrés sont traités comme des obstacles immobiles pour cet appel : il ne
-les pousse pas et ne transporte pas encore le personnage avec un support mobile.
-Mettre à jour le monde avant le déplacement si ses obstacles bougent.
+courantes des boîtes, sphères, capsules et enfants de composés activés. Un
+support cinématique conserve le point du personnage dans son repère local entre
+deux appels : sa translation et sa rotation transportent la capsule, même hors
+du centre de rotation. Appeler `world.step(delta)` avant `calculate_move` et
+réutiliser le même mover avec l'état `grounded` retourné. Le déplacement fourni
+reste l'intention propre du personnage ; l'application ne lui ajoute pas la
+vitesse de la plateforme. Un saut, un support retiré, désactivé ou exclu par le
+filtre coupe le transport. `result.support()` retourne le corps qui a fourni
+l'appui de cet appel, ou `null` ; comme tout handle de corps, vérifier
+`is_valid()` avant de le réutiliser après une destruction possible.
 
-La capsule garde sa forme et son axe vertical. Les personnages physiques, le
-changement de forme, les interactions entre personnages et les supports mobiles
-restent à implémenter. Aucun comportement de saut ou de caméra n'est imposé par
-le package. Ne pas partager simultanément une instance entre plusieurs threads.
+Les autres corps rencontrés restent des obstacles à leur pose courante : le
+contrôleur ne pousse pas les corps dynamiques et ne les suit pas comme supports
+mobiles. La capsule garde sa forme et son axe vertical. Les personnages
+physiques, le changement de forme et les interactions entre personnages
+restent à implémenter. Aucun comportement de saut ou de caméra n'est imposé
+par le package. Ne pas partager simultanément une instance entre plusieurs
+threads.

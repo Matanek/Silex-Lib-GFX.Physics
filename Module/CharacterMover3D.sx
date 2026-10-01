@@ -6,6 +6,9 @@ use GFX.Physics.Geometry3D.CastResult3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.World3D.World3D
+use GFX.Physics.World3D.CharacterShape3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.RigidBody3D
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use GFX.Physics.RigidBody3D.finite_body3d_point
 use STD.Math
@@ -27,19 +30,33 @@ public struct CharacterMoveResult3D {
     let grounded:bool
     let ground_normal:Math.Vec3
     let stepped:bool
+    private var current_support:RigidBody3D?
     private let planes:Math.Vec3[]
 
     package init(position:Math.Vec3, grounded:bool, ground_normal:Math.Vec3,
-        stepped:bool, planes:Math.Vec3[]) {
+        stepped:bool, support:RigidBody3D?, planes:Math.Vec3[]) {
         self.position = position
         self.grounded = grounded
         self.ground_normal = ground_normal
         self.stepped = stepped
+        self.current_support = support
         self.planes = planes
     }
 
+    func support() RigidBody3D? { return self.current_support }
+
     func clip_velocity(velocity:Math.Vec3) Math.Vec3 {
         return clip_planes(velocity, self.planes)
+    }
+}
+
+local struct CharacterCast3D {
+    let result:CastResult3D
+    let candidate_index:int
+
+    init(result:CastResult3D, candidate_index:int) {
+        self.result = result
+        self.candidate_index = candidate_index
     }
 }
 
@@ -49,7 +66,9 @@ public class CharacterMover3D {
     private let settings:CharacterMover3DSettings
     private let shape:Shape3D
     private let slope_cos:float
-    private var candidates:ShapePlacement3D[]
+    private var candidates:CharacterShape3D[]
+    private var previous_support:RigidBody3D?
+    private var previous_support_pose:Transform3D
 
     init(settings:CharacterMover3DSettings = CharacterMover3DSettings()) {
         if !finite_body3d_value(settings.max_slope_angle) ||
@@ -64,6 +83,8 @@ public class CharacterMover3D {
         self.settings = settings
         self.slope_cos = Math.cos(settings.max_slope_angle)
         self.candidates = []
+        self.previous_support = null
+        self.previous_support_pose = Transform3D()
     }
 
     func calculate_move(world:@World3D, position:Math.Vec3,
@@ -71,18 +92,30 @@ public class CharacterMover3D {
         if !finite_body3d_point(position) || !finite_body3d_point(translation) {
             panic("GFX.Physics.CharacterMover3D requires finite position and translation")
         }
+        var carried_position = position
+        if was_grounded {
+            if let support = self.previous_support {
+                if world.valid_character_support(support, self.settings.filter) &&
+                    support.body_type() == BodyType3D.kinematic {
+                    carried_position = support.transform().point(
+                        self.previous_support_pose.inverse_point(position))
+                }
+            }
+        }
         let reach = self.settings.radius + self.settings.half_height +
             self.settings.step_height + self.settings.floor_snap +
-            self.settings.step_forward + translation.length() + 0.1
+            self.settings.step_forward + translation.length() +
+            carried_position.subtract(position).length() + 0.1
         var candidates = self.candidates
         world.character_shapes(position.subtract(Math.Vec3(reach)),
             position.add(Math.Vec3(reach)), self.settings.filter, candidates)
         self.candidates = candidates
         let start = self.recover(position)
         var planes:Math.Vec3[] = []
-        var current = self.slide(start, translation, planes)
+        var current = self.slide(start, carried_position.subtract(start).add(translation), planes)
         var stepped = false
         var step_normal = Math.Vec3.up()
+        var support_index = -1
         let horizontal = Math.Vec3(translation.x, 0.0, translation.z)
         let length = horizontal.length()
         // Only grounded, non-jumping motion may use stairs. The complete lifted
@@ -93,7 +126,7 @@ public class CharacterMover3D {
             if progress < length - 0.0001 {
                 let up = Math.Vec3(0.0, self.settings.step_height, 0.0)
                 let ceiling = self.cast(start, up)
-                if !ceiling.hit {
+                if !ceiling.result.hit {
                     let raised = start.add(up)
                     let forward = horizontal
                     var step_planes:Math.Vec3[] = []
@@ -101,19 +134,21 @@ public class CharacterMover3D {
                     let down = Math.Vec3(0.0, -(self.settings.step_height + self.settings.floor_snap), 0.0)
                     let landing = self.cast(across, down)
                     var support = landing
-                    var support_height = across.y + down.y * landing.fraction
+                    var support_height = across.y + down.y * landing.result.fraction
                     // A short step can land on the capsule's rounded edge. Look
                     // ahead to qualify the tread, but never spend that distance
                     // as movement: the committed pose uses only the input budget.
-                    if landing.hit && landing.normal.y > 0.0 && landing.normal.y < self.slope_cos &&
+                    if landing.result.hit && landing.result.normal.y > 0.0 &&
+                        landing.result.normal.y < self.slope_cos &&
                         self.settings.step_forward > length {
                         var probe_planes:Math.Vec3[] = []
                         let probe = self.slide(raised, direction.multiply(self.settings.step_forward), probe_planes)
                         support = self.cast(probe, down)
-                        support_height = probe.y + down.y * support.fraction
+                        support_height = probe.y + down.y * support.result.fraction
                     }
-                    if landing.hit && landing.normal.y > 0.0 && support.hit && support.normal.y >= self.slope_cos {
-                        let target = across.add(down.multiply(landing.fraction))
+                    if landing.result.hit && landing.result.normal.y > 0.0 &&
+                        support.result.hit && support.result.normal.y >= self.slope_cos {
+                        let target = across.add(down.multiply(landing.result.fraction))
                         let rise = target.y - start.y
                         // Ground beyond a rock's side is not a stair tread:
                         // the qualified support must reach the edge contact height.
@@ -122,7 +157,8 @@ public class CharacterMover3D {
                             target.subtract(start).dot(direction) > progress + 0.0001 {
                             current = target
                             planes = step_planes
-                            step_normal = support.normal
+                            step_normal = support.result.normal
+                            support_index = landing.candidate_index
                             // Step height is positional correction, not launch
                             // velocity from projecting onto the sampled edge.
                             planes.append(Math.Vec3.up())
@@ -139,15 +175,23 @@ public class CharacterMover3D {
             if was_grounded { snap = Math.max(snap, self.settings.floor_snap) }
             let down = Math.Vec3(0.0, -snap, 0.0)
             let floor = self.cast(current, down)
-            if floor.hit && floor.normal.y >= self.slope_cos {
-                current = current.add(down.multiply(floor.fraction))
+            if floor.result.hit && floor.result.normal.y >= self.slope_cos {
+                current = current.add(down.multiply(floor.result.fraction))
                 grounded = true
-                normal = floor.normal
+                normal = floor.result.normal
+                support_index = floor.candidate_index
                 if stepped { planes.append(Math.Vec3.up()) }
                 else { planes.append(normal) }
             }
         }
-        return CharacterMoveResult3D(current, grounded, normal, stepped, planes)
+        var support_body:RigidBody3D? = null
+        if grounded && support_index >= 0 {
+            var body = world.character_body(self.candidates[support_index].body_id)
+            support_body = body
+            self.previous_support_pose = body.transform()
+        }
+        self.previous_support = support_body
+        return CharacterMoveResult3D(current, grounded, normal, stepped, support_body, planes)
     }
 
     private func recover(position:Math.Vec3) Math.Vec3 {
@@ -157,7 +201,7 @@ public class CharacterMover3D {
             var corrected = false
             for target in self.candidates {
                 let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
-                    Transform3D(position:current)), target)
+                    Transform3D(position:current)), target.placement)
                 if distance.separation < -0.00001 {
                     current = current.subtract(distance.normal.multiply(
                         Math.min(-distance.separation + self.settings.skin, self.settings.radius)))
@@ -177,59 +221,62 @@ public class CharacterMover3D {
         var pass = 0
         while pass < 8 && remaining.length_squared() > 0.0000000001 {
             let hit = self.cast(current, remaining)
-            if !hit.hit { return current.add(remaining) }
-            current = current.add(remaining.multiply(hit.fraction))
-            var normal = hit.normal
+            if !hit.result.hit { return current.add(remaining) }
+            current = current.add(remaining.multiply(hit.result.fraction))
+            var normal = hit.result.normal
             // A steep face cannot turn horizontal input into upward motion.
             // Gravity is still allowed to slide down the actual face.
             if normal.y > 0.0 && normal.y < self.slope_cos && translation.y >= -0.00001 {
                 normal = Math.Vec3(normal.x, 0.0, normal.z).normalized()
             }
             planes.append(normal)
-            if hit.normal.y > 0.0 && hit.normal.y < self.slope_cos && translation.y < -0.00001 {
+            if hit.result.normal.y > 0.0 && hit.result.normal.y < self.slope_cos && translation.y < -0.00001 {
                 // A downward request must not acquire lift from horizontal input
                 // on a steep face. Keep the real plane for downhill sliding.
                 planes.append(Math.Vec3(0.0, -1.0, 0.0))
             }
-            remaining = clip_planes(remaining.multiply(1.0 - hit.fraction), planes)
+            remaining = clip_planes(remaining.multiply(1.0 - hit.result.fraction), planes)
             pass++
         }
         return current
     }
 
-    private func cast(position:Math.Vec3, translation:Math.Vec3) CastResult3D {
-        var closest = CastResult3D()
-        for target in self.candidates {
+    private func cast(position:Math.Vec3, translation:Math.Vec3) CharacterCast3D {
+        var closest = CharacterCast3D(CastResult3D(), -1)
+        var index = 0
+        while index < self.candidates.count() {
+            let target = self.candidates[index]
             var fraction = 0.0
             var iteration = 0
             while iteration < 32 {
                 let at = position.add(translation.multiply(fraction))
                 let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
-                    Transform3D(position:at)), target)
+                    Transform3D(position:at)), target.placement)
                 let approaching = translation.dot(distance.normal)
                 // Match clip_planes: a residual it treats as tangent must not
                 // become another zero-fraction contact and stall the slide.
                 if approaching <= 0.000001 { break }
                 if distance.separation <= self.settings.skin + 0.00001 {
-                    if !closest.hit || fraction < closest.fraction {
-                        closest = CastResult3D(distance.second_point,
-                            distance.normal.negated(), fraction)
+                    if !closest.result.hit || fraction < closest.result.fraction {
+                        closest = CharacterCast3D(CastResult3D(distance.second_point,
+                            distance.normal.negated(), fraction), index)
                     }
                     break
                 }
                 if iteration == 31 {
                     // Exhaustion stops at the last proven free pose rather than
                     // accepting unchecked remaining motion through a thin shape.
-                    if !closest.hit || fraction < closest.fraction {
-                        closest = CastResult3D(distance.second_point,
-                            distance.normal.negated(), fraction)
+                    if !closest.result.hit || fraction < closest.result.fraction {
+                        closest = CharacterCast3D(CastResult3D(distance.second_point,
+                            distance.normal.negated(), fraction), index)
                     }
                     break
                 }
                 fraction += (distance.separation - self.settings.skin) / approaching
-                if fraction > 1.0 || (closest.hit && fraction > closest.fraction) { break }
+                if fraction > 1.0 || (closest.result.hit && fraction > closest.result.fraction) { break }
                 iteration++
             }
+            index++
         }
         return closest
     }

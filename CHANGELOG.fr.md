@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` suit désormais un support cinématique en translation ou
+  rotation à partir de sa pose précédente et de l'identité du corps. Le
+  résultat expose le corps d'appui par `support()` ; saut, retrait,
+  désactivation et filtrage coupent le transport sans déplacement résiduel.
+
 - Le glissement de capsule ne se bloque plus sur les faces inclinées et
   leurs arêtes lorsque le résidu de projection est inférieur au seuil de
   mouvement tangent : projection et détection de contact partagent le même seuil.
