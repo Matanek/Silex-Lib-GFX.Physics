@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les composés 3D deviennent dynamiques avec masse, centre de masse et tenseur
+  d'inertie complets issus des enfants orientés et décentrés. Les contacts
+  conservent leurs identités de feuille. `MassProperties3D` accepte désormais
+  un `Mat3` pour les inerties non diagonales tout en conservant les appels `Vec3`.
+
 - `CharacterMover3D` suit désormais un support cinématique en translation ou
   rotation à partir de sa pose précédente et de l'identité du corps. Le
   résultat expose le corps d'appui par `support()` ; saut, retrait,
@@ -29,7 +34,7 @@ puis traduits dans `CHANGELOG.md`.
 - Les composés 3D fixes et cinématiques conservent un manifold par paire
   d'enfants en contact, avec événements et warm start indépendants. Les
   composés cinématiques peuvent transporter et réveiller des corps dynamiques
-  en translation ou en rotation. Les composés dynamiques restent refusés.
+  en translation ou en rotation.
 
 - Le solveur 3D exploite la masse tangentielle scalaire et l'absence de couple
   normal des sphères centrées à inertie isotrope. Les sphères à centre de masse

@@ -1,6 +1,119 @@
 use GFX.Physics
 use STD.Math
 
+func offset_box_pair() Physics.Shape3D {
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(11,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 1.0, 1.0))),
+            Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))),
+        Physics.CompoundChild3D(22,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 2.0, 1.0))),
+            Physics.Transform3D(position:Math.Vec3(1.0, 1.0, 0.0),
+                rotation:Math.Quat.angle_axis(Math.pi() / 4.0, Math.Vec3(0.0, 0.0, 1.0))))
+    ]))
+}
+
+test "dynamic compound preserves off-axis mass and angular impulse" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = offset_box_pair() ..density = 1.0)
+    let mass = body.mass_properties()
+    assert(Math.abs(mass.mass - 4.0) < 0.0001)
+    assert(mass.local_center.subtract(Math.Vec3(0.0, 0.5, 0.0)).length() < 0.0001)
+    assert(Math.abs(mass.inertia_tensor.x.x - 23.0 / 12.0) < 0.0001)
+    assert(Math.abs(mass.inertia_tensor.y.y - 65.0 / 12.0) < 0.0001)
+    assert(Math.abs(mass.inertia_tensor.z.z - 20.0 / 3.0) < 0.0001)
+    assert(Math.abs(mass.inertia_tensor.x.y + 1.75) < 0.0001)
+    assert(Math.abs(mass.inertia_tensor.y.x + 1.75) < 0.0001)
+    body.apply_impulse(Math.Vec3(1.0, 0.0, 0.0),
+        body.world_center_of_mass().add(Math.Vec3(0.0, 0.0, 1.0)))
+    assert(Math.abs(body.linear_velocity().x - 0.25) < 0.0001)
+    assert(Math.abs(body.angular_velocity().x - 0.23908918) < 0.0001)
+    assert(Math.abs(body.angular_velocity().y - 0.26185958) < 0.0001)
+}
+
+test "dynamic compound contact keeps the child id" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = offset_box_pair())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.3, 0.0, 0.0)))
+    world.step(1.0 / 120.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_body().same_body(body))
+    assert(contacts[0].first_child_id() == 11)
+}
+
+test "dynamic compound contact reaches its rotated second child" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = offset_box_pair())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.3))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 1.0, 0.65)))
+    world.step(1.0 / 120.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_body().same_body(body))
+    assert(contacts[0].first_child_id() == 22)
+}
+
+test "full inertia override changes angular impulse response" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings())
+    body.set_mass_properties(Physics.MassProperties3D(4.0, Math.Mat3(
+        Math.Vec3(2.0, 0.5, 0.0),
+        Math.Vec3(0.5, 3.0, 0.0),
+        Math.Vec3(0.0, 0.0, 4.0))))
+    body.apply_angular_impulse(Math.Vec3(0.0, 1.0, 0.0))
+    assert(Math.abs(body.angular_velocity().x + 0.5 / 5.75) < 0.0001)
+    assert(Math.abs(body.angular_velocity().y - 2.0 / 5.75) < 0.0001)
+}
+
+test "cross inertia bypasses centered sphere contact shortcut" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3())
+        ..linear_velocity = Math.Vec3(1.0, 0.0, 1.0)
+        ..friction = 1.0
+        ..mass_properties = Physics.MassProperties3D(1.0, Math.Mat3(
+            Math.Vec3(2.0, 0.5, 0.0),
+            Math.Vec3(0.5, 2.0, 0.0),
+            Math.Vec3(0.0, 0.0, 2.0))))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.9, 0.0, 0.0))
+        ..friction = 1.0)
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 1)
+    assert(Math.abs(moving.angular_velocity().x) > 0.0001)
+}
+
+test "dynamic compound accepts sphere and capsule children" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(5,
+                Physics.Shape3D.sphere(Physics.Sphere3D(0.4)),
+                Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))),
+            Physics.CompoundChild3D(6,
+                Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5)),
+                Physics.Transform3D(position:Math.Vec3(1.0, 0.0, 0.0)))
+        ])))
+    assert(body.mass_properties().mass > 0.0)
+    body.apply_impulse(Math.Vec3(1.0, 0.0, 0.0))
+    world.step(1.0 / 120.0)
+    assert(body.position().x > 0.0)
+}
+
 func two_spheres() Physics.Compound3D {
     return Physics.Compound3D([
         Physics.CompoundChild3D(11,

@@ -15,6 +15,7 @@ public struct MassProperties3D {
     let mass:float
     let local_center:Math.Vec3
     let local_inertia:Math.Vec3
+    let inertia_tensor:Math.Mat3
 
     init(mass:float, local_inertia:Math.Vec3, local_center:Math.Vec3 = Math.Vec3()) {
         if !finite_body3d_value(mass) || mass < 0.0 ||
@@ -26,6 +27,34 @@ public struct MassProperties3D {
         self.mass = mass
         self.local_center = local_center
         self.local_inertia = local_inertia
+        self.inertia_tensor = diagonal_inertia3d(local_inertia)
+    }
+
+    init(mass:float, local_inertia:Math.Mat3, local_center:Math.Vec3 = Math.Vec3()) {
+        let inertia_tensor = local_inertia
+        let scale = Math.max(Math.abs(inertia_tensor.x.x),
+            Math.max(Math.abs(inertia_tensor.y.y), Math.abs(inertia_tensor.z.z)))
+        if !finite_body3d_value(mass) || mass <= 0.0 ||
+            !finite_body3d_point(local_center) || !finite_inertia3d(inertia_tensor) ||
+            scale <= 0.0 {
+            panic("GFX.Physics.MassProperties3D requires a positive symmetric inertia tensor")
+        }
+        let normalized = inertia_tensor.multiply(1.0 / scale)
+        if Math.abs(inertia_tensor.x.y - inertia_tensor.y.x) > 0.00001 * scale ||
+            Math.abs(inertia_tensor.x.z - inertia_tensor.z.x) > 0.00001 * scale ||
+            Math.abs(inertia_tensor.y.z - inertia_tensor.z.y) > 0.00001 * scale ||
+            inertia_tensor.x.x <= 0.0 ||
+            normalized.x.x * normalized.y.y -
+                normalized.x.y * normalized.y.x <= 0.0 ||
+            normalized.determinant() <= 0.0
+        {
+            panic("GFX.Physics.MassProperties3D requires a positive symmetric inertia tensor")
+        }
+        self.mass = mass
+        self.local_center = local_center
+        self.local_inertia = Math.Vec3(inertia_tensor.x.x,
+            inertia_tensor.y.y, inertia_tensor.z.z)
+        self.inertia_tensor = inertia_tensor
     }
 }
 
@@ -91,6 +120,8 @@ package class BodyState3D {
     var mass_properties:MassProperties3D
     var inverse_mass:float
     var inverse_inertia:Math.Vec3
+    var inverse_inertia_tensor:Math.Mat3
+    var has_cross_inertia:bool
     var gravity_scale:float
     var linear_damping:float
     var angular_damping:float
@@ -120,11 +151,7 @@ package class BodyState3D {
         }
         validate_material3d(settings.friction, settings.restitution)
         match settings.shape {
-            compound(_) => {
-                if settings.body_type == BodyType3D.dynamic {
-                    panic("GFX.Physics.Compound3D requires a fixed or kinematic body")
-                }
-            }
+            compound(_) => {}
             sphere(_) => {}
             box(_) => {}
             capsule(_) => {}
@@ -159,10 +186,14 @@ package class BodyState3D {
                 1.0 / properties.local_inertia.y,
                 1.0 / properties.local_inertia.z
             )
+            self.inverse_inertia_tensor = invert_inertia3d(properties.inertia_tensor)
+            self.has_cross_inertia = cross_inertia3d(properties.inertia_tensor)
         } else {
             self.mass_properties = MassProperties3D(0.0, Math.Vec3())
             self.inverse_mass = 0.0
             self.inverse_inertia = Math.Vec3()
+            self.inverse_inertia_tensor = Math.Mat3.zero()
+            self.has_cross_inertia = false
         }
         self.gravity_scale = settings.gravity_scale
         self.linear_damping = settings.linear_damping
@@ -196,16 +227,25 @@ package class BodyState3D {
         if self.body_type != BodyType3D.dynamic { return Math.Vec3() }
         // A scalar inertia tensor is invariant under rotation (cubes/spheres,
         // or any custom mass properties with equal principal moments).
-        if self.inverse_inertia.x == self.inverse_inertia.y &&
+        if !self.has_cross_inertia &&
+            self.inverse_inertia.x == self.inverse_inertia.y &&
             self.inverse_inertia.y == self.inverse_inertia.z {
             return world_vector.multiply(self.inverse_inertia.x)
         }
         let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
+        if self.has_cross_inertia {
+            return self.transform.rotation.rotate(
+                self.inverse_inertia_tensor.multiply(local_vector))
+        }
         return self.transform.rotation.rotate(local_vector.multiply(self.inverse_inertia))
     }
 
     func inertia_times(world_vector:Math.Vec3) Math.Vec3 {
         let local_vector = self.transform.rotation.conjugated().rotate(world_vector)
+        if self.has_cross_inertia {
+            return self.transform.rotation.rotate(
+                self.mass_properties.inertia_tensor.multiply(local_vector))
+        }
         return self.transform.rotation.rotate(local_vector.multiply(self.mass_properties.local_inertia))
     }
 }
@@ -417,6 +457,8 @@ public class RigidBody3D {
             1.0 / properties.local_inertia.y,
             1.0 / properties.local_inertia.z
         )
+        state.inverse_inertia_tensor = invert_inertia3d(properties.inertia_tensor)
+        state.has_cross_inertia = cross_inertia3d(properties.inertia_tensor)
         state.linear_velocity = state.linear_velocity.add(
             state.angular_velocity.cross(state.world_center().subtract(previous_center))
         )
@@ -564,6 +606,81 @@ package func shape_mass_properties3d(shape:Shape3D, density:float) MassPropertie
                 Math.Vec3(transverse, axial, transverse)
             )
         }
-        compound(_) => { return MassProperties3D(0.0, Math.Vec3()) }
+        compound(compound) => {
+            var total_mass = 0.0
+            var weighted_center = Math.Vec3()
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let properties = shape_mass_properties3d(child.shape, density)
+                total_mass += properties.mass
+                weighted_center = weighted_center.add(
+                    child.transform.point(properties.local_center).multiply(properties.mass))
+                index++
+            }
+            let center = weighted_center.divide(total_mass)
+            var tensor = Math.Mat3.zero()
+            index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let properties = shape_mass_properties3d(child.shape, density)
+                let basis = rotation_inertia3d(child.transform.rotation)
+                tensor = tensor.add(basis.multiply(properties.inertia_tensor)
+                    .multiply(basis.transposed()))
+                let offset = child.transform.point(properties.local_center).subtract(center)
+                tensor = tensor.add(parallel_axis_inertia3d(properties.mass, offset))
+                index++
+            }
+            return MassProperties3D(total_mass, tensor, center)
+        }
     }
+}
+
+func diagonal_inertia3d(diagonal:Math.Vec3) Math.Mat3 {
+    return Math.Mat3(Math.Vec3(diagonal.x, 0.0, 0.0),
+        Math.Vec3(0.0, diagonal.y, 0.0), Math.Vec3(0.0, 0.0, diagonal.z))
+}
+
+func rotation_inertia3d(rotation:Math.Quat) Math.Mat3 {
+    return Math.Mat3(rotation.rotate(Math.Vec3(1.0, 0.0, 0.0)),
+        rotation.rotate(Math.Vec3(0.0, 1.0, 0.0)),
+        rotation.rotate(Math.Vec3(0.0, 0.0, 1.0)))
+}
+
+func parallel_axis_inertia3d(mass:float, offset:Math.Vec3) Math.Mat3 {
+    return Math.Mat3(
+        Math.Vec3(mass * (offset.y * offset.y + offset.z * offset.z),
+            -mass * offset.x * offset.y, -mass * offset.x * offset.z),
+        Math.Vec3(-mass * offset.y * offset.x,
+            mass * (offset.x * offset.x + offset.z * offset.z),
+            -mass * offset.y * offset.z),
+        Math.Vec3(-mass * offset.z * offset.x, -mass * offset.z * offset.y,
+            mass * (offset.x * offset.x + offset.y * offset.y))
+    )
+}
+
+func finite_inertia3d(tensor:Math.Mat3) bool {
+    return finite_body3d_point(tensor.x) && finite_body3d_point(tensor.y) &&
+        finite_body3d_point(tensor.z)
+}
+
+func cross_inertia3d(tensor:Math.Mat3) bool {
+    return tensor.x.y != 0.0 || tensor.x.z != 0.0 || tensor.y.x != 0.0 ||
+        tensor.y.z != 0.0 || tensor.z.x != 0.0 || tensor.z.y != 0.0
+}
+
+func invert_inertia3d(tensor:Math.Mat3) Math.Mat3 {
+    if !cross_inertia3d(tensor) {
+        return diagonal_inertia3d(Math.Vec3(1.0 / tensor.x.x,
+            1.0 / tensor.y.y, 1.0 / tensor.z.z))
+    }
+    let scale = Math.max(tensor.x.x, Math.max(tensor.y.y, tensor.z.z))
+    let normalized = tensor.multiply(1.0 / scale)
+    let row0 = normalized.row(0)
+    let row1 = normalized.row(1)
+    let row2 = normalized.row(2)
+    let first = row1.cross(row2)
+    let second = row2.cross(row0)
+    let third = row0.cross(row1)
+    return Math.Mat3(first, second, third).multiply(1.0 / (row0.dot(first) * scale))
 }

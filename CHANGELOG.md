@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D compounds are now dynamic, with full mass, center of mass, and inertia
+  tensors derived from rotated and offset children. Contacts retain child
+  identities. `MassProperties3D` accepts a `Mat3` for non-diagonal inertia
+  while preserving existing `Vec3` calls.
+
 - `CharacterMover3D` now follows a kinematic support through translation or
   rotation using its previous pose and body identity. The result exposes the
   supporting body through `support()`; jumping, removal, disabling, and query
@@ -27,8 +32,7 @@ first in `CHANGELOG.fr.md`.
 
 - Fixed and kinematic 3D compounds retain one manifold per touching child
   pair, with independent events and warm starting. Kinematic compounds can
-  carry and wake dynamic bodies through translation and rotation. Dynamic
-  compounds remain rejected.
+  carry and wake dynamic bodies through translation and rotation.
 
 - The 3D solver uses scalar tangent mass and zero normal torque for centered
   spheres with isotropic inertia. Offset centers of mass and anisotropic sphere

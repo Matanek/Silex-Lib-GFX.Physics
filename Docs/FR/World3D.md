@@ -17,9 +17,12 @@ construction du composé. Les capteurs exposent ces mêmes paires sans réponse.
 Un composé cinématique emploie `move_kinematic` ou ses vitesses linéaire et
 angulaire, comme les primitives. Ses enfants suivent la pose du parent ; leur
 vitesse au contact inclut la rotation autour de l'origine du corps. Il peut
-réveiller et transporter une charge dynamique. Un composé dynamique reste
-refusé : sa masse et son inertie complète, les mutations et les terrains
-restent à livrer. Le mouvement cinématique n'ajoute pas de CCD rotationnel.
+réveiller et transporter une charge dynamique. Un composé dynamique de boîtes,
+sphères ou capsules est également disponible : la densité du corps appliquée à chaque enfant
+détermine la masse, le centre de masse et le tenseur d'inertie du corps entier.
+Les identités des enfants restent visibles dans les contacts. Les mutations,
+autres familles géométriques et terrains restent à livrer. Le mouvement
+cinématique n'ajoute pas de CCD rotationnel.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.
@@ -51,10 +54,15 @@ Les angles et vitesses angulaires sont en radians. `step(delta)` reçoit des
 secondes et rejette une durée négative ou non finie.
 
 Par défaut, un corps est dynamique, porte une sphère de rayon 0,5 et reçoit
-une densité de 1. La masse et les trois moments d'inertie principaux sont
-calculés pour la sphère, la boîte ou la capsule homogène. `MassProperties3D` permet de
-fixer une masse positive, un centre local et trois moments locaux positifs ;
-les axes principaux coïncident alors avec les axes locaux de la forme.
+une densité de 1. La masse et les moments d'inertie sont calculés pour la
+sphère, la boîte, la capsule ou un composé homogène de ces primitives.
+`MassProperties3D` accepte soit trois moments locaux positifs sous forme
+`Vec3`, soit un tenseur symétrique défini positif sous forme `Mat3` ; les
+anciens appels avec `Vec3` conservent leurs axes principaux locaux. Le champ
+`inertia_tensor` restitue le tenseur complet, tandis que `local_inertia`
+restitue sa diagonale. Pour un composé décentré ou orienté, les termes croisés
+du tenseur influencent les impulsions et la rotation. Une
+masse positive et un centre local peuvent aussi être fixés explicitement.
 L'inertie est orientée dans le monde pour les couples et impulsions. Une
 impulsion ou force avec un point d'application mondial produit aussi un
 moment autour du centre de masse. `apply_torque` et

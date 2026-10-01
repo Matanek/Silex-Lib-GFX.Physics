@@ -1344,6 +1344,7 @@ class ContactPairState3D {
             self.second_sphere_radius > 0.0 &&
             first.mass_properties.local_center.length_squared() == 0.0 &&
             second.mass_properties.local_center.length_squared() == 0.0 &&
+            !first.has_cross_inertia && !second.has_cross_inertia &&
             first.inverse_inertia.x == first.inverse_inertia.y &&
             first.inverse_inertia.y == first.inverse_inertia.z &&
             second.inverse_inertia.x == second.inverse_inertia.y &&

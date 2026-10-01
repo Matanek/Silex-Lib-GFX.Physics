@@ -17,9 +17,11 @@ applying a response.
 A kinematic compound uses `move_kinematic` or linear and angular velocities,
 just like primitives. Children follow their parent pose; contact velocity
 includes rotation around the body origin. It can wake and carry a dynamic
-payload. Dynamic compounds remain rejected: full mass and inertia, mutation,
-and terrain support remain to be delivered. Kinematic motion does not add
-rotational CCD.
+payload. Dynamic compounds of boxes, spheres, and capsules are also available:
+the body's density applied to each child determines its mass, center of mass, and
+inertia tensor. Child identities remain visible in contacts. Mutation, other
+shape families, and terrain remain to be delivered. Kinematic motion does not
+add rotational CCD.
 
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.
@@ -51,10 +53,14 @@ the shape origin. Angles and angular velocities use radians. `step(delta)`
 takes seconds and rejects negative or non-finite values.
 
 Bodies are dynamic by default, with a radius 0.5 sphere and density 1. Mass
-and the three principal moments of inertia are derived for a homogeneous
-sphere, box, or capsule. `MassProperties3D` can specify positive mass, a local center,
-and three positive local moments; the principal axes then align with the
-shape's local axes. Inertia is rotated into world coordinates for torque and
+and inertia are derived for a homogeneous sphere, box, capsule, or compound
+of these primitives. `MassProperties3D` accepts either three positive local
+moments as a `Vec3` or a symmetric positive-definite tensor as a `Mat3`;
+existing `Vec3` calls retain their local principal axes. The `inertia_tensor`
+field contains the full tensor, while `local_inertia` contains its diagonal.
+Offset or rotated compound children can produce cross terms that affect
+impulses and rotation. Positive mass and a local center can also be supplied.
+Inertia is rotated into world coordinates for torque and
 impulses. A force or impulse with a world application point also creates a
 moment around the center of mass. `apply_torque` and
 `apply_angular_impulse` act directly on rotation.
