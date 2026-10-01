@@ -82,6 +82,7 @@ public class CharacterMover3D {
         var planes:Math.Vec3[] = []
         var current = self.slide(start, translation, planes)
         var stepped = false
+        var step_normal = Math.Vec3.up()
         let horizontal = Math.Vec3(translation.x, 0.0, translation.z)
         let length = horizontal.length()
         // Only grounded, non-jumping motion may use stairs. The complete lifted
@@ -94,27 +95,40 @@ public class CharacterMover3D {
                 let ceiling = self.cast(start, up)
                 if !ceiling.hit {
                     let raised = start.add(up)
-                    let forward = direction.multiply(Math.max(length, self.settings.step_forward))
+                    let forward = horizontal
                     var step_planes:Math.Vec3[] = []
                     let across = self.slide(raised, forward, step_planes)
                     let down = Math.Vec3(0.0, -(self.settings.step_height + self.settings.floor_snap), 0.0)
                     let landing = self.cast(across, down)
-                    if landing.hit && landing.normal.y >= self.slope_cos {
+                    var support = landing
+                    // A short step can land on the capsule's rounded edge. Look
+                    // ahead to qualify the tread, but never spend that distance
+                    // as movement: the committed pose uses only the input budget.
+                    if landing.hit && landing.normal.y > 0.0 && landing.normal.y < self.slope_cos &&
+                        self.settings.step_forward > length {
+                        var probe_planes:Math.Vec3[] = []
+                        let probe = self.slide(raised, direction.multiply(self.settings.step_forward), probe_planes)
+                        support = self.cast(probe, down)
+                    }
+                    if landing.hit && landing.normal.y > 0.0 && support.hit && support.normal.y >= self.slope_cos {
                         let target = across.add(down.multiply(landing.fraction))
                         let rise = target.y - start.y
                         if rise > self.settings.skin && rise <= self.settings.step_height + self.settings.skin &&
                             target.subtract(start).dot(direction) > progress + 0.0001 {
                             current = target
                             planes = step_planes
-                            planes.append(landing.normal)
+                            step_normal = support.normal
+                            // Step height is positional correction, not launch
+                            // velocity from projecting onto the sampled edge.
+                            planes.append(Math.Vec3.up())
                             stepped = true
                         }
                     }
                 }
             }
         }
-        var grounded = false
-        var normal = Math.Vec3.up()
+        var grounded = stepped
+        var normal = step_normal
         if translation.y <= 0.0 {
             var snap = self.settings.skin * 3.0
             if was_grounded { snap = Math.max(snap, self.settings.floor_snap) }
@@ -124,7 +138,8 @@ public class CharacterMover3D {
                 current = current.add(down.multiply(floor.fraction))
                 grounded = true
                 normal = floor.normal
-                planes.append(normal)
+                if stepped { planes.append(Math.Vec3.up()) }
+                else { planes.append(normal) }
             }
         }
         return CharacterMoveResult3D(current, grounded, normal, stepped, planes)

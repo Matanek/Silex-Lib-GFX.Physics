@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Stair climbing now respects requested horizontal travel: support lookahead
+  beyond the capsule edge no longer causes a dash, even at low speed. The
+  stair correction does not add vertical velocity from the sampled normal.
+
 - `CharacterMover3D` adds virtual capsule motion: sliding, ceilings, slope
   limits, stairs, floor snapping and bounded penetration recovery. Input and
   jumping remain application decisions.

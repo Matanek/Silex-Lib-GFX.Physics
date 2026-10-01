@@ -31,7 +31,9 @@ air control and an interpolated camera.
 
 - `max_slope_angle` is in radians, strictly between 0 and π/2; default 45°.
 - `step_height` defaults to 0.4 m; zero disables stair climbing.
-- `step_forward` defaults to 0.18 m: minimum forward distance attempted over a step.
+- `step_forward` defaults to 0.18 m: lookahead distance for finding walkable
+  support beyond the capsule’s rounded edge. The probe never adds horizontal
+  travel to the requested motion, even at low speed.
 - `floor_snap` defaults to 0.5 m: maximum downward support-following distance.
 - `skin` defaults to 0.002 m and must be strictly between zero and the radius.
 - `filter` uses `QueryFilter3D` and excludes sensors by default.

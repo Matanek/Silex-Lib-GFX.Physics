@@ -33,7 +33,9 @@ Silex-Examples ajoute saut variable, contrôle aérien et caméra interpolée.
 
 - `max_slope_angle` est en radians, strictement entre 0 et π/2 ; défaut 45°.
 - `step_height` vaut 0,4 m par défaut ; zéro désactive le franchissement.
-- `step_forward` vaut 0,18 m : progression minimale tentée au-dessus d'une marche.
+- `step_forward` vaut 0,18 m : portée de recherche d’un appui franchissable
+  au-delà du bord arrondi de la capsule. Cette sonde ne rajoute aucun déplacement
+  horizontal à la commande, même à basse vitesse.
 - `floor_snap` vaut 0,5 m : distance maximale de suivi descendant d'un appui.
 - `skin` vaut 0,002 m et doit rester strictement entre zéro et le rayon.
 - `filter` utilise `QueryFilter3D` et exclut les capteurs par défaut.

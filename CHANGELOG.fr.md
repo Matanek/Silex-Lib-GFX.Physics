@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le franchissement respecte désormais le déplacement horizontal demandé :
+  la recherche d’appui au-delà du bord de capsule ne provoque plus de dash,
+  même à basse vitesse. La correction de marche ne rajoute pas de vitesse
+  verticale à partir de la normale sondée.
+
 - `CharacterMover3D` ajoute le déplacement virtuel de capsule : glissement,
   plafonds, limite de pente, marches, suivi du sol et récupération bornée des
   pénétrations. Les commandes et le saut restent à l’application.

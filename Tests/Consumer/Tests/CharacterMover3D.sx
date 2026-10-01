@@ -64,6 +64,7 @@ func stairs(height:float, roof:bool, expected:bool) {
     var i = 0
     while i < 45 {
         let result = mover.calculate_move(world, position, Math.Vec3(0.05, 0.0, 0.0), true)
+        assert(result.position.x - position.x <= 0.0501)
         position = result.position
         did_step = did_step || result.stepped
         i++
@@ -71,6 +72,47 @@ func stairs(height:float, roof:bool, expected:bool) {
     print("stair $(height) roof=$(roof): $(position.x), $(position.y), stepped=$(did_step)")
     if expected { assert(position.x > 1.5 && Math.abs(position.y - height - 0.852) < 0.01) }
     else { assert(position.x < 0.71 && position.y < 0.86) }
+}
+func stair_budget(height:float, speed:float, frequency:float, sideways:bool) {
+    var world = Physics.World3D()
+    ground(world)
+    var direction = Math.Vec3(1.0, 0.0, 0.0)
+    if sideways { direction = Math.Vec3(0.0, 0.0, -1.0) }
+    box(world, direction.multiply(2.0).add(Math.Vec3(0.0, height / 2.0, 0.0)),
+        Math.Vec3(2.0, height, 2.0))
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 1.2)
+    var position = Math.Vec3(0.0, 0.852, 0.0)
+    var grounded = true
+    var velocity = direction.multiply(speed)
+    let distance = speed / frequency
+    var climbed = false
+    var count = 0
+    // Cross both edges with gravity and the actual returned support state.
+    while count * distance < 4.5 {
+        velocity = direction.multiply(speed).add(Math.Vec3(0.0, velocity.y - 9.81 / frequency, 0.0))
+        let result = mover.calculate_move(world, position, velocity.divide(frequency), grounded)
+        let delta = result.position.subtract(position)
+        // The entry edge must not add travel. At the exit, gravity may
+        // legitimately slide the capsule down the rounded contact surface.
+        if position.dot(direction) < 2.0 || result.stepped {
+            assert(Math.Vec2(delta.x, delta.z).length() <= distance + 0.0001)
+        }
+        position = result.position
+        grounded = result.grounded
+        velocity = result.clip_velocity(velocity)
+        if result.stepped { assert(velocity.y <= 0.0001) }
+        if position.y > height + 0.84 { climbed = true }
+        count++
+    }
+    print("budget height=$(height) speed=$(speed) frequency=$(frequency) progress=$(position.dot(direction)) y=$(position.y) climbed=$(climbed)")
+    assert(climbed && position.dot(direction) > 4.0)
+}
+func stair_budgets() {
+    stair_budget(0.12, 3.0, 120.0, false)
+    stair_budget(0.35, 6.0, 120.0, true)
+    stair_budget(0.8, 7.8, 120.0, false)
+    stair_budget(0.35, 6.0, 60.0, false)
+    stair_budget(0.8, 0.6, 120.0, true)
 }
 func slopes(angle:float, expected:bool) {
     var world = Physics.World3D()
@@ -170,7 +212,9 @@ test "capsule leaves a ledge and loses a removed support" { support_loss() }
 test "gravity and horizontal input cannot climb a steep face" { steep_gravity() }
 test "capsule casts against spheres, capsules and compound leaves" { other_shapes() }
 test "capsule ignores sensors" { filters() }
+test "stair lookahead never adds travel at walk, sprint or slow speed" { stair_budgets() }
 func main() {
+    stair_budgets()
     other_shapes(); support_loss(); steep_gravity(); resting(); walls(); stairs(0.8, false, true); stairs(1.3, false, false)
     stairs(0.8, true, false); slopes(-30.0, true); slopes(-60.0, false); filters()
     print("CharacterMover3D: all scenarios passed")
