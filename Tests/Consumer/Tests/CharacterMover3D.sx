@@ -1,0 +1,177 @@
+use GFX.Physics
+use STD.Math
+
+func box(world:Physics.World3D, position:Math.Vec3, size:Math.Vec3,
+    rotation:Math.Quat = Math.Quat.identity()) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(size))
+        ..transform = Physics.Transform3D(position, rotation))
+}
+func ground(world:Physics.World3D) {
+    box(world, Math.Vec3(0.0, -0.5, 0.0), Math.Vec3(100.0, 1.0, 100.0))
+}
+func resting() {
+    var world = Physics.World3D()
+    ground(world)
+    var mover = Physics.CharacterMover3D()
+    var position = Math.Vec3(0.0, 3.0, 0.0)
+    var grounded = false
+    var velocity = Math.Vec3()
+    var i = 0
+    while i < 240 {
+        velocity.y -= 9.81 / 120.0
+        let result = mover.calculate_move(world, position, velocity.divide(120.0), grounded)
+        position = result.position
+        grounded = result.grounded
+        velocity = result.clip_velocity(velocity)
+        i++
+    }
+    assert(grounded)
+    assert(Math.abs(position.y - 0.852) < 0.001)
+    assert(velocity.length() < 0.001)
+    let jump = mover.calculate_move(world, position, Math.Vec3(0.0, 0.1, 0.0), true)
+    assert(!jump.grounded && jump.position.y > 0.94)
+    let recovered = mover.calculate_move(world, Math.Vec3(0.0, 0.7, 0.0), Math.Vec3(), false)
+    assert(recovered.grounded && recovered.position.y > 0.85)
+}
+func walls() {
+    var world = Physics.World3D()
+    ground(world)
+    box(world, Math.Vec3(2.0, 2.0, 0.0), Math.Vec3(0.05, 4.0, 20.0))
+    box(world, Math.Vec3(0.0, 2.0, 2.0), Math.Vec3(20.0, 4.0, 0.05))
+    var mover = Physics.CharacterMover3D()
+    let hit = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(20.0, 0.0, 1.0), true)
+    assert(hit.position.x < 1.675 && hit.position.x > 1.66)
+    assert(Math.abs(hit.position.z - 1.0) < 0.01)
+    assert(hit.grounded && !hit.stepped)
+    let corner = mover.calculate_move(world, hit.position, Math.Vec3(2.0, 0.0, 2.0), true)
+    assert(corner.position.x < 1.675 && corner.position.z < 1.675)
+    assert(corner.clip_velocity(Math.Vec3(6.0, 0.0, 6.0)).length() < 0.001)
+    box(world, Math.Vec3(0.0, 2.2, 0.0), Math.Vec3(2.0, 0.2, 2.0))
+    let ceiling = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(0.0, 5.0, 0.0), true)
+    assert(!ceiling.grounded && ceiling.position.y < 1.251)
+    assert(ceiling.clip_velocity(Math.Vec3(0.0, 5.0, 0.0)).y < 0.001)
+}
+func stairs(height:float, roof:bool, expected:bool) {
+    var world = Physics.World3D()
+    ground(world)
+    box(world, Math.Vec3(2.0, height / 2.0, 0.0), Math.Vec3(2.0, height, 4.0))
+    if roof { box(world, Math.Vec3(1.0, 2.0, 0.0), Math.Vec3(4.0, 0.2, 4.0)) }
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 1.2)
+    var position = Math.Vec3(0.0, 0.852, 0.0)
+    var did_step = false
+    var i = 0
+    while i < 45 {
+        let result = mover.calculate_move(world, position, Math.Vec3(0.05, 0.0, 0.0), true)
+        position = result.position
+        did_step = did_step || result.stepped
+        i++
+    }
+    print("stair $(height) roof=$(roof): $(position.x), $(position.y), stepped=$(did_step)")
+    if expected { assert(position.x > 1.5 && Math.abs(position.y - height - 0.852) < 0.01) }
+    else { assert(position.x < 0.71 && position.y < 0.86) }
+}
+func slopes(angle:float, expected:bool) {
+    var world = Physics.World3D()
+    ground(world)
+    box(world, Math.Vec3(2.0, 0.0, 0.0), Math.Vec3(6.0, 0.3, 3.0),
+        Math.Quat.angle_axis(Math.radians(angle), Math.Vec3(0.0, 0.0, -1.0)))
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 0.0)
+    var position = Math.Vec3(-1.5, 0.852, 0.0)
+    var i = 0
+    while i < 130 {
+        let result = mover.calculate_move(world, position, Math.Vec3(0.04, 0.0, 0.0), true)
+        position = result.position
+        i++
+    }
+    print("slope $(angle): $(position.x), $(position.y)")
+    if expected { assert(position.y > 1.4) }
+    else { assert(position.y < 0.9) }
+}
+func support_loss() {
+    var world = Physics.World3D()
+    var platform = box(world, Math.Vec3(0.0, 0.4, 0.0), Math.Vec3(2.0, 0.8, 4.0))
+    ground(world)
+    var mover = Physics.CharacterMover3D()
+    let edge = mover.calculate_move(world, Math.Vec3(0.0, 1.652, 0.0), Math.Vec3(3.0, 0.0, 0.0), true)
+    assert(!edge.grounded && Math.abs(edge.position.y - 1.652) < 0.005)
+    world.destroy_rigid_body(platform)
+    let removed = mover.calculate_move(world, Math.Vec3(0.0, 1.652, 0.0), Math.Vec3(), true)
+    assert(!removed.grounded)
+    let landing = mover.calculate_move(world, removed.position, Math.Vec3(0.0, -2.0, 0.0))
+    assert(landing.grounded && Math.abs(landing.position.y - 0.852) < 0.005)
+}
+func steep_gravity() {
+    var world = Physics.World3D()
+    ground(world)
+    box(world, Math.Vec3(2.0, 0.0, 0.0), Math.Vec3(6.0, 0.3, 3.0),
+        Math.Quat.angle_axis(Math.radians(60.0), Math.Vec3(0.0, 0.0, 1.0)))
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 0.0)
+    var position = Math.Vec3(-1.5, 0.852, 0.0)
+    var supported = false
+    var velocity = Math.Vec3()
+    var i = 0
+    while i < 240 {
+        velocity.x = 6.0
+        velocity.y -= 9.81 / 120.0
+        let result = mover.calculate_move(world, position, velocity.divide(120.0), supported)
+        position = result.position
+        velocity = result.clip_velocity(velocity)
+        supported = result.grounded
+        i++
+    }
+    print("steep with gravity: $(position.x), $(position.y)")
+    assert(position.y < 0.9)
+}
+func other_shapes() {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.5, 0.0)))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.5, 0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(3.0, 1.0, 0.0)))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(1, Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 2.0, 1.0))),
+                Physics.Transform3D(position:Math.Vec3(6.0, 1.0, 0.0))),
+            Physics.CompoundChild3D(2, Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))),
+                Physics.Transform3D(position:Math.Vec3(8.0, 0.5, 0.0)))
+        ])))
+    var mover = Physics.CharacterMover3D()
+    let sphere = mover.calculate_move(world, Math.Vec3(0.0, 5.0, 0.0), Math.Vec3(0.0, -10.0, 0.0))
+    let capsule = mover.calculate_move(world, Math.Vec3(3.0, 5.0, 0.0), Math.Vec3(0.0, -10.0, 0.0))
+    let compound = mover.calculate_move(world, Math.Vec3(6.0, 5.0, 0.0), Math.Vec3(0.0, -10.0, 0.0))
+    assert(sphere.grounded && Math.abs(sphere.position.y - 1.852) < 0.005)
+    assert(capsule.grounded && Math.abs(capsule.position.y - 2.852) < 0.005)
+    assert(compound.grounded && Math.abs(compound.position.y - 2.852) < 0.005)
+}
+func filters() {
+    var world = Physics.World3D()
+    ground(world)
+    var sensor = box(world, Math.Vec3(1.0, 2.0, 0.0), Math.Vec3(0.2, 4.0, 4.0))
+    sensor.set_sensor(true)
+    var mover = Physics.CharacterMover3D()
+    let result = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(3.0, 0.0, 0.0), true)
+    assert(Math.abs(result.position.x - 3.0) < 0.001)
+}
+test "capsule falls, rests, jumps and recovers initial overlap" { resting() }
+test "capsule slides, stops at a corner, thin wall and ceiling" { walls() }
+test "capsule climbs an allowed step" { stairs(0.8, false, true) }
+test "capsule refuses a step above the limit" { stairs(1.3, false, false) }
+test "capsule cannot step under a low ceiling" { stairs(0.8, true, false) }
+test "capsule walks a 30 degree slope" { slopes(-30.0, true) }
+test "capsule cannot climb a 60 degree slope" { slopes(-60.0, false) }
+test "capsule leaves a ledge and loses a removed support" { support_loss() }
+test "gravity and horizontal input cannot climb a steep face" { steep_gravity() }
+test "capsule casts against spheres, capsules and compound leaves" { other_shapes() }
+test "capsule ignores sensors" { filters() }
+func main() {
+    other_shapes(); support_loss(); steep_gravity(); resting(); walls(); stairs(0.8, false, true); stairs(1.3, false, false)
+    stairs(0.8, true, false); slopes(-30.0, true); slopes(-60.0, false); filters()
+    print("CharacterMover3D: all scenarios passed")
+}

@@ -251,6 +251,8 @@ handle object per body and frame. Interactive runs use synchronized presentation
 by default; performance measurements can opt into immediate presentation with
 `--immediate`.
 
+The [3D character mover](Character3D.md) moves a capsule with slopes, stairs and sliding.
+
 ## Tile maps
 
 [Tile map collisions](TileMap2D.md)

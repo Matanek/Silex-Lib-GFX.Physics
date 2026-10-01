@@ -293,6 +293,27 @@ public class World3D {
         }
     }
 
+    // Snapshot nearby leaves once per character move, shared by all slide/stair
+    // sweeps. Character queries never retain a body's mutable state across moves.
+    package func character_shapes(lower:Math.Vec3, upper:Math.Vec3,
+        filter:QueryFilter3D, output:&ShapePlacement3D[]) {
+        output.clear()
+        for slot in self.store.slots {
+            if let state = slot {
+                if state.is_enabled && filter.allows(state.collision_filter, state.is_sensor) {
+                    let extent = broad_extent3d(state.shape, state.transform, shape_bounding_radius3d(state.shape))
+                    let lo = state.transform.position.subtract(extent)
+                    let hi = state.transform.position.add(extent)
+                    if hi.x >= lower.x && lo.x <= upper.x &&
+                        hi.y >= lower.y && lo.y <= upper.y &&
+                        hi.z >= lower.z && lo.z <= upper.z {
+                        append_character_shapes3d(state.shape, state.transform, output)
+                    }
+                }
+            }
+        }
+    }
+
     func step(delta:float) {
         if !finite_body3d_value(delta) || delta < 0.0 {
             panic("GFX.Physics.World3D.step requires a finite non-negative delta")
@@ -2227,4 +2248,22 @@ func continuous_fraction3d(
         iteration++
     }
     return null
+}
+
+func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
+    output:&ShapePlacement3D[]) {
+    match shape {
+        compound(compound) => {
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                index++
+                append_character_shapes3d(child.shape,
+                    compound_child_transform(transform, child), output)
+            }
+        }
+        box(_) => { output.append(ShapePlacement3D(shape, transform)) }
+        sphere(_) => { output.append(ShapePlacement3D(shape, transform)) }
+        capsule(_) => { output.append(ShapePlacement3D(shape, transform)) }
+    }
 }

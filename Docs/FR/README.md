@@ -8,6 +8,8 @@ est utilisable sans fenêtre, renderer, scène ni ECS. Le cœur de simulation es
 silex install GFX.Physics
 ```
 
+Le [contrôleur de personnage 3D](Character3D.md) déplace une capsule avec pentes, marches et glissement.
+
 ## Corps et monde
 
 ```silex

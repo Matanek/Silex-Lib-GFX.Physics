@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` adds virtual capsule motion: sliding, ceilings, slope
+  limits, stairs, floor snapping and bounded penetration recovery. Input and
+  jumping remain application decisions.
+
 - Fixed and kinematic 3D compounds retain one manifold per touching child
   pair, with independent events and warm starting. Kinematic compounds can
   carry and wake dynamic bodies through translation and rotation. Dynamic

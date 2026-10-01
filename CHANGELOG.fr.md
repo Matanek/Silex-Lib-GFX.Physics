@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` ajoute le déplacement virtuel de capsule : glissement,
+  plafonds, limite de pente, marches, suivi du sol et récupération bornée des
+  pénétrations. Les commandes et le saut restent à l’application.
+
 - Les composés 3D fixes et cinématiques conservent un manifold par paire
   d'enfants en contact, avec événements et warm start indépendants. Les
   composés cinématiques peuvent transporter et réveiller des corps dynamiques

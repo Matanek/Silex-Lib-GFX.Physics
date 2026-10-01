@@ -1,0 +1,232 @@
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.CollisionFilter3D.QueryFilter3D
+use GFX.Physics.Geometry3D.Geometry3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.CastResult3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.World3D.World3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use STD.Math
+
+public struct CharacterMover3DSettings {
+    var radius:float = 0.3
+    var half_height:float = 0.55
+    var max_slope_angle:float = 0.78539816
+    var step_height:float = 0.4
+    var step_forward:float = 0.18
+    var floor_snap:float = 0.5
+    var skin:float = 0.002
+    var filter:QueryFilter3D
+    init() { self.filter = QueryFilter3D(include_sensors:false) }
+}
+
+public struct CharacterMoveResult3D {
+    let position:Math.Vec3
+    let grounded:bool
+    let ground_normal:Math.Vec3
+    let stepped:bool
+    private let planes:Math.Vec3[]
+
+    package init(position:Math.Vec3, grounded:bool, ground_normal:Math.Vec3,
+        stepped:bool, planes:Math.Vec3[]) {
+        self.position = position
+        self.grounded = grounded
+        self.ground_normal = ground_normal
+        self.stepped = stepped
+        self.planes = planes
+    }
+
+    func clip_velocity(velocity:Math.Vec3) Math.Vec3 {
+        return clip_planes(velocity, self.planes)
+    }
+}
+
+// Virtual upright capsule. Position is the capsule centre; gameplay owns
+// velocity, gravity, jumping and the eye offset. No rigid body is registered.
+public class CharacterMover3D {
+    private let settings:CharacterMover3DSettings
+    private let shape:Shape3D
+    private let slope_cos:float
+    private var candidates:ShapePlacement3D[]
+
+    init(settings:CharacterMover3DSettings = CharacterMover3DSettings()) {
+        if !finite_body3d_value(settings.max_slope_angle) ||
+            settings.max_slope_angle <= 0.0 || settings.max_slope_angle >= Math.pi() / 2.0 ||
+            !finite_body3d_value(settings.step_height) || settings.step_height < 0.0 ||
+            !finite_body3d_value(settings.step_forward) || settings.step_forward < 0.0 ||
+            !finite_body3d_value(settings.floor_snap) || settings.floor_snap < 0.0 ||
+            !finite_body3d_value(settings.skin) || settings.skin <= 0.0 || settings.skin >= settings.radius {
+            panic("GFX.Physics.CharacterMover3D requires finite valid slope, step, snap and skin settings")
+        }
+        self.shape = Shape3D.capsule(Capsule3D(settings.radius, settings.half_height))
+        self.settings = settings
+        self.slope_cos = Math.cos(settings.max_slope_angle)
+        self.candidates = []
+    }
+
+    func calculate_move(world:@World3D, position:Math.Vec3,
+        translation:Math.Vec3, was_grounded:bool = false) CharacterMoveResult3D {
+        if !finite_body3d_point(position) || !finite_body3d_point(translation) {
+            panic("GFX.Physics.CharacterMover3D requires finite position and translation")
+        }
+        let reach = self.settings.radius + self.settings.half_height +
+            self.settings.step_height + self.settings.floor_snap +
+            self.settings.step_forward + translation.length() + 0.1
+        var candidates = self.candidates
+        world.character_shapes(position.subtract(Math.Vec3(reach)),
+            position.add(Math.Vec3(reach)), self.settings.filter, candidates)
+        self.candidates = candidates
+        let start = self.recover(position)
+        var planes:Math.Vec3[] = []
+        var current = self.slide(start, translation, planes)
+        var stepped = false
+        let horizontal = Math.Vec3(translation.x, 0.0, translation.z)
+        let length = horizontal.length()
+        // Only grounded, non-jumping motion may use stairs. The complete lifted
+        // capsule must fit, and a walkable landing must improve forward progress.
+        if was_grounded && translation.y <= 0.0 && length > 0.00001 && self.settings.step_height > 0.0 {
+            let direction = horizontal.divide(length)
+            let progress = current.subtract(start).dot(direction)
+            if progress < length - 0.0001 {
+                let up = Math.Vec3(0.0, self.settings.step_height, 0.0)
+                let ceiling = self.cast(start, up)
+                if !ceiling.hit {
+                    let raised = start.add(up)
+                    let forward = direction.multiply(Math.max(length, self.settings.step_forward))
+                    var step_planes:Math.Vec3[] = []
+                    let across = self.slide(raised, forward, step_planes)
+                    let down = Math.Vec3(0.0, -(self.settings.step_height + self.settings.floor_snap), 0.0)
+                    let landing = self.cast(across, down)
+                    if landing.hit && landing.normal.y >= self.slope_cos {
+                        let target = across.add(down.multiply(landing.fraction))
+                        let rise = target.y - start.y
+                        if rise > self.settings.skin && rise <= self.settings.step_height + self.settings.skin &&
+                            target.subtract(start).dot(direction) > progress + 0.0001 {
+                            current = target
+                            planes = step_planes
+                            planes.append(landing.normal)
+                            stepped = true
+                        }
+                    }
+                }
+            }
+        }
+        var grounded = false
+        var normal = Math.Vec3.up()
+        if translation.y <= 0.0 {
+            var snap = self.settings.skin * 3.0
+            if was_grounded { snap = Math.max(snap, self.settings.floor_snap) }
+            let down = Math.Vec3(0.0, -snap, 0.0)
+            let floor = self.cast(current, down)
+            if floor.hit && floor.normal.y >= self.slope_cos {
+                current = current.add(down.multiply(floor.fraction))
+                grounded = true
+                normal = floor.normal
+                planes.append(normal)
+            }
+        }
+        return CharacterMoveResult3D(current, grounded, normal, stepped, planes)
+    }
+
+    private func recover(position:Math.Vec3) Math.Vec3 {
+        var current = position
+        var pass = 0
+        while pass < 8 {
+            var corrected = false
+            for target in self.candidates {
+                let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
+                    Transform3D(position:current)), target)
+                if distance.separation < -0.00001 {
+                    current = current.subtract(distance.normal.multiply(
+                        Math.min(-distance.separation + self.settings.skin, self.settings.radius)))
+                    corrected = true
+                }
+            }
+            if !corrected { break }
+            pass++
+        }
+        return current
+    }
+
+    private func slide(position:Math.Vec3, translation:Math.Vec3,
+        planes:&Math.Vec3[]) Math.Vec3 {
+        var current = position
+        var remaining = translation
+        var pass = 0
+        while pass < 8 && remaining.length_squared() > 0.0000000001 {
+            let hit = self.cast(current, remaining)
+            if !hit.hit { return current.add(remaining) }
+            current = current.add(remaining.multiply(hit.fraction))
+            var normal = hit.normal
+            // A steep face cannot turn horizontal input into upward motion.
+            // Gravity is still allowed to slide down the actual face.
+            if normal.y > 0.0 && normal.y < self.slope_cos && translation.y >= -0.00001 {
+                normal = Math.Vec3(normal.x, 0.0, normal.z).normalized()
+            }
+            planes.append(normal)
+            if hit.normal.y > 0.0 && hit.normal.y < self.slope_cos && translation.y < -0.00001 {
+                // A downward request must not acquire lift from horizontal input
+                // on a steep face. Keep the real plane for downhill sliding.
+                planes.append(Math.Vec3(0.0, -1.0, 0.0))
+            }
+            remaining = clip_planes(remaining.multiply(1.0 - hit.fraction), planes)
+            pass++
+        }
+        return current
+    }
+
+    private func cast(position:Math.Vec3, translation:Math.Vec3) CastResult3D {
+        var closest = CastResult3D()
+        for target in self.candidates {
+            var fraction = 0.0
+            var iteration = 0
+            while iteration < 32 {
+                let at = position.add(translation.multiply(fraction))
+                let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
+                    Transform3D(position:at)), target)
+                let approaching = translation.dot(distance.normal)
+                if approaching <= 0.0000001 { break }
+                if distance.separation <= self.settings.skin + 0.00001 {
+                    if !closest.hit || fraction < closest.fraction {
+                        closest = CastResult3D(distance.second_point,
+                            distance.normal.negated(), fraction)
+                    }
+                    break
+                }
+                if iteration == 31 {
+                    // Exhaustion stops at the last proven free pose rather than
+                    // accepting unchecked remaining motion through a thin shape.
+                    if !closest.hit || fraction < closest.fraction {
+                        closest = CastResult3D(distance.second_point,
+                            distance.normal.negated(), fraction)
+                    }
+                    break
+                }
+                fraction += (distance.separation - self.settings.skin) / approaching
+                if fraction > 1.0 || (closest.hit && fraction > closest.fraction) { break }
+                iteration++
+            }
+        }
+        return closest
+    }
+}
+
+func clip_planes(vector:Math.Vec3, planes:@Math.Vec3[]) Math.Vec3 {
+    var clipped = vector
+    var pass = 0
+    while pass < 8 {
+        var changed = false
+        for normal in planes {
+            let inward = clipped.dot(normal)
+            if inward < -0.000001 {
+                clipped = clipped.subtract(normal.multiply(inward))
+                changed = true
+            }
+        }
+        if !changed { break }
+        pass++
+    }
+    return clipped
+}
