@@ -1,0 +1,61 @@
+use GFX.Physics
+use STD.Math
+
+func edge_case(angle:float, push:float, tilt:float = 0.0, offset:float = 0.0) {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(100.0, 1.0, 100.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, -0.5, 0.0)))
+    let origin = Math.Vec3(offset, 0.0, offset * 0.7)
+    let rotation = Math.Quat.angle_axis(Math.radians(angle), Math.Vec3.up())
+    let rock_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 2.8, 2.0)))
+    let rock_pose = Physics.Transform3D(position:origin.add(Math.Vec3(0.0, 1.0, 0.0)),
+        rotation:rotation.multiply(Math.Quat.angle_axis(tilt, Math.Vec3.front())))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = rock_shape ..transform = rock_pose)
+    let capsule = Physics.Shape3D.capsule(Physics.Capsule3D(0.3, 0.55))
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 1.2)
+    var position = origin.add(rotation.rotate(Math.Vec3(-1.302, 0.852, -0.9)))
+    // Place the upright capsule beside the inclined face without initial overlap.
+    let normal = rock_pose.vector(Math.Vec3(-1.0, 0.0, 0.0))
+    let face = rock_pose.point(Math.Vec3(-1.0, 0.0, 0.0))
+    let side = rotation.rotate(Math.Vec3.right())
+    let separation = position.subtract(face).dot(normal) - 0.55 * Math.abs(normal.y) - 0.3
+    position = position.add(side.multiply((0.002 - separation) / side.dot(normal)))
+    let translation = rotation.rotate(Math.Vec3(push, 0.0, 1.0).normalized().multiply(0.05))
+    var i = 0
+    var min_progress = 1.0
+    while i < 80 {
+        let before = position
+        let result = mover.calculate_move(world, position, translation, true)
+        position = result.position
+        let progress = rotation.conjugated().rotate(position.subtract(before)).z
+        min_progress = Math.min(min_progress, progress)
+        // A convex edge must remain traversable without crossing the rock.
+        let contact = Physics.Geometry3D.distance(
+            Physics.ShapePlacement3D(capsule, Physics.Transform3D(position:position)),
+            Physics.ShapePlacement3D(rock_shape, rock_pose))
+        assert(contact.separation >= -0.0001)
+        assert(Math.abs(position.y - 0.852) < 0.0001 && result.grounded)
+        assert(!result.stepped)
+        i++
+    }
+    let final_position = rotation.conjugated().rotate(position.subtract(origin))
+    print("edge angle=$(angle) push=$(push) tilt=$(tilt) offset=$(offset) end=$(final_position.x),$(final_position.z) min=$(min_progress)")
+    let expected_progress = 0.05 / Math.sqrt(1.0 + push * push)
+    assert(min_progress >= expected_progress * 0.95)
+    assert(final_position.z > 1.5)
+}
+test "capsule slides along an inclined rock and past its edge away from the origin" {
+    edge_case(45.0, 0.5, -0.28, 37.0)
+}
+test "capsule slides along an oppositely tilted rock" { edge_case(17.0, 0.1, 0.28, 37.0) }
+test "capsule traverses vertical edges with different orientations" {
+    edge_case(0.0, 0.1); edge_case(73.0, 0.1); edge_case(121.0, 0.5)
+}
+func main() {
+    edge_case(45.0, 0.5, -0.28, 37.0); edge_case(17.0, 0.1, 0.28, 37.0)
+    edge_case(0.0, 0.1); edge_case(73.0, 0.1); edge_case(121.0, 0.5)
+    print("CharacterEdges3D: sliding and separation passed")
+}

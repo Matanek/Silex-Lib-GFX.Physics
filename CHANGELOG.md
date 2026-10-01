@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Capsule sliding no longer stalls on tilted faces and their edges when
+  the projection residual is below the tangential movement threshold. Contact
+  detection and plane clipping now use the same threshold. Stair lookahead also
+  requires support at the edge contact height, preventing false step-ups onto
+  lower ground beyond a rock.
+
 - Stair climbing now respects requested horizontal travel: support lookahead
   beyond the capsule edge no longer causes a dash, even at low speed. The
   stair correction does not add vertical velocity from the sampled normal.

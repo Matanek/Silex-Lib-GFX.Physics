@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le glissement de capsule ne se bloque plus sur les faces inclinées et
+  leurs arêtes lorsque le résidu de projection est inférieur au seuil de
+  mouvement tangent : projection et détection de contact partagent le même seuil.
+  La recherche de marche exige un appui à la hauteur du contact ; le sol situé
+  derrière une arête ne déclenche plus une fausse montée.
+
 - Le franchissement respecte désormais le déplacement horizontal demandé :
   la recherche d’appui au-delà du bord de capsule ne provoque plus de dash,
   même à basse vitesse. La correction de marche ne rajoute pas de vitesse

@@ -101,6 +101,7 @@ public class CharacterMover3D {
                     let down = Math.Vec3(0.0, -(self.settings.step_height + self.settings.floor_snap), 0.0)
                     let landing = self.cast(across, down)
                     var support = landing
+                    var support_height = across.y + down.y * landing.fraction
                     // A short step can land on the capsule's rounded edge. Look
                     // ahead to qualify the tread, but never spend that distance
                     // as movement: the committed pose uses only the input budget.
@@ -109,11 +110,15 @@ public class CharacterMover3D {
                         var probe_planes:Math.Vec3[] = []
                         let probe = self.slide(raised, direction.multiply(self.settings.step_forward), probe_planes)
                         support = self.cast(probe, down)
+                        support_height = probe.y + down.y * support.fraction
                     }
                     if landing.hit && landing.normal.y > 0.0 && support.hit && support.normal.y >= self.slope_cos {
                         let target = across.add(down.multiply(landing.fraction))
                         let rise = target.y - start.y
-                        if rise > self.settings.skin && rise <= self.settings.step_height + self.settings.skin &&
+                        // Ground beyond a rock's side is not a stair tread:
+                        // the qualified support must reach the edge contact height.
+                        if support_height >= target.y - self.settings.skin &&
+                            rise > self.settings.skin && rise <= self.settings.step_height + self.settings.skin &&
                             target.subtract(start).dot(direction) > progress + 0.0001 {
                             current = target
                             planes = step_planes
@@ -202,7 +207,9 @@ public class CharacterMover3D {
                 let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
                     Transform3D(position:at)), target)
                 let approaching = translation.dot(distance.normal)
-                if approaching <= 0.0000001 { break }
+                // Match clip_planes: a residual it treats as tangent must not
+                // become another zero-fraction contact and stall the slide.
+                if approaching <= 0.000001 { break }
                 if distance.separation <= self.settings.skin + 0.00001 {
                     if !closest.hit || fraction < closest.fraction {
                         closest = CastResult3D(distance.second_point,
