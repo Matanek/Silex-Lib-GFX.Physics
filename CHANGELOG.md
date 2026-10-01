@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `RigidBody3D.set_shape` replaces a live body's shape, including a modified
+  compound, without changing its identity. Dynamic mass is recalculated from
+  density; previous contacts end on the next step and their impulses are not
+  reused with the new geometry.
+
 - 3D compounds are now dynamic, with full mass, center of mass, and inertia
   tensors derived from rotated and offset children. Contacts retain child
   identities. `MassProperties3D` accepts a `Mat3` for non-diagonal inertia

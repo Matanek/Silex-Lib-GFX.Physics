@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `RigidBody3D.set_shape` remplace la forme d'un corps vivant, notamment un
+  composé modifié, sans changer son identité. La masse dynamique est recalculée
+  depuis la densité ; les contacts précédents terminent au pas suivant et leurs
+  impulsions ne sont pas réutilisées avec la nouvelle géométrie.
+
 - Les composés 3D deviennent dynamiques avec masse, centre de masse et tenseur
   d'inertie complets issus des enfants orientés et décentrés. Les contacts
   conservent leurs identités de feuille. `MassProperties3D` accepte désormais

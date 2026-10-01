@@ -1,0 +1,39 @@
+use GFX.Physics
+use STD.Math
+
+func leaf(radius:float, offset:float) Physics.Shape3D {
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(7,
+            Physics.Shape3D.sphere(Physics.Sphere3D(radius)),
+            Physics.Transform3D(position:Math.Vec3(offset, 0.0, 0.0)))
+    ]))
+}
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = leaf(1.0, 0.0))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..is_sensor = true
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.4, 0.0, 0.0)))
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    fixed.set_shape(leaf(1.25, 0.0))
+    world.step(0.01)
+    var began:Physics.Contact3D[] = []
+    var ended:Physics.Contact3D[] = []
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    assert(world.contact_count() == 1 && began.count() == 1 && ended.count() == 1)
+    assert(began[0].first_child_id() == 7 && ended[0].first_child_id() == 7)
+    var moving = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = leaf(1.0, 0.0)
+        ..density = 2.0
+        ..angular_velocity = Math.Vec3(0.0, 0.0, 2.0)
+        ..transform = Physics.Transform3D(position:Math.Vec3(10.0, 0.0, 0.0)))
+    moving.set_shape(leaf(0.5, 1.0))
+    assert(Math.abs(moving.mass_properties().mass - Math.pi() / 3.0) < 0.0001)
+    assert(moving.linear_velocity().nearly_equal(Math.Vec3(0.0, 2.0, 0.0), 0.0001))
+    print("3D compound shape mutation: mass, center velocity and contact lifecycle ok")
+}

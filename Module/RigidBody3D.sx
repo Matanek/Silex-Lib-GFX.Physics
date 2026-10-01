@@ -112,6 +112,7 @@ package struct BodyId3D {
 package class BodyState3D {
     var body_type:BodyType3D
     var shape:Shape3D
+    var shape_revision:int
     var transform:Transform3D
     var linear_velocity:Math.Vec3
     var angular_velocity:Math.Vec3
@@ -122,6 +123,7 @@ package class BodyState3D {
     var inverse_inertia:Math.Vec3
     var inverse_inertia_tensor:Math.Mat3
     var has_cross_inertia:bool
+    var density:float
     var gravity_scale:float
     var linear_damping:float
     var angular_damping:float
@@ -170,6 +172,7 @@ package class BodyState3D {
         }
         self.body_type = settings.body_type
         self.shape = settings.shape
+        self.shape_revision = 0
         self.transform = Transform3D(settings.transform.position, settings.transform.rotation)
         self.linear_velocity = settings.linear_velocity
         self.angular_velocity = settings.angular_velocity
@@ -195,6 +198,7 @@ package class BodyState3D {
             self.inverse_inertia_tensor = Math.Mat3.zero()
             self.has_cross_inertia = false
         }
+        self.density = settings.density
         self.gravity_scale = settings.gravity_scale
         self.linear_damping = settings.linear_damping
         self.angular_damping = settings.angular_damping
@@ -214,6 +218,24 @@ package class BodyState3D {
 
     func world_center() Math.Vec3 {
         return self.transform.point(self.mass_properties.local_center)
+    }
+
+    func apply_dynamic_mass_properties(properties:MassProperties3D) {
+        require_dynamic_mass3d(properties)
+        let previous_center = self.world_center()
+        self.mass_properties = properties
+        self.inverse_mass = 1.0 / properties.mass
+        self.inverse_inertia = Math.Vec3(
+            1.0 / properties.local_inertia.x,
+            1.0 / properties.local_inertia.y,
+            1.0 / properties.local_inertia.z
+        )
+        self.inverse_inertia_tensor = invert_inertia3d(properties.inertia_tensor)
+        self.has_cross_inertia = cross_inertia3d(properties.inertia_tensor)
+        self.linear_velocity = self.linear_velocity.add(
+            self.angular_velocity.cross(self.world_center().subtract(previous_center))
+        )
+        self.wake()
     }
 
     func wake() {
@@ -422,6 +444,19 @@ public class RigidBody3D {
         self.store.wake_all()
     }
 
+    func set_shape(shape:Shape3D) {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        let properties = shape_mass_properties3d(shape, state.density)
+        if state.body_type == BodyType3D.dynamic { require_dynamic_mass3d(properties) }
+        state.shape = shape
+        state.shape_revision++
+        if state.body_type == BodyType3D.dynamic {
+            state.apply_dynamic_mass_properties(properties)
+        }
+        self.store.wake_all()
+    }
+
     func set_linear_velocity(velocity:Math.Vec3) {
         if !finite_body3d_point(velocity) { panic("GFX.Physics.RigidBody3D requires finite linear velocity") }
         self.store.require_mutable()
@@ -448,21 +483,7 @@ public class RigidBody3D {
         if state.body_type != BodyType3D.dynamic {
             panic("GFX.Physics.RigidBody3D mass override requires a dynamic body")
         }
-        require_dynamic_mass3d(properties)
-        let previous_center = state.world_center()
-        state.mass_properties = properties
-        state.inverse_mass = 1.0 / properties.mass
-        state.inverse_inertia = Math.Vec3(
-            1.0 / properties.local_inertia.x,
-            1.0 / properties.local_inertia.y,
-            1.0 / properties.local_inertia.z
-        )
-        state.inverse_inertia_tensor = invert_inertia3d(properties.inertia_tensor)
-        state.has_cross_inertia = cross_inertia3d(properties.inertia_tensor)
-        state.linear_velocity = state.linear_velocity.add(
-            state.angular_velocity.cross(state.world_center().subtract(previous_center))
-        )
-        state.wake()
+        state.apply_dynamic_mass_properties(properties)
     }
 
     private func dynamic_state() BodyState3D {

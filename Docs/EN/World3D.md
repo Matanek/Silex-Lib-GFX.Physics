@@ -6,7 +6,7 @@ a contact response between these shapes. Boxes resting on nearly parallel
 faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
-An immutable `Compound3D` can be the shape of a **fixed or kinematic** body.
+An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by
 `Contact3D.first_child_id()` and `second_child_id()`; `-1` denotes a primitive.
 Several contacts may therefore connect the same bodies. Events and cached
@@ -19,7 +19,8 @@ just like primitives. Children follow their parent pose; contact velocity
 includes rotation around the body origin. It can wake and carry a dynamic
 payload. Dynamic compounds of boxes, spheres, and capsules are also available:
 the body's density applied to each child determines its mass, center of mass, and
-inertia tensor. Child identities remain visible in contacts. Mutation, other
+inertia tensor. Child identities remain visible in contacts. Replacing an
+existing body's shape is available; editing a `Compound3D` in place, other
 shape families, and terrain remain to be delivered. Kinematic motion does not
 add rotational CCD.
 
@@ -70,8 +71,18 @@ moves with configured velocities; `move_kinematic(target, duration)` computes
 velocities to reach a pose at a specified time, then clears them. It reaches
 the target exactly when a step covers the end of the duration.
 `set_transform`, `set_linear_velocity`, `set_angular_velocity`,
-`set_enabled`, and `set_mass_properties` support direct changes. Only a
+`set_enabled`, `set_shape`, and `set_mass_properties` support direct changes. Only a
 dynamic body accepts a mass override.
+
+`body.set_shape(new_shape)` replaces a shape without changing the body's
+identity, pose, material, or filter. To change a compound, build a new
+`Compound3D` and pass it to this method; its children are not edited in place.
+For a dynamic body, the density selected at creation derives the new mass,
+center, and inertia tensor. This replaces any custom `mass_properties` override;
+the override can be applied again with `set_mass_properties`. Linear velocity
+is adjusted to preserve the velocity at the new center of mass, and affected
+bodies wake. On the next step, contacts of the old shape end and contacts of
+the new shape begin, even when a child ID is reused; old impulses are not reused.
 
 ## Connect two bodies by distance
 

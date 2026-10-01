@@ -13,6 +13,83 @@ func offset_box_pair() Physics.Shape3D {
     ]))
 }
 
+func single_sphere_child(radius:float, offset:float) Physics.Shape3D {
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(7,
+            Physics.Shape3D.sphere(Physics.Sphere3D(radius)),
+            Physics.Transform3D(position:Math.Vec3(offset, 0.0, 0.0)))
+    ]))
+}
+
+test "replacing a compound leaf ends and begins a reused contact identity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = single_sphere_child(1.0, 0.0))
+    var probe = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..is_sensor = true
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.4, 0.0, 0.0)))
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    var began:Physics.Contact3D[] = []
+    var ended:Physics.Contact3D[] = []
+    world.write_contact_begin_events(began)
+    assert(began.count() == 1 && began[0].first_child_id() == 7)
+    assert(began[0].first_body().same_body(fixed))
+    fixed.set_shape(single_sphere_child(1.25, 0.0))
+    assert(Physics.Geometry3D.distance(
+        Physics.ShapePlacement3D(fixed.shape(), fixed.transform()),
+        Physics.ShapePlacement3D(probe.shape(), probe.transform())).separation < -0.3)
+    world.step(0.01)
+    world.write_contact_begin_events(began)
+    world.write_contact_end_events(ended)
+    assert(world.contact_count() == 1)
+    assert(began.count() == 1 && ended.count() == 1)
+    assert(began[0].first_child_id() == 7 && ended[0].first_child_id() == 7)
+    fixed.set_shape(single_sphere_child(1.25, 5.0))
+    world.step(0.01)
+    world.write_contact_end_events(ended)
+    assert(world.contact_count() == 0 && ended.count() == 1)
+    fixed.set_shape(single_sphere_child(1.25, 0.0))
+    world.step(0.01)
+    world.write_contact_begin_events(began)
+    assert(world.contact_count() == 1 && began.count() == 1)
+}
+
+test "replacing dynamic compound derives mass and preserves center velocity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = single_sphere_child(1.0, 0.0)
+        ..density = 2.0
+        ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0)
+        ..angular_velocity = Math.Vec3(0.0, 0.0, 2.0)
+        ..mass_properties = Physics.MassProperties3D(10.0, Math.Vec3(2.0)))
+    body.set_shape(single_sphere_child(0.5, 1.0))
+    let properties = body.mass_properties()
+    assert(Math.abs(properties.mass - Math.pi() / 3.0) < 0.0001)
+    assert(properties.local_center.nearly_equal(Math.Vec3(1.0, 0.0, 0.0), 0.0001))
+    assert(Math.abs(properties.local_inertia.x - properties.mass * 0.1) < 0.0001)
+    assert(body.world_center_of_mass().nearly_equal(Math.Vec3(1.0, 0.0, 0.0), 0.0001))
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(1.0, 2.0, 0.0), 0.0001))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, 2.0), 0.0001))
+}
+
+test "replacing a sleeping compound wakes its body" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = single_sphere_child(0.5, 0.0))
+    var index = 0
+    while index < 40 {
+        world.step(1.0 / 60.0)
+        index++
+    }
+    assert(!body.is_awake())
+    body.set_shape(single_sphere_child(0.5, 1.0))
+    assert(body.is_awake())
+    assert(body.mass_properties().local_center.x == 1.0)
+}
+
 test "dynamic compound preserves off-axis mass and angular impulse" {
     var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
     var body = world.create_rigid_body(Physics.RigidBody3DSettings()

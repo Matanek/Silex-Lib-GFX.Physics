@@ -6,8 +6,8 @@ fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
-Un `Compound3D` immuable peut servir de forme à un corps **fixe ou
-cinématique**. Chaque paire d'enfants en contact possède son propre manifold,
+Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou
+dynamique. Chaque paire d'enfants en contact possède son propre manifold,
 avec `Contact3D.first_child_id()` et `second_child_id()` ; `-1` désigne une
 forme primitive. Plusieurs contacts peuvent donc relier les mêmes corps.
 Leurs événements et impulsions persistantes sont distingués par les deux
@@ -20,9 +20,10 @@ vitesse au contact inclut la rotation autour de l'origine du corps. Il peut
 réveiller et transporter une charge dynamique. Un composé dynamique de boîtes,
 sphères ou capsules est également disponible : la densité du corps appliquée à chaque enfant
 détermine la masse, le centre de masse et le tenseur d'inertie du corps entier.
-Les identités des enfants restent visibles dans les contacts. Les mutations,
-autres familles géométriques et terrains restent à livrer. Le mouvement
-cinématique n'ajoute pas de CCD rotationnel.
+Les identités des enfants restent visibles dans les contacts. Le remplacement
+de la forme d'un corps existant est disponible ; l'édition en place d'un
+`Compound3D`, les autres familles géométriques et les terrains restent à livrer.
+Le mouvement cinématique n'ajoute pas de CCD rotationnel.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.
@@ -73,9 +74,21 @@ cinématique avance avec ses vitesses configurées ; `move_kinematic(target,
 duration)` calcule des vitesses pour atteindre une pose à une date donnée,
 puis les annule. La cible est atteinte exactement si un pas couvre la fin de
 la durée. `set_transform`, `set_linear_velocity`,
-`set_angular_velocity`, `set_enabled` et `set_mass_properties` permettent les
+`set_angular_velocity`, `set_enabled`, `set_shape` et `set_mass_properties` permettent les
 changements directs. La masse ne peut être remplacée que sur un corps
 dynamique.
+
+`body.set_shape(new_shape)` remplace la forme sans changer l'identité, la pose,
+les matériaux ou le filtre du corps. Pour modifier un composé, construire un
+nouveau `Compound3D` puis le passer à cette méthode ; ses feuilles ne sont pas
+modifiables en place. Sur un corps dynamique, la densité choisie à la création
+recalcule la masse, le centre et le tenseur de la nouvelle forme. Un éventuel
+`mass_properties` personnalisé est alors remplacé par ce calcul ; il peut être
+réappliqué ensuite avec `set_mass_properties`. La vitesse linéaire est ajustée
+pour conserver la vitesse du point correspondant au nouveau centre de masse,
+et les corps concernés sont réveillés. Au pas suivant, les contacts de l'ancienne
+forme se terminent et ceux de la nouvelle commencent, même si un ID d'enfant
+est réutilisé ; aucune impulsion de l'ancienne forme n'est réemployée.
 
 ## Relier deux corps par une distance
 
