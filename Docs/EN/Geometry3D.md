@@ -1,6 +1,6 @@
 # Standalone 3D convex geometry
 
-`GFX.Physics` provides spheres, boxes, capsules, fixed compounds, and rigid poses as Silex values. They
+`GFX.Physics` provides spheres, boxes, capsules, immutable compounds, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
 The [3D world](World3D.md) uses these first shapes for free body motion.
 
@@ -69,7 +69,7 @@ The queries retain no cache; the world selects candidate pairs before these
 narrow queries. Other shape families,
 shape casts, and world queries remain to be delivered.
 
-## Static compound
+## Immutable compound
 
 `Compound3D` takes a nonempty array of `CompoundChild3D(id, shape,
 transform)`. Each child has a unique nonnegative integer ID and a local pose.

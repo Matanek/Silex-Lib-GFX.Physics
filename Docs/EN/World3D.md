@@ -6,13 +6,20 @@ a contact response between these shapes. Boxes resting on nearly parallel
 faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
-An immutable `Compound3D` may also be the shape of a **fixed** body. The
-world tests its primitive children and exposes `Contact3D.first_child_id()`
-and `second_child_id()` for the selected child; `-1` denotes a primitive.
-The contact currently selects the child with the smallest signed separation,
-with one manifold per body pair. Dynamic and kinematic compounds are
-rejected. Dynamic compound mass, mutation, and terrain support remain to be
-delivered.
+An immutable `Compound3D` can be the shape of a **fixed or kinematic** body.
+Each touching child pair owns a manifold, identified by
+`Contact3D.first_child_id()` and `second_child_id()`; `-1` denotes a primitive.
+Several contacts may therefore connect the same bodies. Events and cached
+impulses distinguish both body identities and both child IDs, independently
+of the compound's construction order. Sensors report the same pairs without
+applying a response.
+
+A kinematic compound uses `move_kinematic` or linear and angular velocities,
+just like primitives. Children follow their parent pose; contact velocity
+includes rotation around the body origin. It can wake and carry a dynamic
+payload. Dynamic compounds remain rejected: full mass and inertia, mutation,
+and terrain support remain to be delivered. Kinematic motion does not add
+rotational CCD.
 
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.

@@ -1,6 +1,6 @@
 # Géométrie convexe 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes, des capsules, des composés fixes et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules, des composés immuables et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -72,7 +72,7 @@ sélectionne les paires candidates avant ces requêtes fines. Les autres famille
 de formes, les casts de formes et les requêtes sur
 le monde restent à livrer.
 
-## Composé statique
+## Composé immuable
 
 `Compound3D` prend un tableau non vide de `CompoundChild3D(id, shape,
 transform)`. Chaque enfant possède un identifiant entier positif ou nul,

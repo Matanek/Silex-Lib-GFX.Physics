@@ -1,0 +1,190 @@
+use GFX.Physics
+use STD.Math
+
+func split_support() Physics.Shape3D {
+    // Deliberately reverse child IDs: contact order must not follow array order.
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(30,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 0.4, 2.0))),
+            Physics.Transform3D(position:Math.Vec3(-0.75, 0.0, 0.0))),
+        Physics.CompoundChild3D(10,
+            Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 0.4, 2.0))),
+            Physics.Transform3D(position:Math.Vec3(0.75, 0.0, 0.0)))
+    ]))
+}
+
+func advance(world:Physics.World3D, steps:int) {
+    var index = 0
+    while index < steps { world.step(1.0 / 120.0)
+        index++ }
+}
+
+func verify_case_0() {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = split_support())
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.5, 0.6, 1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.5, 0.0)))
+    world.step(1.0 / 120.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contact_begin_events(contacts)
+    assert(contacts.count() == 2)
+    assert(contacts[0].first_child_id() == 10)
+    assert(contacts[1].first_child_id() == 30)
+    assert(contacts[0].normal_impulse() > 0.0)
+    assert(contacts[1].normal_impulse() > 0.0)
+    advance(world, 240)
+    assert(world.contact_count() == 2)
+    assert(!box.is_awake())
+    assert(Math.abs(box.position().y - 0.5) < 0.01)
+    assert(box.rotation().rotate(Math.Vec3.up()).dot(Math.Vec3.up()) > 0.999)
+    world.write_contact_begin_events(contacts)
+    assert(contacts.is_empty())
+    world.write_contact_end_events(contacts)
+    assert(contacts.is_empty())
+    box.set_transform(Physics.Transform3D(position:Math.Vec3(2.0, 0.5, 0.0)))
+    world.step(1.0 / 120.0)
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 10)
+    world.write_contact_begin_events(contacts)
+    assert(contacts.is_empty())
+    world.write_contact_end_events(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 30)
+}
+
+func verify_case_1() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = split_support()
+        ..is_sensor = true)
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = split_support())
+    world.step(0.01)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 2)
+    assert(contacts[0].first_child_id() == 10 && contacts[0].second_child_id() == 10)
+    assert(contacts[1].first_child_id() == 30 && contacts[1].second_child_id() == 30)
+    assert(contacts[0].is_sensor() && contacts[0].point_count() == 0)
+    assert(second.position().nearly_equal(Math.Vec3(), 0.000001))
+    world.step(0.01)
+    world.write_contact_begin_events(contacts)
+    assert(contacts.is_empty())
+    world.destroy_rigid_body(first)
+    world.step(0.01)
+    world.write_contact_end_events(contacts)
+    assert(contacts.count() == 2)
+    assert(!contacts[0].first_body().is_valid())
+}
+
+func verify_case_2() {
+    var world = Physics.World3D()
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = split_support()
+        ..friction = 1.0)
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.5, 0.6, 1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.5, 0.0))
+        ..friction = 1.0)
+    advance(world, 240)
+    assert(!payload.is_awake())
+    platform.move_kinematic(Physics.Transform3D(position:Math.Vec3(1.0, 1.0, 0.0)), 2.0)
+    world.step(1.0 / 120.0)
+    assert(payload.is_awake())
+    advance(world, 239)
+    assert(platform.position().nearly_equal(Math.Vec3(1.0, 1.0, 0.0), 0.0001))
+    assert(payload.position().x > 0.8)
+    assert(Math.abs(payload.position().y - 1.5) < 0.05)
+    advance(world, 240)
+    assert(!payload.is_awake())
+}
+
+func verify_case_3() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rotor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(42,
+                Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.6, 1.0, 1.0))),
+                Physics.Transform3D(position:Math.Vec3(2.0, 0.0, 0.0)))
+        ])) ..angular_velocity = Math.Vec3(0.0, 1.0, 0.0))
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.0, -1.0)))
+    advance(world, 20)
+    assert(rotor.rotation().rotate(Math.Vec3.right()).z < -0.1)
+    assert(sphere.linear_velocity().z < -0.5)
+    assert(sphere.position().z < -1.1)
+}
+
+
+func verify_case_4() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var capsule = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.65, 0.0, 0.0)))
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = split_support()
+        ..linear_velocity = Math.Vec3(1.0, 0.0, 0.0))
+    var contacts:Physics.Contact3D[] = []
+    var touched = false
+    var index = 0
+    while index < 30 {
+        world.step(1.0 / 120.0)
+        world.write_contacts(contacts)
+        for contact in contacts {
+            assert(contact.first_child_id() == -1 && contact.second_child_id() == 10)
+            touched = true
+        }
+        index++
+    }
+    assert(touched)
+    assert(capsule.position().x > 1.7)
+    assert(capsule.linear_velocity().x > 0.8)
+}
+
+func verify_case_5() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let shape = Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(12, Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+            Physics.Transform3D(position:Math.Vec3(-0.4, 0.0, 0.0))),
+        Physics.CompoundChild3D(5, Physics.Shape3D.sphere(Physics.Sphere3D(1.0)),
+            Physics.Transform3D(position:Math.Vec3(0.4, 0.0, 0.0)))
+    ]))
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = shape ..is_sensor = true)
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = shape)
+    world.step(0.01)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contact_begin_events(contacts)
+    assert(contacts.count() == 4)
+    assert(contacts[0].first_child_id() == 5 && contacts[0].second_child_id() == 5)
+    assert(contacts[1].first_child_id() == 5 && contacts[1].second_child_id() == 12)
+    assert(contacts[2].first_child_id() == 12 && contacts[2].second_child_id() == 5)
+    assert(contacts[3].first_child_id() == 12 && contacts[3].second_child_id() == 12)
+    world.step(0.01)
+    world.write_contact_begin_events(contacts)
+    assert(contacts.is_empty())
+    first.set_enabled(false)
+    world.step(0.01)
+    world.write_contact_end_events(contacts)
+    assert(contacts.count() == 4)
+}
+
+test "two compound supports share load and preserve sleep and child events" { verify_case_0() }
+test "compound sensors retain every child pair without response" { verify_case_1() }
+test "kinematic compound wakes and transports a sleeping payload" { verify_case_2() }
+test "rotating offset compound transfers tangential motion to a sphere" { verify_case_3() }
+test "capsule contacts a moving compound even when the compound is second" { verify_case_4() }
+test "all intersecting pairs of compound sensor children have distinct identities" { verify_case_5() }
+
+func main() {
+    verify_case_0()
+    verify_case_1()
+    verify_case_2()
+    verify_case_3()
+    verify_case_4()
+    verify_case_5()
+    print("Compound motion: all 6 behavior cases passed")
+}

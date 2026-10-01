@@ -6,13 +6,20 @@ fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
-Un `Compound3D` immuable peut aussi servir de forme à un corps **fixe**. Le
-monde teste ses enfants primitifs et expose `Contact3D.first_child_id()` et
-`second_child_id()` pour l'enfant retenu ; `-1` désigne une forme primitive.
-Le contact retient actuellement l'enfant dont la séparation signée est la
-plus petite, avec un seul manifold par paire de corps. Un composé dynamique
-ou cinématique est refusé. La masse d'un composé dynamique, les mutations et
-les terrains restent à livrer.
+Un `Compound3D` immuable peut servir de forme à un corps **fixe ou
+cinématique**. Chaque paire d'enfants en contact possède son propre manifold,
+avec `Contact3D.first_child_id()` et `second_child_id()` ; `-1` désigne une
+forme primitive. Plusieurs contacts peuvent donc relier les mêmes corps.
+Leurs événements et impulsions persistantes sont distingués par les deux
+identités de corps et les deux IDs d'enfants, indépendamment de l'ordre de
+construction du composé. Les capteurs exposent ces mêmes paires sans réponse.
+
+Un composé cinématique emploie `move_kinematic` ou ses vitesses linéaire et
+angulaire, comme les primitives. Ses enfants suivent la pose du parent ; leur
+vitesse au contact inclut la rotation autour de l'origine du corps. Il peut
+réveiller et transporter une charge dynamique. Un composé dynamique reste
+refusé : sa masse et son inertie complète, les mutations et les terrains
+restent à livrer. Le mouvement cinématique n'ajoute pas de CCD rotationnel.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.

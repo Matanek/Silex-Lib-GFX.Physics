@@ -121,8 +121,8 @@ package class BodyState3D {
         validate_material3d(settings.friction, settings.restitution)
         match settings.shape {
             compound(_) => {
-                if settings.body_type != BodyType3D.fixed {
-                    panic("GFX.Physics.Compound3D currently requires a fixed body")
+                if settings.body_type == BodyType3D.dynamic {
+                    panic("GFX.Physics.Compound3D requires a fixed or kinematic body")
                 }
             }
             sphere(_) => {}

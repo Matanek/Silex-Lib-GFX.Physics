@@ -604,110 +604,43 @@ public class World3D {
                                     (first.body_type == BodyType3D.kinematic ||
                                         second.body_type == BodyType3D.kinematic)))
                         {
-                            let first_radius = primitive_sphere_radius3d(first.shape)
-                            let second_radius = primitive_sphere_radius3d(second.shape)
-                            let sphere_pair = first_radius > 0.0 && second_radius > 0.0
-                            var distance = DistanceResult3D(
-                                Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
-                            if sphere_pair {
-                                distance = sphere_centers_distance3d(
-                                    first.transform.position, first_radius,
-                                    second.transform.position, second_radius)
-                            } else {
-                                distance = contact_distance3d(
+                            let first_id = BodyId3D(
+                                first_slot, self.store.generations[first_slot])
+                            let second_id = BodyId3D(
+                                second_slot, self.store.generations[second_slot])
+                            if is_compound3d(first.shape) || is_compound3d(second.shape) {
+                                var distances:DistanceResult3D[] = []
+                                write_leaf_contacts3d(
                                     ShapePlacement3D(first.shape, first.transform),
-                                    ShapePlacement3D(second.shape, second.transform))
-                            }
-                            if distance.separation <= 0.000001 {
-                                var normal = distance.normal
-                                var point = distance.first_point.add(
-                                    distance.second_point
-                                ).multiply(0.5)
-                                let sensor_pair = first.is_sensor || second.is_sensor
-                                var points:Math.Vec3[] = []
+                                    ShapePlacement3D(second.shape, second.transform),
+                                    -1, -1, distances)
+                                // Canonical child order also fixes solver order,
+                                // independent of the compound's construction order.
+                                Sort.sort<DistanceResult3D>(
+                                    &distances[0:distances.count()], leaf_contact_before3d)
+                                for distance in distances {
+                                    append_contact_pair3d(first, second,
+                                        first_id, second_id, distance, false,
+                                        previous_contacts, pairs)
+                                }
+                            } else {
+                                let first_radius = primitive_sphere_radius3d(first.shape)
+                                let second_radius = primitive_sphere_radius3d(second.shape)
+                                let sphere_pair = first_radius > 0.0 && second_radius > 0.0
+                                var distance = DistanceResult3D(
+                                    Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
                                 if sphere_pair {
-                                    if !sensor_pair { points.append(point) }
+                                    distance = sphere_centers_distance3d(
+                                        first.transform.position, first_radius,
+                                        second.transform.position, second_radius)
                                 } else {
-                                    let first_contact_shape = contact_placement3d(
-                                        first, distance.first_child_id)
-                                    let second_contact_shape = contact_placement3d(
-                                        second, distance.second_child_id)
-                                    normal = contact_normal3d(
-                                        first_contact_shape, second_contact_shape, normal)
-                                    if !sensor_pair {
-                                        points = contact_points3d(
-                                            first_contact_shape, second_contact_shape,
-                                            normal, point)
-                                    }
+                                    distance = contact_distance3d(
+                                        ShapePlacement3D(first.shape, first.transform),
+                                        ShapePlacement3D(second.shape, second.transform))
                                 }
-                                if !sphere_pair && !points.is_empty() {
-                                    point = Math.Vec3()
-                                    for candidate in points {
-                                        point = point.add(candidate)
-                                    }
-                                    point = point.divide(points.count() as float)
-                                }
-                                var friction = 0.0
-                                var restitution = 0.0
-                                if !sensor_pair {
-                                    friction = Math.sqrt(first.friction) *
-                                        Math.sqrt(second.friction)
-                                    restitution = Math.max(
-                                        first.restitution, second.restitution
-                                    )
-                                }
-                                var constraints:ContactPointState3D[] = []
-                                for candidate in points {
-                                    constraints.append(ContactPointState3D(
-                                        candidate, first, second, normal, restitution
-                                    ))
-                                }
-                                let first_id = BodyId3D(
-                                    first_slot, self.store.generations[first_slot]
-                                )
-                                let second_id = BodyId3D(
-                                    second_slot, self.store.generations[second_slot]
-                                )
-                                var had_previous = false
-                                let previous_index = contact_index_at_pair3d(
-                                    previous_contacts, first_id, second_id
-                                )
-                                if previous_index >= 0 {
-                                    var previous = previous_contacts[previous_index]
-                                    if previous.first_child_id() ==
-                                        distance.first_child_id &&
-                                        previous.second_child_id() ==
-                                            distance.second_child_id &&
-                                        previous.is_sensor() == sensor_pair {
-                                        had_previous = true
-                                    }
-                                }
-                                if !sensor_pair {
-                                    if !had_previous ||
-                                        (first.body_type == BodyType3D.kinematic &&
-                                            (first.linear_velocity.length_squared() > 0.0 ||
-                                                first.angular_velocity.length_squared() > 0.0)) ||
-                                        (second.body_type == BodyType3D.kinematic &&
-                                            (second.linear_velocity.length_squared() > 0.0 ||
-                                                second.angular_velocity.length_squared() > 0.0))
-                                    {
-                                        first.wake()
-                                        second.wake()
-                                    } else {
-                                        if first.awake && !second.awake { second.wake() }
-                                        if second.awake && !first.awake { first.wake() }
-                                    }
-                                }
-                                let active = !sensor_pair &&
-                                    (first.awake || second.awake)
-                                pairs.append(ContactPairState3D(
-                                    first, second,
-                                    first_id, second_id,
-                                    normal, distance.separation, point,
-                                    friction, restitution, constraints, active,
-                                    distance.first_child_id, distance.second_child_id,
-                                    sensor_pair, previous_index
-                                ))
+                                append_contact_pair3d(first, second,
+                                    first_id, second_id, distance, sphere_pair,
+                                    previous_contacts, pairs)
                             }
                         }
                     }
@@ -910,7 +843,7 @@ public class World3D {
             }
             position_iteration++
         }
-        // Both snapshots are ordered by body-slot pair. Merge once to emit
+        // Both snapshots are ordered by body slots and child IDs. Merge once to emit
         // transitions instead of searching each complete array again.
         var current_index = 0
         var previous_index = 0
@@ -925,16 +858,10 @@ public class World3D {
             } else {
                 var current = self.contacts[current_index]
                 var previous = previous_contacts[previous_index]
-                let current_first = current.first_body_id().slot
-                let current_second = current.second_body_id().slot
-                let previous_first = previous.first_body_id().slot
-                let previous_second = previous.second_body_id().slot
-                if current_first < previous_first ||
-                    (current_first == previous_first && current_second < previous_second) {
+                if contact_before3d(current, previous) {
                     self.contact_begins.append(current)
                     current_index++
-                } else if previous_first < current_first ||
-                    (previous_first == current_first && previous_second < current_second) {
+                } else if contact_before3d(previous, current) {
                     self.contact_ends.append(previous)
                     previous_index++
                 } else {
@@ -995,6 +922,181 @@ public class World3D {
         }
         islands.apply(self.store, self.current_gravity)
     }
+}
+
+func is_compound3d(shape:Shape3D) bool {
+    match shape {
+        compound(_) => { return true }
+        box(_) => {}
+        sphere(_) => {}
+        capsule(_) => {}
+    }
+    return false
+}
+
+// Only called for compound broad-phase candidates, once per detection pass.
+// Child poses change with their parent, so distances cannot persist across steps.
+func write_leaf_contacts3d(
+    first:ShapePlacement3D, second:ShapePlacement3D,
+    first_child_id:int, second_child_id:int, output:&DistanceResult3D[]
+) {
+    match first.shape() {
+        compound(compound) => {
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                write_leaf_contacts3d(ShapePlacement3D(child.shape,
+                    compound_child_transform(first.transform(), child)), second,
+                    child.id, second_child_id, output)
+                index++
+            }
+            return
+        }
+        box(_) => {}
+        sphere(_) => {}
+        capsule(_) => {}
+    }
+    match second.shape() {
+        compound(compound) => {
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                write_leaf_contacts3d(first, ShapePlacement3D(child.shape,
+                    compound_child_transform(second.transform(), child)),
+                    first_child_id, child.id, output)
+                index++
+            }
+            return
+        }
+        box(_) => {}
+        sphere(_) => {}
+        capsule(_) => {}
+    }
+    let distance = contact_distance3d(first, second)
+    if distance.separation <= 0.000001 {
+        output.append(DistanceResult3D(distance.first_point, distance.second_point,
+            distance.normal, distance.separation, first_child_id, second_child_id))
+    }
+}
+
+func leaf_contact_before3d(first:@DistanceResult3D, second:@DistanceResult3D) bool {
+    if first.first_child_id != second.first_child_id {
+        return first.first_child_id < second.first_child_id
+    }
+    return first.second_child_id < second.second_child_id
+}
+
+func contact_key_before3d(
+    first_slot:int, second_slot:int, first_child:int, second_child:int,
+    other_first_slot:int, other_second_slot:int, other_first_child:int, other_second_child:int
+) bool {
+    if first_slot != other_first_slot { return first_slot < other_first_slot }
+    if second_slot != other_second_slot { return second_slot < other_second_slot }
+    if first_child != other_first_child { return first_child < other_first_child }
+    return second_child < other_second_child
+}
+
+func contact_before3d(first:@Contact3D, second:@Contact3D) bool {
+    return contact_key_before3d(
+        first.first_body_id().slot, first.second_body_id().slot,
+        first.first_child_id(), first.second_child_id(),
+        second.first_body_id().slot, second.second_body_id().slot,
+        second.first_child_id(), second.second_child_id())
+}
+
+// One manifold per leaf pair; the public geometry distance query still selects
+// the nearest child. Primitive pairs keep their direct path and allocation count.
+func append_contact_pair3d(
+    first:BodyState3D, second:BodyState3D,
+    first_id:BodyId3D, second_id:BodyId3D,
+    distance:DistanceResult3D, sphere_pair:bool,
+    previous_contacts:@Contact3D[], pairs:&ContactPairState3D[]
+) {
+    if distance.separation > 0.000001 { return }
+    var normal = distance.normal
+    var point = distance.first_point.add(
+        distance.second_point
+    ).multiply(0.5)
+    let sensor_pair = first.is_sensor || second.is_sensor
+    var points:Math.Vec3[] = []
+    if sphere_pair {
+        if !sensor_pair { points.append(point) }
+    } else {
+        let first_contact_shape = contact_placement3d(
+            first, distance.first_child_id)
+        let second_contact_shape = contact_placement3d(
+            second, distance.second_child_id)
+        normal = contact_normal3d(
+            first_contact_shape, second_contact_shape, normal)
+        if !sensor_pair {
+            points = contact_points3d(
+                first_contact_shape, second_contact_shape,
+                normal, point)
+        }
+    }
+    if !sphere_pair && !points.is_empty() {
+        point = Math.Vec3()
+        for candidate in points {
+            point = point.add(candidate)
+        }
+        point = point.divide(points.count() as float)
+    }
+    var friction = 0.0
+    var restitution = 0.0
+    if !sensor_pair {
+        friction = Math.sqrt(first.friction) *
+            Math.sqrt(second.friction)
+        restitution = Math.max(
+            first.restitution, second.restitution
+        )
+    }
+    var constraints:ContactPointState3D[] = []
+    for candidate in points {
+        constraints.append(ContactPointState3D(
+            candidate, first, second, normal, restitution
+        ))
+    }
+    var had_previous = false
+    let previous_index = contact_index_at_pair3d(
+        previous_contacts, first_id, second_id,
+        distance.first_child_id, distance.second_child_id
+    )
+    if previous_index >= 0 {
+        var previous = previous_contacts[previous_index]
+        if previous.first_child_id() ==
+            distance.first_child_id &&
+            previous.second_child_id() ==
+                distance.second_child_id &&
+            previous.is_sensor() == sensor_pair {
+            had_previous = true
+        }
+    }
+    if !sensor_pair {
+        if !had_previous ||
+            (first.body_type == BodyType3D.kinematic &&
+                (first.linear_velocity.length_squared() > 0.0 ||
+                    first.angular_velocity.length_squared() > 0.0)) ||
+            (second.body_type == BodyType3D.kinematic &&
+                (second.linear_velocity.length_squared() > 0.0 ||
+                    second.angular_velocity.length_squared() > 0.0))
+        {
+            first.wake()
+            second.wake()
+        } else {
+            if first.awake && !second.awake { second.wake() }
+            if second.awake && !first.awake { first.wake() }
+        }
+    }
+    let active = !sensor_pair &&
+        (first.awake || second.awake)
+    pairs.append(ContactPairState3D(
+        first, second,
+        first_id, second_id,
+        normal, distance.separation, point,
+        friction, restitution, constraints, active,
+        distance.first_child_id, distance.second_child_id,
+        sensor_pair, previous_index
+    ))
 }
 
 func same_contact_identity3d(first:Contact3D, second:Contact3D) bool {
@@ -2024,9 +2126,10 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     return pairs
 }
 
-// Contact arrays are emitted in ascending body-slot pair order.
+// Contacts are ordered by body slots, then by the two child IDs.
 func contact_index_at_pair3d(
-    contacts:@Contact3D[], first:BodyId3D, second:BodyId3D
+    contacts:@Contact3D[], first:BodyId3D, second:BodyId3D,
+    first_child_id:int, second_child_id:int
 ) int {
     var lower = 0
     var upper = contacts.count()
@@ -2035,8 +2138,9 @@ func contact_index_at_pair3d(
         let candidate = contacts[middle]
         let first_slot = candidate.first_body_id().slot
         let second_slot = candidate.second_body_id().slot
-        if first_slot < first.slot ||
-            (first_slot == first.slot && second_slot < second.slot) {
+        if contact_key_before3d(first_slot, second_slot,
+            candidate.first_child_id(), candidate.second_child_id(),
+            first.slot, second.slot, first_child_id, second_child_id) {
             lower = middle + 1
         } else {
             upper = middle
@@ -2049,7 +2153,9 @@ func contact_index_at_pair3d(
         if first_id.slot == first.slot &&
             first_id.generation == first.generation &&
             second_id.slot == second.slot &&
-            second_id.generation == second.generation {
+            second_id.generation == second.generation &&
+            candidate.first_child_id() == first_child_id &&
+            candidate.second_child_id() == second_child_id {
             return lower
         }
     }

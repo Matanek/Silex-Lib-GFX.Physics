@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fixed and kinematic 3D compounds retain one manifold per touching child
+  pair, with independent events and warm starting. Kinematic compounds can
+  carry and wake dynamic bodies through translation and rotation. Dynamic
+  compounds remain rejected.
+
 - The 3D solver uses scalar tangent mass and zero normal torque for centered
   spheres with isotropic inertia. Offset centers of mass and anisotropic sphere
   inertia retain the general response. A private spatial grid finds neighbors

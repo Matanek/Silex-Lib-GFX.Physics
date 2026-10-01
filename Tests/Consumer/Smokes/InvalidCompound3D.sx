@@ -29,12 +29,10 @@ func main() {
             Physics.Compound3D([Physics.CompoundChild3D(2, sphere())])
         ))
     }
-    if selected("dynamic") || selected("kinematic") {
+    if selected("dynamic") {
         var world = Physics.World3D()
-        var kind = Physics.BodyType3D.dynamic
-        if selected("kinematic") { kind = Physics.BodyType3D.kinematic }
         world.create_rigid_body(Physics.RigidBody3DSettings()
-            ..body_type = kind
+            ..body_type = Physics.BodyType3D.dynamic
             ..shape = Physics.Shape3D.compound(
                 Physics.Compound3D([Physics.CompoundChild3D(2, sphere())])
             ))

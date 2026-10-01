@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les composés 3D fixes et cinématiques conservent un manifold par paire
+  d'enfants en contact, avec événements et warm start indépendants. Les
+  composés cinématiques peuvent transporter et réveiller des corps dynamiques
+  en translation ou en rotation. Les composés dynamiques restent refusés.
+
 - Le solveur 3D exploite la masse tangentielle scalaire et l'absence de couple
   normal des sphères centrées à inertie isotrope. Les sphères à centre de masse
   décalé ou inertie anisotrope conservent la réponse générale. Une grille
