@@ -17,11 +17,15 @@ are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
 sphere primitive or compound child, the world keeps at most one front-facing
-triangle per step. `Contact3D.first_child_id()` or `second_child_id()` reports its index.
+triangle per step. `Contact3D.first_child_id()` or `second_child_id()` reports
+its index.
 A square of two coplanar triangles keeps the sphere supported while it crosses
 the shared diagonal. Deterministic selection avoids two identical corrections
-on this flat seam; inclined, concave, and nonmanifold seams are not yet
-qualified. Dynamic or kinematic mesh bodies, mesh children in compounds, and
+on this flat seam. A first 0.4 m height break between two triangles is also
+qualified for a frictionless sphere: uphill and downhill crossings in both
+directions retain contact at the seam and follow a trajectory close to Jolt.
+Arbitrary seam heights and angles, multi-seam or nonmanifold meshes remain
+unqualified. Dynamic or kinematic mesh bodies, mesh children in compounds, and
 CCD against meshes are absent.
 
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.

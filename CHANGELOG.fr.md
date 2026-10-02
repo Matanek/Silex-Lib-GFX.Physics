@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La couture entre deux triangles fixes avec une différence de hauteur de
+  0,4 m est qualifiée dans les deux sens pour une sphère sans friction, avec
+  identité de face et trajectoire comparées à Jolt Debug et Release.
+
 - `TriangleMesh3D` réunit des triangles dans une forme fixe. Distance et rayon
   exposent l'index de face ; le monde choisit une face avant par sphère
   dynamique primitive ou enfant de composé. Le franchissement d'une couture plane de deux

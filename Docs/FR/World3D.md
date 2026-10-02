@@ -19,10 +19,14 @@ indépendant de la géométrie de rendu.
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
 chaque sphère dynamique primitive ou enfant de composé, le monde ne retient
 qu'une face avant au plus par pas. `Contact3D.first_child_id()` ou
-`second_child_id()` indique son index. Un carré de deux triangles coplanaires conserve l'appui
-pendant le franchissement de sa diagonale. La sélection déterministe évite
-deux corrections identiques sur cette couture plane ; elle ne qualifie pas
-encore les coutures inclinées, concaves ou non manifold. Un corps maillé
+`second_child_id()` indique son index. Un carré de deux triangles coplanaires
+conserve l'appui pendant le franchissement de sa diagonale. La sélection
+déterministe évite deux corrections identiques sur cette couture plane.
+Une première cassure de hauteur de 0,4 m entre deux triangles est également
+qualifiée pour une sphère sans friction : montée et descente dans les deux
+sens gardent un contact pendant la couture et une trajectoire proche de Jolt.
+Cette preuve ne couvre ni les coutures de hauteur ou d'angle arbitraire, ni
+les maillages à plusieurs coutures ou non manifold. Un corps maillé
 dynamique/cinématique, un maillage enfant de composé et le CCD contre maillage
 sont absents.
 

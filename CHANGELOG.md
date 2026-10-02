@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- A seam between two fixed triangles with a 0.4 m height difference is
+  qualified in both directions for a frictionless sphere, with face identity
+  and trajectory compared against Jolt Debug and Release.
+
 - `TriangleMesh3D` combines triangles into a fixed shape. Distance and ray
   queries expose the triangle index; the world selects one front-facing
   triangle per dynamic sphere primitive or compound child. Crossing a flat two-triangle seam retains

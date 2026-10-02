@@ -1,0 +1,98 @@
+use GFX.Physics
+use STD.Math
+
+func crease_mesh(height:float) Physics.Shape3D {
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D([
+        Physics.Triangle3D(Math.Vec3(), Math.Vec3(0.0, 0.0, 4.0),
+            Math.Vec3(4.0, 0.0, 0.0)),
+        Physics.Triangle3D(Math.Vec3(4.0, 0.0, 0.0),
+            Math.Vec3(0.0, 0.0, 4.0), Math.Vec3(4.0, height, 4.0))
+    ]))
+}
+
+func check_case(height:float, reverse:bool, expected_x:float,
+    expected_y:float, expected_vx:float, expected_vy:float) {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = crease_mesh(height)
+        ..friction = 0.0)
+    var start = 1.0
+    var direction = 1.5
+    var start_y = 0.5
+    if reverse {
+        start = 3.0
+        direction = -1.5
+        start_y += 0.5 * height
+    }
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(
+            position:Math.Vec3(start, start_y, start))
+        ..linear_velocity = Math.Vec3(direction, 0.0, direction)
+        ..friction = 0.0 ..allow_sleep = false)
+    var first_face = false
+    var second_face = false
+    var step = 1
+    while step <= 150 {
+        world.step(1.0 / 120.0)
+        var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        // The initially penetrating uphill reverse case separates for four
+        // settling steps; the contact stays continuous once it reaches the seam.
+        if step >= 6 { assert(contacts.count() == 1) }
+        if contacts.count() == 1 {
+            let face = contacts[0].first_child_id()
+            assert(face == 0 || face == 1)
+            if face == 0 { first_face = true }
+            if face == 1 { second_face = true }
+        }
+        let position = sphere.position()
+        let velocity = sphere.linear_velocity()
+        assert(Math.abs(position.x - position.z) < 0.001)
+        assert(Math.abs(velocity.x - velocity.z) < 0.001)
+        step++
+    }
+    let position = sphere.position()
+    let velocity = sphere.linear_velocity()
+    assert(first_face && second_face)
+    assert(Math.abs(position.x - expected_x) < 0.035)
+    assert(Math.abs(position.y - expected_y) < 0.015)
+    assert(Math.abs(velocity.x - expected_vx) < 0.07)
+    assert(Math.abs(velocity.y - expected_vy) < 0.05)
+}
+
+test "sphere crosses a raised triangle seam in both directions" {
+    check_case(0.4, false, 2.67938352, 0.640851796, 0.889497042, 0.177899405)
+    check_case(0.4, true, 0.626850367, 0.5, -2.02360129, 0.0)
+}
+
+test "sphere crosses a lowered triangle seam in both directions" {
+    check_case(-0.4, false, 3.020298, 0.29991594, 2.02522707, -0.40504539)
+    check_case(-0.4, true, 1.90174615, 0.498763502, -0.479020029, 0.0)
+}
+
+test "inclined seam keeps the deeper face identity and its normal" {
+    let sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(2.05, 0.4, 2.05)))
+    let uphill = Physics.Geometry3D.distance(sphere,
+        Physics.ShapePlacement3D(crease_mesh(0.4)))
+    assert(uphill.second_child_id == 1)
+    assert(Math.abs(uphill.separation + 0.113842428) < 0.01)
+    assert(Math.abs(uphill.normal.x - 0.09901475) < 0.02)
+    assert(Math.abs(uphill.normal.y + 0.99014753) < 0.02)
+
+    let downhill = Physics.Geometry3D.distance(sphere,
+        Physics.ShapePlacement3D(crease_mesh(-0.4)))
+    assert(downhill.second_child_id == 1)
+    assert(Math.abs(downhill.normal.x + 0.09901475) < 0.02)
+    assert(Math.abs(downhill.normal.y + 0.99014753) < 0.02)
+}
+
+func main() {
+    check_case(0.4, false, 2.67938352, 0.640851796, 0.889497042, 0.177899405)
+    check_case(0.4, true, 0.626850367, 0.5, -2.02360129, 0.0)
+    check_case(-0.4, false, 3.020298, 0.29991594, 2.02522707, -0.40504539)
+    check_case(-0.4, true, 1.90174615, 0.498763502, -0.479020029, 0.0)
+    print("Triangle mesh crease: four crossings match the pinned Jolt envelope")
+}
