@@ -88,6 +88,19 @@ rayon le renvoie par `child_id`. Distance, recouvrement et rayon autonomes
 restent géométriques des deux côtés. Les autres paires avec un maillage ne
 sont pas prises en charge.
 
+`TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
+row_spacing)` construit un maillage fixe à partir d'une grille régulière.
+`heights` est rangé par lignes Z, puis par colonnes X : l'échantillon
+`(column, row)` occupe `(column × column_spacing, height, row × row_spacing)`
+dans le repère local. Il faut au moins deux échantillons par axe, exactement
+`columns × rows` hauteurs finies et deux espacements positifs finis. Chaque
+cellule produit deux faces orientées vers le haut, dans l'ordre des lignes puis
+des colonnes ; leurs IDs sont `2 × (row × (columns - 1) + column)` et cet ID
+plus un. La liste de triangles obtenue est immuable et s'utilise avec
+`Shape3D.mesh(grid)` pour un corps fixe. Les requêtes existantes parcourent
+encore les faces une par une ; cette API n'affirme pas un coût adapté aux très
+grands terrains. Elle ne gère ni trous ni données de hauteur mutables.
+
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
 arêtes. Les capsules utilisent le segment axial et les rayons testent aussi
 leurs hémisphères. Les requêtes n'allouent pas de cache persistant ; le monde

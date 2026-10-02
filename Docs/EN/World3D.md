@@ -11,9 +11,9 @@ spheres on the front side defined by vertex winding, including exposed edges
 and vertices; a sphere whose center is behind the triangle plane creates no
 contact. The triangle and its pose can be replaced without recreating the body.
 Dynamic or kinematic triangle bodies and triangle children in compounds are
-rejected. Triangle/box, triangle/capsule, triangle/triangle contacts, mesh
-seams, terrain, and CCD against triangles are not qualified. Physics triangles
-are independent of render geometry.
+rejected. Triangle/box, triangle/capsule, and triangle/triangle contacts, other
+mesh seams and general terrains, and CCD against triangles are not qualified.
+Physics triangles are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
 sphere primitive or compound child, the world keeps at most one front-facing
@@ -24,9 +24,12 @@ the shared diagonal. Deterministic selection avoids two identical corrections
 on this flat seam. A first 0.4 m height break between two triangles is also
 qualified for a frictionless sphere: uphill and downhill crossings in both
 directions retain contact at the seam and follow a trajectory close to Jolt.
-Arbitrary seam heights and angles, multi-seam or nonmanifold meshes remain
-unqualified. Dynamic or kinematic mesh bodies, mesh children in compounds, and
-CCD against meshes are absent.
+A regular height grid can also produce this mesh: a frictionless sphere
+traverses all three inclined rows of a 4 by 4 grid in both directions, with
+trajectories compared against Jolt Debug and Release and face identity tracked.
+The comparison does not establish arbitrary seam heights or angles, holes, or
+nonmanifold meshes. Dynamic or kinematic mesh bodies, mesh children in
+compounds, and CCD against meshes are absent.
 
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by
@@ -43,7 +46,7 @@ payload. Dynamic compounds of boxes, spheres, and capsules are also available:
 the body's density applied to each child determines its mass, center of mass, and
 inertia tensor. Child identities remain visible in contacts. Replacing an
 existing body's shape is available; editing a `Compound3D` in place, other
-shape families, and terrain remain to be delivered. Kinematic motion does not
+shape families, and general terrain remain to be delivered. Kinematic motion does not
 add rotational CCD.
 
 The following program applies an impulse to a box, advances the world, and

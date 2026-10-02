@@ -1,0 +1,123 @@
+use GFX.Physics
+use STD.Math
+
+func flat_grid() Physics.TriangleMesh3D {
+    return Physics.TriangleMesh3D.from_height_grid(3, 3,
+        [0.0, 0.0, 0.0,
+         0.0, 0.0, 0.0,
+         0.0, 0.0, 0.0], 1.0, 1.0)
+}
+
+test "height grid keeps upward faces and row major face identities" {
+    var grid = flat_grid()
+    assert(grid.triangle_count() == 8)
+    assert(grid.triangle(0).normal().nearly_equal(Math.Vec3.up(), 0.00001))
+    assert(grid.triangle(7).normal().nearly_equal(Math.Vec3.up(), 0.00001))
+    assert(grid.triangle(6).first.nearly_equal(Math.Vec3(1.0, 0.0, 1.0), 0.00001))
+
+    let surface = Physics.ShapePlacement3D(Physics.Shape3D.mesh(grid))
+    let sphere = Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:Math.Vec3(1.25, 0.4, 1.25)))
+    let distance = Physics.Geometry3D.distance(sphere, surface)
+    assert(distance.second_child_id == 6)
+    assert(Math.nearly_equal(distance.separation, -0.1, 0.00001))
+    let ray = Physics.Geometry3D.ray_cast(
+        Physics.Ray3D(Math.Vec3(1.25, 2.0, 1.25), Math.Vec3(0.0, -4.0, 0.0)),
+        surface)
+    assert(ray.hit && ray.child_id == 6)
+    assert(Math.nearly_equal(ray.fraction, 0.5, 0.00001))
+}
+
+test "height grid fixed body reports its face identity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.mesh(flat_grid()))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.25, 0.4, 1.25)))
+    world.step(1.0 / 60.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_child_id() == 6)
+}
+
+func ridge_grid() Physics.TriangleMesh3D {
+    return Physics.TriangleMesh3D.from_height_grid(4, 4,
+        [0.0, 0.0, 0.0, 0.0,
+         0.15, 0.15, 0.15, 0.15,
+         0.30, 0.30, 0.30, 0.30,
+         0.15, 0.15, 0.15, 0.15], 1.0, 1.0)
+}
+
+func run_ridge(reverse:bool) {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.mesh(ridge_grid()) ..friction = 0.0)
+    var start_y = 0.65
+    var start_z = 0.4
+    var start_speed = 4.0
+    var expected_y:float[] = [0.63900197, 0.70651329, 0.77071983,
+        0.80738211, 0.71590495]
+    var expected_z:float[] = [0.88938737, 1.34400594, 1.77619827,
+        2.18706059, 2.59792542]
+    var expected_vz:float[] = [3.73209070, 3.55219984, 3.37304068,
+        3.26909256, 3.40589666]
+    if reverse {
+        start_y = 0.72
+        start_z = 2.6
+        start_speed = -4.0
+        expected_y = [0.78652066, 0.80575621, 0.68585050,
+            0.61164576, 0.53323400]
+        expected_z = [2.12194896, 1.66289067, 1.20171130,
+            0.71067131, 0.19722237]
+        expected_vz = [-3.73455763, -3.67247057, -3.83292198,
+            -4.01306438, -4.19354630]
+    }
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.5,
+            start_y, start_z))
+        ..linear_velocity = Math.Vec3(0.0, 0.0, start_speed)
+        ..friction = 0.0 ..allow_sleep = false)
+    var seen_rows:bool[] = [false, false, false]
+    var sample = 0
+    var step = 0
+    while step < 75 {
+        world.step(1.0 / 120.0)
+        assert(world.contact_count() <= 1)
+        if world.contact_count() == 1 {
+            var contacts:Physics.Contact3D[] = []
+            world.write_contacts(contacts)
+            let row = contacts[0].first_child_id() / 6
+            assert(row >= 0 && row < 3)
+            seen_rows[row] = true
+        }
+        if step % 15 == 14 {
+            let position = sphere.position()
+            let velocity = sphere.linear_velocity()
+            assert(Math.abs(position.y - expected_y[sample]) < 0.025)
+            assert(Math.abs(position.z - expected_z[sample]) < 0.04)
+            assert(Math.abs(velocity.z - expected_vz[sample]) < 0.16)
+            sample++
+        }
+        assert(Math.abs(sphere.position().x - 1.5) < 0.02)
+        step++
+    }
+    assert(sample == 5)
+    assert(seen_rows[0] && seen_rows[1] && seen_rows[2])
+}
+
+test "sphere crosses multiple height grid seams in both directions near Jolt" {
+    run_ridge(false)
+    run_ridge(true)
+}
+
+func main() {
+    run_ridge(false)
+    run_ridge(true)
+    print("Height grid: both multi-seam crossings match the pinned Jolt envelope")
+}

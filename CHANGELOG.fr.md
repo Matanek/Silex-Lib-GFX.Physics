@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `TriangleMesh3D.from_height_grid` construit une surface fixe depuis une
+  grille régulière de hauteurs finies, avec identité déterministe des deux
+  faces de chaque cellule. Une sphère franchit plusieurs coutures inclinées
+  dans les deux sens sur un cas 4 × 4 comparé à Jolt Debug et Release.
+
 - La couture entre deux triangles fixes avec une différence de hauteur de
   0,4 m est qualifiée dans les deux sens pour une sphère sans friction, avec
   identité de face et trajectoire comparées à Jolt Debug et Release.

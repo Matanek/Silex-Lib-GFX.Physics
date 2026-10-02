@@ -12,8 +12,8 @@ et sommets isolés ; une sphère dont le centre est derrière le plan du triangl
 ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
 recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
 triangles enfants d'un composé sont rejetés. Les contacts triangle/boîte,
-triangle/capsule, triangle/triangle, les coutures de maillage, les terrains et
-le CCD contre triangle ne sont pas qualifiés. Un triangle physique reste
+triangle/capsule et triangle/triangle, ainsi que les autres coutures, les
+terrains généraux et le CCD contre triangle, ne sont pas qualifiés. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
@@ -25,8 +25,11 @@ déterministe évite deux corrections identiques sur cette couture plane.
 Une première cassure de hauteur de 0,4 m entre deux triangles est également
 qualifiée pour une sphère sans friction : montée et descente dans les deux
 sens gardent un contact pendant la couture et une trajectoire proche de Jolt.
-Cette preuve ne couvre ni les coutures de hauteur ou d'angle arbitraire, ni
-les maillages à plusieurs coutures ou non manifold. Un corps maillé
+Une grille régulière de hauteurs peut aussi produire ce maillage : une sphère
+sans friction traverse les trois rangées inclinées d'une grille 4 × 4 dans
+les deux sens, avec des trajectoires comparées à Jolt Debug et Release et une
+identité de face suivie. La comparaison n'établit pas les coutures de hauteur
+ou d'angle arbitraire, les trous ni les maillages non manifold. Un corps maillé
 dynamique/cinématique, un maillage enfant de composé et le CCD contre maillage
 sont absents.
 
@@ -46,7 +49,8 @@ sphères ou capsules est également disponible : la densité du corps appliquée
 détermine la masse, le centre de masse et le tenseur d'inertie du corps entier.
 Les identités des enfants restent visibles dans les contacts. Le remplacement
 de la forme d'un corps existant est disponible ; l'édition en place d'un
-`Compound3D`, les autres familles géométriques et les terrains restent à livrer.
+`Compound3D`, les autres familles géométriques et les terrains généraux
+restent à livrer.
 Le mouvement cinématique n'ajoute pas de CCD rotationnel.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et

@@ -84,6 +84,18 @@ to shape order; a ray reports it as `child_id`. Standalone distance, overlap,
 and ray queries remain geometric on both sides. Other mesh pairs are not
 supported.
 
+`TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
+row_spacing)` builds a fixed mesh from a regular grid. `heights` is laid out
+by Z rows, then X columns: sample `(column, row)` lies at
+`(column × column_spacing, height, row × row_spacing)` in local coordinates.
+At least two samples per axis, exactly `columns × rows` finite heights, and
+positive finite spacing on both axes are required. Each cell generates two
+upward-facing triangles, ordered by row and then column. Their IDs are
+`2 × (row × (columns - 1) + column)` and the next ID. The resulting triangle
+list is immutable and can be used as `Shape3D.mesh(grid)` on a fixed body.
+Existing queries still walk individual triangles; this API does not claim
+large-terrain query performance. Holes and mutable heights are not supported.
+
 Separated box pairs compare vertices against faces and edges against edges.
 Capsules use their axial segment; ray queries also test their hemispheres.
 The queries retain no cache; the world selects candidate pairs before these

@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `TriangleMesh3D.from_height_grid` builds a fixed surface from a regular
+  grid of finite heights, with deterministic identities for both triangles
+  in each cell. A sphere crosses multiple inclined seams in both directions
+  on a 4 by 4 case compared with Jolt Debug and Release.
+
 - A seam between two fixed triangles with a 0.4 m height difference is
   qualified in both directions for a frictionless sphere, with face identity
   and trajectory compared against Jolt Debug and Release.
