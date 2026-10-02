@@ -104,6 +104,7 @@ public struct Geometry3D {
             sphere(_) => {}
             box(_) => {}
             capsule(_) => {}
+            triangle(_) => {}
         }
         match second.shape() {
             compound(second_compound) => {
@@ -114,6 +115,7 @@ public struct Geometry3D {
             sphere(_) => {}
             box(_) => {}
             capsule(_) => {}
+            triangle(_) => {}
         }
         match first.shape() {
             sphere(first_sphere) => {
@@ -135,6 +137,10 @@ public struct Geometry3D {
                             first_sphere, first.transform(),
                             second_capsule, second.transform()
                         )
+                    }
+                    triangle(second_triangle) => {
+                        return sphere_triangle_distance(first_sphere, first.transform(),
+                            second_triangle, second.transform())
                     }
                     compound(_) => {}
                 }
@@ -159,6 +165,7 @@ public struct Geometry3D {
                             first_box, first.transform()
                         ))
                     }
+                    triangle(_) => {}
                     compound(_) => {}
                 }
             }
@@ -182,7 +189,22 @@ public struct Geometry3D {
                             second_capsule, second.transform()
                         )
                     }
+                    triangle(_) => {}
                     compound(_) => {}
+                }
+            }
+            triangle(first_triangle) => {
+                match second.shape() {
+                    sphere(second_sphere) => {
+                        return reversed_distance(sphere_triangle_distance(
+                            second_sphere, second.transform(),
+                            first_triangle, first.transform()
+                        ))
+                    }
+                    box(_) => {}
+                    capsule(_) => {}
+                    compound(_) => {}
+                    triangle(_) => {}
                 }
             }
             compound(_) => {}
@@ -206,11 +228,13 @@ public struct Geometry3D {
                     sphere(_) => {}
                     capsule(_) => {}
                     compound(_) => {}
+                    triangle(_) => {}
                 }
             }
             sphere(_) => {}
             capsule(_) => {}
             compound(_) => {}
+            triangle(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
     }
@@ -228,6 +252,9 @@ public struct Geometry3D {
             }
             compound(compound) => {
                 return compound_ray_cast(ray, compound, target.transform())
+            }
+            triangle(triangle) => {
+                return ray_triangle_cast(ray, triangle, target.transform())
             }
         }
     }
@@ -411,11 +438,13 @@ package func contact_distance3d(
                 sphere(_) => {}
                 capsule(_) => {}
                 compound(_) => {}
+                triangle(_) => {}
             }
         }
         sphere(_) => {}
         capsule(_) => {}
         compound(_) => {}
+        triangle(_) => {}
     }
     return Geometry3D.distance(first, second)
 }
@@ -446,12 +475,59 @@ package func contact_separation3d(
                 sphere(_) => {}
                 capsule(_) => {}
                 compound(_) => {}
+                triangle(_) => {}
             }
         }
         sphere(_) => {}
         capsule(_) => {}
         compound(_) => {}
+        triangle(_) => {}
     }
     let distance = Geometry3D.distance(first, second)
+    if !front_triangle_contact3d(first, second) {
+        return ContactSeparation3D(distance.normal, Math.max(0.000001, distance.separation))
+    }
     return ContactSeparation3D(distance.normal, distance.separation)
+}
+
+package func front_triangle_contact3d(
+    first:ShapePlacement3D, second:ShapePlacement3D
+) bool {
+    match first.shape() {
+        triangle(triangle) => {
+            match second.shape() {
+                sphere(_) => {
+                    return sphere_triangle_front3d(second.transform(), triangle,
+                        first.transform())
+                }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+            }
+        }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    match second.shape() {
+        triangle(triangle) => {
+            match first.shape() {
+                sphere(_) => {
+                    return sphere_triangle_front3d(first.transform(), triangle,
+                        second.transform())
+                }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+            }
+        }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+        compound(_) => {}
+    }
+    return true
 }

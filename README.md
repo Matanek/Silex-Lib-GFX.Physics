@@ -3,9 +3,10 @@
 `GFX.Physics` provides optional native Silex 2D and 3D physics simulations.
 Their worlds work without windows or renderers; Application plugins connect
 them to ECS and Scene2D or Scene3D when requested. The 3D world supports
-spheres, boxes, capsules, fixed and kinematic compounds, rigid or spring distance constraints,
-contact events, sleeping and a virtual capsule character mover.
-CCD and other shape families remain under development.
+spheres, boxes, capsules, compounds with dynamic mass, and fixed triangles
+against dynamic spheres. It also supports rigid or spring distance constraints,
+contact events, sleeping, linear CCD for the qualified pairs, and a virtual
+capsule character mover. Other shape families remain under development.
 
 ```text
 silex install GFX.Physics

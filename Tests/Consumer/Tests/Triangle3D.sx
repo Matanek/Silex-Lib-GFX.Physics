@@ -1,0 +1,88 @@
+use GFX.Physics
+use STD.Math
+
+func floor_triangle() Physics.Shape3D {
+    return Physics.Shape3D.triangle(Physics.Triangle3D(
+        Math.Vec3(0.0, 0.0, 0.0),
+        Math.Vec3(0.0, 0.0, 4.0),
+        Math.Vec3(4.0, 0.0, 0.0)
+    ))
+}
+
+func sphere_at(position:Math.Vec3) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:position)
+    )
+}
+
+test "triangle distances cover face edge vertex and both sides" {
+    let surface = Physics.ShapePlacement3D(floor_triangle())
+    let face = Physics.Geometry3D.distance(sphere_at(Math.Vec3(1.0, 1.0, 1.0)), surface)
+    assert(Math.nearly_equal(face.separation, 0.5, 0.00001))
+    assert(face.second_point.nearly_equal(Math.Vec3(1.0, 0.0, 1.0), 0.00001))
+    assert(face.normal.nearly_equal(Math.Vec3(0.0, -1.0, 0.0), 0.00001))
+
+    let edge = Physics.Geometry3D.distance(sphere_at(Math.Vec3(-0.3, 0.4, 2.0)), surface)
+    assert(Math.nearly_equal(edge.separation, 0.0, 0.00001))
+    assert(edge.second_point.nearly_equal(Math.Vec3(0.0, 0.0, 2.0), 0.00001))
+    assert(edge.normal.nearly_equal(Math.Vec3(0.6, -0.8, 0.0), 0.00001))
+    assert(Physics.Geometry3D.overlaps(sphere_at(Math.Vec3(-0.3, 0.4, 2.0)), surface))
+
+    let vertex = Physics.Geometry3D.distance(sphere_at(Math.Vec3(-0.3, 0.4, -0.4)), surface)
+    assert(Math.nearly_equal(vertex.separation, Math.sqrt(0.41) - 0.5, 0.00001))
+    assert(vertex.second_point.nearly_equal(Math.Vec3(), 0.00001))
+    assert(vertex.normal.nearly_equal(Math.Vec3(0.3, -0.4, 0.4)
+        .divide(Math.sqrt(0.41)), 0.00001))
+
+    let back = Physics.Geometry3D.distance(sphere_at(Math.Vec3(1.0, -0.4, 1.0)), surface)
+    assert(Math.nearly_equal(back.separation, -0.1, 0.00001))
+    assert(back.normal.nearly_equal(Math.Vec3.up(), 0.00001))
+    let reversed = Physics.Geometry3D.distance(surface,
+        sphere_at(Math.Vec3(1.0, -0.4, 1.0)))
+    assert(reversed.normal.nearly_equal(back.normal.negated(), 0.00001))
+}
+
+test "oriented triangle and two-sided finite ray" {
+    let pose = Physics.Transform3D(
+        position:Math.Vec3(2.0, 3.0, -1.0),
+        rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())
+    )
+    let surface = Physics.ShapePlacement3D(floor_triangle(), pose)
+    let center = pose.point(Math.Vec3(1.0, 1.0, 1.0))
+    let gap = Physics.Geometry3D.distance(sphere_at(center), surface)
+    assert(Math.nearly_equal(gap.separation, 0.5, 0.00001))
+    assert(gap.second_point.nearly_equal(pose.point(Math.Vec3(1.0, 0.0, 1.0)), 0.00001))
+
+    let above = Physics.Geometry3D.ray_cast(Physics.Ray3D(
+        Math.Vec3(1.0, 2.0, 1.0), Math.Vec3(0.0, -4.0, 0.0)),
+        Physics.ShapePlacement3D(floor_triangle()))
+    assert(above.hit && Math.nearly_equal(above.fraction, 0.5, 0.00001))
+    assert(above.normal.nearly_equal(Math.Vec3.up(), 0.00001))
+    let below = Physics.Geometry3D.ray_cast(Physics.Ray3D(
+        Math.Vec3(1.0, -2.0, 1.0), Math.Vec3(0.0, 4.0, 0.0)),
+        Physics.ShapePlacement3D(floor_triangle()))
+    assert(below.hit && Math.nearly_equal(below.fraction, 0.5, 0.00001))
+    assert(below.normal.nearly_equal(Math.Vec3(0.0, -1.0, 0.0), 0.00001))
+}
+
+test "fixed triangle contacts a dynamic sphere only from its front" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = floor_triangle())
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.4, 1.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    assert(ball.position().y >= 0.4)
+    ball.set_transform(Physics.Transform3D(position:Math.Vec3(1.0, -0.4, 1.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 0)
+    assert(floor.position().nearly_equal(Math.Vec3(), 0.00001))
+    floor.set_shape(Physics.Shape3D.triangle(Physics.Triangle3D(
+        Math.Vec3(), Math.Vec3(4.0, 0.0, 0.0), Math.Vec3(0.0, 0.0, 4.0))))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+}

@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `Triangle3D` adds an orientable fixed physics surface. Standalone sphere
+  distance and overlap and ray queries cover the face, edges, and vertices;
+  the world responds to dynamic spheres from the front only. Other pairs,
+  triangle compounds, and moving triangle bodies remain outside this slice.
+
 - `RigidBody3D.set_shape` replaces a live body's shape, including a modified
   compound, without changing its identity. Dynamic mass is recalculated from
   density; previous contacts end on the next step and their impulses are not

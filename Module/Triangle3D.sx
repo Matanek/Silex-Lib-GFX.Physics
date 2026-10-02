@@ -1,0 +1,39 @@
+use STD.Math
+
+public struct Triangle3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+    let third:Math.Vec3
+
+    init(first:Math.Vec3, second:Math.Vec3, third:Math.Vec3) {
+        if !finite_triangle3d_vector(first) || !finite_triangle3d_vector(second) ||
+            !finite_triangle3d_vector(third) {
+            panic("GFX.Physics.Triangle3D requires finite vertices")
+        }
+        let edge = second.subtract(first)
+        let other = third.subtract(first)
+        let area_squared = edge.cross(other).length_squared()
+        let scale = Math.max(edge.length_squared(), other.length_squared())
+        if !finite_triangle3d_value(area_squared) ||
+            area_squared <= 0.000000000001 * scale * scale {
+            panic("GFX.Physics.Triangle3D requires a nondegenerate triangle")
+        }
+        self.first = first
+        self.second = second
+        self.third = third
+    }
+
+    func normal() Math.Vec3 {
+        return self.second.subtract(self.first)
+            .cross(self.third.subtract(self.first)).normalized()
+    }
+}
+
+func finite_triangle3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+
+func finite_triangle3d_vector(value:Math.Vec3) bool {
+    return finite_triangle3d_value(value.x) && finite_triangle3d_value(value.y) &&
+        finite_triangle3d_value(value.z)
+}

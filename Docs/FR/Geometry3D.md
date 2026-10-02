@@ -1,6 +1,6 @@
-# Géométrie convexe 3D autonome
+# Géométrie 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes, des capsules, des composés immuables et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules, des triangles, des composés immuables et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -47,7 +47,8 @@ ne corrigent pas silencieusement un quaternion invalide.
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
-et capsules, y compris les poses orientées. `DistanceResult3D.separation` est positive
+et capsules, ainsi que la paire sphère/triangle dans les deux ordres, y compris
+les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.
@@ -62,8 +63,19 @@ boîtes, il utilise les axes séparateurs sans calculer tous les points les plus
 proches. `Ray3D(origin, translation)` décrit un segment paramétré de 0 à 1 ;
 son origine et sa translation doivent être finies, et la translation non
 nulle. `Geometry3D.ray_cast` retourne `hit`, le premier `fraction` rencontré,
-le point et la normale extérieure de la forme. Depuis l'intérieur d'une
+le point et la normale extérieure de la forme (ou celle du côté touché pour un
+triangle). Depuis l'intérieur d'une
 forme, le premier passage sortant est retourné. Un rayon manqué a `hit = false`.
+
+Un `Triangle3D(first, second, third)` porte trois sommets locaux finis et non
+alignés. Leur ordre détermine la face avant par `(second - first) × (third -
+first)` ; `normal()` retourne cette direction unitaire. La distance à une
+sphère utilise le point le plus proche sur la face, une arête ou un sommet.
+Elle est géométrique des deux côtés du triangle, comme `overlaps`. Le rayon
+simple traverse et touche les deux faces ; sa normale est opposée à sa direction
+sur la face touchée. La réponse du monde est unilatérale, décrite dans
+[World3D](World3D.md). Les autres paires avec un triangle et les composés de
+triangles ne sont pas pris en charge.
 
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
 arêtes. Les capsules utilisent le segment axial et les rayons testent aussi

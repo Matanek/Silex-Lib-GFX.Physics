@@ -1,0 +1,40 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func triangle() Physics.Shape3D {
+    return Physics.Shape3D.triangle(Physics.Triangle3D(
+        Math.Vec3(), Math.Vec3(0.0, 0.0, 4.0), Math.Vec3(4.0, 0.0, 0.0)))
+}
+
+func main() {
+    if selected("degenerate") {
+        Physics.Triangle3D(Math.Vec3(), Math.Vec3.right(), Math.Vec3(2.0, 0.0, 0.0))
+    }
+    if selected("dynamic") {
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = triangle())
+    }
+    if selected("kinematic") {
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.kinematic ..shape = triangle())
+    }
+    if selected("compound") { Physics.CompoundChild3D(0, triangle()) }
+    if selected("mutation") {
+        var world = Physics.World3D()
+        var body = world.create_rigid_body()
+        body.set_shape(triangle())
+    }
+    panic("invalid triangle use was accepted")
+}

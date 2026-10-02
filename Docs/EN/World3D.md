@@ -6,6 +6,15 @@ a contact response between these shapes. Boxes resting on nearly parallel
 faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
+A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
+spheres on the front side defined by vertex winding, including exposed edges
+and vertices; a sphere whose center is behind the triangle plane creates no
+contact. The triangle and its pose can be replaced without recreating the body.
+Dynamic or kinematic triangle bodies and triangle children in compounds are
+rejected. Triangle/box, triangle/capsule, triangle/triangle contacts, mesh
+seams, terrain, and CCD against triangles are not qualified. Physics triangles
+are independent of render geometry.
+
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by
 `Contact3D.first_child_id()` and `second_child_id()`; `-1` denotes a primitive.

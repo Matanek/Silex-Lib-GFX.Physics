@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `Triangle3D` ajoute une surface physique fixe orientable. Distance et
+  recouvrement avec une sphère ainsi que rayon autonome couvrent face, arêtes
+  et sommets ; le monde répond aux sphères dynamiques du côté avant uniquement.
+  Les autres paires, composés triangulaires et mouvements du triangle restent
+  hors de cette tranche.
+
 - `RigidBody3D.set_shape` remplace la forme d'un corps vivant, notamment un
   composé modifié, sans changer son identité. La masse dynamique est recalculée
   depuis la densité ; les contacts précédents terminent au pas suivant et leurs

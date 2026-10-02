@@ -6,6 +6,16 @@ fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
+Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères
+dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
+et sommets isolés ; une sphère dont le centre est derrière le plan du triangle
+ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
+recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
+triangles enfants d'un composé sont rejetés. Les contacts triangle/boîte,
+triangle/capsule, triangle/triangle, les coutures de maillage, les terrains et
+le CCD contre triangle ne sont pas qualifiés. Un triangle physique reste
+indépendant de la géométrie de rendu.
+
 Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou
 dynamique. Chaque paire d'enfants en contact possède son propre manifold,
 avec `Contact3D.first_child_id()` et `second_child_id()` ; `-1` désigne une

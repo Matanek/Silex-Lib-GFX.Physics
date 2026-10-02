@@ -1,6 +1,6 @@
-# Standalone 3D convex geometry
+# Standalone 3D geometry
 
-`GFX.Physics` provides spheres, boxes, capsules, immutable compounds, and rigid poses as Silex values. They
+`GFX.Physics` provides spheres, boxes, capsules, triangles, immutable compounds, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
 The [3D world](World3D.md) uses these first shapes for free body motion.
 
@@ -45,8 +45,9 @@ an invalid quaternion.
 
 ## Query results
 
-`Geometry3D.distance(first, second)` accepts every pair of the available
-spheres, boxes, and capsules, including oriented poses. `DistanceResult3D.separation` is
+`Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
+and capsules, as well as sphere/triangle in either order, including oriented
+poses. `DistanceResult3D.separation` is
 positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
 second. The two witness points lie on their respective surfaces. When several
@@ -60,8 +61,18 @@ separating axes without calculating every closest feature. A
 `Ray3D(origin, translation)` describes a segment parameterized from 0 to 1;
 its origin and translation must be finite, and its translation nonzero.
 `Geometry3D.ray_cast` returns `hit`, the first hit `fraction`, the point, and
-the target's outward normal. A ray starting inside returns its first exit. A
+the target's outward normal (or the hit side's normal for a triangle). A ray
+starting inside returns its first exit. A
 miss returns `hit = false`.
+
+`Triangle3D(first, second, third)` stores three finite, noncollinear local
+vertices. Their winding defines the front face through `(second - first) ×
+(third - first)`; `normal()` returns that unit direction. Sphere distance uses
+the closest point on the face, an edge, or a vertex. Distance and overlap are
+geometric on both sides. A simple ray hits either face and reports a normal
+opposing its direction. World contact is one-sided, as described in
+[World3D](World3D.md). Other triangle pairs and triangle compounds are not
+supported.
 
 Separated box pairs compare vertices against faces and edges against edges.
 Capsules use their axial segment; ray queries also test their hemispheres.
