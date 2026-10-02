@@ -6,6 +6,13 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Capsule–triangle and capsule–mesh distance and overlap cover the complete
+  axial segment, oriented poses and both argument orders. World contacts use
+  the front side; a capsule parallel to a flat face can rest on two points.
+  `CharacterMover3D` traverses an inclined grid in both directions with
+  continuous support and Jolt positions matched within 5 mm. `CapsuleTerrainScene`
+  adds manual movement and jumping. Boxes on terrain remain outside this slice.
+
 - `TriangleMesh3D.from_height_grid` builds a fixed surface from a regular
   grid of finite heights, with deterministic identities for both triangles
   in each cell. A sphere crosses multiple inclined seams in both directions

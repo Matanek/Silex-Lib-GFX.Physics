@@ -7,16 +7,18 @@ faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
 A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
-spheres on the front side defined by vertex winding, including exposed edges
-and vertices; a sphere whose center is behind the triangle plane creates no
+spheres and capsules on the front side defined by vertex winding, including
+exposed edges
+and vertices; a shape whose center is behind the triangle plane creates no
 contact. The triangle and its pose can be replaced without recreating the body.
 Dynamic or kinematic triangle bodies and triangle children in compounds are
-rejected. Triangle/box, triangle/capsule, and triangle/triangle contacts, other
+rejected. Triangle/box and triangle/triangle contacts, other
 mesh seams and general terrains, and CCD against triangles are not qualified.
 Physics triangles are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
-sphere primitive or compound child, the world keeps at most one front-facing
+sphere or capsule primitive or compound child, the world keeps at most one
+front-facing
 triangle per step. `Contact3D.first_child_id()` or `second_child_id()` reports
 its index.
 A square of two coplanar triangles keeps the sphere supported while it crosses
@@ -29,7 +31,10 @@ traverses all three inclined rows of a 4 by 4 grid in both directions, with
 trajectories compared against Jolt Debug and Release and face identity tracked.
 The comparison does not establish arbitrary seam heights or angles, holes, or
 nonmanifold meshes. Dynamic or kinematic mesh bodies, mesh children in
-compounds, and CCD against meshes are absent.
+compounds, and CCD against meshes are absent. An upright dynamic capsule rests
+on a flat grid; a capsule parallel to the face uses two contact points when
+both ends share the same normal and depth. Virtual capsule traversal across
+the inclined rows is described in [Character3D](Character3D.md).
 
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by

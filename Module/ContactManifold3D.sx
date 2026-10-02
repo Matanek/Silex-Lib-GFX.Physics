@@ -1,5 +1,9 @@
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Transform3D.Transform3D
 use STD.Math
 
@@ -147,6 +151,30 @@ func component3d(value:Math.Vec3, axis:int) float {
     if axis == 0 { return value.x }
     if axis == 1 { return value.y }
     return value.z
+}
+
+// Only an axis parallel to the selected surface needs two cap witnesses.
+// The two extra queries run once during manifold generation, never per solver
+// iteration. Keep the single witness at edges or across different face normals.
+package func capsule_surface_contact_points(
+    capsule:Capsule3D, transform:Transform3D, surface:ShapePlacement3D,
+    normal:Math.Vec3, witness:Math.Vec3
+) Math.Vec3[] {
+    let axis = transform.vector(Math.Vec3.up())
+    if Math.abs(axis.dot(normal)) > 0.001 { return [witness] }
+    let shape = Shape3D.sphere(Sphere3D(capsule.radius))
+    let first = contact_distance3d(ShapePlacement3D(shape, Transform3D(
+        position:transform.position.subtract(axis.multiply(capsule.half_height)))), surface)
+    let second = contact_distance3d(ShapePlacement3D(shape, Transform3D(
+        position:transform.position.add(axis.multiply(capsule.half_height)))), surface)
+    if first.normal.dot(normal) < 0.99999 || second.normal.dot(normal) < 0.99999 ||
+        Math.abs(first.separation - second.separation) > 0.00001 ||
+        Math.abs(first.first_point.add(first.second_point).multiply(0.5)
+            .subtract(witness).dot(normal)) > 0.00001 {
+        return [witness]
+    }
+    return [first.first_point.add(first.second_point).multiply(0.5),
+        second.first_point.add(second.second_point).multiply(0.5)]
 }
 
 package func capsule_capsule_contact_points(

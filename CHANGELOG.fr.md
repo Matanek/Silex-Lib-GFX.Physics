@@ -6,6 +6,14 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les distances et recouvrements capsule–triangle et capsule–maillage
+  couvrent tout le segment axial, les poses orientées et les deux ordres.
+  Le monde répond du côté avant ; une capsule parallèle à une face plane
+  peut reposer sur deux points. `CharacterMover3D` parcourt une grille
+  inclinée dans les deux sens, avec un appui continu et une comparaison à
+  Jolt à 5 mm près. La scène `CapsuleTerrainScene` permet d'essayer le saut
+  et le mouvement manuel. Les boîtes sur terrain restent hors de cette tranche.
+
 - `TriangleMesh3D.from_height_grid` construit une surface fixe depuis une
   grille régulière de hauteurs finies, avec identité déterministe des deux
   faces de chaque cellule. Une sphère franchit plusieurs coutures inclinées

@@ -7,17 +7,19 @@ des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
 Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères
+et capsules
 dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
-et sommets isolés ; une sphère dont le centre est derrière le plan du triangle
+et sommets isolés ; une forme dont le centre est derrière le plan du triangle
 ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
 recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
 triangles enfants d'un composé sont rejetés. Les contacts triangle/boîte,
-triangle/capsule et triangle/triangle, ainsi que les autres coutures, les
+triangle/triangle, ainsi que les autres coutures, les
 terrains généraux et le CCD contre triangle, ne sont pas qualifiés. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
-chaque sphère dynamique primitive ou enfant de composé, le monde ne retient
+chaque sphère ou capsule dynamique primitive ou enfant de composé, le monde
+ne retient
 qu'une face avant au plus par pas. `Contact3D.first_child_id()` ou
 `second_child_id()` indique son index. Un carré de deux triangles coplanaires
 conserve l'appui pendant le franchissement de sa diagonale. La sélection
@@ -31,7 +33,10 @@ les deux sens, avec des trajectoires comparées à Jolt Debug et Release et une
 identité de face suivie. La comparaison n'établit pas les coutures de hauteur
 ou d'angle arbitraire, les trous ni les maillages non manifold. Un corps maillé
 dynamique/cinématique, un maillage enfant de composé et le CCD contre maillage
-sont absents.
+sont absents. Une capsule dynamique verticale repose sur une grille plane ;
+une capsule parallèle à la face utilise deux points de contact lorsque ses
+deux extrémités partagent la même normale et profondeur. Le parcours virtuel
+des capsules sur les rangées inclinées est décrit dans [Character3D](Character3D.md).
 
 Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou
 dynamique. Chaque paire d'enfants en contact possède son propre manifold,

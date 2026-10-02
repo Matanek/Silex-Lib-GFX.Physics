@@ -12,6 +12,7 @@ In a fixed timestep loop, this fragment assumes a `world`, `position`, `velocity
 ```sx
 var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings()
     ..radius = 0.3 ..half_height = 0.55 ..step_height = 1.2)
+if grounded { velocity.y = 0.0 }
 let result = mover.calculate_move(world, position, velocity.multiply(delta), grounded)
 position = result.position
 grounded = result.grounded
@@ -26,6 +27,15 @@ removes velocity into encountered surfaces without adding artificial stair veloc
 The [executable consumer](../../Tests/Consumer/Tests/CharacterMover3D.sx) covers
 motion and collisions. `World3D` in Silex-Examples adds variable jumping,
 air control and an interpolated camera.
+
+An inclined 4 by 4 grid is traversed in both directions, with positions
+compared against Jolt Debug and Release within 5 mm. The
+[terrain consumer](../../Tests/Consumer/Tests/CapsuleTerrain3D.sx) covers seams
+and loss of support. `Physics3D/CapsuleTerrainScene.sx` in Silex-Examples lets
+you try traversal and jumping. For grounded walking, reset vertical velocity
+before applying motion: upward velocity retained after projection represents
+an upward intention and disables downward floor following. Gravity and
+jumping remain application rules.
 
 ## Configure support
 
@@ -47,7 +57,8 @@ passes; a capsule deeply enclosed in geometry is not guaranteed to escape.
 ## Current scope
 
 The mover is virtual and registers no rigid body. It reads current poses of
-enabled boxes, spheres, capsules and compound children. A kinematic support
+enabled boxes, spheres, capsules and compound children, plus the front faces
+of fixed triangles and meshes. A kinematic support
 keeps the character's point in its local frame between calls: translation and
 rotation carry the capsule, even away from the centre of rotation. Call
 `world.step(delta)` before `calculate_move`, and reuse the same mover with the

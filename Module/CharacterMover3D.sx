@@ -1,6 +1,7 @@
+use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Geometry3D.front_triangle_contact3d
 use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.CollisionFilter3D.QueryFilter3D
-use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.CastResult3D
 use GFX.Physics.Shape3D.Shape3D
@@ -200,8 +201,9 @@ public class CharacterMover3D {
         while pass < 8 {
             var corrected = false
             for target in self.candidates {
-                let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
-                    Transform3D(position:current)), target.placement)
+                let placement = ShapePlacement3D(self.shape, Transform3D(position:current))
+                if !front_triangle_contact3d(placement, target.placement) { continue }
+                let distance = contact_distance3d(placement, target.placement)
                 if distance.separation < -0.00001 {
                     current = current.subtract(distance.normal.multiply(
                         Math.min(-distance.separation + self.settings.skin, self.settings.radius)))
@@ -250,8 +252,9 @@ public class CharacterMover3D {
             var iteration = 0
             while iteration < 32 {
                 let at = position.add(translation.multiply(fraction))
-                let distance = Geometry3D.distance(ShapePlacement3D(self.shape,
-                    Transform3D(position:at)), target.placement)
+                let placement = ShapePlacement3D(self.shape, Transform3D(position:at))
+                if !front_triangle_contact3d(placement, target.placement) { break }
+                let distance = contact_distance3d(placement, target.placement)
                 let approaching = translation.dot(distance.normal)
                 // Match clip_planes: a residual it treats as tangent must not
                 // become another zero-fraction contact and stall the slide.

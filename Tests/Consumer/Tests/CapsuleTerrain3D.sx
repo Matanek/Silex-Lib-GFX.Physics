@@ -1,0 +1,183 @@
+use GFX.Physics
+use STD.Math
+
+func surface() Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.triangle(Physics.Triangle3D(
+        Math.Vec3(), Math.Vec3(0.0, 0.0, 4.0), Math.Vec3(4.0, 0.0, 0.0))))
+}
+
+func capsule(position:Math.Vec3,
+    rotation:Math.Quat = Math.Quat.identity()) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(0.3, 0.5)),
+        Physics.Transform3D(position, rotation))
+}
+
+func geometry() {
+    let floor = surface()
+    let face = Physics.Geometry3D.distance(capsule(Math.Vec3(1.0, 1.0, 1.0)), floor)
+    assert(Math.abs(face.separation - 0.2) < 0.00001)
+    assert(face.normal.nearly_equal(Math.Vec3(0.0, -1.0, 0.0), 0.00001))
+    assert(face.second_point.nearly_equal(Math.Vec3(1.0, 0.0, 1.0), 0.00001))
+    let edge = Physics.Geometry3D.distance(capsule(Math.Vec3(-0.3, 0.9, 2.0)), floor)
+    assert(Math.abs(edge.separation - 0.2) < 0.00001)
+    assert(edge.second_point.nearly_equal(Math.Vec3(0.0, 0.0, 2.0), 0.00001))
+    assert(edge.normal.nearly_equal(Math.Vec3(0.6, -0.8, 0.0), 0.00001))
+    let vertex = Physics.Geometry3D.distance(capsule(Math.Vec3(-0.3, 0.9, -0.4)), floor)
+    assert(Math.abs(vertex.separation - Math.sqrt(0.41) + 0.3) < 0.00001)
+    assert(vertex.second_point.nearly_equal(Math.Vec3(), 0.00001))
+    let horizontal = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())
+    // Both axial endpoints lie outside this narrow triangle; its face is
+    // nearest to the middle of the axis, not to either capsule cap.
+    let narrow = Physics.ShapePlacement3D(Physics.Shape3D.triangle(Physics.Triangle3D(
+        Math.Vec3(-0.1, 0.0, -0.2), Math.Vec3(0.0, 0.0, 0.2),
+        Math.Vec3(0.1, 0.0, -0.2))))
+    let middle = Physics.Geometry3D.distance(capsule(Math.Vec3(0.0, 0.4, 0.0), horizontal), narrow)
+    assert(Math.abs(middle.separation - 0.1) < 0.00001)
+    print("middle sep=$(middle.separation) first=$(middle.first_point.x),$(middle.first_point.y),$(middle.first_point.z) second=$(middle.second_point.x),$(middle.second_point.y),$(middle.second_point.z) normal=$(middle.normal.x),$(middle.normal.y),$(middle.normal.z)")
+    assert(Math.abs(middle.second_point.y) < 0.00001)
+    assert(middle.normal.nearly_equal(Math.Vec3(0.0, -1.0, 0.0), 0.00001))
+    let crossing = Physics.Geometry3D.distance(capsule(Math.Vec3(1.0, 0.1, 1.0)), floor)
+    assert(Math.abs(crossing.separation + 0.7) < 0.00001)
+    assert(crossing.normal.nearly_equal(Math.Vec3(0.0, -1.0, 0.0), 0.00001))
+    let narrow_crossing = Physics.Geometry3D.distance(capsule(Math.Vec3(0.0, 0.1, 0.0)), narrow)
+    assert(Math.abs(narrow_crossing.separation + 0.3 + 0.02 / Math.sqrt(0.17)) < 0.00001)
+    let back = Physics.Geometry3D.distance(capsule(Math.Vec3(1.0, -0.7, 1.0)), floor)
+    assert(Math.abs(back.separation + 0.1) < 0.00001)
+    assert(back.normal.nearly_equal(Math.Vec3.up(), 0.00001))
+    assert(Physics.Geometry3D.overlaps(capsule(Math.Vec3(1.0, -0.7, 1.0)), floor))
+    let reversed = Physics.Geometry3D.distance(floor, capsule(Math.Vec3(1.0, -0.7, 1.0)))
+    assert(reversed.normal.nearly_equal(back.normal.negated(), 0.00001))
+    assert(reversed.first_point.nearly_equal(back.second_point, 0.00001))
+
+    let pose = Physics.Transform3D(Math.Vec3(2.0, 3.0, -1.0), horizontal)
+    let oriented = Physics.Geometry3D.distance(capsule(pose.point(Math.Vec3(1.0, 1.0, 1.0)), horizontal),
+        Physics.ShapePlacement3D(surface().shape(), pose))
+    assert(Math.abs(oriented.separation - face.separation) < 0.00001)
+    assert(oriented.normal.nearly_equal(pose.vector(face.normal), 0.00001))
+}
+
+func grid() Physics.Shape3D {
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(4, 4,
+        [0.0, 0.0, 0.0, 0.0,
+         0.15, 0.15, 0.15, 0.15,
+         0.30, 0.30, 0.30, 0.30,
+         0.15, 0.15, 0.15, 0.15], 1.0, 1.0))
+}
+
+func world_contacts() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = surface().shape())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = capsule(Math.Vec3()).shape()
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.7, 1.0)))
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 1 && body.position().y > 0.7)
+    body.set_transform(Physics.Transform3D(position:Math.Vec3(1.0, -0.7, 1.0)))
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 0 && Math.abs(body.position().y + 0.7) < 0.00001)
+
+    var terrain = Physics.World3D()
+    terrain.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(
+            Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0, 0.0, 0.0, 0.0], 4.0, 4.0)))
+    var falling = terrain.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = capsule(Math.Vec3()).shape()
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.25, 2.5, 0.25)))
+    var step = 0
+    while step < 240 { terrain.step(1.0 / 120.0); step++ }
+    print("dynamic capsule x=$(falling.position().x) y=$(falling.position().y) z=$(falling.position().z) contacts=$(terrain.contact_count())")
+    assert(falling.position().y > 0.7 && falling.position().y < 1.3)
+    assert(terrain.contact_count() == 1)
+    var contacts:Physics.Contact3D[] = []
+    terrain.write_contacts(contacts)
+    assert(contacts[0].first_child_id() >= 0 && contacts[0].first_child_id() < 18)
+    falling.set_transform(Physics.Transform3D(Math.Vec3(1.5, 0.3, 1.5),
+        Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back())))
+    falling.set_linear_velocity(Math.Vec3())
+    falling.set_angular_velocity(Math.Vec3())
+    step = 0
+    while step < 240 { terrain.step(1.0 / 120.0); step++ }
+    print("horizontal capsule y=$(falling.position().y) z=$(falling.position().z) spin=$(falling.angular_velocity().length())")
+    assert(Math.abs(falling.position().y - 0.3) < 0.002)
+    assert(falling.angular_velocity().length() < 0.01)
+    contacts.clear()
+    terrain.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].point_count() == 2)
+    let query = Physics.Geometry3D.distance(capsule(Math.Vec3(1.25, 1.25, 1.25)),
+        Physics.ShapePlacement3D(grid()))
+    assert(query.second_child_id >= 6 && query.second_child_id < 12)
+    let reverse = Physics.Geometry3D.distance(Physics.ShapePlacement3D(grid()),
+        capsule(Math.Vec3(1.25, 1.25, 1.25)))
+    assert(reverse.first_child_id == query.second_child_id)
+}
+
+func walking(reverse:bool) {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = grid())
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..step_height = 0.0)
+    var position = Math.Vec3(1.5, 1.0, 0.4)
+    var speed = 2.0
+    if reverse { position = Math.Vec3(1.5, 1.3, 2.6); speed = -2.0 }
+    var expected_y:float[] = [0.987270355, 1.06062007, 1.13396966, 1.09815192]
+    var expected_z:float[] = [0.892610133, 1.38160861, 1.87060726, 2.36817837]
+    if reverse {
+        expected_y = [1.13779771, 1.09423482, 1.01923501, 0.944235146]
+        expected_z = [2.10387325, 1.60570812, 1.10570860, 0.605709076]
+    }
+    var velocity = Math.Vec3()
+    var grounded = false
+    var step = 0
+    var supported = 0
+    while step < 120 {
+        velocity.z = speed
+        if grounded { velocity.y = 0.0 } else { velocity.y -= 9.81 / 120.0 }
+        let result = mover.calculate_move(world, position, velocity.divide(120.0), grounded)
+        let change = result.position.subtract(position)
+        assert(Math.abs(change.z) <= 2.0 / 120.0 + 0.0001)
+        position = result.position
+        velocity = result.clip_velocity(velocity)
+        grounded = result.grounded
+        assert(Math.abs(position.x - 1.5) < 0.001)
+        if step > 30 {
+            assert(grounded)
+            if let support = result.support() { assert(support.same_body(floor)) }
+            else { assert(false) }
+            let distance = Physics.Geometry3D.distance(capsule(position), Physics.ShapePlacement3D(grid()))
+            // Character default half-height is 0.55; geometry helper is 0.5.
+            assert(distance.separation > 0.05 && distance.separation < 0.054)
+            supported++
+        }
+        if step % 30 == 29 {
+            let sample = step / 30
+            assert(grounded)
+            assert(Math.abs(position.y - expected_y[sample]) < 0.005)
+            assert(Math.abs(position.z - expected_z[sample]) < 0.005)
+            print("reverse=$(reverse) step=$(step + 1) y=$(position.y) z=$(position.z) grounded=$(grounded)")
+        }
+        step++
+    }
+    print("terrain reverse=$(reverse): x=$(position.x) y=$(position.y) z=$(position.z), supports=$(supported)")
+    if reverse { assert(position.z < 0.7) } else { assert(position.z > 2.3) }
+    world.destroy_rigid_body(floor)
+    let removed = mover.calculate_move(world, position, Math.Vec3(), true)
+    assert(!removed.grounded && removed.support() == null)
+    var back_world = Physics.World3D()
+    back_world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = surface().shape())
+    let back = mover.calculate_move(back_world, Math.Vec3(1.0, -0.7, 1.0), Math.Vec3(), false)
+    assert(!back.grounded && Math.abs(back.position.y + 0.7) < 0.00001)
+}
+
+test "capsule triangle covers the full axial segment" { geometry() }
+test "capsule terrain contacts are unilateral and preserve face identity" { world_contacts() }
+test "character crosses height grid seams in both directions" { walking(false); walking(true) }
+
+func main() {
+    geometry()
+    world_contacts()
+    walking(false)
+    walking(true)
+    print("Capsule terrain: geometry, contacts and character passed")
+}

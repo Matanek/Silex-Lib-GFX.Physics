@@ -61,11 +61,11 @@ func sphere_triangle_distance(
     )
 }
 
-package func sphere_triangle_front3d(
-    sphere_transform:Transform3D,
+package func shape_triangle_front3d(
+    shape_transform:Transform3D,
     triangle:Triangle3D, triangle_transform:Transform3D
 ) bool {
-    let center = triangle_transform.inverse_point(sphere_transform.position)
+    let center = triangle_transform.inverse_point(shape_transform.position)
     return center.subtract(triangle.first).dot(triangle.normal()) >= 0.0
 }
 
@@ -99,7 +99,7 @@ func sphere_mesh_distance(
     var index = 0
     while index < mesh.triangle_count() {
         let triangle = mesh.triangle(index)
-        if !front_only || sphere_triangle_front3d(sphere_transform, triangle,
+        if !front_only || shape_triangle_front3d(sphere_transform, triangle,
             mesh_transform) {
             let distance = sphere_triangle_distance(sphere, sphere_transform,
                 triangle, mesh_transform)
@@ -113,13 +113,13 @@ func sphere_mesh_distance(
     return best
 }
 
-package func sphere_mesh_front3d(
-    sphere_transform:Transform3D,
+package func shape_mesh_front3d(
+    shape_transform:Transform3D,
     mesh:TriangleMesh3D, mesh_transform:Transform3D
 ) bool {
     var index = 0
     while index < mesh.triangle_count() {
-        if sphere_triangle_front3d(sphere_transform, mesh.triangle(index),
+        if shape_triangle_front3d(shape_transform, mesh.triangle(index),
             mesh_transform) { return true }
         index++
     }

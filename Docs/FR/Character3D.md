@@ -13,6 +13,7 @@ Dans une boucle à pas fixe, ce fragment suppose un monde `world`, une position
 ```sx
 var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings()
     ..radius = 0.3 ..half_height = 0.55 ..step_height = 1.2)
+if grounded { velocity.y = 0.0 }
 let result = mover.calculate_move(world, position, velocity.multiply(delta), grounded)
 position = result.position
 grounded = result.grounded
@@ -28,6 +29,16 @@ vers les surfaces rencontrées, sans ajouter la vitesse d'une marche artificiell
 Le [consommateur exécutable](../../Tests/Consumer/Tests/CharacterMover3D.sx)
 couvre le déplacement et les collisions. L'exemple `World3D` du dépôt
 Silex-Examples ajoute saut variable, contrôle aérien et caméra interpolée.
+
+Une grille inclinée 4 × 4 est parcourue dans les deux sens avec des positions
+comparées à Jolt Debug et Release à 5 mm près. Le
+[consommateur de terrain](../../Tests/Consumer/Tests/CapsuleTerrain3D.sx) couvre
+les coutures et la perte d'appui. `Physics3D/CapsuleTerrainScene.sx` dans
+Silex-Examples permet d'essayer le parcours et le saut. Pour une commande de
+marche au sol, remettre la vitesse verticale à zéro avant le déplacement ;
+une vitesse ascendante conservée après projection représente une intention
+de montée et désactive le suivi descendant. La gravité et le saut restent
+les règles de l'application.
 
 ## Régler les appuis
 
@@ -50,7 +61,8 @@ capsule profondément enfermée dans une géométrie ne garantit pas une sortie.
 ## Portée actuelle
 
 Le contrôleur est virtuel et n'enregistre aucun corps rigide. Il lit les poses
-courantes des boîtes, sphères, capsules et enfants de composés activés. Un
+courantes des boîtes, sphères, capsules et enfants de composés activés, ainsi
+que les faces avant des triangles et maillages fixes. Un
 support cinématique conserve le point du personnage dans son repère local entre
 deux appels : sa translation et sa rotation transportent la capsule, même hors
 du centre de rotation. Appeler `world.step(delta)` avant `calculate_move` et

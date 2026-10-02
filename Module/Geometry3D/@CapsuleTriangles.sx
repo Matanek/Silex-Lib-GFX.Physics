@@ -1,0 +1,128 @@
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
+use STD.Math
+
+func closest_capsule_triangle3d(axis:CapsuleAxis3D,
+    triangle:Triangle3D) CapsuleAxisPair3D {
+    let direction = axis.second.subtract(axis.first)
+    let normal = triangle.normal()
+    let denominator = normal.dot(direction)
+    if Math.abs(denominator) > 0.000000000001 {
+        let fraction = normal.dot(triangle.first.subtract(axis.first)) / denominator
+        if fraction >= 0.0 && fraction <= 1.0 {
+            let point = axis.first.add(direction.multiply(fraction))
+            let closest = closest_triangle_point3d(point, triangle)
+            if point.subtract(closest).length_squared() <= 0.000000000001 {
+                return CapsuleAxisPair3D(point, point)
+            }
+        }
+    }
+
+    var best = CapsuleAxisPair3D(axis.first,
+        closest_triangle_point3d(axis.first, triangle))
+    var best_squared = best.second.subtract(best.first).length_squared()
+    let second_point = closest_triangle_point3d(axis.second, triangle)
+    let second_squared = second_point.subtract(axis.second).length_squared()
+    if second_squared < best_squared {
+        best = CapsuleAxisPair3D(axis.second, second_point)
+        best_squared = second_squared
+    }
+    // A non-intersecting minimum is on an axial endpoint or a triangle edge.
+    // The segment/segment query also includes edge endpoints and parallel axes.
+    var edge = 0
+    while edge < 3 {
+        var first = triangle.first
+        var second = triangle.second
+        if edge == 1 { first = triangle.second; second = triangle.third }
+        if edge == 2 { first = triangle.third; second = triangle.first }
+        let pair = closest_capsule_axes3d(axis, CapsuleAxis3D(first, second))
+        let squared = pair.second.subtract(pair.first).length_squared()
+        if squared < best_squared { best = pair; best_squared = squared }
+        edge++
+    }
+    return best
+}
+
+func capsule_triangle_distance(
+    capsule:Capsule3D, capsule_transform:Transform3D,
+    triangle:Triangle3D, triangle_transform:Transform3D
+) DistanceResult3D {
+    let world_axis = capsule_axis3d(capsule, capsule_transform)
+    let axis = CapsuleAxis3D(triangle_transform.inverse_point(world_axis.first),
+        triangle_transform.inverse_point(world_axis.second))
+    let pair = closest_capsule_triangle3d(axis, triangle)
+    let offset = pair.second.subtract(pair.first)
+    let length = offset.length()
+    if length <= 0.000000001 {
+        return capsule_triangle_penetration3d(capsule, axis, triangle, triangle_transform)
+    }
+    let local_normal = offset.divide(length)
+    let normal = triangle_transform.vector(local_normal)
+    return DistanceResult3D(
+        triangle_transform.point(pair.first).add(normal.multiply(capsule.radius)),
+        triangle_transform.point(pair.second), normal, length - capsule.radius)
+}
+
+// If the axial segment intersects the triangle, its Minkowski difference is
+// a prism. Its nearest exit lies on a triangle face or an edge extruded along
+// the capsule axis; adding the radius gives the actual separating translation.
+func capsule_triangle_penetration3d(capsule:Capsule3D, axis:CapsuleAxis3D,
+    triangle:Triangle3D, transform:Transform3D) DistanceResult3D {
+    let direction = axis.second.subtract(axis.first)
+    var best_depth = 1000000000000.0
+    var best_normal = triangle.normal().negated()
+    var index = 0
+    while index < 4 {
+        var normal = triangle.normal()
+        if index == 1 { normal = direction.cross(triangle.second.subtract(triangle.first)) }
+        if index == 2 { normal = direction.cross(triangle.third.subtract(triangle.second)) }
+        if index == 3 { normal = direction.cross(triangle.first.subtract(triangle.third)) }
+        let squared = normal.length_squared()
+        if squared > 0.000000000001 {
+            normal = normal.divide(Math.sqrt(squared))
+            let first = triangle.first.dot(normal)
+            let second = triangle.second.dot(normal)
+            let third = triangle.third.dot(normal)
+            let triangle_min = Math.min(first, Math.min(second, third))
+            let triangle_max = Math.max(first, Math.max(second, third))
+            let low = Math.min(axis.first.dot(normal), axis.second.dot(normal))
+            let high = Math.max(axis.first.dot(normal), axis.second.dot(normal))
+            let forward = triangle_max - low + capsule.radius
+            let backward = high - triangle_min + capsule.radius
+            if forward < best_depth { best_depth = forward; best_normal = normal.negated() }
+            if backward < best_depth { best_depth = backward; best_normal = normal }
+        }
+        index++
+    }
+    var center = axis.first
+    if axis.second.dot(best_normal) > axis.first.dot(best_normal) { center = axis.second }
+    return DistanceResult3D(transform.point(center.add(best_normal.multiply(capsule.radius))),
+        transform.point(closest_triangle_point3d(center, triangle)),
+        transform.vector(best_normal), -best_depth)
+}
+
+func capsule_mesh_distance(
+    capsule:Capsule3D, capsule_transform:Transform3D,
+    mesh:TriangleMesh3D, mesh_transform:Transform3D,
+    front_only:bool = false
+) DistanceResult3D {
+    var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(),
+        1000000000000.0)
+    var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        if !front_only || shape_triangle_front3d(capsule_transform, triangle,
+            mesh_transform) {
+            let distance = capsule_triangle_distance(capsule, capsule_transform,
+                triangle, mesh_transform)
+            if distance.separation < best.separation {
+                best = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, -1, index)
+            }
+        }
+        index++
+    }
+    return best
+}

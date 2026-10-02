@@ -46,10 +46,9 @@ an invalid quaternion.
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
-and capsules, as well as sphere/triangle and sphere/triangle-mesh in either
-order, including oriented
-poses. `DistanceResult3D.separation` is
-positive when surfaces are apart, zero at tangency, and negative in
+and capsules, as well as sphere/triangle, capsule/triangle and their mesh
+variants in either order, including oriented poses.
+`DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
 second. The two witness points lie on their respective surfaces. When several
 points are equally close, their coordinates may differ without changing the
@@ -69,7 +68,10 @@ miss returns `hit = false`.
 `Triangle3D(first, second, third)` stores three finite, noncollinear local
 vertices. Their winding defines the front face through `(second - first) ×
 (third - first)`; `normal()` returns that unit direction. Sphere distance uses
-the closest point on the face, an edge, or a vertex. Distance and overlap are
+the closest point on the face, an edge, or a vertex. Capsule distance uses the
+whole axial segment: the closest witness can lie in its middle even when both
+endpoints are outside the face. Penetration also accounts for the complete
+segment and radius. Distance and overlap are
 geometric on both sides. A simple ray hits either face and reports a normal
 opposing its direction. World contact is one-sided, as described in
 [World3D](World3D.md). Other triangle pairs and triangle compounds are not
@@ -78,7 +80,8 @@ supported.
 `TriangleMesh3D([triangle, ...])` copies a nonempty list of `Triangle3D`
 values. Each triangle's zero-based index remains its identity until the mesh
 is replaced. `triangle_count()` and `triangle(index)` expose the list. Sphere
-distance selects the smallest separation and keeps the first index on a tie.
+and capsule distance selects the smallest separation and keeps the first index
+on a tie.
 The result reports that index as `second_child_id` or `first_child_id` according
 to shape order; a ray reports it as `child_id`. Standalone distance, overlap,
 and ray queries remain geometric on both sides. Other mesh pairs are not
