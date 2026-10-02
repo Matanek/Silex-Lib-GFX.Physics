@@ -1,0 +1,118 @@
+use GFX.Physics
+use STD.Math
+
+func floor_mesh() Physics.Shape3D {
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D([
+        Physics.Triangle3D(Math.Vec3(), Math.Vec3(0.0, 0.0, 4.0),
+            Math.Vec3(4.0, 0.0, 0.0)),
+        Physics.Triangle3D(Math.Vec3(4.0, 0.0, 0.0),
+            Math.Vec3(0.0, 0.0, 4.0), Math.Vec3(4.0, 0.0, 4.0))
+    ]))
+}
+
+func sphere_at(position:Math.Vec3) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Transform3D(position:position))
+}
+
+test "mesh distance and rays identify a triangle across a flat seam" {
+    let mesh = Physics.ShapePlacement3D(floor_mesh())
+    let first = Physics.Geometry3D.distance(sphere_at(Math.Vec3(1.0, 0.4, 1.0)), mesh)
+    assert(first.second_child_id == 0)
+    assert(Math.nearly_equal(first.separation, -0.1, 0.00001))
+    let seam = Physics.Geometry3D.distance(sphere_at(Math.Vec3(2.0, 0.4, 2.0)), mesh)
+    assert(seam.second_child_id == 0)
+    assert(Math.nearly_equal(seam.separation, -0.1, 0.00001))
+    let second = Physics.Geometry3D.distance(sphere_at(Math.Vec3(3.0, 0.4, 3.0)), mesh)
+    assert(second.second_child_id == 1)
+    let reversed = Physics.Geometry3D.distance(mesh,
+        sphere_at(Math.Vec3(3.0, 0.4, 3.0)))
+    assert(reversed.first_child_id == 1 && reversed.second_child_id == -1)
+
+    let ray = Physics.Geometry3D.ray_cast(Physics.Ray3D(
+        Math.Vec3(3.0, 2.0, 3.0), Math.Vec3(0.0, -4.0, 0.0)), mesh)
+    assert(ray.hit && ray.child_id == 1)
+    assert(Math.nearly_equal(ray.fraction, 0.5, 0.00001))
+
+    let pose = Physics.Transform3D(
+        position:Math.Vec3(2.0, 3.0, -1.0),
+        rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back()))
+    let oriented = Physics.Geometry3D.distance(sphere_at(
+        pose.point(Math.Vec3(3.0, 0.4, 3.0))),
+        Physics.ShapePlacement3D(floor_mesh(), pose))
+    assert(oriented.second_child_id == 1)
+    assert(Math.nearly_equal(oriented.separation, -0.1, 0.00001))
+}
+
+test "fixed mesh contacts a sphere once on the seam and ignores its back" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var mesh = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = floor_mesh())
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.4, 2.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 0)
+    sphere.set_transform(Physics.Transform3D(position:Math.Vec3(3.0, 0.4, 3.0)))
+    world.step(1.0 / 60.0)
+    world.write_contacts(contacts)
+    assert(world.contact_count() == 1 && contacts[0].first_child_id() == 1)
+    sphere.set_transform(Physics.Transform3D(position:Math.Vec3(2.0, -0.4, 2.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 0)
+    assert(mesh.position().nearly_equal(Math.Vec3(), 0.00001))
+    mesh.set_shape(Physics.Shape3D.mesh(Physics.TriangleMesh3D([
+        Physics.Triangle3D(Math.Vec3(), Math.Vec3(4.0, 0.0, 0.0),
+            Math.Vec3(0.0, 0.0, 4.0)),
+        Physics.Triangle3D(Math.Vec3(4.0, 0.0, 0.0),
+            Math.Vec3(4.0, 0.0, 4.0), Math.Vec3(0.0, 0.0, 4.0))
+    ])))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+}
+
+test "dynamic sphere traverses the shared edge without losing its support" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = floor_mesh() ..friction = 0.0)
+    var sphere = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.5, 1.0))
+        ..linear_velocity = Math.Vec3(2.0, 0.0, 2.0)
+        ..friction = 0.0 ..allow_sleep = false)
+    var step = 0
+    while step < 120 {
+        world.step(1.0 / 120.0)
+        assert(world.contact_count() == 1)
+        assert(sphere.position().y > 0.49 && sphere.position().y < 0.51)
+        assert(Math.abs(sphere.linear_velocity().y) < 0.1)
+        assert(Math.abs(sphere.linear_velocity().x - 2.0) < 0.05)
+        assert(Math.abs(sphere.linear_velocity().z - 2.0) < 0.05)
+        step++
+    }
+    assert(sphere.position().x > 2.95 && sphere.position().x < 3.05)
+    assert(sphere.position().z > 2.95 && sphere.position().z < 3.05)
+}
+
+test "mesh face and compound sphere child keep separate identities" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = floor_mesh())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(7,
+                Physics.Shape3D.sphere(Physics.Sphere3D(0.5)))
+        ]))
+        ..transform = Physics.Transform3D(position:Math.Vec3(3.0, 0.4, 3.0)))
+    world.step(1.0 / 60.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1)
+    assert(contacts[0].first_child_id() == 1)
+    assert(contacts[0].second_child_id() == 7)
+}

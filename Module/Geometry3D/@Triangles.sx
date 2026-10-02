@@ -1,6 +1,7 @@
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
 use STD.Math
 
 func closest_triangle_point3d(point:Math.Vec3, triangle:Triangle3D) Math.Vec3 {
@@ -86,4 +87,55 @@ func ray_triangle_cast(ray:Ray3D, triangle:Triangle3D,
     if denominator > 0.0 { normal = face.negated() }
     return CastResult3D(ray.origin.add(ray.translation.multiply(fraction)),
         transform.vector(normal), fraction)
+}
+
+func sphere_mesh_distance(
+    sphere:Sphere3D, sphere_transform:Transform3D,
+    mesh:TriangleMesh3D, mesh_transform:Transform3D,
+    front_only:bool = false
+) DistanceResult3D {
+    var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(),
+        1000000000000.0)
+    var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        if !front_only || sphere_triangle_front3d(sphere_transform, triangle,
+            mesh_transform) {
+            let distance = sphere_triangle_distance(sphere, sphere_transform,
+                triangle, mesh_transform)
+            if distance.separation < best.separation {
+                best = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, -1, index)
+            }
+        }
+        index++
+    }
+    return best
+}
+
+package func sphere_mesh_front3d(
+    sphere_transform:Transform3D,
+    mesh:TriangleMesh3D, mesh_transform:Transform3D
+) bool {
+    var index = 0
+    while index < mesh.triangle_count() {
+        if sphere_triangle_front3d(sphere_transform, mesh.triangle(index),
+            mesh_transform) { return true }
+        index++
+    }
+    return false
+}
+
+func ray_mesh_cast(ray:Ray3D, mesh:TriangleMesh3D,
+    transform:Transform3D) CastResult3D {
+    var best = CastResult3D()
+    var index = 0
+    while index < mesh.triangle_count() {
+        let hit = ray_triangle_cast(ray, mesh.triangle(index), transform)
+        if hit.hit && (!best.hit || hit.fraction < best.fraction) {
+            best = CastResult3D(hit.point, hit.normal, hit.fraction, index)
+        }
+        index++
+    }
+    return best
 }

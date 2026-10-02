@@ -16,6 +16,16 @@ triangle/capsule, triangle/triangle, les coutures de maillage, les terrains et
 le CCD contre triangle ne sont pas qualifiés. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
+`TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
+chaque sphère dynamique primitive ou enfant de composé, le monde ne retient
+qu'une face avant au plus par pas. `Contact3D.first_child_id()` ou
+`second_child_id()` indique son index. Un carré de deux triangles coplanaires conserve l'appui
+pendant le franchissement de sa diagonale. La sélection déterministe évite
+deux corrections identiques sur cette couture plane ; elle ne qualifie pas
+encore les coutures inclinées, concaves ou non manifold. Un corps maillé
+dynamique/cinématique, un maillage enfant de composé et le CCD contre maillage
+sont absents.
+
 Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou
 dynamique. Chaque paire d'enfants en contact possède son propre manifold,
 avec `Contact3D.first_child_id()` et `second_child_id()` ; `-1` désigne une

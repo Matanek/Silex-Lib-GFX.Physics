@@ -15,6 +15,15 @@ rejected. Triangle/box, triangle/capsule, triangle/triangle contacts, mesh
 seams, terrain, and CCD against triangles are not qualified. Physics triangles
 are independent of render geometry.
 
+`TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
+sphere primitive or compound child, the world keeps at most one front-facing
+triangle per step. `Contact3D.first_child_id()` or `second_child_id()` reports its index.
+A square of two coplanar triangles keeps the sphere supported while it crosses
+the shared diagonal. Deterministic selection avoids two identical corrections
+on this flat seam; inclined, concave, and nonmanifold seams are not yet
+qualified. Dynamic or kinematic mesh bodies, mesh children in compounds, and
+CCD against meshes are absent.
+
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by
 `Contact3D.first_child_id()` and `second_child_id()`; `-1` denotes a primitive.

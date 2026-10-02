@@ -3,6 +3,7 @@ use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.Compound3D.Compound3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
 
 public enum Shape3D {
     box(Box3D)
@@ -10,4 +11,5 @@ public enum Shape3D {
     capsule(Capsule3D)
     compound(Compound3D)
     triangle(Triangle3D)
+    mesh(TriangleMesh3D)
 }

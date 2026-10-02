@@ -15,6 +15,7 @@ test "construct the first 3D shapes as finite values" {
         capsule(_) => { assert(false) }
         compound(_) => { assert(false) }
         triangle(_) => { assert(false) }
+        mesh(_) => { assert(false) }
     }
     match box_shape {
         sphere(_) => { assert(false) }
@@ -22,6 +23,7 @@ test "construct the first 3D shapes as finite values" {
         capsule(_) => { assert(false) }
         compound(_) => { assert(false) }
         triangle(_) => { assert(false) }
+        mesh(_) => { assert(false) }
     }
 }
 

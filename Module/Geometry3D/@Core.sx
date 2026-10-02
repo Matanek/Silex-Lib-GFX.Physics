@@ -105,6 +105,7 @@ public struct Geometry3D {
             box(_) => {}
             capsule(_) => {}
             triangle(_) => {}
+            mesh(_) => {}
         }
         match second.shape() {
             compound(second_compound) => {
@@ -116,6 +117,7 @@ public struct Geometry3D {
             box(_) => {}
             capsule(_) => {}
             triangle(_) => {}
+            mesh(_) => {}
         }
         match first.shape() {
             sphere(first_sphere) => {
@@ -142,6 +144,10 @@ public struct Geometry3D {
                         return sphere_triangle_distance(first_sphere, first.transform(),
                             second_triangle, second.transform())
                     }
+                    mesh(second_mesh) => {
+                        return sphere_mesh_distance(first_sphere, first.transform(),
+                            second_mesh, second.transform())
+                    }
                     compound(_) => {}
                 }
             }
@@ -166,6 +172,7 @@ public struct Geometry3D {
                         ))
                     }
                     triangle(_) => {}
+                    mesh(_) => {}
                     compound(_) => {}
                 }
             }
@@ -190,6 +197,7 @@ public struct Geometry3D {
                         )
                     }
                     triangle(_) => {}
+                    mesh(_) => {}
                     compound(_) => {}
                 }
             }
@@ -205,6 +213,22 @@ public struct Geometry3D {
                     capsule(_) => {}
                     compound(_) => {}
                     triangle(_) => {}
+                    mesh(_) => {}
+                }
+            }
+            mesh(first_mesh) => {
+                match second.shape() {
+                    sphere(second_sphere) => {
+                        return reversed_distance(sphere_mesh_distance(
+                            second_sphere, second.transform(),
+                            first_mesh, first.transform()
+                        ))
+                    }
+                    box(_) => {}
+                    capsule(_) => {}
+                    compound(_) => {}
+                    triangle(_) => {}
+                    mesh(_) => {}
                 }
             }
             compound(_) => {}
@@ -229,12 +253,14 @@ public struct Geometry3D {
                     capsule(_) => {}
                     compound(_) => {}
                     triangle(_) => {}
+                    mesh(_) => {}
                 }
             }
             sphere(_) => {}
             capsule(_) => {}
             compound(_) => {}
             triangle(_) => {}
+            mesh(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
     }
@@ -255,6 +281,9 @@ public struct Geometry3D {
             }
             triangle(triangle) => {
                 return ray_triangle_cast(ray, triangle, target.transform())
+            }
+            mesh(mesh) => {
+                return ray_mesh_cast(ray, mesh, target.transform())
             }
         }
     }
@@ -429,6 +458,33 @@ package func contact_distance3d(
     first:ShapePlacement3D, second:ShapePlacement3D
 ) DistanceResult3D {
     match first.shape() {
+        sphere(first_sphere) => {
+            match second.shape() {
+                mesh(second_mesh) => {
+                    return sphere_mesh_distance(first_sphere, first.transform(),
+                        second_mesh, second.transform(), true)
+                }
+                sphere(_) => {}
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+            }
+        }
+        mesh(first_mesh) => {
+            match second.shape() {
+                sphere(second_sphere) => {
+                    return reversed_distance(sphere_mesh_distance(
+                        second_sphere, second.transform(), first_mesh,
+                        first.transform(), true))
+                }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+                mesh(_) => {}
+            }
+        }
         box(first_box) => {
             match second.shape() {
                 box(second_box) => {
@@ -439,9 +495,9 @@ package func contact_distance3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
-        sphere(_) => {}
         capsule(_) => {}
         compound(_) => {}
         triangle(_) => {}
@@ -465,6 +521,34 @@ package func contact_separation3d(
     first:ShapePlacement3D, second:ShapePlacement3D
 ) ContactSeparation3D {
     match first.shape() {
+        sphere(first_sphere) => {
+            match second.shape() {
+                mesh(second_mesh) => {
+                    let distance = sphere_mesh_distance(first_sphere, first.transform(),
+                        second_mesh, second.transform(), true)
+                    return ContactSeparation3D(distance.normal, distance.separation)
+                }
+                sphere(_) => {}
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+            }
+        }
+        mesh(first_mesh) => {
+            match second.shape() {
+                sphere(second_sphere) => {
+                    let distance = sphere_mesh_distance(second_sphere, second.transform(),
+                        first_mesh, first.transform(), true)
+                    return ContactSeparation3D(distance.normal.negated(), distance.separation)
+                }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+                mesh(_) => {}
+            }
+        }
         box(first_box) => {
             match second.shape() {
                 box(second_box) => {
@@ -476,9 +560,9 @@ package func contact_separation3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
-        sphere(_) => {}
         capsule(_) => {}
         compound(_) => {}
         triangle(_) => {}
@@ -504,6 +588,18 @@ package func front_triangle_contact3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
+            }
+        }
+        mesh(mesh) => {
+            match second.shape() {
+                sphere(_) => { return sphere_mesh_front3d(second.transform(), mesh,
+                    first.transform()) }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+                mesh(_) => {}
             }
         }
         sphere(_) => {}
@@ -522,6 +618,18 @@ package func front_triangle_contact3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
+            }
+        }
+        mesh(mesh) => {
+            match first.shape() {
+                sphere(_) => { return sphere_mesh_front3d(first.transform(), mesh,
+                    second.transform()) }
+                box(_) => {}
+                capsule(_) => {}
+                compound(_) => {}
+                triangle(_) => {}
+                mesh(_) => {}
             }
         }
         sphere(_) => {}

@@ -18,6 +18,9 @@ public struct CompoundChild3D {
             triangle(_) => {
                 panic("GFX.Physics.CompoundChild3D cannot contain a triangle")
             }
+            mesh(_) => {
+                panic("GFX.Physics.CompoundChild3D cannot contain a mesh")
+            }
         }
         self.id = id
         self.shape = shape

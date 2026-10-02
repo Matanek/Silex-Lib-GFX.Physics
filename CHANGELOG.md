@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `TriangleMesh3D` combines triangles into a fixed shape. Distance and ray
+  queries expose the triangle index; the world selects one front-facing
+  triangle per dynamic sphere primitive or compound child. Crossing a flat two-triangle seam retains
+  one support contact without duplicate correction.
+
 - `Triangle3D` adds an orientable fixed physics surface. Standalone sphere
   distance and overlap and ray queries cover the face, edges, and vertices;
   the world responds to dynamic spheres from the front only. Other pairs,

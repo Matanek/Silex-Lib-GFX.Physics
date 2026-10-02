@@ -1,0 +1,16 @@
+use GFX.Physics.Triangle3D.Triangle3D
+
+public class TriangleMesh3D {
+    private var triangles:Triangle3D[]
+
+    init(triangles:Triangle3D[]) {
+        if triangles.count() == 0 {
+            panic("GFX.Physics.TriangleMesh3D requires at least one triangle")
+        }
+        self.triangles = []
+        for triangle in triangles { self.triangles.append(triangle) }
+    }
+
+    func triangle_count() int { return self.triangles.count() }
+    func triangle(index:int) Triangle3D { return self.triangles[index] }
+}

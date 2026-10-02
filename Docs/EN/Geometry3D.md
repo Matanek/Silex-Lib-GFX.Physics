@@ -46,7 +46,8 @@ an invalid quaternion.
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
-and capsules, as well as sphere/triangle in either order, including oriented
+and capsules, as well as sphere/triangle and sphere/triangle-mesh in either
+order, including oriented
 poses. `DistanceResult3D.separation` is
 positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
@@ -72,6 +73,15 @@ the closest point on the face, an edge, or a vertex. Distance and overlap are
 geometric on both sides. A simple ray hits either face and reports a normal
 opposing its direction. World contact is one-sided, as described in
 [World3D](World3D.md). Other triangle pairs and triangle compounds are not
+supported.
+
+`TriangleMesh3D([triangle, ...])` copies a nonempty list of `Triangle3D`
+values. Each triangle's zero-based index remains its identity until the mesh
+is replaced. `triangle_count()` and `triangle(index)` expose the list. Sphere
+distance selects the smallest separation and keeps the first index on a tie.
+The result reports that index as `second_child_id` or `first_child_id` according
+to shape order; a ray reports it as `child_id`. Standalone distance, overlap,
+and ray queries remain geometric on both sides. Other mesh pairs are not
 supported.
 
 Separated box pairs compare vertices against faces and edges against edges.

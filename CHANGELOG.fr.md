@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `TriangleMesh3D` réunit des triangles dans une forme fixe. Distance et rayon
+  exposent l'index de face ; le monde choisit une face avant par sphère
+  dynamique primitive ou enfant de composé. Le franchissement d'une couture plane de deux
+  triangles conserve un appui unique sans double correction.
+
 - `Triangle3D` ajoute une surface physique fixe orientable. Distance et
   recouvrement avec une sphère ainsi que rayon autonome couvrent face, arêtes
   et sommets ; le monde répond aux sphères dynamiques du côté avant uniquement.

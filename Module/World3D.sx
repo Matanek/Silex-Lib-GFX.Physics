@@ -979,6 +979,7 @@ func is_compound3d(shape:Shape3D) bool {
         sphere(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     return false
 }
@@ -1005,6 +1006,7 @@ func write_leaf_contacts3d(
         sphere(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     match second.shape() {
         compound(compound) => {
@@ -1022,12 +1024,17 @@ func write_leaf_contacts3d(
         sphere(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     if !front_triangle_contact3d(first, second) { return }
     let distance = contact_distance3d(first, second)
     if distance.separation <= 0.000001 {
+        var resolved_first = first_child_id
+        var resolved_second = second_child_id
+        if resolved_first < 0 { resolved_first = distance.first_child_id }
+        if resolved_second < 0 { resolved_second = distance.second_child_id }
         output.append(DistanceResult3D(distance.first_point, distance.second_point,
-            distance.normal, distance.separation, first_child_id, second_child_id))
+            distance.normal, distance.separation, resolved_first, resolved_second))
     }
 }
 
@@ -1373,6 +1380,7 @@ func primitive_sphere_radius3d(shape:Shape3D) float {
         capsule(_) => {}
         compound(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     return 0.0
 }
@@ -1409,6 +1417,7 @@ func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {
         box(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     return ShapePlacement3D(state.shape, state.transform)
 }
@@ -1432,6 +1441,7 @@ func contact_points3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
         sphere(_) => {}
@@ -1449,9 +1459,11 @@ func contact_points3d(
                 box(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
         triangle(_) => {}
+        mesh(_) => {}
     }
     return [witness]
 }
@@ -1473,6 +1485,7 @@ func contact_normal3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
         box(box) => {
@@ -1490,6 +1503,7 @@ func contact_normal3d(
                 box(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
         capsule(_) => {
@@ -1503,10 +1517,12 @@ func contact_normal3d(
                 capsule(_) => {}
                 compound(_) => {}
                 triangle(_) => {}
+                mesh(_) => {}
             }
         }
         compound(_) => {}
         triangle(_) => {}
+        mesh(_) => {}
     }
     return geometric_normal
 }
@@ -2017,7 +2033,7 @@ func broad_pair_before3d(first:@BroadPair3D, second:@BroadPair3D) bool {
 }
 
 // Tight world-axis bounds reject separated boxes before exact distance queries.
-// Triangle bounds include every local vertex; other shapes keep conservative
+// Triangle and mesh bounds include every local vertex; other shapes keep conservative
 // sphere bounds, including child offsets.
 func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec3 {
     match shape {
@@ -2030,6 +2046,26 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
                 Math.max(Math.abs(first.y), Math.max(Math.abs(second.y), Math.abs(third.y))),
                 Math.max(Math.abs(first.z), Math.max(Math.abs(second.z), Math.abs(third.z)))
             )
+        }
+        mesh(mesh) => {
+            var extent = Math.Vec3()
+            var index = 0
+            while index < mesh.triangle_count() {
+                let triangle = mesh.triangle(index)
+                let first = transform.vector(triangle.first)
+                let second = transform.vector(triangle.second)
+                let third = transform.vector(triangle.third)
+                extent = Math.Vec3(
+                    Math.max(extent.x, Math.max(Math.abs(first.x),
+                        Math.max(Math.abs(second.x), Math.abs(third.x)))),
+                    Math.max(extent.y, Math.max(Math.abs(first.y),
+                        Math.max(Math.abs(second.y), Math.abs(third.y)))),
+                    Math.max(extent.z, Math.max(Math.abs(first.z),
+                        Math.max(Math.abs(second.z), Math.abs(third.z))))
+                )
+                index++
+            }
+            return extent
         }
         box(box) => {
             let half = box.half_size()
@@ -2246,6 +2282,17 @@ func shape_bounding_radius3d(shape:Shape3D) float {
             return Math.max(triangle.first.length(), Math.max(
                 triangle.second.length(), triangle.third.length()))
         }
+        mesh(mesh) => {
+            var radius = 0.0
+            var index = 0
+            while index < mesh.triangle_count() {
+                let triangle = mesh.triangle(index)
+                radius = Math.max(radius, Math.max(triangle.first.length(),
+                    Math.max(triangle.second.length(), triangle.third.length())))
+                index++
+            }
+            return radius
+        }
         sphere(sphere) => { return sphere.radius }
         box(box) => { return box.half_size().length() }
         capsule(capsule) => { return capsule.half_height + capsule.radius }
@@ -2327,5 +2374,6 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
         sphere(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         triangle(_) => {}
+        mesh(_) => {}
     }
 }
