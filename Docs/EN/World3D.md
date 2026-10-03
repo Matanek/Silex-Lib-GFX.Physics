@@ -16,9 +16,11 @@ mesh seams and general terrains, and CCD against triangles are not qualified.
 Physics triangles are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
-sphere, capsule or box primitive or compound child, the world produces at
+sphere or capsule primitive or compound child, the world produces at
 most one contact per step, identified by the front-facing triangle selected
-for separation. `Contact3D.first_child_id()` or `second_child_id()` reports
+for separation. A box can have several simultaneous surface contacts when
+their normals or support planes differ. `Contact3D.first_child_id()` or
+`second_child_id()` reports
 its index.
 A square of two coplanar triangles keeps the sphere supported while it crosses
 the shared diagonal. Deterministic selection avoids two identical corrections
@@ -39,9 +41,15 @@ A box spanning a coplanar seam uses up to four points covering its footprint
 on the touching triangles. The contact keeps the ID of the triangle selected
 for separation. Rest without sleeping and frictionless sliding over several
 inclined cells have Jolt witnesses. A small angular disturbance also verifies
-the return to stable support. This collection does not qualify box support
-over arbitrary noncoplanar folds. `Physics3D/BoxTerrainScene.sx` combines a
-resting stack with sliding.
+the return to stable support.
+A valley with two pans sloping at ±0.25 provides two simultaneous reactions:
+a 1 m cube rests with its center at a height of 0.625 m. This rest without
+sleeping is compared with Jolt Debug/Release, with both body and triangle
+orders, and a compound box child on a terrain rotated around Y. Coplanar seams and
+identical ridge reactions share one contact; each contact keeps a representative
+triangle ID. Sensors expose these surfaces without response. This qualification
+does not cover all folds, holes, or nonmanifold meshes.
+`Physics3D/BoxTerrainScene.sx` combines a resting stack with sliding.
 
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by

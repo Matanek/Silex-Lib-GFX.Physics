@@ -6,6 +6,13 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les boîtes conservent plusieurs contacts de surface sur un terrain lorsque
+  les appuis diffèrent. Le repos dans une vallée à deux pans est qualifié
+  contre Jolt Debug/Release, y compris ordres inversés et enfant de composé.
+  Les réactions identiques des triangles coplanaires ou d’une crête sont
+  fusionnées ; chaque appui conserve son ID de face et ses événements.
+  Les capteurs exposent les mêmes surfaces sans correction.
+
 - Les boîtes utilisent les distances et recouvrements bilatéraux contre
   triangle et maillage fixe. Le monde génère jusqu’à quatre appuis sur les
   faces coplanaires touchées : repos sur diagonale et glissement incliné sont

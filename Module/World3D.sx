@@ -16,6 +16,7 @@ use GFX.Physics.PointConstraint3D.PointConstraintStore3D
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.sphere_centers_distance3d
+use GFX.Physics.Geometry3D.write_box_mesh_contacts3d
 use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.contact_separation3d
 use GFX.Physics.Geometry3D.front_triangle_contact3d
@@ -654,7 +655,8 @@ public class World3D {
                                 first_slot, self.store.generations[first_slot])
                             let second_id = BodyId3D(
                                 second_slot, self.store.generations[second_slot])
-                            if is_compound3d(first.shape) || is_compound3d(second.shape) {
+                            if is_compound3d(first.shape) || is_compound3d(second.shape) ||
+                                is_box_mesh_pair3d(first.shape, second.shape) {
                                 var distances:DistanceResult3D[] = []
                                 write_leaf_contacts3d(
                                     ShapePlacement3D(first.shape, first.transform),
@@ -874,12 +876,16 @@ public class World3D {
                         correct_sphere_pair3d(pair)
                         continue
                     }
-                    let first_shape = contact_placement3d(
+                    var first_shape = contact_placement3d(
                         pair.first, pair.first_child_id
                     )
-                    let second_shape = contact_placement3d(
+                    var second_shape = contact_placement3d(
                         pair.second, pair.second_child_id
                     )
+                    if is_box_mesh_pair3d(first_shape.shape(), second_shape.shape()) {
+                        first_shape = mesh_contact_face3d(first_shape, pair.first_child_id)
+                        second_shape = mesh_contact_face3d(second_shape, pair.second_child_id)
+                    }
                     let distance = contact_separation3d(first_shape, second_shape)
                     if distance.separation < 0.0 {
                         correct_contact3d(
@@ -986,7 +992,66 @@ func is_compound3d(shape:Shape3D) bool {
     return false
 }
 
-// Only called for compound broad-phase candidates, once per detection pass.
+func is_box_mesh_pair3d(first:Shape3D, second:Shape3D) bool {
+    match first {
+        box(_) => {
+            match second {
+                mesh(_) => { return true }
+                else => {}
+            }
+        }
+        mesh(_) => {
+            match second {
+                box(_) => { return true }
+                else => {}
+            }
+        }
+        else => {}
+    }
+    return false
+}
+
+func mesh_contact_face3d(placement:ShapePlacement3D, child_id:int) ShapePlacement3D {
+    match placement.shape() {
+        mesh(mesh) => {
+            return ShapePlacement3D(
+                Shape3D.triangle(mesh.triangle(child_id)), placement.transform())
+        }
+        else => {}
+    }
+    return placement
+}
+
+func write_box_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
+    output:&DistanceResult3D[]) {
+    match first.shape() {
+        box(box) => {
+            match second.shape() {
+                mesh(mesh) => {
+                    write_box_mesh_contacts3d(
+                        box, first.transform(), mesh, second.transform(), output)
+                }
+                else => {}
+            }
+        }
+        mesh(mesh) => {
+            match second.shape() {
+                box(box) => {
+                    var reversed:DistanceResult3D[] = []
+                    write_box_mesh_contacts3d(box, second.transform(), mesh, first.transform(), reversed)
+                    for contact in reversed {
+                        output.append(DistanceResult3D(contact.second_point, contact.first_point,
+                            contact.normal.negated(), contact.separation, contact.second_child_id, -1))
+                    }
+                }
+                else => {}
+            }
+        }
+        else => {}
+    }
+}
+
+// Compound leaves and box/mesh support planes, once per detection pass.
 // Child poses change with their parent, so distances cannot persist across steps.
 func write_leaf_contacts3d(
     first:ShapePlacement3D, second:ShapePlacement3D,
@@ -1028,6 +1093,19 @@ func write_leaf_contacts3d(
         triangle(_) => {}
         mesh(_) => {}
     }
+    if is_box_mesh_pair3d(first.shape(), second.shape()) {
+        var contacts:DistanceResult3D[] = []
+        write_box_surface_pairs3d(first, second, contacts)
+        for contact in contacts {
+            var resolved_first = first_child_id
+            var resolved_second = second_child_id
+            if resolved_first < 0 { resolved_first = contact.first_child_id }
+            if resolved_second < 0 { resolved_second = contact.second_child_id }
+            output.append(DistanceResult3D(contact.first_point, contact.second_point,
+                contact.normal, contact.separation, resolved_first, resolved_second))
+        }
+        return
+    }
     if !front_triangle_contact3d(first, second) { return }
     let distance = contact_distance3d(first, second)
     if distance.separation <= 0.000001 {
@@ -1065,8 +1143,8 @@ func contact_before3d(first:@Contact3D, second:@Contact3D) bool {
         second.first_child_id(), second.second_child_id())
 }
 
-// One manifold per leaf pair; the public geometry distance query still selects
-// the nearest child. Primitive pairs keep their direct path and allocation count.
+// One manifold per leaf/support pair; public distance queries still select
+// the nearest child. Other primitive pairs keep their direct path.
 func append_contact_pair3d(
     first:BodyState3D, second:BodyState3D,
     first_id:BodyId3D, second_id:BodyId3D,

@@ -1,0 +1,138 @@
+use GFX.Physics
+use STD.Math
+
+func grid(crest:bool = false, reversed:bool = false) Physics.TriangleMesh3D {
+    var heights:float[] = []
+    var row = 0
+    while row < 3 {
+        var column = 0
+        while column < 5 {
+            var height = 0.25 * Math.abs(column as float - 2.0)
+            if crest { height = 0.5 - height }
+            heights.append(height); column++
+        }
+        row++
+    }
+    var mesh = Physics.TriangleMesh3D.from_height_grid(5, 3, heights, 1.0, 2.0)
+    if !reversed { return mesh }
+    var triangles:Physics.Triangle3D[] = []
+    var index = mesh.triangle_count()
+    while index > 0 { index--; triangles.append(mesh.triangle(index)) }
+    return Physics.TriangleMesh3D(triangles)
+}
+
+func valley(reverse_bodies:bool, reverse_triangles:bool, compound:bool, yaw:float) {
+    var world = Physics.World3D()
+    let pose = Physics.Transform3D(Math.Vec3(3.0, 0.0, -7.0),
+        Math.Quat.angle_axis(yaw, Math.Vec3.up()))
+    var shape = Physics.Shape3D.box(Physics.Box3D())
+    if compound { shape = Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(7, shape)])) }
+    let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false
+        ..transform = Physics.Transform3D(pose.point(Math.Vec3(2.0, 1.5, 2.0)), pose.rotation)
+    var selected:Physics.RigidBody3D? = null
+    if reverse_bodies { selected = world.create_rigid_body(settings) }
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.mesh(grid(reversed:reverse_triangles)) ..transform = pose)
+    if !reverse_bodies { selected = world.create_rigid_body(settings) }
+    if let body = selected {
+        var step = 0
+        while step < 480 {
+            world.step(1.0 / 120.0); step++
+            if step >= 120 {
+                let relative = pose.inverse_point(body.position())
+                assert(Math.abs(relative.x - 2.0) < 0.01 && Math.abs(relative.z - 2.0) < 0.01)
+                assert(Math.abs(relative.y - 0.625) < 0.005)
+                assert(body.linear_velocity().length() < 0.01)
+                assert(body.angular_velocity().length() < 0.01)
+            }
+        }
+        let relative = pose.inverse_point(body.position())
+        print("valley reverse=$(reverse_bodies),$(reverse_triangles) compound=$(compound) yaw=$(yaw) local=$(relative.x),$(relative.y),$(relative.z) speed=$(body.linear_velocity().length()) spin=$(body.angular_velocity().length())")
+        // Jolt Debug/Release settles at (2.00041485, 0.624514639, 1.99990416).
+        assert(Math.abs(relative.x - 2.00041485) < 0.01)
+        assert(Math.abs(relative.y - 0.624514639) < 0.005)
+        assert(Math.abs(relative.z - 1.99990416) < 0.01)
+        var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        assert(contacts.count() == 2)
+        var left = false
+        var right = false
+        for contact in contacts {
+            var normal = contact.normal()
+            var face = contact.first_child_id()
+            var child = contact.second_child_id()
+            if contact.first_body().same_body(body) {
+                normal = normal.negated()
+                face = contact.second_child_id()
+                child = contact.first_child_id()
+            }
+            normal = pose.rotation.conjugated().rotate(normal)
+            assert(Math.abs(normal.y - 1.0 / Math.sqrt(1.0625)) < 0.0001)
+            assert(Math.abs(Math.abs(normal.x) - 0.25 / Math.sqrt(1.0625)) < 0.0001)
+            assert(Math.abs(normal.z) < 0.0001)
+            if normal.x > 0.0 { left = true } else { right = true }
+            assert(face >= 0 && face < 16)
+            if compound { assert(child == 7) } else { assert(child == -1) }
+            assert(contact.point_count() >= 2 && contact.point_count() <= 4)
+        }
+        assert(left && right)
+        body.set_transform(Physics.Transform3D(pose.point(Math.Vec3(2.0, -1.0, 2.0)), pose.rotation))
+        body.set_linear_velocity(Math.Vec3())
+        body.set_angular_velocity(Math.Vec3())
+        world.step(1.0 / 120.0)
+        assert(world.contact_count() == 0)
+        world.write_contact_end_events(contacts)
+        assert(contacts.count() == 2)
+    } else { panic("valley body not created") }
+}
+
+func crest_and_sensor() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(grid(crest:true)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D()) ..allow_sleep = false
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.99, 2.0)))
+    world.step(1.0 / 120.0)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    print("crest contacts=$(contacts.count()) height=$(body.position().y)")
+    for contact in contacts {
+        let n = contact.normal()
+        print("crest face=$(contact.first_child_id()) points=$(contact.point_count()) normal=$(n.x),$(n.y),$(n.z)")
+    }
+    // Both pans share the same upward ridge support: one response, not two.
+    assert(contacts.count() == 1 && contacts[0].point_count() >= 2 && contacts[0].point_count() <= 4)
+    assert(contacts[0].normal().nearly_equal(Math.Vec3.up(), 0.0001))
+    assert(Math.abs(body.position().y - 1.0) < 0.002)
+    var valley_world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    valley_world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(grid()))
+    var sensor = valley_world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D()) ..is_sensor = true
+        ..transform = Physics.Transform3D(position:Math.Vec3(2.0, 0.6, 2.0)))
+    valley_world.step(1.0 / 120.0)
+    valley_world.write_contacts(contacts)
+    assert(contacts.count() == 2)
+    for contact in contacts { assert(contact.is_sensor() && contact.point_count() == 0) }
+    assert(Math.abs(sensor.position().y - 0.6) < 0.000001)
+    sensor.set_transform(Physics.Transform3D(position:Math.Vec3(2.0, -1.0, 2.0)))
+    valley_world.step(1.0 / 120.0)
+    valley_world.write_contact_end_events(contacts)
+    assert(contacts.count() == 2 && valley_world.contact_count() == 0)
+}
+
+func check_valleys() {
+    valley(false, false, false, 0.0)
+    valley(true, false, false, 0.0)
+    valley(false, true, false, 0.0)
+    valley(true, true, false, 0.0)
+    valley(false, false, true, 0.37)
+}
+
+test "box rests on both valley pans regardless of body and triangle order" { check_valleys() }
+test "ridge support merges identical reactions and valley sensor keeps both faces" { crest_and_sensor() }
+
+func main() { check_valleys(); crest_and_sensor() }

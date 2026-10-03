@@ -17,9 +17,11 @@ pas qualifiés. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
-chaque sphère, capsule ou boîte dynamique primitive ou enfant de composé,
+chaque sphère ou capsule dynamique primitive ou enfant de composé,
 le monde ne produit qu’un contact au plus par pas, identifié par la face avant
-retenue pour la séparation. `Contact3D.first_child_id()` ou
+retenue pour la séparation. Une boîte peut avoir plusieurs contacts de surface
+simultanés lorsque leurs normales ou leurs plans d’appui diffèrent.
+`Contact3D.first_child_id()` ou
 `second_child_id()` indique son index. Un carré de deux triangles coplanaires
 conserve l'appui pendant le franchissement de sa diagonale. La sélection
 déterministe évite deux corrections identiques sur cette couture plane.
@@ -41,8 +43,15 @@ Une boîte sur une couture coplanaire utilise jusqu’à quatre points couvrant
 son empreinte sur les triangles touchés. Le contact conserve l’ID de la face
 retenue pour la séparation. Le repos sans sommeil et le glissement sans
 friction sur plusieurs cellules inclinées ont des témoins Jolt. Une petite
-perturbation angulaire vérifie aussi le retour à l’appui stable. Cette collecte ne
-qualifie pas l’appui des boîtes sur les plis non coplanaires arbitraires.
+perturbation angulaire vérifie aussi le retour à l’appui stable.
+Une vallée à deux pans de pente ±0,25 fournit deux réactions simultanées :
+un cube de côté 1 m repose à hauteur de centre 0,625 m. Ce repos sans sommeil
+est comparé à Jolt Debug/Release, dans les deux ordres de corps et de triangles,
+ainsi que pour un enfant boîte de composé avec terrain tourné autour de Y. Les coutures
+coplanaires et les réactions identiques d’une crête partagent un seul contact ;
+chaque contact conserve l’ID d’un triangle représentatif. Les capteurs exposent
+ces surfaces sans réponse. Cette qualification ne couvre pas tous les plis,
+les trous ou les maillages non manifold.
 La scène `Physics3D/BoxTerrainScene.sx` réunit pile au repos et glissement.
 
 Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou

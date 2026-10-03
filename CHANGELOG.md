@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Boxes keep multiple surface contacts on terrain when their supports differ.
+  Rest in a two-pan valley is qualified against Jolt Debug/Release, including
+  reversed orders and a compound child. Identical reactions from coplanar
+  triangles or a ridge are merged; each support keeps its face ID and events.
+  Sensors expose the same surfaces without correction.
+
 - Boxes support bilateral distance and overlap against fixed triangles and
   meshes. World contacts provide up to four support points across touching
   coplanar faces; diagonal rest and inclined sliding are qualified against

@@ -122,3 +122,55 @@ func box_mesh_distance(box:Box3D, transform:Transform3D,
     }
     return best
 }
+
+// Select the deepest triangle on each geometric plane before merging identical
+// reactions. Otherwise SAT edge normals turn internal seams into extra walls.
+// Runs once per box/mesh pair, not per solver iteration.
+package func write_box_mesh_contacts3d(box:Box3D, transform:Transform3D,
+    mesh:TriangleMesh3D, mesh_transform:Transform3D, output:&DistanceResult3D[]) {
+    var planes:DistanceResult3D[] = []
+    var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        if shape_triangle_front3d(transform, triangle, mesh_transform) {
+            let distance = box_triangle_distance(box, transform, triangle, mesh_transform, true)
+            if distance.separation <= 0.000001 {
+                let normal = mesh_transform.vector(triangle.normal())
+                let origin = mesh_transform.point(triangle.first)
+                var selected = -1
+                var plane = 0
+                while plane < planes.count() {
+                    let existing = mesh.triangle(planes[plane].second_child_id)
+                    if normal.dot(mesh_transform.vector(existing.normal())) > 0.99999 &&
+                        Math.abs(origin.subtract(mesh_transform.point(existing.first)).dot(normal)) < 0.00001 {
+                        selected = plane
+                        break
+                    }
+                    plane++
+                }
+                let contact = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, -1, index)
+                if selected < 0 { planes.append(contact) }
+                else if distance.separation < planes[selected].separation { planes[selected] = contact }
+            }
+        }
+        index++
+    }
+    var supports:DistanceResult3D[] = []
+    for plane in planes {
+        var selected = -1
+        var support_index = 0
+        while support_index < supports.count() {
+            let existing = supports[support_index]
+            if plane.normal.dot(existing.normal) > 0.99999 &&
+                Math.abs(plane.second_point.subtract(existing.second_point).dot(plane.normal)) < 0.00001 {
+                selected = support_index
+                break
+            }
+            support_index++
+        }
+        if selected < 0 { supports.append(plane) }
+        else if plane.separation < supports[selected].separation { supports[selected] = plane }
+    }
+    for support in supports { output.append(support) }
+}
