@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Qualified open planar meshes: boxes, spheres and capsules fall through
+  a hole, a wide box rests on its edges, and contact ends at the outer edge.
+  Supports stay on existing faces.
+
 - Boxes keep multiple surface contacts on terrain when their supports differ.
   Rest in a two-pan valley is qualified against Jolt Debug/Release, including
   reversed orders and a compound child. Identical reactions from coplanar

@@ -94,6 +94,15 @@ rayon le renvoie par `child_id`. Distance, recouvrement et rayon autonomes
 restent géométriques des deux côtés. Les autres paires avec un maillage ne
 sont pas prises en charge.
 
+Un trou se représente en omettant ses triangles. Sur un terrain plan fixe,
+une boîte, une sphère ou une capsule plus étroite que l'ouverture tombe
+librement, sans appui sur les faces absentes. Une boîte plus large peut
+reposer sur les faces présentes autour du trou ; ses points de manifold
+restent sur ces faces. Quitter un bord extérieur termine le contact puis
+laisse le corps tomber. Ces cas sont qualifiés à 120 Hz sur une ouverture
+carrée, y compris ordre des triangles inversé et rotation commune autour de Y.
+Les trous des terrains inclinés et le CCD terrain restent à qualifier.
+
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
 row_spacing)` construit un maillage fixe à partir d'une grille régulière.
 `heights` est rangé par lignes Z, puis par colonnes X : l'échantillon

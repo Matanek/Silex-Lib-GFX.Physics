@@ -1,0 +1,138 @@
+use GFX.Physics
+use STD.Math
+
+func terrain(reversed:bool = false) Physics.TriangleMesh3D {
+    var triangles:Physics.Triangle3D[] = []
+    var row = 0
+    while row < 6 {
+        var column = 0
+        while column < 6 {
+            if column < 2 || column >= 4 || row < 2 || row >= 4 {
+                let x = column as float - 3.0
+                let z = row as float - 3.0
+                let first = Math.Vec3(x, 0.0, z)
+                let next_column = Math.Vec3(x + 1.0, 0.0, z)
+                let next_row = Math.Vec3(x, 0.0, z + 1.0)
+                let opposite = Math.Vec3(x + 1.0, 0.0, z + 1.0)
+                triangles.append(Physics.Triangle3D(first, next_row, next_column))
+                triangles.append(Physics.Triangle3D(next_column, next_row, opposite))
+            }
+            column++
+        }
+        row++
+    }
+    if !reversed { return Physics.TriangleMesh3D(triangles) }
+    var reverse:Physics.Triangle3D[] = []
+    var index = triangles.count()
+    while index > 0 { index--; reverse.append(triangles[index]) }
+    return Physics.TriangleMesh3D(reverse)
+}
+
+func narrow_shape(kind:int) Physics.Shape3D {
+    if kind == 1 { return Physics.Shape3D.sphere(Physics.Sphere3D(0.5)) }
+    if kind == 2 { return Physics.Shape3D.capsule(Physics.Capsule3D(0.5, 0.5)) }
+    return Physics.Shape3D.box(Physics.Box3D())
+}
+
+func falling(kind:int, reverse:bool, yaw:float) {
+    var world = Physics.World3D()
+    let pose = Physics.Transform3D(Math.Vec3(4.0, 0.0, -7.0),
+        Math.Quat.angle_axis(yaw, Math.Vec3.up()))
+    let settings = Physics.RigidBody3DSettings() ..shape = narrow_shape(kind)
+        ..allow_sleep = false ..linear_damping = 0.0 ..angular_damping = 0.0
+        ..transform = Physics.Transform3D(pose.point(Math.Vec3(0.0, 2.0, 0.0)), pose.rotation)
+    var selected:Physics.RigidBody3D? = null
+    if reverse { selected = world.create_rigid_body(settings) }
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(terrain(reverse))
+        ..transform = pose)
+    if !reverse { selected = world.create_rigid_body(settings) }
+    if let body = selected {
+        var step = 0
+        while step < 120 {
+            world.step(1.0 / 120.0); step++
+            let relative = pose.inverse_point(body.position())
+            let expected = 2.0 - 9.81 * step as float * (step + 1) as float / 28800.0
+            assert(world.contact_count() == 0)
+            assert(Math.abs(relative.y - expected) < 0.0001)
+            assert(Math.abs(relative.x) < 0.00001 && Math.abs(relative.z) < 0.00001)
+            assert(Math.abs(body.linear_velocity().y + 9.81 * step as float / 120.0) < 0.0001)
+        }
+        print("hole kind=$(kind) reverse=$(reverse) yaw=$(yaw) y=$(body.position().y)")
+    } else { panic("missing falling body") }
+}
+
+func bridge(reverse:bool, yaw:float) {
+    var world = Physics.World3D()
+    let pose = Physics.Transform3D(Math.Vec3(4.0, 0.0, -7.0),
+        Math.Quat.angle_axis(yaw, Math.Vec3.up()))
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(terrain(reverse))
+        ..transform = pose)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(3.0, 1.0, 3.0)))
+        ..allow_sleep = false ..linear_damping = 0.0 ..angular_damping = 0.0
+        ..transform = Physics.Transform3D(pose.point(Math.Vec3(0.0, 2.0, 0.0)), pose.rotation))
+    var step = 0
+    while step < 480 { world.step(1.0 / 120.0); step++ }
+    let relative = pose.inverse_point(body.position())
+    print("bridge reverse=$(reverse) yaw=$(yaw) local=$(relative.x),$(relative.y),$(relative.z) spin=$(body.angular_velocity().length())")
+    assert(Math.abs(relative.y - 0.5) < 0.005)
+    assert(Math.abs(relative.x) < 0.01 && Math.abs(relative.z) < 0.01)
+    assert(body.linear_velocity().length() < 0.01 && body.angular_velocity().length() < 0.01)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].point_count() == 4)
+    assert(contacts[0].first_child_id() >= 0 && contacts[0].first_child_id() < 64)
+    var points:Physics.ContactPoint3D[] = []
+    contacts[0].write_points(points)
+    for point in points {
+        let contact_position = pose.inverse_point(point.position)
+        assert(Math.abs(contact_position.x) >= 0.9999 || Math.abs(contact_position.z) >= 0.9999)
+        assert(Math.abs(contact_position.x) <= 3.0001 && Math.abs(contact_position.z) <= 3.0001)
+    }
+}
+
+func leaving_edge(kind:int) {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(terrain()) ..friction = 0.0)
+    var height = 0.5
+    if kind == 2 { height = 1.0 }
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = narrow_shape(kind) ..friction = 0.0 ..allow_sleep = false
+        ..linear_damping = 0.0 ..angular_damping = 0.0
+        ..transform = Physics.Transform3D(position:Math.Vec3(-2.0, height, 0.0)))
+    body.set_linear_velocity(Math.Vec3(-2.0, 0.0, 0.0))
+    var had_contact = false
+    var had_end = false
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 120.0); step++
+        if world.contact_count() > 0 { had_contact = true }
+        var events:Physics.Contact3D[] = []
+        world.write_contact_end_events(events)
+        if events.count() > 0 { had_end = true }
+    }
+    print("edge kind=$(kind) x=$(body.position().x) y=$(body.position().y) vx=$(body.linear_velocity().x) spin=$(body.angular_velocity().length())")
+    assert(had_contact && had_end && world.contact_count() == 0)
+    assert(body.position().x < -4.5 && body.position().y < -1.0)
+}
+
+func falls() {
+    var kind = 0
+    while kind < 3 {
+        falling(kind, false, 0.0); falling(kind, true, 0.37)
+        kind++
+    }
+}
+
+test "open terrain leaves a real hole for boxes spheres and capsules" { falls() }
+test "wide box bridges terrain hole with contact points on existing faces" {
+    bridge(false, 0.0); bridge(true, 0.37)
+}
+test "bodies lose contact after leaving an open terrain edge" {
+    leaving_edge(0); leaving_edge(1); leaving_edge(2)
+}
+
+func main() { falls(); bridge(false, 0.0); bridge(true, 0.37); leaving_edge(0); leaving_edge(1); leaving_edge(2) }

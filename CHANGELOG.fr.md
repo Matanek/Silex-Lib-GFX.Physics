@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Qualification des maillages plans ouverts : chute des boîtes, sphères et
+  capsules dans un trou, boîte large sur ses bords et perte de contact au
+  bord extérieur. Les appuis restent sur les faces présentes.
+
 - Les boîtes conservent plusieurs contacts de surface sur un terrain lorsque
   les appuis diffèrent. Le repos dans une vallée à deux pans est qualifié
   contre Jolt Debug/Release, y compris ordres inversés et enfant de composé.

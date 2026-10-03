@@ -88,6 +88,14 @@ to shape order; a ray reports it as `child_id`. Standalone distance, overlap,
 and ray queries remain geometric on both sides. Other mesh pairs are not
 supported.
 
+Represent a hole by omitting its triangles. On a fixed planar terrain,
+a box, sphere or capsule narrower than the opening falls freely, without
+support on missing faces. A wider box can rest on the existing faces around
+the hole; its manifold points stay on those faces. Leaving an outer edge
+ends contact and lets the body fall. These cases are qualified at 120 Hz
+on a square opening, including reversed triangle order and a shared rotation
+around Y. Holes on sloped terrain and terrain CCD remain to be qualified.
+
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
 row_spacing)` builds a fixed mesh from a regular grid. `heights` is laid out
 by Z rows, then X columns: sample `(column, row)` lies at
