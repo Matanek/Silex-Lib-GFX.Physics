@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le CCD linéaire respecte le côté avant des triangles et maillages fixes :
+  sphères, boîtes et capsules rapides traversent les faces arrière et les
+  ouvertures sans déplacement bridé ni événement fantôme. Une face arrière
+  proche ne masque plus la face avant suivante ; les requêtes autonomes
+  restent bilatérales. Poses inclinées et boîte enfant de composé qualifiées.
+
 - Qualification des maillages plans ouverts : chute des boîtes, sphères et
   capsules dans un trou, boîte large sur ses bords et perte de contact au
   bord extérieur. Les appuis restent sur les faces présentes.

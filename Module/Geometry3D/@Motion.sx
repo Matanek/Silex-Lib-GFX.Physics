@@ -1,0 +1,64 @@
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Shape3D.Shape3D
+use STD.Math
+
+// Linear CCD retains the beginning-of-step face policy while evaluating exact
+// separated distances at each advancement. A back face must not clip motion,
+// nor hide a farther front face in the same mesh. No persistent cache is added.
+package func motion_distance3d(first:ShapePlacement3D, second:ShapePlacement3D,
+    first_start:Transform3D, second_start:Transform3D) DistanceResult3D {
+    match first.shape() {
+        compound(compound) => {
+            var best = empty_motion_distance3d()
+            var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let distance = motion_distance3d(
+                    ShapePlacement3D(child.shape, compound_child_transform(first.transform(), child)),
+                    second, compound_child_transform(first_start, child), second_start)
+                if distance.separation < best.separation {
+                    best = DistanceResult3D(distance.first_point, distance.second_point,
+                        distance.normal, distance.separation, child.id, distance.second_child_id)
+                }
+                index++
+            }
+            return best
+        }
+        mesh(mesh) => {
+            var best = empty_motion_distance3d()
+            var index = 0
+            while index < mesh.triangle_count() {
+                let distance = motion_distance3d(
+                    ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), first.transform()),
+                    second, first_start, second_start)
+                if distance.separation < best.separation {
+                    best = DistanceResult3D(distance.first_point, distance.second_point,
+                        distance.normal, distance.separation, index, distance.second_child_id)
+                }
+                index++
+            }
+            return best
+        }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+        triangle(_) => {}
+    }
+    match second.shape() {
+        compound(_) => { return reversed_distance(motion_distance3d(second, first, second_start, first_start)) }
+        mesh(_) => { return reversed_distance(motion_distance3d(second, first, second_start, first_start)) }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+        triangle(_) => {}
+    }
+    if !front_triangle_contact3d(ShapePlacement3D(first.shape(), first_start),
+        ShapePlacement3D(second.shape(), second_start)) {
+        return empty_motion_distance3d()
+    }
+    return Geometry3D.distance(first, second)
+}
+
+func empty_motion_distance3d() DistanceResult3D {
+    return DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(), 3.4028235e38)
+}

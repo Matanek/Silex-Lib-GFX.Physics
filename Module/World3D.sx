@@ -18,6 +18,7 @@ use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.sphere_centers_distance3d
 use GFX.Physics.Geometry3D.write_box_mesh_contacts3d
 use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Geometry3D.motion_distance3d
 use GFX.Physics.Geometry3D.contact_separation3d
 use GFX.Physics.Geometry3D.front_triangle_contact3d
 use GFX.Physics.Geometry3D.ShapePlacement3D
@@ -481,13 +482,15 @@ public class World3D {
                                     (second.body_type == BodyType3D.dynamic &&
                                         second.continuous_collision && second.awake))
                             {
-                                let initial = Geometry3D.distance(
+                                let initial = motion_distance3d(
                                     ShapePlacement3D(first.shape, previous_poses[first_slot]),
-                                    ShapePlacement3D(second.shape, previous_poses[second_slot])
+                                    ShapePlacement3D(second.shape, previous_poses[second_slot]),
+                                    previous_poses[first_slot], previous_poses[second_slot]
                                 )
-                                let final = Geometry3D.distance(
+                                let final = motion_distance3d(
                                     ShapePlacement3D(first.shape, continuous_poses[first_slot]),
-                                    ShapePlacement3D(second.shape, continuous_poses[second_slot])
+                                    ShapePlacement3D(second.shape, continuous_poses[second_slot]),
+                                    previous_poses[first_slot], previous_poses[second_slot]
                                 )
                                 if initial.separation > 0.000001 &&
                                     final.separation > 0.000001
@@ -513,9 +516,10 @@ public class World3D {
                                                 second_motion.multiply(hit)
                                             ), previous_poses[second_slot].rotation
                                         )
-                                        let witness = Geometry3D.distance(
+                                        let witness = motion_distance3d(
                                             ShapePlacement3D(first.shape, first_pose),
-                                            ShapePlacement3D(second.shape, second_pose)
+                                            ShapePlacement3D(second.shape, second_pose),
+                                            previous_poses[first_slot], previous_poses[second_slot]
                                         )
                                         var contact = Contact3D(
                                             RigidBody3D(self.store, BodyId3D(
@@ -2449,9 +2453,9 @@ func continuous_fraction3d(
     let target_translation = target_end.position.subtract(target_start.position)
     let relative_speed = moving_translation.subtract(target_translation).length()
     if relative_speed <= 0.000001 { return null }
-    let initial = Geometry3D.distance(
+    let initial = motion_distance3d(
         ShapePlacement3D(moving_shape, moving_start),
-        ShapePlacement3D(target_shape, target_start)
+        ShapePlacement3D(target_shape, target_start), moving_start, target_start
     )
     if initial.separation <= 0.000001 { return null }
     var fraction = 0.0
@@ -2465,9 +2469,9 @@ func continuous_fraction3d(
             target_start.position.add(target_translation.multiply(fraction)),
             target_start.rotation
         )
-        let separation = Geometry3D.distance(
+        let separation = motion_distance3d(
             ShapePlacement3D(moving_shape, moving_pose),
-            ShapePlacement3D(target_shape, target_pose)
+            ShapePlacement3D(target_shape, target_pose), moving_start, target_start
         ).separation
         if separation <= 0.000001 { return fraction }
         fraction += separation / relative_speed

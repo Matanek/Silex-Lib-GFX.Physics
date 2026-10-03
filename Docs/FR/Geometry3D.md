@@ -101,7 +101,8 @@ reposer sur les faces présentes autour du trou ; ses points de manifold
 restent sur ces faces. Quitter un bord extérieur termine le contact puis
 laisse le corps tomber. Ces cas sont qualifiés à 120 Hz sur une ouverture
 carrée, y compris ordre des triangles inversé et rotation commune autour de Y.
-Les trous des terrains inclinés et le CCD terrain restent à qualifier.
+Les trous des terrains inclinés restent à qualifier. Le CCD linéaire des
+terrains fixes est décrit dans [World3D](World3D.md).
 
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
 row_spacing)` construit un maillage fixe à partir d'une grille régulière.

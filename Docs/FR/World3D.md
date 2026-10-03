@@ -12,8 +12,8 @@ et sommets isolés ; une forme dont le centre est derrière le plan du triangle
 ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
 recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
 triangles enfants d’un composé sont rejetés. Les contacts triangle/triangle,
-les autres coutures, les terrains généraux et le CCD contre triangle ne sont
-pas qualifiés. Un triangle physique reste
+les autres coutures et les terrains généraux restent à qualifier. Le CCD
+linéaire sur face avant est qualifié ci-dessous. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
@@ -32,9 +32,10 @@ Une grille régulière de hauteurs peut aussi produire ce maillage : une sphère
 sans friction traverse les trois rangées inclinées d'une grille 4 × 4 dans
 les deux sens, avec des trajectoires comparées à Jolt Debug et Release et une
 identité de face suivie. La comparaison n'établit pas les coutures de hauteur
-ou d'angle arbitraire, les trous ni les maillages non manifold. Un corps maillé
-dynamique/cinématique, un maillage enfant de composé et le CCD contre maillage
-sont absents. Une capsule dynamique verticale repose sur une grille plane ;
+ou d'angle arbitraire ni les maillages non manifold. Les trous plans sont
+qualifiés dans [Geometry3D](Geometry3D.md). Un corps maillé dynamique/cinématique
+et un maillage enfant de composé sont absents. Une capsule dynamique verticale
+repose sur une grille plane ;
 une capsule parallèle à la face utilise deux points de contact lorsque ses
 deux extrémités partagent la même normale et profondeur. Le parcours virtuel
 des capsules sur les rangées inclinées est décrit dans [Character3D](Character3D.md).
@@ -257,10 +258,21 @@ traite les obstacles fixes, cinématiques et dynamiques, puis laisse le solveur
 répondre au contact. Une paire déjà recouvrante au début du pas suit la
 résolution discrète habituelle.
 
+Sur triangle et maillage fixes, une sphère, une boîte ou une capsule rapide
+est arrêtée par une face avant et traverse les faces arrière ou les triangles
+absents d'une ouverture. La sélection conserve le côté admissible au début
+du balayage pour chaque face ; une face arrière proche ne masque pas une
+face avant plus éloignée du même maillage. Les poses communes inclinées, les
+ordres inversés, filtres et événements sont qualifiés, ainsi qu'une boîte
+enfant de composé. Ces preuves concernent une translation linéaire à pose
+fixe ; elles ne garantissent pas les plis arbitraires ni les appuis rasants.
+
 Pour un capteur entièrement traversé dans un seul pas, le monde émet un début
-et une fin transitoires dans ce pas, sans contact persistant ni réponse. Ce
-choix est explicite : le témoin Jolt épinglé ne rapporte aucun événement dans
-ce cas rapide, alors qu'il s'accorde avec Silex sur la traversée lente.
+et une fin transitoires dans ce pas, sans contact persistant ni réponse.
+Les faces arrière ne produisent pas d’événement transitoire ; leur recouvrement
+initial ne masque pas une face avant traversée ensuite. L’émission transitoire
+est un choix explicite : le témoin Jolt épinglé ne rapporte aucun événement
+dans ce cas rapide, alors qu'il s'accorde avec Silex sur la traversée lente.
 
 La recherche ne balaie que les translations avec les orientations du début
 de pas. Elle ne garantit pas l'impact créé uniquement par une rotation rapide,
@@ -387,6 +399,7 @@ les handles conservés, sans que ceux-ci maintiennent le monde vivant.
 `write_bodies` remplit un tableau fourni par le consommateur avec les corps
 vivants, sans promettre un ordre de création.
 
-Le monde ne fournit pas encore de requêtes spatiales intégrées ni de CCD.
-Les [requêtes géométriques autonomes](Geometry3D.md)
-restent disponibles pour les formes isolées.
+Le monde fournit les requêtes spatiales et le CCD linéaire décrits ci-dessus.
+Les [requêtes géométriques autonomes](Geometry3D.md) restent disponibles
+pour les formes isolées ; leur politique bilatérale reste distincte de la
+réponse unilatérale du terrain.

@@ -12,7 +12,8 @@ including exposed edges and vertices; a shape whose center is behind the triangl
 contact. The triangle and its pose can be replaced without recreating the body.
 Dynamic or kinematic triangle bodies and triangle children in compounds are
 rejected. Triangle/triangle contacts, other
-mesh seams and general terrains, and CCD against triangles are not qualified.
+mesh seams and general terrains remain to be qualified. Linear CCD on front
+faces is qualified below.
 Physics triangles are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
@@ -30,9 +31,10 @@ directions retain contact at the seam and follow a trajectory close to Jolt.
 A regular height grid can also produce this mesh: a frictionless sphere
 traverses all three inclined rows of a 4 by 4 grid in both directions, with
 trajectories compared against Jolt Debug and Release and face identity tracked.
-The comparison does not establish arbitrary seam heights or angles, holes, or
-nonmanifold meshes. Dynamic or kinematic mesh bodies, mesh children in
-compounds, and CCD against meshes are absent. An upright dynamic capsule rests
+The comparison does not establish arbitrary seam heights or angles or
+nonmanifold meshes. Planar holes are qualified in [Geometry3D](Geometry3D.md).
+Dynamic or kinematic mesh bodies and mesh children in compounds are absent.
+An upright dynamic capsule rests
 on a flat grid; a capsule parallel to the face uses two contact points when
 both ends share the same normal and depth. Virtual capsule traversal across
 the inclined rows is described in [Character3D](Character3D.md).
@@ -240,10 +242,20 @@ sweep. Fixed, kinematic, and dynamic targets take part, and the usual contact
 solver responds afterward. A pair already overlapping at the start of a step
 uses the ordinary discrete response.
 
+On fixed triangles and meshes, a fast sphere, box or capsule is stopped by
+a front face and passes through back faces or missing triangles in an opening.
+Selection retains each face's admissible side at the beginning of the sweep;
+a nearby back face does not hide a farther front face in the same mesh.
+Shared tilted poses, reversed orders, filters and events are qualified,
+as is a box child in a compound. These proofs concern linear translation
+with a fixed orientation; they do not guarantee arbitrary folds or grazing
+supports.
+
 When a sensor is crossed completely within one step, the world emits a
 transient begin and end in that step, without persistent contact or physical
-response. This is an explicit policy difference: the pinned Jolt witness
-reports no event for this fast crossing, while the engines agree on a slow
+response. Back faces produce no transient event, and initially overlapping
+one does not hide a front face crossed afterward. Transient emission is an
+explicit policy difference: the pinned Jolt witness reports no event for this fast crossing, while the engines agree on a slow
 traversal.
 
 The sweep considers translations with start-of-step orientations. It does not
@@ -361,6 +373,6 @@ handle fails explicitly. A world refuses to destroy another world's body.
 `write_bodies` fills a caller-owned array with live bodies without promising
 creation order.
 
-The world does not yet provide integrated spatial queries or CCD.
-[Standalone geometry queries](Geometry3D.md) remain
-available for individual shapes.
+The world provides the spatial queries and linear CCD described above.
+[Standalone geometry queries](Geometry3D.md) remain available for individual
+shapes; their bilateral policy stays distinct from unilateral terrain response.

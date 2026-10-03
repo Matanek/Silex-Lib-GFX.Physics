@@ -94,7 +94,8 @@ support on missing faces. A wider box can rest on the existing faces around
 the hole; its manifold points stay on those faces. Leaving an outer edge
 ends contact and lets the body fall. These cases are qualified at 120 Hz
 on a square opening, including reversed triangle order and a shared rotation
-around Y. Holes on sloped terrain and terrain CCD remain to be qualified.
+around Y. Holes on sloped terrain remain to be qualified. Linear CCD against
+fixed terrain is described in [World3D](World3D.md).
 
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
 row_spacing)` builds a fixed mesh from a regular grid. `heights` is laid out

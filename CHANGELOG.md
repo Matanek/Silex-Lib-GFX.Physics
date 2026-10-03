@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Linear CCD respects front-facing fixed triangles and meshes: fast spheres,
+  boxes and capsules pass through back faces and openings without clipped
+  motion or phantom events. A nearby back face no longer hides the next
+  front face; standalone queries remain bilateral. Tilted poses and a box
+  compound child are qualified.
+
 - Qualified open planar meshes: boxes, spheres and capsules fall through
   a hole, a wide box rests on its edges, and contact ends at the outer edge.
   Supports stay on existing faces.

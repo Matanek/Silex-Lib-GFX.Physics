@@ -1,0 +1,147 @@
+use GFX.Physics
+use STD.Math
+
+func shape(kind:int, compound:bool = false) Physics.Shape3D {
+    var result = Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+    if kind == 1 { result = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5))) }
+    if kind == 2 { result = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.25)) }
+    if compound { result = Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(7, result)])) }
+    return result
+}
+
+func surface(mesh:bool, hole:bool, hidden:bool, reversed:bool, back_overlap:bool) Physics.Shape3D {
+    let first = Physics.Triangle3D(Math.Vec3(-3.0, 0.0, -3.0),
+        Math.Vec3(-3.0, 0.0, 3.0), Math.Vec3(3.0, 0.0, -3.0))
+    if !mesh { return Physics.Shape3D.triangle(first) }
+    var triangles:Physics.Triangle3D[] = [first, Physics.Triangle3D(
+        Math.Vec3(3.0, 0.0, -3.0), Math.Vec3(-3.0, 0.0, 3.0), Math.Vec3(3.0, 0.0, 3.0))]
+    if hole { triangles = [Physics.Triangle3D(Math.Vec3(-3.0, 0.0, -3.0),
+        Math.Vec3(-3.0, 0.0, 3.0), Math.Vec3(-1.0, 0.0, -3.0))] }
+    if hidden {
+        var height = 1.25
+        if back_overlap { height = 1.75 }
+        // Downward face is closer but seen from its back; floor below remains solid.
+        triangles.append(Physics.Triangle3D(Math.Vec3(-3.0, height, -3.0),
+            Math.Vec3(3.0, height, -3.0), Math.Vec3(-3.0, height, 3.0)))
+    }
+    if reversed {
+        var reverse:Physics.Triangle3D[] = []
+        var index = triangles.count()
+        while index > 0 { index--; reverse.append(triangles[index]) }
+        triangles = reverse
+    }
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D(triangles))
+}
+
+func crossing(kind:int, back:bool, mesh:bool, reverse:bool, tilted:bool,
+    hole:bool = false, hidden:bool = false, sensor:bool = false,
+    filtered:bool = false, compound:bool = false, continuous:bool = true, back_overlap:bool = false) {
+    let rotation = Math.Quat.angle_axis(0.37, Math.Vec3.up())
+    var orientation = rotation
+    if tilted { orientation = rotation.multiply(Math.Quat.angle_axis(0.31, Math.Vec3.right())) }
+    let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -7.0), orientation)
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let terrain_shape = surface(mesh, hole, hidden, reverse, back_overlap)
+    var origin = Math.Vec3(-0.75, 1.0, -0.75)
+    var velocity = Math.Vec3(0.0, -120.0, 0.0)
+    if hidden { origin = Math.Vec3(-0.75, 2.0, -0.75); velocity = Math.Vec3(0.0, -240.0, 0.0) }
+    if hole { origin = Math.Vec3(0.0, 1.0, 0.0) }
+    if back { origin = Math.Vec3(-0.75, -1.0, -0.75); velocity = Math.Vec3(0.0, 120.0, 0.0) }
+    let settings = Physics.RigidBody3DSettings() ..shape = shape(kind, compound)
+        ..allow_sleep = false ..continuous_collision = continuous ..friction = 0.0
+        ..transform = Physics.Transform3D(pose.point(origin), orientation)
+        ..linear_velocity = pose.vector(velocity)
+    var selected:Physics.RigidBody3D? = null
+    if reverse { selected = world.create_rigid_body(settings) }
+    var filter = Physics.CollisionFilter3D()
+    if filtered { filter = Physics.CollisionFilter3D(mask_bits:0) }
+    var terrain = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = terrain_shape ..transform = pose
+        ..is_sensor = sensor ..friction = 0.0 ..collision_filter = filter)
+    if !reverse { selected = world.create_rigid_body(settings) }
+    if let body = selected {
+        // Public geometry remains bilateral, even when the world ignores the back.
+        let distance = Physics.Geometry3D.distance(
+            Physics.ShapePlacement3D(body.shape(), body.transform()),
+            Physics.ShapePlacement3D(terrain_shape, pose))
+        if back_overlap { assert(distance.separation <= 0.00001) }
+        else { assert(distance.separation > 0.0) }
+        world.step(1.0 / 60.0)
+        let position = pose.inverse_point(body.position())
+        let speed = orientation.conjugated().rotate(body.linear_velocity())
+        print("ccd kind=$(kind) back=$(back) mesh=$(mesh) reverse=$(reverse) tilted=$(tilted) hole=$(hole) hidden=$(hidden) sensor=$(sensor) compound=$(compound) y=$(position.y) vy=$(speed.y) contacts=$(world.contact_count())")
+        var begins:Physics.Contact3D[] = []
+        var ends:Physics.Contact3D[] = []
+        world.write_contact_begin_events(begins); world.write_contact_end_events(ends)
+        if back || hole || filtered || sensor || !continuous {
+            var expected = -1.0
+            if hidden { expected = -2.0 }
+            if back { expected = 1.0 }
+            assert(Math.abs(position.y - expected) < 0.001)
+            assert(Math.abs(speed.y - velocity.y) < 0.001)
+            assert(world.contact_count() == 0)
+            if sensor && !back && !hole && !filtered && continuous {
+                assert(begins.count() == 1 && ends.count() == 1)
+                assert(begins[0].is_sensor() && ends[0].is_sensor())
+            } else { assert(begins.count() == 0 && ends.count() == 0) }
+        } else {
+            var expected = 0.25
+            if kind == 2 { expected = 0.5 }
+            assert(Math.abs(position.y - expected) < 0.001)
+            assert(Math.abs(speed.y) < 0.001)
+            assert(world.contact_count() == 1 && begins.count() == 1 && ends.count() == 0)
+            assert(begins[0].normal_impulse() > 0.0)
+            var face = begins[0].first_child_id()
+            var child = begins[0].second_child_id()
+            if begins[0].first_body().same_body(body) {
+                face = begins[0].second_child_id(); child = begins[0].first_child_id()
+            }
+            if mesh { assert(face >= 0 && face < 3) }
+            if hidden {
+                if reverse { assert(face != 0) } else { assert(face != 2) }
+            }
+            if compound { assert(child == 7) }
+            assert(Math.abs(speed.x) < 0.001 && Math.abs(speed.z) < 0.001)
+        }
+        assert(Math.abs(position.x - origin.x) < 0.001 && Math.abs(position.z - origin.z) < 0.001)
+    } else { panic("missing continuous body") }
+}
+
+func front_and_back() {
+    var kind = 0
+    while kind < 3 {
+        crossing(kind, true, true, false, false)
+        crossing(kind, false, true, false, false)
+        crossing(kind, true, false, true, true)
+        crossing(kind, false, false, true, true)
+        kind++
+    }
+}
+
+func openings_and_hidden_faces() {
+    var kind = 0
+    while kind < 3 {
+        crossing(kind, false, true, true, true, hole:true)
+        crossing(kind, false, true, true, false, hidden:true)
+        crossing(kind, false, true, false, true, hidden:true)
+        kind++
+    }
+}
+
+func policies_and_compounds() {
+    crossing(0, false, true, false, false, filtered:true)
+    crossing(0, false, true, false, false, sensor:true)
+    crossing(0, true, true, false, false, sensor:true)
+    crossing(0, false, true, false, false, continuous:false)
+    crossing(0, false, true, false, false, sensor:true, hidden:true, back_overlap:true)
+    crossing(2, false, true, true, true, sensor:true, hidden:true, back_overlap:true)
+    crossing(1, false, true, false, true, compound:true)
+    crossing(1, true, true, true, true, compound:true)
+}
+
+test "terrain CCD stops front approaches and lets back faces pass for three primitives" { front_and_back() }
+test "terrain CCD respects missing faces and selects solid face behind a back face" { openings_and_hidden_faces() }
+test "terrain CCD keeps filters sensor chronology discrete switch and compound leaves" { policies_and_compounds() }
+
+func main() { front_and_back(); openings_and_hidden_faces(); policies_and_compounds() }
