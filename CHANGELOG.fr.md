@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le CCD 3D referme l’écart restant entre sa marge de recherche et la
+  surface d’impact. Un rebond oblique sur un convexe est résolu dans le pas
+  qui freine le déplacement, sans image d’accrochage avant l’impulsion.
+
 - `ConvexHull3D(points)` ajoute une enveloppe solide immuable et
   `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
   contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière

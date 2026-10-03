@@ -2504,12 +2504,21 @@ func continuous_fraction3d(
             target_start.position.add(target_translation.multiply(fraction)),
             target_start.rotation
         )
-        let separation = motion_distance3d(
+        let distance = motion_distance3d(
             ShapePlacement3D(moving_shape, moving_pose),
             ShapePlacement3D(target_shape, target_pose), moving_start, target_start
-        ).separation
-        if separation <= 0.000001 { return fraction }
-        fraction += separation / relative_speed
+        )
+        if distance.separation <= 0.000001 {
+            // The search margin locates the impact, but is also the solver's
+            // contact threshold. Close the remaining gap along the approach
+            // instead of leaving the clipped pose on that rounding boundary.
+            let closing = moving_translation.subtract(target_translation).dot(distance.normal)
+            if distance.separation > 0.0 && closing > 0.0 {
+                return Math.min(1.0, fraction + distance.separation / closing)
+            }
+            return fraction
+        }
+        fraction += distance.separation / relative_speed
         iteration++
     }
     return null

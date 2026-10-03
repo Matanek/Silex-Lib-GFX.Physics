@@ -282,3 +282,49 @@ test "asymmetric hulls use their actual planes and original point coordinates" {
     let exit = Physics.Geometry3D.ray_cast(Physics.Ray3D(offset, Math.Vec3(0.0, 2.0, 0.0)), solid)
     assert(exit.hit && Math.nearly_equal(exit.fraction, 0.503, 0.0001))
 }
+
+test "convex CCD resolves every clipped bounce in the same step" {
+    var mode = 0
+    while mode < 4 {
+        var pose = Physics.Transform3D()
+        if mode >= 2 {
+            pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -7.0),
+                Math.Quat.angle_axis(0.37, Math.Vec3.up()))
+        }
+        var world = Physics.World3D()
+        var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = wedge()
+            ..transform = pose ..friction = 0.0 ..restitution = 0.45)
+        let start = Math.Vec3(-1.5 + (mode % 2) as float, 4.0, 0.8)
+        var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.3))
+            ..transform = Physics.Transform3D(position:pose.point(start))
+            ..continuous_collision = true ..allow_sleep = false
+            ..friction = 0.0 ..restitution = 0.45)
+        var impacts = 0
+        var step = 0
+        while step < 100 {
+            let before = ball.position()
+            let incoming = ball.linear_velocity().add(Math.Vec3(0.0, -9.81 / 60.0, 0.0))
+            world.step(1.0 / 60.0)
+            let travel = ball.position().subtract(before).length()
+            if travel + 0.0001 < incoming.length() / 60.0 {
+                var contacts:Physics.Contact3D[] = []
+                world.write_contacts(contacts)
+                assert(contacts.count() == 1)
+                assert(contacts[0].normal_impulse() > 0.0)
+                let normal = pose.vector(Math.Vec3(0.5, 1.0, 0.0).normalized())
+                let approach = incoming.dot(normal)
+                if approach < -1.0 {
+                    assert(Math.abs(ball.linear_velocity().dot(normal) / -approach - 0.45) < 0.005)
+                    let tangent = pose.vector(Math.Vec3(1.0, -0.5, 0.0).normalized())
+                    assert(Math.abs(ball.linear_velocity().dot(tangent) - incoming.dot(tangent)) < 0.001)
+                    impacts++
+                }
+            }
+            step++
+        }
+        assert(impacts >= 2)
+        mode++
+    }
+}

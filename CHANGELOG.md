@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D CCD closes the remaining gap between its search margin and the impact
+  surface. An oblique convex bounce is resolved in the step that clips motion,
+  without a sticking frame before the impulse.
+
 - `ConvexHull3D(points)` adds an immutable solid hull and `Shape3D.convex`:
   signed sphere/convex distances, rays and collisions against a fixed body,
   with linear CCD, filters and sensors. Its triangulated boundary is available
