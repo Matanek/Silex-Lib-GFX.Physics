@@ -47,8 +47,9 @@ ne corrigent pas silencieusement un quaternion invalide.
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
-et capsules, ainsi que les paires sphère/triangle, capsule/triangle et leurs
-variantes maillées dans les deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
+et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
+boîte/triangle et leurs variantes maillées dans les deux ordres, y compris les
+poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.
@@ -73,7 +74,9 @@ first)` ; `normal()` retourne cette direction unitaire. La distance à une
 sphère utilise le point le plus proche sur la face, une arête ou un sommet.
 La capsule utilise tout son segment axial : le plus proche témoin peut être
 au milieu du segment, même si ses deux extrémités sont hors de la face. La
-pénétration tient aussi compte du segment entier et du rayon. Ces distances
+pénétration tient aussi compte du segment entier et du rayon. La boîte couvre
+les contacts face/arête/sommet ; sa pénétration est la plus courte translation
+séparatrice parmi les axes des faces et les axes croisés des arêtes. Ces distances
 sont géométriques des deux côtés du triangle, comme `overlaps`. Le rayon
 simple traverse et touche les deux faces ; sa normale est opposée à sa direction
 sur la face touchée. La réponse du monde est unilatérale, décrite dans
@@ -83,8 +86,9 @@ triangles ne sont pas pris en charge.
 `TriangleMesh3D([triangle, ...])` copie une liste non vide de `Triangle3D`.
 L'index de chaque triangle, à partir de zéro, reste son identité tant que le
 maillage n'est pas remplacé. `triangle_count()` et `triangle(index)` permettent
-de consulter cette liste. La distance à une sphère ou une capsule choisit
-la plus petite séparation ; en cas d'égalité, elle conserve le premier index. Cet index est
+de consulter cette liste. La distance à une sphère, une capsule ou une boîte
+choisit la plus petite séparation ; en cas d’égalité, elle conserve le premier
+index. Cet index est
 renvoyé par `second_child_id` ou `first_child_id` selon l'ordre des formes ; un
 rayon le renvoie par `child_id`. Distance, recouvrement et rayon autonomes
 restent géométriques des deux côtés. Les autres paires avec un maillage ne

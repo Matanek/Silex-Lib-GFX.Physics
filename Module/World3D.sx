@@ -1,5 +1,6 @@
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.ContactManifold3D.box_box_contact_points
+use GFX.Physics.ContactManifold3D.box_surface_contact_points
 use GFX.Physics.ContactManifold3D.capsule_capsule_contact_points
 use GFX.Physics.ContactManifold3D.capsule_surface_contact_points
 use GFX.Physics.Contact3D.Contact3D
@@ -1441,8 +1442,12 @@ func contact_points3d(
                 sphere(_) => {}
                 capsule(_) => {}
                 compound(_) => {}
-                triangle(_) => {}
-                mesh(_) => {}
+                triangle(_) => {
+                    return box_surface_contact_points(first_box, first.transform(), second, normal, witness)
+                }
+                mesh(_) => {
+                    return box_surface_contact_points(first_box, first.transform(), second, normal, witness)
+                }
             }
         }
         sphere(_) => {}
@@ -1476,7 +1481,9 @@ func contact_points3d(
                         first, normal.negated(), witness)
                 }
                 sphere(_) => {}
-                box(_) => {}
+                box(box) => {
+                    return box_surface_contact_points(box, second.transform(), first, normal.negated(), witness)
+                }
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
@@ -1489,7 +1496,9 @@ func contact_points3d(
                         first, normal.negated(), witness)
                 }
                 sphere(_) => {}
-                box(_) => {}
+                box(box) => {
+                    return box_surface_contact_points(box, second.transform(), first, normal.negated(), witness)
+                }
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}

@@ -6,6 +6,14 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les boîtes utilisent les distances et recouvrements bilatéraux contre
+  triangle et maillage fixe. Le monde génère jusqu’à quatre appuis sur les
+  faces coplanaires touchées : repos sur diagonale et glissement incliné sont
+  qualifiés contre Jolt Debug/Release. `BoxTerrainScene` montre une pile et
+  un parcours de grille. Les plis arbitraires et le CCD terrain restent ouverts.
+  `RigidBody3D.same_body` emprunte son argument en lecture, ce qui permet de
+  comparer directement une poignée issue d’un état emprunté.
+
 - Les distances et recouvrements capsule–triangle et capsule–maillage
   couvrent tout le segment axial, les poses orientées et les deux ordres.
   Le monde répond du côté avant ; une capsule parallèle à une face plane

@@ -6,21 +6,20 @@ fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
-Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères
-et capsules
-dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
+Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères,
+capsules et boîtes dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
 et sommets isolés ; une forme dont le centre est derrière le plan du triangle
 ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
 recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
-triangles enfants d'un composé sont rejetés. Les contacts triangle/boîte,
-triangle/triangle, ainsi que les autres coutures, les
-terrains généraux et le CCD contre triangle, ne sont pas qualifiés. Un triangle physique reste
+triangles enfants d’un composé sont rejetés. Les contacts triangle/triangle,
+les autres coutures, les terrains généraux et le CCD contre triangle ne sont
+pas qualifiés. Un triangle physique reste
 indépendant de la géométrie de rendu.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
-chaque sphère ou capsule dynamique primitive ou enfant de composé, le monde
-ne retient
-qu'une face avant au plus par pas. `Contact3D.first_child_id()` ou
+chaque sphère, capsule ou boîte dynamique primitive ou enfant de composé,
+le monde ne produit qu’un contact au plus par pas, identifié par la face avant
+retenue pour la séparation. `Contact3D.first_child_id()` ou
 `second_child_id()` indique son index. Un carré de deux triangles coplanaires
 conserve l'appui pendant le franchissement de sa diagonale. La sélection
 déterministe évite deux corrections identiques sur cette couture plane.
@@ -37,6 +36,14 @@ sont absents. Une capsule dynamique verticale repose sur une grille plane ;
 une capsule parallèle à la face utilise deux points de contact lorsque ses
 deux extrémités partagent la même normale et profondeur. Le parcours virtuel
 des capsules sur les rangées inclinées est décrit dans [Character3D](Character3D.md).
+
+Une boîte sur une couture coplanaire utilise jusqu’à quatre points couvrant
+son empreinte sur les triangles touchés. Le contact conserve l’ID de la face
+retenue pour la séparation. Le repos sans sommeil et le glissement sans
+friction sur plusieurs cellules inclinées ont des témoins Jolt. Une petite
+perturbation angulaire vérifie aussi le retour à l’appui stable. Cette collecte ne
+qualifie pas l’appui des boîtes sur les plis non coplanaires arbitraires.
+La scène `Physics3D/BoxTerrainScene.sx` réunit pile au repos et glissement.
 
 Un `Compound3D` immuable peut servir de forme à un corps fixe, cinématique ou
 dynamique. Chaque paire d'enfants en contact possède son propre manifold,
@@ -354,8 +361,10 @@ pour le prochain pas positif ; la désactivation ou l'éloignement sont constat�
 en attente. Les snapshots copiés gardent point, normale, séparation et ID
 d'enfant après les pas suivants. Leurs handles permettent toujours
 `is_valid()` et `same_body()` ; les lectures d'état d'un corps détruit restent
-invalides. Le recyclage d'un emplacement ne confond pas l'ancien et le nouveau
-corps. Un corps endormi peut garder un contact et n'émet pas de fin pour le
+invalides. `same_body(other)` emprunte l’autre poignée en lecture : la
+comparaison accepte aussi une poignée atteinte depuis un état emprunté, sans
+en conserver une copie. Le recyclage d’un emplacement ne confond pas l’ancien
+et le nouveau corps. Un corps endormi peut garder un contact et n'émet pas de fin pour le
 seul motif du sommeil.
 
 ## Propriété et durée de vie

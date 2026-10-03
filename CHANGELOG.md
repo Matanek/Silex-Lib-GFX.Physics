@@ -6,6 +6,14 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Boxes support bilateral distance and overlap against fixed triangles and
+  meshes. World contacts provide up to four support points across touching
+  coplanar faces; diagonal rest and inclined sliding are qualified against
+  Jolt Debug/Release. `BoxTerrainScene` combines a stack with grid traversal.
+  Arbitrary folds and terrain CCD remain open. `RigidBody3D.same_body` reads
+  its argument through a borrowed parameter, allowing direct comparisons of
+  handles reached from borrowed state.
+
 - Capsule–triangle and capsule–mesh distance and overlap cover the complete
   axial segment, oriented poses and both argument orders. World contacts use
   the front side; a capsule parallel to a flat face can rest on two points.

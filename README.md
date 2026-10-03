@@ -4,7 +4,8 @@
 Their worlds work without windows or renderers; Application plugins connect
 them to ECS and Scene2D or Scene3D when requested. The 3D world supports
 spheres, boxes, capsules, compounds with dynamic mass, and fixed triangles or
-triangle meshes against dynamic spheres and capsules. It also supports rigid or spring distance constraints,
+triangle meshes against dynamic spheres, capsules and boxes. It also supports
+rigid or spring distance constraints,
 contact events, sleeping, linear CCD for the qualified pairs, and a virtual
 capsule character mover. Other shape families remain under development.
 

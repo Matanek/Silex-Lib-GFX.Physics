@@ -7,19 +7,18 @@ faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
 A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
-spheres and capsules on the front side defined by vertex winding, including
-exposed edges
-and vertices; a shape whose center is behind the triangle plane creates no
+spheres, capsules and boxes on the front side defined by vertex winding,
+including exposed edges and vertices; a shape whose center is behind the triangle plane creates no
 contact. The triangle and its pose can be replaced without recreating the body.
 Dynamic or kinematic triangle bodies and triangle children in compounds are
-rejected. Triangle/box and triangle/triangle contacts, other
+rejected. Triangle/triangle contacts, other
 mesh seams and general terrains, and CCD against triangles are not qualified.
 Physics triangles are independent of render geometry.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
-sphere or capsule primitive or compound child, the world keeps at most one
-front-facing
-triangle per step. `Contact3D.first_child_id()` or `second_child_id()` reports
+sphere, capsule or box primitive or compound child, the world produces at
+most one contact per step, identified by the front-facing triangle selected
+for separation. `Contact3D.first_child_id()` or `second_child_id()` reports
 its index.
 A square of two coplanar triangles keeps the sphere supported while it crosses
 the shared diagonal. Deterministic selection avoids two identical corrections
@@ -35,6 +34,14 @@ compounds, and CCD against meshes are absent. An upright dynamic capsule rests
 on a flat grid; a capsule parallel to the face uses two contact points when
 both ends share the same normal and depth. Virtual capsule traversal across
 the inclined rows is described in [Character3D](Character3D.md).
+
+A box spanning a coplanar seam uses up to four points covering its footprint
+on the touching triangles. The contact keeps the ID of the triangle selected
+for separation. Rest without sleeping and frictionless sliding over several
+inclined cells have Jolt witnesses. A small angular disturbance also verifies
+the return to stable support. This collection does not qualify box support
+over arbitrary noncoplanar folds. `Physics3D/BoxTerrainScene.sx` combines a
+resting stack with sliding.
 
 An immutable `Compound3D` can be the shape of a fixed, kinematic, or dynamic body.
 Each touching child pair owns a manifold, identified by
@@ -330,7 +337,9 @@ for the next positive step. Disabling or moving a body apart is observed at
 that step. `step(0)` retains the previous step's events and any pending ends.
 Copied snapshots retain their point, normal, separation, and child IDs across
 later steps. Their handles still support `is_valid()` and `same_body()`;
-reading the state of a destroyed body remains invalid. Reusing a slot cannot
+reading the state of a destroyed body remains invalid. `same_body(other)` reads
+the other handle through a borrowed parameter, accepting a handle reached
+from borrowed state without retaining a copy. Reusing a slot cannot
 confuse the old body with the new one. A sleeping body may retain its contact
 and does not emit an end solely because it sleeps.
 

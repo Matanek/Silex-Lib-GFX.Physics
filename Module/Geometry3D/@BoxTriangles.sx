@@ -1,0 +1,124 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
+use STD.Math
+
+func box_triangle_axis3d(box:Box3D, transform:Transform3D,
+    triangle:Triangle3D) BoxAxis3D {
+    let basis = BoxBasis3D(box, transform)
+    let face = triangle.normal()
+    let first_edge = triangle.second.subtract(triangle.first)
+    let second_edge = triangle.third.subtract(triangle.second)
+    let third_edge = triangle.first.subtract(triangle.third)
+    var best = BoxAxis3D(face.negated(), -3.4028235e38)
+    var index = 0
+    while index < 13 {
+        var axis = face
+        if index > 0 && index < 4 { axis = basis.axis(index - 1) }
+        if index >= 4 {
+            var edge = first_edge
+            if (index - 4) % 3 == 1 { edge = second_edge }
+            if (index - 4) % 3 == 2 { edge = third_edge }
+            axis = basis.axis((index - 4) / 3).cross(edge)
+        }
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            let first = triangle.first.dot(axis)
+            let second = triangle.second.dot(axis)
+            let third = triangle.third.dot(axis)
+            let low = Math.min(first, Math.min(second, third))
+            let high = Math.max(first, Math.max(second, third))
+            let center = transform.position.dot(axis)
+            let radius = basis.projection(axis)
+            let forward = low - center - radius
+            let backward = center - radius - high
+            var gap = backward
+            var normal = axis.negated()
+            if forward > backward { gap = forward; normal = axis }
+            if gap > best.gap { best = BoxAxis3D(normal, gap) }
+        }
+        index++
+    }
+    return best
+}
+
+func triangle_support3d(triangle:Triangle3D, direction:Math.Vec3) Math.Vec3 {
+    var point = triangle.first
+    if triangle.second.dot(direction) > point.dot(direction) { point = triangle.second }
+    if triangle.third.dot(direction) > point.dot(direction) { point = triangle.third }
+    return point
+}
+
+package func box_triangle_distance(
+    box:Box3D, transform:Transform3D,
+    triangle:Triangle3D, triangle_transform:Transform3D,
+    contact_only:bool = false
+) DistanceResult3D {
+    let world = Triangle3D(triangle_transform.point(triangle.first),
+        triangle_transform.point(triangle.second), triangle_transform.point(triangle.third))
+    let separating = box_triangle_axis3d(box, transform, world)
+    if separating.gap <= 0.0 || (contact_only && separating.gap > 0.000001) {
+        return DistanceResult3D(box_support(box, transform, separating.normal),
+            triangle_support3d(world, separating.normal.negated()),
+            separating.normal, separating.gap)
+    }
+    var pair = BoxSegmentPair3D(Math.Vec3(), Math.Vec3())
+    var best_squared = 3.4028235e38
+    var index = 0
+    while index < 8 {
+        let point = box_vertex(box, transform, index)
+        let closest = closest_triangle_point3d(point, world)
+        let squared = point.subtract(closest).length_squared()
+        if squared < best_squared {
+            pair = BoxSegmentPair3D(point, closest); best_squared = squared
+        }
+        index++
+    }
+    let vertices:Math.Vec3[] = [world.first, world.second, world.third]
+    for point in vertices {
+        let closest = box_closest_point(box, transform, point)
+        let squared = point.subtract(closest).length_squared()
+        if squared < best_squared {
+            pair = BoxSegmentPair3D(closest, point); best_squared = squared
+        }
+    }
+    index = 0
+    while index < 12 {
+        let box_segment = box_edge(box, transform, index)
+        var edge = 0
+        while edge < 3 {
+            let closest = closest_box_segments(box_segment,
+                BoxSegment3D(vertices[edge], vertices[(edge + 1) % 3]))
+            let squared = closest.second.subtract(closest.first).length_squared()
+            if squared < best_squared { pair = closest; best_squared = squared }
+            edge++
+        }
+        index++
+    }
+    let separation = Math.sqrt(best_squared)
+    var normal = separating.normal
+    if separation > 0.000001 { normal = pair.second.subtract(pair.first).divide(separation) }
+    return DistanceResult3D(pair.first, pair.second, normal, separation)
+}
+
+func box_mesh_distance(box:Box3D, transform:Transform3D,
+    mesh:TriangleMesh3D, mesh_transform:Transform3D,
+    front_only:bool = false, contact_only:bool = false
+) DistanceResult3D {
+    var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(), 3.4028235e38)
+    var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        if !front_only || shape_triangle_front3d(transform, triangle, mesh_transform) {
+            let distance = box_triangle_distance(box, transform, triangle, mesh_transform, contact_only)
+            if distance.separation < best.separation {
+                best = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, -1, index)
+            }
+        }
+        index++
+    }
+    return best
+}
