@@ -1,3 +1,4 @@
+use GFX.Physics.Geometry3D.inside_convex3d
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.ContactManifold3D.box_box_contact_points
 use GFX.Physics.ContactManifold3D.box_surface_contact_points
@@ -992,6 +993,7 @@ func is_compound3d(shape:Shape3D) bool {
         capsule(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(_) => {}
     }
     return false
 }
@@ -1078,6 +1080,7 @@ func write_leaf_contacts3d(
         capsule(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(_) => {}
     }
     match second.shape() {
         compound(compound) => {
@@ -1096,6 +1099,7 @@ func write_leaf_contacts3d(
         capsule(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(_) => {}
     }
     if is_box_mesh_pair3d(first.shape(), second.shape()) {
         var contacts:DistanceResult3D[] = []
@@ -1465,6 +1469,7 @@ func primitive_sphere_radius3d(shape:Shape3D) float {
         compound(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(_) => {}
     }
     return 0.0
 }
@@ -1502,6 +1507,7 @@ func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {
         capsule(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(_) => {}
     }
     return ShapePlacement3D(state.shape, state.transform)
 }
@@ -1530,6 +1536,7 @@ func contact_points3d(
                 mesh(_) => {
                     return box_surface_contact_points(first_box, first.transform(), second, normal, witness)
                 }
+                convex(_) => {}
             }
         }
         sphere(_) => {}
@@ -1554,6 +1561,7 @@ func contact_points3d(
                     return capsule_surface_contact_points(first_capsule, first.transform(),
                         second, normal, witness)
                 }
+                convex(_) => {}
             }
         }
         triangle(_) => {
@@ -1569,6 +1577,7 @@ func contact_points3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
+                convex(_) => {}
             }
         }
         mesh(_) => {
@@ -1584,8 +1593,10 @@ func contact_points3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
+                convex(_) => {}
             }
         }
+        convex(_) => {}
     }
     return [witness]
 }
@@ -1608,6 +1619,9 @@ func contact_normal3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
+                convex(hull) => {
+                    if inside_convex3d(first.transform().position, hull, second.transform()) { return geometric_normal.negated() }
+                }
             }
         }
         box(box) => {
@@ -1626,6 +1640,7 @@ func contact_normal3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
+                convex(_) => {}
             }
         }
         capsule(_) => {
@@ -1640,11 +1655,20 @@ func contact_normal3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
+                convex(_) => {}
             }
         }
         compound(_) => {}
         triangle(_) => {}
         mesh(_) => {}
+        convex(hull) => {
+            match second.shape() {
+                sphere(_) => {
+                    if inside_convex3d(second.transform().position, hull, first.transform()) { return geometric_normal.negated() }
+                }
+                else => {}
+            }
+        }
     }
     return geometric_normal
 }
@@ -2203,6 +2227,7 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
         sphere(_) => {}
         capsule(_) => {}
         compound(_) => {}
+        convex(_) => {}
     }
     return Math.Vec3(radius)
 }
@@ -2404,6 +2429,16 @@ func shape_bounding_radius3d(shape:Shape3D) float {
             return Math.max(triangle.first.length(), Math.max(
                 triangle.second.length(), triangle.third.length()))
         }
+        convex(hull) => {
+            var radius = 0.0
+            var index = 0
+            while index < hull.triangle_count() {
+                let triangle = hull.triangle(index)
+                radius = Math.max(radius, Math.max(triangle.first.length(), Math.max(triangle.second.length(), triangle.third.length())))
+                index++
+            }
+            return radius
+        }
         mesh(mesh) => {
             var radius = 0.0
             var index = 0
@@ -2497,5 +2532,6 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
         capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         triangle(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         mesh(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        convex(_) => { panic("GFX.Physics.CharacterMover3D convex hull obstacles are not supported") }
     }
 }

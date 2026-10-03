@@ -91,6 +91,10 @@ func main() {
 }
 ```
 
+A solid `Shape3D.convex(ConvexHull3D(points))` can also be fixed and respond
+to spheres, including linear CCD. See [convex hulls and their
+limits](Geometry3D.md#fixed-convex-hulls).
+
 ## Poses, mass, and commands
 
 Coordinates follow `STD.Math`: right handed, with Y up.

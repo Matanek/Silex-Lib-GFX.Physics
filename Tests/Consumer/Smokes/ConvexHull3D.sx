@@ -1,0 +1,60 @@
+use GFX.Physics
+use STD.Math
+
+func cube_points(scale:float = 1.0) Math.Vec3[] {
+    var points:Math.Vec3[] = []
+    var x = -1
+    while x <= 1 {
+        var y = -1
+        while y <= 1 {
+            var z = -1
+            while z <= 1 { points.append(Math.Vec3(x as float, y as float, z as float).multiply(scale)); z += 2 }
+            y += 2
+        }
+        x += 2
+    }
+    return points
+}
+func cube(scale:float = 1.0) Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(cube_points(scale)))
+}
+func ball_at(point:Math.Vec3, radius:float = 0.5) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(radius)),
+        Physics.Transform3D(position:point))
+}
+
+func main() {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = cube() ..friction = 0.0)
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 3.0, 0.0))
+        ..friction = 0.0 ..allow_sleep = false)
+    var step = 0
+    while step < 180 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(ball.position().y - 1.5) < 0.01)
+    let gap = Physics.Geometry3D.distance(ball_at(Math.Vec3(0.0, 0.8, 0.0)), Physics.ShapePlacement3D(cube()))
+    assert(Math.abs(gap.separation + 0.7) < 0.0001)
+    assert(gap.normal.nearly_equal(Math.Vec3.up(), 0.0001))
+    ball.set_transform(Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)))
+    ball.set_continuous_collision(true)
+    ball.set_linear_velocity(Math.Vec3(0.0, -120.0, 0.0))
+    world.set_gravity(Math.Vec3())
+    world.step(1.0 / 60.0)
+    assert(Math.abs(ball.position().y - 1.5) < 0.001)
+    assert(Math.abs(ball.linear_velocity().y) < 0.001)
+    floor.set_shape(wedge())
+    ball.set_transform(Physics.Transform3D(position:Math.Vec3(-1.0, 2.0, 0.0)))
+    ball.set_linear_velocity(Math.Vec3())
+    world.set_gravity(Math.Vec3(0.0, -9.81, 0.0))
+    step = 0
+    while step < 40 { world.step(1.0 / 60.0); step++ }
+    assert(ball.position().x > -0.6 && ball.linear_velocity().x > 1.0)
+    print("Convex hull native: solid interior, rest, CCD and slope verified")
+}
+func wedge() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(-3.0, -1.0, -2.0), Math.Vec3(-3.0, 2.0, -2.0), Math.Vec3(3.0, -1.0, -2.0),
+        Math.Vec3(-3.0, -1.0, 2.0), Math.Vec3(-3.0, 2.0, 2.0), Math.Vec3(3.0, -1.0, 2.0)]))
+}

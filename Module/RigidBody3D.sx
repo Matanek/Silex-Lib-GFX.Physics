@@ -162,6 +162,9 @@ package class BodyState3D {
                     panic("GFX.Physics.Triangle3D requires a fixed body")
                 }
             }
+            convex(_) => {
+                if settings.body_type != BodyType3D.fixed { panic("GFX.Physics.ConvexHull3D requires a fixed body") }
+            }
             mesh(_) => {
                 if settings.body_type != BodyType3D.fixed {
                     panic("GFX.Physics.TriangleMesh3D requires a fixed body")
@@ -463,6 +466,9 @@ public class RigidBody3D {
                     panic("GFX.Physics.Triangle3D requires a fixed body")
                 }
             }
+            convex(_) => {
+                if state.body_type != BodyType3D.fixed { panic("GFX.Physics.ConvexHull3D requires a fixed body") }
+            }
             mesh(_) => {
                 if state.body_type != BodyType3D.fixed {
                     panic("GFX.Physics.TriangleMesh3D requires a fixed body")
@@ -622,6 +628,7 @@ package func shape_mass_properties3d(shape:Shape3D, density:float) MassPropertie
     match shape {
         triangle(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         mesh(_) => { return MassProperties3D(0.0, Math.Vec3()) }
+        convex(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         sphere(value) => {
             let mass = density * (4.0 / 3.0) * Math.pi() * value.radius * value.radius * value.radius
             let inertia = 0.4 * mass * value.radius * value.radius

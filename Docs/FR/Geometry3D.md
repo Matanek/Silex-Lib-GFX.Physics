@@ -44,12 +44,41 @@ La convention est celle de `STD.Math` : repère droit, Y vers le haut. La pose
 est sans échelle ; les dimensions appartiennent à la forme. Les transformations
 ne corrigent pas silencieusement un quaternion invalide.
 
+## Enveloppes convexes fixes
+
+`ConvexHull3D(points)` construit un solide fermé depuis au moins quatre points
+finis non coplanaires. `Shape3D.convex(hull)` conserve cette enveloppe immuable.
+Les points dupliqués, intérieurs ou redondants sur une face ne créent pas de
+faces superposées. Les nuages dégénérés, les calculs non finis et les frontières
+numériquement ambiguës sont rejetés. La construction utilise une tolérance de
+1 millionième de l’étendue du nuage ; elle convient à de petits nuages préparés
+au démarrage. Le package ne fournit pas encore une construction de gros assets.
+
+La paire sphère/convexe accepte les deux ordres, les poses orientées et les
+contacts de face, d’arête et de sommet. Depuis l’intérieur, la séparation vaut
+l’opposé de la distance au plan de sortie le plus proche, moins le rayon ; la
+normale géométrique pointe vers cette sortie, comme pour sphère/boîte. Le monde
+emploie la normale de réponse correspondante pour expulser la sphère.
+Les rayons sont découpés par les demi-espaces du solide et retournent la sortie
+quand leur origine est intérieure. `triangle_count()` et `triangle(index)`
+exposent la frontière triangulée orientée vers l’extérieur pour la visualiser.
+
+Le corps convexe est **fixe** dans cette première tranche. Les collisions,
+capteurs, filtres, remplacements de forme et CCD linéaire avec les sphères sont
+disponibles. Les corps convexes dynamiques ou cinématiques, les enfants convexes
+de composés, les paires boîte/capsule/convexe et les obstacles convexes de
+`CharacterMover3D` sont refusés. La famille convexe demeure partielle.
+
+La scène `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` montre deux sphères
+qui tombent sur un coin construit avec six points, rebondissent, quittent sa
+pente puis touchent le plateau inférieur. Elle démarre et recommence automatiquement.
+
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
 et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
-boîte/triangle et leurs variantes maillées dans les deux ordres, y compris les
-poses orientées. `DistanceResult3D.separation` est positive
+boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe, dans les
+deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.

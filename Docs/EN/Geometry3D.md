@@ -43,11 +43,40 @@ The conventions follow `STD.Math`: right-handed coordinates with Y up. A pose
 has no scale; dimensions belong to the shape. Transforms do not silently fix
 an invalid quaternion.
 
+## Fixed convex hulls
+
+`ConvexHull3D(points)` builds a closed solid from at least four finite,
+non-coplanar points. `Shape3D.convex(hull)` retains this immutable hull.
+Duplicate points, interior points and redundant points on a face do not create
+overlapping faces. Degenerate clouds, non-finite calculations and numerically
+ambiguous boundaries are rejected. Construction uses a tolerance of one millionth
+of the cloud extent; use small clouds prepared at startup. The package does not
+yet provide a builder for large assets.
+
+Sphere/convex pairs support both orders, oriented poses and face, edge and
+vertex contacts. From inside, separation is the negative distance to the nearest
+exit plane minus the radius; the geometric normal points toward that exit, as
+for sphere/box. The world uses the corresponding response normal to push the
+sphere out. Rays clip against the solid's half-spaces and return the exit when
+the origin is inside. `triangle_count()` and `triangle(index)` expose the outward
+triangulated boundary for visualization.
+
+The convex body must be **fixed** in this first increment. Sphere collisions,
+sensors, filters, shape replacement and linear CCD are available. Dynamic or
+kinematic convex bodies, convex compound children, box/capsule/convex pairs and
+convex obstacles for `CharacterMover3D` are rejected. The convex family remains
+partial.
+
+`Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows two spheres falling
+onto a wedge built from six points, bouncing, leaving its slope and landing on
+the lower tray. The scene starts and repeats automatically.
+
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
-and their mesh variants in either order, including oriented poses.
+and their mesh variants, as well as sphere/convex, in either order, including
+oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
 second. The two witness points lie on their respective surfaces. When several

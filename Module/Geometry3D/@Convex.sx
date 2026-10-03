@@ -1,0 +1,89 @@
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+func sphere_convex_distance(sphere:Sphere3D, sphere_transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D) DistanceResult3D {
+    let center = hull_transform.inverse_point(sphere_transform.position)
+    var face = 0
+    var signed_distance = center.subtract(hull.face_origin(0)).dot(hull.face_normal(0))
+    var index = 1
+    while index < hull.face_count() {
+        let distance = center.subtract(hull.face_origin(index)).dot(hull.face_normal(index))
+        if distance > signed_distance { signed_distance = distance; face = index }
+        index++
+    }
+    var local_normal = hull.face_normal(face)
+    var closest = center.subtract(local_normal.multiply(signed_distance))
+    var separation = signed_distance - sphere.radius
+    if signed_distance > 0.0 {
+        closest = closest_triangle_point3d(center, hull.triangle(0))
+        var squared = closest.subtract(center).length_squared()
+        index = 1
+        while index < hull.triangle_count() {
+            let point = closest_triangle_point3d(center, hull.triangle(index))
+            let candidate = point.subtract(center).length_squared()
+            if candidate < squared { closest = point; squared = candidate }
+            index++
+        }
+        let length = Math.sqrt(squared)
+        if length > 0.0 { local_normal = closest.subtract(center).divide(length) }
+        else { local_normal = local_normal.negated() }
+        separation = length - sphere.radius
+    }
+    // Interior normals point to the nearest exit, as for sphere/box queries.
+    let normal = hull_transform.vector(local_normal)
+    return DistanceResult3D(sphere_transform.position.add(normal.multiply(sphere.radius)),
+        hull_transform.point(closest), normal, separation)
+}
+
+package func inside_convex3d(point:Math.Vec3, hull:ConvexHull3D, transform:Transform3D) bool {
+    let center = transform.inverse_point(point)
+    var index = 0
+    while index < hull.face_count() {
+        if center.subtract(hull.face_origin(index)).dot(hull.face_normal(index)) > 0.0 { return false }
+        index++
+    }
+    return true
+}
+
+func ray_convex_cast(ray:Ray3D, hull:ConvexHull3D, transform:Transform3D) CastResult3D {
+    let origin = transform.inverse_point(ray.origin)
+    let direction = transform.inverse_vector(ray.translation)
+    var entry = 0.0
+    var exit = 1.0
+    var entry_normal = Math.Vec3()
+    var exit_normal = Math.Vec3()
+    var boundary_normal = Math.Vec3()
+    var inside = true
+    var index = 0
+    while index < hull.face_count() {
+        let normal = hull.face_normal(index)
+        let distance = origin.subtract(hull.face_origin(index)).dot(normal)
+        let speed = direction.dot(normal)
+        if distance >= 0.0 { inside = false; boundary_normal = normal }
+        if Math.abs(speed) < 0.000000000001 {
+            if distance > 0.0 { return CastResult3D() }
+        } else {
+            let fraction = -distance / speed
+            if speed < 0.0 {
+                if fraction >= entry { entry = fraction; entry_normal = normal }
+            } else {
+                if fraction <= exit { exit = fraction; exit_normal = normal }
+            }
+            if entry > exit { return CastResult3D() }
+        }
+        index++
+    }
+    var fraction = entry
+    var normal = entry_normal
+    if inside { fraction = exit; normal = exit_normal }
+    if normal.length_squared() == 0.0 {
+        if inside { return CastResult3D() }
+        normal = boundary_normal
+    }
+    if fraction < 0.0 || fraction > 1.0 { return CastResult3D() }
+    return CastResult3D(ray.origin.add(ray.translation.multiply(fraction)),
+        transform.vector(normal), fraction)
+}

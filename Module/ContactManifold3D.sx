@@ -179,6 +179,7 @@ package func box_surface_contact_points(box:Box3D, transform:Transform3D,
                 index++
             }
         }
+        convex(_) => {}
         sphere(_) => {}
         box(_) => {}
         capsule(_) => {}

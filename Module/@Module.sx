@@ -140,3 +140,5 @@ contribute GFX.Plugins {
 public use GFX.Physics.CharacterMover3D.CharacterMover3D
 public use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
 public use GFX.Physics.CharacterMover3D.CharacterMoveResult3D
+
+public use GFX.Physics.ConvexHull3D.ConvexHull3D

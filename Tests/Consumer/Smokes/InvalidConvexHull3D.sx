@@ -1,0 +1,48 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func hull() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(), Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back()]))
+}
+func main() {
+    if selected("few") { Physics.ConvexHull3D([Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()]) }
+    if selected("planar") { Physics.ConvexHull3D([Math.Vec3(), Math.Vec3.up(), Math.Vec3.right(), Math.Vec3(1.0, 1.0, 0.0)]) }
+    if selected("collinear") { Physics.ConvexHull3D([Math.Vec3(), Math.Vec3.up(), Math.Vec3(0.0, 2.0, 0.0), Math.Vec3(0.0, 3.0, 0.0)]) }
+    if selected("duplicate") { Physics.ConvexHull3D([Math.Vec3(), Math.Vec3(), Math.Vec3(), Math.Vec3()]) }
+    if selected("finite") {
+        var value:float = 3.4028235e38
+        value *= 2.0
+        Physics.ConvexHull3D([Math.Vec3(value, 0.0, 0.0), Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()])
+    }
+    if selected("compound") { Physics.CompoundChild3D(0, hull()) }
+    if selected("dynamic") { var world = Physics.World3D(); world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = hull()) }
+    if selected("kinematic") {
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic ..shape = hull())
+    }
+    if selected("mutation") { var world = Physics.World3D(); var body = world.create_rigid_body(); body.set_shape(hull()) }
+    if selected("box-pair") {
+        Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
+            Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))))
+    }
+    if selected("capsule-pair") {
+        Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
+            Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(0.5, 0.5))))
+    }
+    if selected("world-pair") {
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = hull())
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))))
+        world.step(1.0 / 60.0)
+    }
+    panic("invalid convex use was accepted")
+}

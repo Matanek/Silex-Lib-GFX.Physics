@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `ConvexHull3D(points)` adds an immutable solid hull and `Shape3D.convex`:
+  signed sphere/convex distances, rays and collisions against a fixed body,
+  with linear CCD, filters and sensors. Its triangulated boundary is available
+  for rendering; moving hulls, compound children, box/capsule/convex pairs and
+  CharacterMover3D remain unsupported and are rejected.
+
 - Linear CCD respects front-facing fixed triangles and meshes: fast spheres,
   boxes and capsules pass through back faces and openings without clipped
   motion or phantom events. A nearby back face no longer hides the next

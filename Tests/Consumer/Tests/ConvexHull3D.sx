@@ -1,0 +1,284 @@
+use GFX.Physics
+use STD.Math
+
+func cube_points(scale:float = 1.0) Math.Vec3[] {
+    var points:Math.Vec3[] = []
+    var x = -1
+    while x <= 1 {
+        var y = -1
+        while y <= 1 {
+            var z = -1
+            while z <= 1 { points.append(Math.Vec3(x as float, y as float, z as float).multiply(scale)); z += 2 }
+            y += 2
+        }
+        x += 2
+    }
+    return points
+}
+func cube(scale:float = 1.0) Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(cube_points(scale)))
+}
+func ball_at(point:Math.Vec3, radius:float = 0.5) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(radius)),
+        Physics.Transform3D(position:point))
+}
+
+test "hull boundary ignores redundant points and keeps outward closed faces" {
+    var points = cube_points()
+    points.append(Math.Vec3())
+    points.append(Math.Vec3(1.0, 0.0, 0.0))
+    points.append(Math.Vec3(1.0, 1.0, 0.0))
+    points.append(points[0])
+    var hull = Physics.ConvexHull3D(points)
+    points[0] = Math.Vec3(99.0)
+    assert(hull.triangle_count() == 12)
+    var area = 0.0
+    var volume = 0.0
+    var index = 0
+    while index < hull.triangle_count() {
+        let face = hull.triangle(index)
+        assert(face.normal().dot(face.first) > 0.9999)
+        area += face.second.subtract(face.first).cross(face.third.subtract(face.first)).length() * 0.5
+        volume += face.first.dot(face.second.cross(face.third)) / 6.0
+        index++
+    }
+    assert(Math.nearly_equal(area, 24.0, 0.0001))
+    assert(Math.nearly_equal(volume, 8.0, 0.0001))
+    var reversed:Math.Vec3[] = []
+    index = points.count() - 1
+    points[0] = Math.Vec3(-1.0)
+    while index >= 0 { reversed.append(points[index]); index-- }
+    assert(Physics.ConvexHull3D(reversed).triangle_count() == 12)
+}
+
+test "solid hull sphere distances face edge vertex and interior are signed" {
+    let shape = Physics.ShapePlacement3D(cube())
+    let centers:Math.Vec3[] = [Math.Vec3(0.0, 2.0, 0.0), Math.Vec3(1.3, 1.4, 0.0),
+        Math.Vec3(1.3, 1.4, 1.4), Math.Vec3(0.0, 0.8, 0.0), Math.Vec3(0.0, 1.0, 0.0)]
+    let gaps:float[] = [0.5, 0.0, Math.sqrt(0.41) - 0.5, -0.7, -0.5]
+    var index = 0
+    while index < centers.count() {
+        let ball = ball_at(centers[index])
+        let distance = Physics.Geometry3D.distance(ball, shape)
+        let reverse = Physics.Geometry3D.distance(shape, ball)
+        assert(Math.nearly_equal(distance.separation, gaps[index], 0.0001))
+        assert(Math.nearly_equal(reverse.separation, distance.separation, 0.0001))
+        assert(reverse.normal.nearly_equal(distance.normal.negated(), 0.0001))
+        assert(reverse.first_point.nearly_equal(distance.second_point, 0.0001))
+        index++
+    }
+    let interior = Physics.Geometry3D.distance(ball_at(Math.Vec3(0.0, 0.8, 0.0)), shape)
+    assert(interior.normal.nearly_equal(Math.Vec3.up(), 0.0001))
+    assert(interior.second_point.nearly_equal(Math.Vec3(0.0, 1.0, 0.0), 0.0001))
+}
+
+test "hulls preserve distances under common poses and scale" {
+    let pose = Physics.Transform3D(Math.Vec3(3.0, -2.0, 5.0),
+        Math.Quat.angle_axis(0.6, Math.Vec3(1.0, 2.0, 3.0)))
+    let scales:float[] = [0.01, 1.0, 100.0]
+    for scale in scales {
+        let hull = Physics.ShapePlacement3D(cube(scale), pose)
+        let ball = ball_at(pose.point(Math.Vec3(0.0, 2.0 * scale, 0.0)), 0.5 * scale)
+        let distance = Physics.Geometry3D.distance(ball, hull)
+        assert(Math.nearly_equal(distance.separation, 0.5 * scale, 0.0001))
+        assert(distance.normal.nearly_equal(pose.vector(Math.Vec3(0.0, -1.0, 0.0)), 0.0001))
+    }
+    var tetra = Physics.ConvexHull3D([Math.Vec3(), Math.Vec3(1.0, 0.0, 0.0),
+        Math.Vec3(0.0, 1.0, 0.0), Math.Vec3(0.0, 0.0, 1.0)])
+    assert(tetra.triangle_count() == 4)
+}
+
+test "convex ray entry inside exit boundary parallel and finite misses" {
+    let shape = Physics.ShapePlacement3D(cube())
+    let entry = Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(0.0, 3.0, 0.0),
+        Math.Vec3(0.0, -4.0, 0.0)), shape)
+    assert(entry.hit && Math.nearly_equal(entry.fraction, 0.5, 0.0001))
+    assert(entry.normal.nearly_equal(Math.Vec3.up(), 0.0001))
+    let exit = Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(), Math.Vec3(0.0, 2.0, 0.0)), shape)
+    assert(exit.hit && Math.nearly_equal(exit.fraction, 0.5, 0.0001))
+    assert(exit.normal.nearly_equal(Math.Vec3.up(), 0.0001))
+    let boundary = Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(0.0, 1.0, 0.0),
+        Math.Vec3.up()), shape)
+    assert(boundary.hit && boundary.fraction == 0.0)
+    assert(!Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(2.0, 0.0, 0.0), Math.Vec3.up()), shape).hit)
+    assert(!Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(), Math.Vec3(0.0, 0.5, 0.0)), shape).hit)
+}
+
+test "fixed hull responds to spheres outside and inside in both body orders" {
+    var order = 0
+    while order < 2 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        let floor_settings = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = cube()
+        let ball_settings = Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+            ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.8, 0.0))
+        var first_settings = floor_settings
+        var second_settings = ball_settings
+        if order == 1 { first_settings = ball_settings; second_settings = floor_settings }
+        var first = world.create_rigid_body(first_settings)
+        var second = world.create_rigid_body(second_settings)
+        var ball = second
+        if order == 1 { ball = first }
+        var step = 0
+        while step < 30 { world.step(1.0 / 60.0); step++ }
+        assert(ball.position().y > 1.49)
+        assert(ball.position().x == 0.0 && ball.position().z == 0.0)
+        order++
+    }
+}
+
+func wedge() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(-3.0, -1.0, -2.0), Math.Vec3(-3.0, 2.0, -2.0), Math.Vec3(3.0, -1.0, -2.0),
+        Math.Vec3(-3.0, -1.0, 2.0), Math.Vec3(-3.0, 2.0, 2.0), Math.Vec3(3.0, -1.0, 2.0)]))
+}
+
+test "hull sphere rests bounces and slides on the actual slope" {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = cube() ..friction = 0.0 ..restitution = 0.65)
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 3.0, 0.0))
+        ..friction = 0.0 ..restitution = 0.65 ..allow_sleep = false)
+    var bounce = false
+    var step = 0
+    while step < 120 {
+        let incoming = ball.linear_velocity().y - 9.81 / 60.0
+        world.step(1.0 / 60.0)
+        if incoming < -1.0 && ball.linear_velocity().y > 0.0 {
+            assert(Math.abs(ball.linear_velocity().y / -incoming - 0.65) < 0.005)
+            bounce = true
+        }
+        step++
+    }
+    assert(bounce)
+    ball.set_material(0.0, 0.0)
+    floor.set_material(0.0, 0.0)
+    while step < 300 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(ball.position().y - 1.5) < 0.01)
+    floor.set_shape(wedge())
+    ball.set_transform(Physics.Transform3D(position:Math.Vec3(-1.0, 2.0, 0.0)))
+    ball.set_linear_velocity(Math.Vec3())
+    step = 0
+    while step < 40 { world.step(1.0 / 60.0); step++ }
+    assert(ball.position().x > -0.6)
+    assert(ball.linear_velocity().x > 1.0)
+    assert(Math.abs(ball.position().z) < 0.0001)
+}
+
+test "hull linear CCD from either side filters and sensor crossing" {
+    var mode = 0
+    while mode < 4 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = cube(0.25) ..is_sensor = (mode == 3))
+        if mode == 2 { floor.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0)) }
+        var origin = Math.Vec3(0.0, 1.0, 0.0)
+        var velocity = Math.Vec3(0.0, -120.0, 0.0)
+        if mode == 1 { origin = origin.negated(); velocity = velocity.negated() }
+        var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+            ..transform = Physics.Transform3D(position:origin) ..linear_velocity = velocity
+            ..continuous_collision = true ..allow_sleep = false)
+        world.step(1.0 / 60.0)
+        if mode < 2 {
+            assert(Math.abs(Math.abs(ball.position().y) - 0.5) < 0.001)
+            assert(Math.abs(ball.linear_velocity().y) < 0.001)
+            assert(world.contact_count() == 1)
+        } else {
+            assert(Math.abs(ball.position().y + 1.0) < 0.001)
+            assert(Math.abs(ball.linear_velocity().y + 120.0) < 0.001)
+            assert(world.contact_count() == 0)
+            var begins:Physics.Contact3D[] = []
+            var ends:Physics.Contact3D[] = []
+            world.write_contact_begin_events(begins)
+            world.write_contact_end_events(ends)
+            if mode == 3 {
+                assert(begins.count() == 1 && ends.count() == 1)
+                assert(begins[0].is_sensor() && begins[0].normal_impulse() == 0.0)
+            } else { assert(begins.count() == 0 && ends.count() == 0) }
+        }
+        mode++
+    }
+}
+
+test "hull world queries and replacement retain body identity and update bounds" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = cube())
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.5, 0.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    floor.set_transform(Physics.Transform3D(position:Math.Vec3(10.0, 0.0, 0.0)))
+    floor.set_shape(cube(0.5))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 0)
+    var ends:Physics.Contact3D[] = []
+    world.write_contact_end_events(ends)
+    assert(ends.count() == 1)
+    ball.set_transform(Physics.Transform3D(position:Math.Vec3(10.0, 0.9, 0.0)))
+    world.step(1.0 / 60.0)
+    assert(world.contact_count() == 1)
+    assert(ball.position().y > 0.9)
+    if let hit = world.ray_cast(Physics.Ray3D(Math.Vec3(10.0, 3.0, 0.0),
+        Math.Vec3(0.0, -4.0, 0.0)), ignore_body:ball) {
+        assert(hit.body().same_body(floor))
+        assert(Math.nearly_equal(hit.fraction(), 0.625, 0.0001))
+    } else { assert(false) }
+    floor.set_collision_filter(Physics.CollisionFilter3D(category_bits:2))
+    assert(world.ray_cast(Physics.Ray3D(Math.Vec3(10.0, 3.0, 0.0),
+        Math.Vec3(0.0, -4.0, 0.0)), ignore_body:ball, filter:Physics.QueryFilter3D(mask_bits:1)) == null)
+}
+
+test "hull restitution has the same zero gravity impact velocity" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = cube() ..friction = 0.0 ..restitution = 0.65)
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.6, 0.0))
+        ..linear_velocity = Math.Vec3(0.0, -6.0, 0.0)
+        ..friction = 0.0 ..restitution = 0.65 ..allow_sleep = false)
+    var step = 0
+    while step < 3 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(ball.linear_velocity().y - 3.9) < 0.01)
+}
+
+test "asymmetric hulls use their actual planes and original point coordinates" {
+    var hull = Physics.ConvexHull3D([Math.Vec3(), Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back()])
+    let placement = Physics.ShapePlacement3D(Physics.Shape3D.convex(hull))
+    let distance = Physics.Geometry3D.distance(ball_at(Math.Vec3(0.4), 0.1), placement)
+    assert(Math.nearly_equal(distance.separation, 0.2 / Math.sqrt(3.0) - 0.1, 0.0001))
+    assert(distance.second_point.nearly_equal(Math.Vec3(1.0 / 3.0), 0.0001))
+    assert(distance.normal.nearly_equal(Math.Vec3(-1.0).normalized(), 0.0001))
+    var points = cube_points()
+    var index = 0
+    let offset = Math.Vec3(10.0, -3.0, 2.0)
+    while index < points.count() {
+        let point = points[index]
+        points[index] = Math.Vec3(point.x + 0.3 * point.y,
+            point.y + 0.2 * point.z, point.z + 0.1 * point.x).add(offset)
+        index++
+    }
+    var sheared = Physics.ConvexHull3D(points)
+    assert(sheared.triangle_count() == 12)
+    var volume = 0.0
+    index = 0
+    while index < sheared.triangle_count() {
+        let triangle = sheared.triangle(index)
+        let a = triangle.first.subtract(offset)
+        let b = triangle.second.subtract(offset)
+        let c = triangle.third.subtract(offset)
+        volume += a.dot(b.cross(c)) / 6.0
+        assert(a.dot(triangle.normal()) > 0.0)
+        index++
+    }
+    assert(Math.nearly_equal(volume, 8.048, 0.0001))
+    let solid = Physics.ShapePlacement3D(Physics.Shape3D.convex(sheared))
+    assert(Physics.Geometry3D.distance(ball_at(offset, 0.1), solid).separation < -1.0)
+    let exit = Physics.Geometry3D.ray_cast(Physics.Ray3D(offset, Math.Vec3(0.0, 2.0, 0.0)), solid)
+    assert(exit.hit && Math.nearly_equal(exit.fraction, 0.503, 0.0001))
+}

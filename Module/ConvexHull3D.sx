@@ -1,0 +1,176 @@
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+// Immutable boundary of a solid. Construction is cold; the world reuses it.
+public class ConvexHull3D {
+    private var triangles:Triangle3D[]
+    private var normals:Math.Vec3[]
+    private var origins:Math.Vec3[]
+
+    init(points:Math.Vec3[]) {
+        if points.count() < 4 { panic("GFX.Physics.ConvexHull3D requires a solid point cloud") }
+        var scale = 0.0
+        let anchor = points[0]
+        for point in points {
+            if !finite_hull_point3d(point) { panic("GFX.Physics.ConvexHull3D requires finite points") }
+            scale = Math.max(scale, point.subtract(anchor).length())
+        }
+        if !finite_hull_value3d(scale) || scale <= 0.0 {
+            panic("GFX.Physics.ConvexHull3D requires a finite solid point cloud")
+        }
+        let tolerance = scale * 0.000001
+        var unique:Math.Vec3[] = []
+        for point in points {
+            var duplicate = false
+            for existing in unique {
+                if point.subtract(existing).length() <= tolerance { duplicate = true }
+            }
+            if !duplicate { unique.append(point) }
+        }
+        self.triangles = []
+        self.normals = []
+        self.origins = []
+        var first = 0
+        while first < unique.count() {
+            var second = first + 1
+            while second < unique.count() {
+                var third = second + 1
+                while third < unique.count() {
+                    self.add_supporting_face(unique, first, second, third, scale, tolerance)
+                    third++
+                }
+                second++
+            }
+            first++
+        }
+        if self.normals.count() < 4 {
+            panic("GFX.Physics.ConvexHull3D requires a non-coplanar solid point cloud")
+        }
+        require_closed_hull3d(self.triangles)
+    }
+
+    func triangle_count() int { return self.triangles.count() }
+    func triangle(index:int) Triangle3D { return self.triangles[index] }
+    package func face_count() int { return self.normals.count() }
+    package func face_normal(index:int) Math.Vec3 { return self.normals[index] }
+    package func face_origin(index:int) Math.Vec3 { return self.origins[index] }
+
+    private func add_supporting_face(points:Math.Vec3[], first:int, second:int,
+        third:int, scale:float, tolerance:float) {
+        let origin = points[first]
+        // Normalize before the cross product to keep construction scale independent.
+        let ab = points[second].subtract(origin).divide(scale)
+        let ac = points[third].subtract(origin).divide(scale)
+        let cross = ab.cross(ac)
+        if cross.length() <= 0.000001 { return }
+        var normal = cross.normalized()
+        var positive = false
+        var negative = false
+        for point in points {
+            let distance = point.subtract(origin).dot(normal)
+            if distance > tolerance { positive = true }
+            if distance < -tolerance { negative = true }
+        }
+        if positive && negative { return }
+        if !positive && !negative { return }
+        if positive { normal = normal.negated() }
+        var index = 0
+        while index < self.normals.count() {
+            if normal.dot(self.normals[index]) > 0.0 &&
+                normal.cross(self.normals[index]).length() <= 0.000001 &&
+                Math.abs(origin.subtract(self.origins[index]).dot(normal)) <= tolerance {
+                return
+            }
+            index++
+        }
+        var face_points:Math.Vec3[] = []
+        for point in points {
+            if Math.abs(point.subtract(origin).dot(normal)) <= tolerance {
+                face_points.append(point)
+            }
+        }
+        let polygon = hull_face_boundary3d(face_points, normal, scale)
+        index = 1
+        while index + 1 < polygon.count() {
+            self.triangles.append(Triangle3D(polygon[0], polygon[index], polygon[index + 1]))
+            index++
+        }
+        self.normals.append(normal)
+        self.origins.append(origin)
+    }
+}
+
+// Gift wrapping removes coplanar interior points and collinear edge points.
+func hull_face_boundary3d(points:Math.Vec3[], normal:Math.Vec3, scale:float) Math.Vec3[] {
+    var start = 0
+    var index = 1
+    while index < points.count() {
+        let point = points[index]
+        let old = points[start]
+        if point.x < old.x || (point.x == old.x && point.y < old.y) ||
+            (point.x == old.x && point.y == old.y && point.z < old.z) { start = index }
+        index++
+    }
+    var boundary:Math.Vec3[] = []
+    var current = start
+    while true {
+        boundary.append(points[current])
+        var next = (current + 1) % points.count()
+        index = 0
+        while index < points.count() {
+            if index != current && index != next {
+                let candidate = points[next].subtract(points[current]).divide(scale)
+                let edge = points[index].subtract(points[current]).divide(scale)
+                let turn = normal.dot(candidate.cross(edge))
+                if turn < -0.000000000001 ||
+                    (Math.abs(turn) <= 0.000000000001 && edge.length_squared() > candidate.length_squared()) {
+                    next = index
+                }
+            }
+            index++
+        }
+        current = next
+        if current == start { return boundary }
+        if boundary.count() > points.count() {
+            panic("GFX.Physics.ConvexHull3D face boundary could not close")
+        }
+    }
+    return boundary
+}
+
+func finite_hull_value3d(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+func finite_hull_point3d(point:Math.Vec3) bool {
+    return finite_hull_value3d(point.x) && finite_hull_value3d(point.y) && finite_hull_value3d(point.z)
+}
+
+// Every directed edge must have exactly one opposite edge. Reject numerical
+// ambiguities rather than returning an open approximation of a solid.
+func require_closed_hull3d(triangles:Triangle3D[]) {
+    for triangle in triangles {
+        let vertices:Math.Vec3[] = [triangle.first, triangle.second, triangle.third]
+        var edge = 0
+        while edge < 3 {
+            let first = vertices[edge]
+            let second = vertices[(edge + 1) % 3]
+            var opposite = 0
+            var same = 0
+            for other in triangles {
+                let points:Math.Vec3[] = [other.first, other.second, other.third]
+                var index = 0
+                while index < 3 {
+                    let a = points[index]
+                    let b = points[(index + 1) % 3]
+                    if first.subtract(b).length_squared() == 0.0 && second.subtract(a).length_squared() == 0.0 { opposite++ }
+                    if first.subtract(a).length_squared() == 0.0 && second.subtract(b).length_squared() == 0.0 { same++ }
+                    index++
+                }
+            }
+            if opposite != 1 || same != 1 {
+                panic("GFX.Physics.ConvexHull3D requires an unambiguous closed boundary")
+            }
+            edge++
+        }
+    }
+}

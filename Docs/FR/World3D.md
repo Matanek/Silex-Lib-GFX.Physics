@@ -95,6 +95,10 @@ func main() {
 }
 ```
 
+Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe et répondre
+aux sphères, y compris par CCD linéaire. Voir les [enveloppes convexes et leurs
+limites](Geometry3D.md#enveloppes-convexes-fixes).
+
 ## Poses, masse et commandes
 
 Le repère suit `STD.Math` : droit, Y vers le haut. `Transform3D.position`

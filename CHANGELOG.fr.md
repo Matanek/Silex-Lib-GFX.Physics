@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `ConvexHull3D(points)` ajoute une enveloppe solide immuable et
+  `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
+  contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière
+  triangulée accessible pour le rendu ; convexes mobiles, enfants de composés,
+  paires boîte/capsule/convexe et CharacterMover3D restent refusés.
+
 - Le CCD linéaire respecte le côté avant des triangles et maillages fixes :
   sphères, boîtes et capsules rapides traversent les faces arrière et les
   ouvertures sans déplacement bridé ni événement fantôme. Une face arrière

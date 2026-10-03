@@ -43,6 +43,7 @@ package func motion_distance3d(first:ShapePlacement3D, second:ShapePlacement3D,
         box(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        convex(_) => {}
     }
     match second.shape() {
         compound(_) => { return reversed_distance(motion_distance3d(second, first, second_start, first_start)) }
@@ -51,6 +52,7 @@ package func motion_distance3d(first:ShapePlacement3D, second:ShapePlacement3D,
         box(_) => {}
         capsule(_) => {}
         triangle(_) => {}
+        convex(_) => {}
     }
     if !front_triangle_contact3d(ShapePlacement3D(first.shape(), first_start),
         ShapePlacement3D(second.shape(), second_start)) {
