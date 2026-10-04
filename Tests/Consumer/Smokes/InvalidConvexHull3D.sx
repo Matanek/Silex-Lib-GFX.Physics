@@ -24,9 +24,10 @@ func main() {
         Physics.ConvexHull3D([Math.Vec3(value, 0.0, 0.0), Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()])
     }
     if selected("compound") { Physics.CompoundChild3D(0, hull()) }
-    if selected("triangle-pair") {
+    if selected("mesh-pair") {
         Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
-            Physics.ShapePlacement3D(Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(), Math.Vec3.right(), Math.Vec3.up()))))
+            Physics.ShapePlacement3D(Physics.Shape3D.mesh(Physics.TriangleMesh3D([
+                Physics.Triangle3D(Math.Vec3(), Math.Vec3.right(), Math.Vec3.up())]))))
     }
     panic("invalid convex use was accepted")
 }

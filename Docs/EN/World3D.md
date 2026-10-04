@@ -7,7 +7,7 @@ faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
 A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
-spheres, capsules and boxes on the front side defined by vertex winding,
+spheres, capsules, boxes and convex hulls on the front side defined by vertex winding,
 including exposed edges and vertices; a shape whose center is behind the triangle plane creates no
 contact. The triangle and its pose can be replaced without recreating the body.
 Dynamic or kinematic triangle bodies and triangle children in compounds are
@@ -15,6 +15,10 @@ rejected. Triangle/triangle contacts, other
 mesh seams and general terrains remain to be qualified. Linear CCD on front
 faces is qualified below.
 Physics triangles are independent of render geometry.
+
+For a hull, the center selecting the front side is its homogeneous volume
+center, independently of its local origin and explicit body mass properties.
+Face contacts cover up to four points. Convex/mesh and its seams remain rejected.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
 sphere or capsule primitive or compound child, the world produces at
@@ -92,7 +96,7 @@ func main() {
 ```
 
 A solid `Shape3D.convex(ConvexHull3D(points))` can also be fixed, kinematic or
-dynamic and respond to spheres, boxes, capsules and other hulls. See
+dynamic and respond to spheres, boxes, capsules and other hulls and fixed triangles. See
 [convex hulls and their limits](Geometry3D.md#convex-hulls).
 A capsule lying across a slope can roll under friction; friction does not
 guarantee that a rounded shape stays still.
@@ -260,6 +264,11 @@ Shared tilted poses, reversed orders, filters and events are qualified,
 as is a box child in a compound. These proofs concern linear translation
 with a fixed orientation; they do not guarantee arbitrary folds or grazing
 supports.
+
+Hull CCD is also qualified against a fixed triangle: front approaches stop,
+back approaches pass freely, with shared tilted poses, shifted local origins,
+filters and sensors. This qualification covers neither convex/mesh pairs nor
+rotational sweeps.
 
 When a sensor is crossed completely within one step, the world emits a
 transient begin and end in that step, without persistent contact or physical

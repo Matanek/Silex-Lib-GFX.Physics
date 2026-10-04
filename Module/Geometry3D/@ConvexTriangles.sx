@@ -1,0 +1,120 @@
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+// Complete SAT once per nearby hull/triangle pose, never per solver iteration.
+// Triangle edges are normalized before crossing immutable hull edge directions.
+func convex_triangle_axis3d(hull:ConvexHull3D, transform:Transform3D,
+    triangle:Triangle3D, surface:Transform3D, contact_only:bool) ConvexPairAxis3D {
+    let vertices:Math.Vec3[] = [triangle.first, triangle.second, triangle.third]
+    var best = ConvexPairAxis3D(surface.vector(triangle.normal()).negated(), -3.4028235e38)
+    var index = 0
+    while index < 1 + hull.face_count() + hull.edge_count() * 3 {
+        var axis = surface.vector(triangle.normal())
+        if index > 0 && index <= hull.face_count() { axis = transform.vector(hull.face_normal(index - 1)) }
+        if index > hull.face_count() {
+            let edge = index - hull.face_count() - 1
+            let direction = vertices[(edge % 3 + 1) % 3].subtract(vertices[edge % 3]).normalized()
+            axis = transform.vector(hull.edge(edge / 3)).cross(surface.vector(direction))
+        }
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            let local_axis = transform.inverse_vector(axis)
+            var low = hull.vertex(0).dot(local_axis); var high = low; var vertex = 1
+            while vertex < hull.vertex_count() {
+                let value = hull.vertex(vertex).dot(local_axis)
+                low = Math.min(low, value); high = Math.max(high, value); vertex++
+            }
+            let surface_axis = surface.inverse_vector(axis)
+            let first = triangle.first.dot(surface_axis)
+            let second = triangle.second.dot(surface_axis)
+            let third = triangle.third.dot(surface_axis)
+            let offset = surface.position.subtract(transform.position).dot(axis)
+            let forward = Math.min(first, Math.min(second, third)) + offset - high
+            let backward = low - Math.max(first, Math.max(second, third)) - offset
+            var gap = backward; var normal = axis.negated()
+            if forward > backward { gap = forward; normal = axis }
+            if gap > best.gap { best = ConvexPairAxis3D(normal, gap) }
+            if contact_only && gap > 0.000001 { return best }
+        }
+        index++
+    }
+    return best
+}
+
+func triangle_support_segment3d(triangle:Triangle3D, surface:Transform3D,
+    direction:Math.Vec3) CapsuleAxis3D {
+    let local_axis = surface.inverse_vector(direction)
+    let point = triangle_support3d(triangle, local_axis)
+    var other = point; var farthest = 0.0
+    let vertices:Math.Vec3[] = [triangle.first, triangle.second, triangle.third]
+    let extent = Math.max(triangle.second.subtract(triangle.first).length(),
+        Math.max(triangle.third.subtract(triangle.first).length(), triangle.third.subtract(triangle.second).length()))
+    for candidate in vertices {
+        if point.dot(local_axis) - candidate.dot(local_axis) <= extent * 0.000001 {
+            let squared = candidate.subtract(point).length_squared()
+            if squared > farthest { other = candidate; farthest = squared }
+        }
+    }
+    return CapsuleAxis3D(surface.point(point), surface.point(other))
+}
+
+package func convex_triangle_distance3d(hull:ConvexHull3D, transform:Transform3D,
+    triangle:Triangle3D, surface:Transform3D, contact_only:bool = false) DistanceResult3D {
+    let axis = convex_triangle_axis3d(hull, transform, triangle, surface, contact_only)
+    // Contact detection uses the SAT normal even just outside the surface.
+    // Normalizing a sub-micrometer boundary witness amplifies rounding noise.
+    if contact_only || axis.gap <= 0.0 {
+        let pair = convex_feature_pair3d(convex_support_segment3d(hull, transform, axis.normal),
+            triangle_support_segment3d(triangle, surface, axis.normal.negated()))
+        return DistanceResult3D(pair.first, pair.second, axis.normal, axis.gap)
+    }
+    let scale = Math.max(convex_extent3d(hull), Math.max(triangle.second.subtract(triangle.first).length(),
+        triangle.third.subtract(triangle.first).length()))
+    let anchor = transform.position
+    let normalized = Triangle3D(convex_relative_point3d(triangle.first, surface, anchor, scale),
+        convex_relative_point3d(triangle.second, surface, anchor, scale),
+        convex_relative_point3d(triangle.third, surface, anchor, scale))
+    var best = CapsuleAxisPair3D(Math.Vec3(), Math.Vec3()); var best_squared = 3.4028235e38
+    var face = 0
+    while face < hull.face_count() {
+        let polygon = hull.face_polygon(face); var edge = 0
+        while edge < polygon.count() {
+            let segment = CapsuleAxis3D(convex_relative_point3d(polygon[edge], transform, anchor, scale),
+                convex_relative_point3d(polygon[(edge + 1) % polygon.count()], transform, anchor, scale))
+            let pair = closest_capsule_triangle3d(segment, normalized, false)
+            let squared = pair.second.subtract(pair.first).length_squared()
+            if squared < best_squared { best = pair; best_squared = squared }
+            edge++
+        }
+        face++
+    }
+    let vertices:Math.Vec3[] = [normalized.first, normalized.second, normalized.third]
+    var index = 0
+    while index < hull.triangle_count() {
+        let boundary = hull.triangle(index)
+        let target = Triangle3D(convex_relative_point3d(boundary.first, transform, anchor, scale),
+            convex_relative_point3d(boundary.second, transform, anchor, scale),
+            convex_relative_point3d(boundary.third, transform, anchor, scale))
+        var edge = 0
+        while edge < 3 {
+            let pair = closest_capsule_triangle3d(CapsuleAxis3D(vertices[edge], vertices[(edge + 1) % 3]), target, false)
+            let squared = pair.second.subtract(pair.first).length_squared()
+            if squared < best_squared { best = CapsuleAxisPair3D(pair.second, pair.first); best_squared = squared }
+            edge++
+        }
+        index++
+    }
+    let offset = best.second.subtract(best.first); let length = offset.length()
+    var normal = axis.normal
+    if length > 0.0 { normal = offset.divide(length) }
+    return DistanceResult3D(anchor.add(best.first.multiply(scale)), anchor.add(best.second.multiply(scale)), normal, length * scale)
+}
+
+package func convex_triangle_front3d(hull:ConvexHull3D, transform:Transform3D,
+    triangle:Triangle3D, surface:Transform3D) bool {
+    let center = surface.inverse_point(transform.point(hull.center()))
+    return center.subtract(triangle.first).dot(triangle.normal()) >= 0.0
+}

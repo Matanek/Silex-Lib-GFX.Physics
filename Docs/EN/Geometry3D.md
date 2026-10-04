@@ -81,6 +81,15 @@ crossed edge axes. Face contacts retain up to four points on their actual
 polygons; an edge contact uses witnesses on its supporting segments.
 When minima tie, the engine chooses a deterministic axis.
 
+Convex/triangle pairs are bilateral in standalone queries. Exterior separation
+is Euclidean at faces, edges and vertices; penetration uses the shortest
+separating translation among face and edge axes. The world applies the fixed
+triangle's front-side policy, with up to four points covering the actual
+support polygon. Sensors, world queries and translation CCD use the same pair.
+A geometric volume center, independent of the local origin and explicit body
+mass properties, determines the side of the plane. A shifted hull therefore
+remains equivalent when its pose compensates for the shift.
+
 A hull can be the shape of a **fixed, kinematic or dynamic** body. Its density
 determines the mass, local center of mass and full inertia tensor of a
 homogeneous solid; see [body commands](World3D.md#poses-mass-and-commands).
@@ -90,8 +99,8 @@ the shape and recomputes a dynamic body's mass properties.
 
 Collisions against spheres, boxes, capsules and other hulls work in both
 orders, with sensors, filters and linear CCD. A kinematic hull can push a
-dynamic body. Convex compound children and convex/triangle and convex/mesh
-pairs are rejected. This qualification does not cover rotational CCD.
+dynamic body. Convex compound children and convex/mesh pairs are rejected.
+This qualification does not cover rotational CCD.
 `CharacterMover3D` is qualified on fixed hulls for movement and support;
 see [the character guide](Character3D.md). The convex family remains partial.
 
@@ -108,11 +117,17 @@ tetrahedron hitting a dynamic convex base, and a kinematic convex platform
 lifting a convex cube. Every physical shape in this scene is a hull;
 Space, R and Escape retain the same controls.
 
+`Silex-Examples/Sources/Physics3D/ConvexTriangleScene.sx` shows three separate
+fixed triangles: a falling and rotating tetrahedron, a supported cube with
+shifted local vertices, and a cube crossing the back face before landing on
+the front. Space pauses, R restarts and Escape exits.
+
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
-and their mesh variants, as well as sphere/convex, box/convex, capsule/convex and convex/convex, in either
+and their mesh variants, as well as sphere/convex, box/convex, capsule/convex,
+convex/convex and convex/triangle, in either
 order, including oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the

@@ -1,0 +1,206 @@
+use GFX.Physics
+use STD.Math
+
+func cube(size:float = 1.0, offset:Math.Vec3 = Math.Vec3()) Physics.Shape3D {
+    var points:Math.Vec3[] = []; var index = 0
+    while index < 8 {
+        var x = -0.5; var y = -0.5; var z = -0.5
+        if index % 2 == 1 { x = 0.5 }
+        if (index / 2) % 2 == 1 { y = 0.5 }
+        if index / 4 == 1 { z = 0.5 }
+        points.append(Math.Vec3(x, y, z).multiply(size).add(offset)); index++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func tetra() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([Math.Vec3(-0.5),
+        Math.Vec3(1.0, -0.5, -0.5), Math.Vec3(-0.5, 1.0, -0.5), Math.Vec3(-0.5, -0.5, 1.0)]))
+}
+func triangle(size:float = 4.0) Physics.Shape3D {
+    return Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(), Math.Vec3(0.0, 0.0, size), Math.Vec3(size, 0.0, 0.0)))
+}
+func floor() Physics.Shape3D {
+    return Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(-8.0, 0.0, -8.0),
+        Math.Vec3(0.0, 0.0, 8.0), Math.Vec3(8.0, 0.0, -8.0)))
+}
+func placed(shape:Physics.Shape3D, point:Math.Vec3 = Math.Vec3(), rotation:Math.Quat = Math.Quat()) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(shape, Physics.Transform3D(point, rotation))
+}
+func near(value:float, expected:float, tolerance:float = 0.00001) {
+    assert(value == value && Math.abs(value - expected) <= tolerance)
+}
+func symmetric(first:Physics.ShapePlacement3D, second:Physics.ShapePlacement3D,
+    expected:float, tolerance:float = 0.00001) {
+    let result = Physics.Geometry3D.distance(first, second)
+    let reverse = Physics.Geometry3D.distance(second, first)
+    near(result.separation, expected, tolerance); near(reverse.separation, expected, tolerance)
+    near(result.normal.length(), 1.0, 0.0001)
+    assert(reverse.normal.nearly_equal(result.normal.negated(), 0.0001))
+    assert(reverse.first_point.nearly_equal(result.second_point, tolerance))
+    assert(reverse.second_point.nearly_equal(result.first_point, tolerance))
+    near(result.second_point.subtract(result.first_point).dot(result.normal), expected, tolerance)
+    if expected > tolerance { near(result.second_point.subtract(result.first_point).length(), expected, tolerance) }
+}
+func geometry() {
+    let points:Math.Vec3[] = [Math.Vec3(1.0, 1.0, 1.0), Math.Vec3(-0.8, 0.9, 2.0),
+        Math.Vec3(-0.8, 0.9, -0.7), Math.Vec3(1.0, -0.4, 1.0), Math.Vec3(1.0, 0.1, 1.0), Math.Vec3(3.0, 0.7, 3.0)]
+    let gaps:float[] = [0.5, 0.5, Math.sqrt(0.29), -0.1, -0.4, Math.sqrt(0.54)]
+    let target = placed(triangle()); var index = 0
+    while index < points.count() {
+        let body = placed(cube(), points[index]); symmetric(body, target, gaps[index])
+        let result = Physics.Geometry3D.distance(body, target)
+        let point = result.first_point.subtract(points[index])
+        assert(Math.abs(point.x) <= 0.50001 && Math.abs(point.y) <= 0.50001 && Math.abs(point.z) <= 0.50001)
+        near(Math.max(Math.abs(point.x), Math.max(Math.abs(point.y), Math.abs(point.z))), 0.5)
+        near(result.second_point.y, 0.0)
+        assert(result.second_point.x >= -0.00001 && result.second_point.z >= -0.00001 && result.second_point.x + result.second_point.z <= 4.00001)
+        assert(Physics.Geometry3D.overlaps(body, target) == (gaps[index] <= 0.0))
+        print("gap name=simple$(index) value=$(result.separation)"); index++
+    }
+    symmetric(placed(cube(), Math.Vec3(1.0, 0.5, 1.0)), target, 0.0)
+    let skew = placed(Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(-0.8, -1.1, -0.1),
+        Math.Vec3(0.9, -0.3, -1.1), Math.Vec3(-0.8, -1.5, -1.2))))
+    symmetric(placed(cube()), skew, 0.28 / Math.sqrt(1.64))
+    print("gap name=skew value=$(Physics.Geometry3D.distance(placed(cube()), skew).separation)")
+    let narrow = placed(Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(0.49, 0.0, -0.1),
+        Math.Vec3(0.49, 0.0, 0.1), Math.Vec3(0.51, 0.0, 0.0))))
+    symmetric(placed(cube(), Math.Vec3(0.0, 0.1, 0.0)), narrow, -0.01)
+    print("gap name=narrow value=$(Physics.Geometry3D.distance(placed(cube(), Math.Vec3(0.0, 0.1, 0.0)), narrow).separation)")
+    symmetric(placed(tetra(), Math.Vec3(1.0, 1.0, 1.0)), target, 0.5)
+    symmetric(placed(tetra(), Math.Vec3(1.0, 0.4, 1.0)), target, -0.1)
+    print("gap name=tetraOutside value=$(Physics.Geometry3D.distance(placed(tetra(), Math.Vec3(1.0, 1.0, 1.0)), target).separation)")
+    print("gap name=tetraInside value=$(Physics.Geometry3D.distance(placed(tetra(), Math.Vec3(1.0, 0.4, 1.0)), target).separation)")
+}
+func transformed() {
+    let scales:float[] = [0.01, 1.0, 100.0]
+    for scale in scales {
+        let common_rotation = Math.Quat.angle_axis(0.73, Math.Vec3(1.0, 2.0, -1.0))
+        let common = Physics.Transform3D(Math.Vec3(2.0, 3.0, -1.0).multiply(scale), common_rotation)
+        let target = Physics.ShapePlacement3D(triangle(4.0 * scale), common)
+        var index = 0
+        while index < 12 {
+            let point = common.point(Math.Vec3(-0.7 + index as float * 0.2, 0.81 - index as float * 0.08, 1.0).multiply(scale))
+            let rotation = common_rotation.multiply(Math.Quat.angle_axis(index as float * 0.17, Math.Vec3(1.0, 2.0, 3.0)))
+            let shape = cube(scale)
+            let body = placed(shape, point, rotation)
+            let reference = Physics.Geometry3D.distance(placed(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(scale))), point, rotation), target)
+            symmetric(body, target, reference.separation, 0.00001 * scale)
+            let result = Physics.Geometry3D.distance(body, target)
+            assert(result.normal.nearly_equal(reference.normal, 0.0002))
+            if scale == 1.0 { print("gap name=rotated$(index) value=$(result.separation)") }
+            let offset = Math.Vec3(3.0, -4.0, 2.0).multiply(scale)
+            let shifted = placed(cube(scale, offset), point.subtract(rotation.rotate(offset)), rotation)
+            near(Physics.Geometry3D.distance(shifted, target).separation, result.separation, 0.00001 * scale)
+            index++
+        }
+    }
+}
+func advance(world:Physics.World3D, count:int) {
+    var step = 0; while step < count { world.step(1.0 / 120.0); step++ }
+}
+func resting(reverse:bool, shifted:bool) {
+    var offset = Math.Vec3()
+    if shifted { offset = Math.Vec3(3.0, -4.0, 2.0) }
+    var world = Physics.World3D()
+    let fixed = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = floor() ..friction = 0.0
+    let moving = Physics.RigidBody3DSettings() ..shape = cube(offset:offset) ..friction = 0.0 ..allow_sleep = false
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, 2.5, 0.0).subtract(offset))
+    var first_settings = fixed; var second_settings = moving
+    if reverse { first_settings = moving; second_settings = fixed }
+    var first = world.create_rigid_body(first_settings); var second = world.create_rigid_body(second_settings)
+    var body = second; if reverse { body = first }
+    advance(world, 480)
+    let center = body.transform().point(offset)
+    near(center.y, 0.5, 0.005); near(center.x, 0.0, 0.001); near(center.z, 0.0, 0.001)
+    assert(body.angular_velocity().length() < 0.01 && body.linear_velocity().length() < 0.05)
+    var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].point_count() == 4)
+    print("rest reverse=$(reverse) shifted=$(shifted) y=$(center.y) vy=$(body.linear_velocity().y)")
+}
+func unilateral(reverse:bool, shifted:bool) {
+    var offset = Math.Vec3(); if shifted { offset = Math.Vec3(0.0, 3.0, 0.0) }
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let settings = Physics.RigidBody3DSettings() ..shape = cube(offset:offset)
+        ..transform = Physics.Transform3D(Math.Vec3(1.0, 0.4, 1.0).subtract(offset)) ..allow_sleep = false
+    var selected:Physics.RigidBody3D? = null
+    if reverse { selected = world.create_rigid_body(settings) }
+    var terrain = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = triangle())
+    if !reverse { selected = world.create_rigid_body(settings) }
+    if var body = selected {
+        world.step(1.0 / 120.0); assert(world.contact_count() == 1)
+        assert(body.transform().point(offset).y > 0.4)
+        body.set_transform(Physics.Transform3D(Math.Vec3(1.0, -0.4, 1.0).subtract(offset))); body.set_linear_velocity(Math.Vec3())
+        world.step(1.0 / 120.0); assert(world.contact_count() == 0)
+        near(body.transform().point(offset).y, -0.4)
+        var ends:Physics.Contact3D[] = []; world.write_contact_end_events(ends); assert(ends.count() == 1)
+        var hits:Physics.WorldOverlap3D[] = []
+        world.write_overlaps(placed(cube(), Math.Vec3(1.0, -0.4, 1.0)), hits, ignore_body:body)
+        assert(hits.count() == 1 && hits[0].body().same_body(terrain))
+        terrain.set_sensor(true)
+        body.set_shape(cube()); body.set_transform(Physics.Transform3D(Math.Vec3(1.0, 0.4, 1.0)))
+        world.step(1.0 / 120.0)
+        var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].is_sensor() && contacts[0].point_count() == 0)
+        near(body.position().y, 0.4)
+        world.destroy_rigid_body(terrain); world.step(1.0 / 120.0); world.write_contact_end_events(ends)
+        assert(ends.count() == 1 && ends[0].is_sensor())
+    }
+}
+func ccd(reverse:bool, back:bool, shifted:bool, mode:int = 0) {
+    let rotation = Math.Quat.angle_axis(0.37, Math.Vec3(1.0, 2.0, 3.0))
+    let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -7.0), rotation)
+    var offset = Math.Vec3(); if shifted { offset = Math.Vec3(0.0, 3.0, 0.0) }
+    var y = 1.0; var speed = -240.0; if back { y = -1.0; speed = 240.0 }
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let settings = Physics.RigidBody3DSettings() ..shape = cube(0.2, offset) ..continuous_collision = true ..friction = 0.0
+        ..transform = Physics.Transform3D(pose.point(Math.Vec3(1.0, y, 1.0).subtract(offset)), rotation)
+        ..linear_velocity = pose.vector(Math.Vec3(0.0, speed, 0.0))
+    var selected:Physics.RigidBody3D? = null
+    if reverse { selected = world.create_rigid_body(settings) }
+    var filter = Physics.CollisionFilter3D(); if mode == 1 { filter = Physics.CollisionFilter3D(mask_bits:0) }
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = triangle()
+        ..transform = pose ..is_sensor = (mode == 2) ..collision_filter = filter)
+    if !reverse { selected = world.create_rigid_body(settings) }
+    if let body = selected {
+        world.step(1.0 / 120.0)
+        let position = pose.inverse_point(body.transform().point(offset)); let velocity = pose.inverse_vector(body.linear_velocity())
+        var begins:Physics.Contact3D[] = []; var ends:Physics.Contact3D[] = []
+        world.write_contact_begin_events(begins); world.write_contact_end_events(ends)
+        if back || mode > 0 {
+            var expected = -1.0; if back { expected = 1.0 }
+            near(position.y, expected, 0.001); near(velocity.y, speed, 0.001); assert(world.contact_count() == 0)
+            if mode == 2 && !back { assert(begins.count() == 1 && ends.count() == 1 && begins[0].is_sensor()) }
+            else { assert(begins.is_empty() && ends.is_empty()) }
+        } else {
+            near(position.y, 0.1, 0.001); near(velocity.y, 0.0, 0.001)
+            assert(world.contact_count() == 1 && begins.count() == 1 && begins[0].normal_impulse() > 0.0)
+            assert(begins[0].point_count() == 4)
+        }
+        near(position.x, 1.0, 0.001); near(position.z, 1.0, 0.001)
+        print("ccd reverse=$(reverse) back=$(back) shifted=$(shifted) mode=$(mode) y=$(position.y) vy=$(velocity.y)")
+    }
+}
+func bounce() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = floor() ..friction = 0.0 ..restitution = 1.0)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = cube() ..friction = 0.0 ..restitution = 1.0
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, 0.6, 0.0)) ..linear_velocity = Math.Vec3(0.0, -2.0, 0.0) ..allow_sleep = false)
+    advance(world, 12)
+    near(body.linear_velocity().y, 2.0, 0.0001); near(body.linear_velocity().length_squared(), 4.0, 0.0002)
+    assert(body.angular_velocity().length() < 0.0001)
+    print("bounce vy=$(body.linear_velocity().y)")
+}
+func all_rest() { resting(false, false); resting(true, false); resting(false, true); resting(true, true) }
+func all_front() { unilateral(false, false); unilateral(true, false); unilateral(false, true); unilateral(true, true) }
+func all_ccd() {
+    ccd(false, false, false); ccd(true, false, false); ccd(false, true, false); ccd(true, true, false)
+    ccd(false, false, true); ccd(true, true, true); ccd(false, false, false, 1); ccd(false, false, false, 2); ccd(false, true, false, 2)
+}
+test "convex triangle geometry covers faces edges vertices narrow penetration and asymmetry" { geometry() }
+test "convex triangle transforms scales and local offsets agree with independent boxes" { transformed() }
+test "convex triangle has four resting supports in both orders and with shifted vertices" { all_rest() }
+test "convex triangle unilateral contacts retain bilateral queries sensor and removal identities" { all_front() }
+test "convex triangle CCD respects front back offsets filters and transient sensors" { all_ccd() }
+test "convex triangle elastic bounce conserves normal energy without torque" { bounce() }
+func main() { geometry(); transformed(); all_rest(); all_front(); all_ccd(); bounce(); print("Convex triangle: all scenarios passed") }

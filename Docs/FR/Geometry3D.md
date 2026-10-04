@@ -86,6 +86,16 @@ Les contacts de face gardent jusqu’à quatre points sur leurs polygones réels
 un contact d’arêtes utilise les témoins de leurs segments supports.
 En cas de minima égaux, le moteur choisit un axe déterministe.
 
+La paire convexe/triangle est bilatérale dans les requêtes autonomes. Sa
+séparation extérieure est euclidienne aux faces, arêtes et sommets ; une
+pénétration utilise la plus courte translation séparatrice des axes de faces
+et d’arêtes. Le monde applique la politique de face avant du triangle fixe,
+avec jusqu’à quatre points couvrant le polygone d’appui réel. Les capteurs,
+requêtes de monde et CCD de translation utilisent la même paire. Un centre
+volumique géométrique, indépendant de l’origine locale et des propriétés de
+masse explicites du corps, détermine le côté du plan. Une enveloppe décalée
+reste donc équivalente après compensation de sa pose.
+
 Une enveloppe peut être la forme d’un corps **fixe, cinématique ou dynamique**.
 Sa densité détermine la masse, le centre de masse local et le tenseur complet
 d’un solide homogène ; voir [les commandes du corps](World3D.md#poses-masse-et-commandes).
@@ -96,7 +106,7 @@ et recalcule les propriétés de masse d’un corps dynamique.
 Les collisions face aux sphères, boîtes, capsules et autres convexes fonctionnent
 dans les deux ordres, avec capteurs, filtres et CCD linéaire. Un convexe
 cinématique peut pousser un corps dynamique. Les enfants convexes de composés
-et les paires convexe/triangle et convexe/maillage sont refusés.
+et la paire convexe/maillage sont refusés.
 Cette qualification ne couvre pas le CCD rotationnel. `CharacterMover3D`
 est qualifié sur les convexes fixes pour le déplacement et l’appui ; voir
 [le guide du personnage](Character3D.md). La famille convexe demeure partielle.
@@ -115,12 +125,18 @@ tétraèdre en rotation heurtant une base convexe dynamique et une plateforme
 convexe cinématique soulevant un cube convexe. Toutes les formes physiques de
 cette scène sont des enveloppes ; les commandes restent Espace, R et Échap.
 
+`Silex-Examples/Sources/Physics3D/ConvexTriangleScene.sx` montre trois triangles
+fixes distincts : chute et rotation d’un tétraèdre, appui d’un cube dont les
+sommets locaux sont décalés, et cube traversant la face arrière avant de
+retomber sur l’avant. Espace met en pause, R recommence et Échap ferme.
+
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
 et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
 boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe et
-boîte/convexe, capsule/convexe et convexe/convexe, dans les deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
+boîte/convexe, capsule/convexe, convexe/convexe et convexe/triangle, dans les
+deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.

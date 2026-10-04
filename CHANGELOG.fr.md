@@ -6,6 +6,18 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le CCD de translation écarte les paires dont les volumes parcourus ne se
+  rencontrent pas avant de calculer leur distance exacte. Les bornes d’un
+  convexe suivent ses vrais sommets, y compris une origine locale décalée.
+  Cela supprime le ralentissement Debug de la scène à trois triangles.
+
+- Une enveloppe convexe entre en contact avec un triangle fixe : distances
+  bilatérales face/arête/sommet, profondeur de pénétration, manifold d’appui,
+  rebond, capteurs, requêtes et CCD de translation unilatéral. Le centre du
+  volume conserve le côté avant lorsque l’origine locale est décalée.
+  `ConvexTriangleScene.sx` montre chute, rotation et passage de la face arrière.
+  Convexe/maillage, coutures et enfants convexes restent à qualifier.
+
 - Deux enveloppes convexes peuvent se rencontrer dans les deux ordres :
   distance extérieure euclidienne, profondeur d’inclusion, contacts de face
   jusqu’à quatre points et témoins d’arêtes. Le monde conserve les filtres,

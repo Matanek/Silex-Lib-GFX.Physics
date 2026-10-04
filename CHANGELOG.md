@@ -6,6 +6,18 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Translation CCD rejects pairs whose swept bounds cannot intersect before
+  computing their exact distance. Convex bounds follow the actual vertices,
+  including shifted local origins. This removes the Debug slowdown in the
+  three-triangle scene.
+
+- A convex hull contacts a fixed triangle: bilateral face/edge/vertex
+  distances, penetration depth, support manifold, bounce, sensors, queries
+  and unilateral translation CCD. The volume center preserves front-side
+  selection when the local origin is shifted. `ConvexTriangleScene.sx` shows
+  falling, rotation and back-face crossing. Convex/mesh, seams and convex
+  compound children remain to be qualified.
+
 - Two convex hulls can collide in either order: Euclidean exterior distance,
   containment depth, up to four face contact points and edge witnesses. The
   world retains filters, sensors, events and translational CCD.

@@ -7,7 +7,7 @@ des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
 Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères,
-capsules et boîtes dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
+capsules, boîtes et enveloppes convexes dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
 et sommets isolés ; une forme dont le centre est derrière le plan du triangle
 ne crée pas de contact. Le triangle et sa pose peuvent être remplacés sans
 recréer le corps. Les corps triangulaires dynamiques ou cinématiques et les
@@ -15,6 +15,11 @@ triangles enfants d’un composé sont rejetés. Les contacts triangle/triangle,
 les autres coutures et les terrains généraux restent à qualifier. Le CCD
 linéaire sur face avant est qualifié ci-dessous. Un triangle physique reste
 indépendant de la géométrie de rendu.
+
+Pour un convexe, le centre qui sélectionne la face avant est celui du volume
+homogène de l’enveloppe, indépendamment de son origine locale et d’une masse
+explicitement fournie. Le contact de face couvre jusqu’à quatre points.
+Convexe/maillage et ses coutures restent refusés.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
 chaque sphère ou capsule dynamique primitive ou enfant de composé,
@@ -97,7 +102,7 @@ func main() {
 
 Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe,
 cinématique ou dynamique et répondre aux sphères, boîtes, capsules et autres
-enveloppes.
+enveloppes, ainsi qu’aux triangles fixes.
 Voir les [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes).
 Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
@@ -278,6 +283,11 @@ face avant plus éloignée du même maillage. Les poses communes inclinées, les
 ordres inversés, filtres et événements sont qualifiés, ainsi qu'une boîte
 enfant de composé. Ces preuves concernent une translation linéaire à pose
 fixe ; elles ne garantissent pas les plis arbitraires ni les appuis rasants.
+
+Le CCD d’une enveloppe convexe est également qualifié contre un triangle
+fixe : approche avant arrêtée, passage arrière libre, poses communes inclinées,
+origine locale décalée, filtres et capteurs. Cette qualification ne couvre
+pas la paire convexe/maillage ni le balayage rotationnel.
 
 Pour un capteur entièrement traversé dans un seul pas, le monde émet un début
 et une fin transitoires dans ce pas, sans contact persistant ni réponse.

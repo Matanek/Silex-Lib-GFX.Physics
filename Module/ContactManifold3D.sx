@@ -110,6 +110,11 @@ func clipped_convex_face3d(hull:ConvexHull3D, hull_transform:Transform3D,
     let origin = hull_transform.point(hull.face_origin(face))
     var polygon:Math.Vec3[] = []
     for point in hull.face_polygon(face) { polygon.append(hull_transform.point(point)) }
+    return clipped_polygon_face3d(polygon, outward, origin, incident, witness)
+}
+
+func clipped_polygon_face3d(polygon:Math.Vec3[], outward:Math.Vec3,
+    origin:Math.Vec3, incident:Math.Vec3[], witness:Math.Vec3) Math.Vec3[] {
     var clipped = incident
     var index = 0
     while index < polygon.count() {
@@ -128,6 +133,20 @@ func clipped_convex_face3d(hull:ConvexHull3D, hull_transform:Transform3D,
     if points.is_empty() { return [witness] }
     let tangent = polygon[1].subtract(polygon[0]).normalized()
     return reduce_contact_points3d(points, tangent, outward.cross(tangent))
+}
+
+package func convex_triangle_contact_points(hull:ConvexHull3D, transform:Transform3D,
+    triangle:Triangle3D, surface:Transform3D, normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    let face = convex_face3d(hull, transform, normal)
+    let polygon:Math.Vec3[] = [surface.point(triangle.first), surface.point(triangle.second), surface.point(triangle.third)]
+    if transform.vector(hull.face_normal(face)).dot(normal) >= 0.99999 {
+        return clipped_convex_face3d(hull, transform, face, polygon, witness)
+    }
+    let outward = surface.vector(triangle.normal())
+    if outward.dot(normal.negated()) < 0.99999 { return [witness] }
+    var incident:Math.Vec3[] = []
+    for point in hull.face_polygon(face) { incident.append(transform.point(point)) }
+    return clipped_polygon_face3d(polygon, outward, polygon[0], incident, witness)
 }
 
 // Clip a parallel capsule axis to the actual face polygon, including when

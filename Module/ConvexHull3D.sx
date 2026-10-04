@@ -9,6 +9,7 @@ public class ConvexHull3D {
     private var polygons:Math.Vec3[][]
     private var vertices:Math.Vec3[]
     private var edges:Math.Vec3[]
+    private var geometric_center:Math.Vec3
 
     init(points:Math.Vec3[]) {
         if points.count() < 4 { panic("GFX.Physics.ConvexHull3D requires a solid point cloud") }
@@ -53,6 +54,7 @@ public class ConvexHull3D {
             panic("GFX.Physics.ConvexHull3D requires a non-coplanar solid point cloud")
         }
         require_closed_hull3d(self.triangles)
+        self.geometric_center = hull_center3d(self.triangles, anchor, scale)
     }
 
     func triangle_count() int { return self.triangles.count() }
@@ -65,6 +67,7 @@ public class ConvexHull3D {
     package func vertex(index:int) Math.Vec3 { return self.vertices[index] }
     package func edge_count() int { return self.edges.count() }
     package func edge(index:int) Math.Vec3 { return self.edges[index] }
+    package func center() Math.Vec3 { return self.geometric_center }
 
     private func add_supporting_face(points:Math.Vec3[], first:int, second:int,
         third:int, scale:float, tolerance:float) {
@@ -130,6 +133,21 @@ public class ConvexHull3D {
         self.normals.append(normal)
         self.origins.append(origin)
     }
+}
+
+// Unit-density volume center, built once with the immutable boundary. It is
+// independent of a body's origin and of explicit mass/inertia overrides.
+func hull_center3d(triangles:Triangle3D[], anchor:Math.Vec3, scale:float) Math.Vec3 {
+    var volume = 0.0; var moment = Math.Vec3()
+    for triangle in triangles {
+        let first = triangle.first.subtract(anchor).divide(scale)
+        let second = triangle.second.subtract(anchor).divide(scale)
+        let third = triangle.third.subtract(anchor).divide(scale)
+        let weight = first.dot(second.cross(third))
+        volume += weight
+        moment = moment.add(first.add(second).add(third).multiply(weight * 0.25))
+    }
+    return anchor.add(moment.divide(volume).multiply(scale))
 }
 
 // Gift wrapping removes coplanar interior points and collinear edge points.

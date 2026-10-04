@@ -1,3 +1,4 @@
+use GFX.Physics.ContactManifold3D.convex_triangle_contact_points
 use GFX.Physics.ContactManifold3D.convex_convex_contact_points
 use GFX.Physics.Geometry3D.inside_convex3d
 use GFX.Physics.Box3D.Box3D
@@ -1567,7 +1568,7 @@ func contact_points3d(
                 convex(hull) => { return capsule_convex_contact_points(first_capsule, first.transform(), hull, second.transform(), normal, witness) }
             }
         }
-        triangle(_) => {
+        triangle(triangle) => {
             match second.shape() {
                 capsule(capsule) => {
                     return capsule_surface_contact_points(capsule, second.transform(),
@@ -1580,7 +1581,7 @@ func contact_points3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
-                convex(_) => {}
+                convex(hull) => { return convex_triangle_contact_points(hull, second.transform(), triangle, first.transform(), normal.negated(), witness) }
             }
         }
         mesh(_) => {
@@ -1604,6 +1605,7 @@ func contact_points3d(
                 capsule(capsule) => { return capsule_convex_contact_points(capsule, second.transform(), hull, first.transform(), normal.negated(), witness) }
                 box(box) => { return box_convex_contact_points(box, second.transform(), hull, first.transform(), normal.negated(), witness) }
                 convex(other) => { return convex_convex_contact_points(hull, first.transform(), other, second.transform(), normal, witness) }
+                triangle(triangle) => { return convex_triangle_contact_points(hull, first.transform(), triangle, second.transform(), normal, witness) }
                 else => {}
             }
         }
@@ -2486,6 +2488,46 @@ func bounding_spheres_overlap3d(
     return first.subtract(second).length_squared() <= extent * extent
 }
 
+// Conservative bounds of the translation-only CCD path. The hull's actual
+// vertices retain local offsets; the search holds both beginning rotations.
+struct LinearSweepBounds3D {
+    let lower:Math.Vec3
+    let upper:Math.Vec3
+    init(lower:Math.Vec3, upper:Math.Vec3) { self.lower = lower; self.upper = upper }
+}
+
+func linear_sweep_bounds3d(shape:Shape3D, start:Transform3D, end:Transform3D) LinearSweepBounds3D {
+    var lower = Math.Vec3(); var upper = Math.Vec3(); var precise = false
+    match shape {
+        convex(hull) => {
+            precise = true; lower = start.vector(hull.vertex(0)); upper = lower
+            var index = 1
+            while index < hull.vertex_count() {
+                let point = start.vector(hull.vertex(index))
+                lower = Math.Vec3(Math.min(lower.x, point.x), Math.min(lower.y, point.y), Math.min(lower.z, point.z))
+                upper = Math.Vec3(Math.max(upper.x, point.x), Math.max(upper.y, point.y), Math.max(upper.z, point.z))
+                index++
+            }
+        }
+        sphere(_) => {}
+        box(_) => {}
+        capsule(_) => {}
+        triangle(_) => {}
+        mesh(_) => {}
+        compound(_) => {}
+    }
+    if !precise { upper = broad_extent3d(shape, start, shape_bounding_radius3d(shape)); lower = upper.negated() }
+    let minimum = Math.Vec3(Math.min(start.position.x, end.position.x), Math.min(start.position.y, end.position.y), Math.min(start.position.z, end.position.z)).add(lower)
+    let maximum = Math.Vec3(Math.max(start.position.x, end.position.x), Math.max(start.position.y, end.position.y), Math.max(start.position.z, end.position.z)).add(upper)
+    return LinearSweepBounds3D(minimum, maximum)
+}
+
+func linear_sweeps_overlap3d(first:@LinearSweepBounds3D, second:@LinearSweepBounds3D) bool {
+    return first.upper.x + 0.000001 >= second.lower.x && second.upper.x + 0.000001 >= first.lower.x &&
+        first.upper.y + 0.000001 >= second.lower.y && second.upper.y + 0.000001 >= first.lower.y &&
+        first.upper.z + 0.000001 >= second.lower.z && second.upper.z + 0.000001 >= first.lower.z
+}
+
 func continuous_fraction3d(
     moving_shape:Shape3D,
     moving_start:Transform3D,
@@ -2498,6 +2540,9 @@ func continuous_fraction3d(
     let target_translation = target_end.position.subtract(target_start.position)
     let relative_speed = moving_translation.subtract(target_translation).length()
     if relative_speed <= 0.000001 { return null }
+    let moving_proxy = linear_sweep_bounds3d(moving_shape, moving_start, moving_end)
+    let target_proxy = linear_sweep_bounds3d(target_shape, target_start, target_end)
+    if !linear_sweeps_overlap3d(moving_proxy, target_proxy) { return null }
     let initial = motion_distance3d(
         ShapePlacement3D(moving_shape, moving_start),
         ShapePlacement3D(target_shape, target_start), moving_start, target_start
