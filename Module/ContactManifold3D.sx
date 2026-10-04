@@ -94,6 +94,53 @@ package func box_convex_contact_points(box:Box3D, transform:Transform3D,
     return reduce_contact_points3d(points, tangent, outward.cross(tangent))
 }
 
+// Clip a parallel capsule axis to the actual face polygon, including when
+// both caps extend past its edges. Evaluated once per nearby contact pair.
+package func capsule_convex_contact_points(capsule:Capsule3D, transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D,
+    normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    let axial = hull_transform.inverse_vector(transform.vector(Math.Vec3.up()))
+    let inward = hull_transform.inverse_vector(normal)
+    if Math.abs(axial.dot(inward)) > 0.001 { return [witness] }
+    var face = 0; var alignment = -1.0; var index = 0
+    while index < hull.face_count() {
+        let candidate = hull.face_normal(index).dot(inward.negated())
+        if candidate > alignment { alignment = candidate; face = index }
+        index++
+    }
+    if alignment < 0.99999 { return [witness] }
+    let outward = hull.face_normal(face)
+    let center = hull_transform.inverse_point(transform.position)
+    let first = center.subtract(axial.multiply(capsule.half_height))
+    let direction = axial.multiply(2.0 * capsule.half_height)
+    let polygon = hull.face_polygon(face)
+    var lower = 0.0; var upper = 1.0; index = 0
+    while index < polygon.count() {
+        let origin = polygon[index]
+        let side = polygon[(index + 1) % polygon.count()].subtract(origin).cross(outward).normalized()
+        let distance = first.subtract(origin).dot(side)
+        let speed = direction.dot(side)
+        if Math.abs(speed) < 0.000000001 {
+            if distance > 0.000001 { return [witness] }
+        } else {
+            let fraction = -distance / speed
+            if speed < 0.0 { lower = Math.max(lower, fraction) }
+            else { upper = Math.min(upper, fraction) }
+            if lower > upper { return [witness] }
+        }
+        index++
+    }
+    if upper - lower < 0.000001 { return [witness] }
+    var points:Math.Vec3[] = []
+    let fractions:float[] = [lower, upper]
+    for fraction in fractions {
+        let point = first.add(direction.multiply(fraction)).add(inward.multiply(capsule.radius))
+        let depth = point.subtract(hull.face_origin(face)).dot(outward)
+        points.append(hull_transform.point(point.subtract(outward.multiply(depth * 0.5))))
+    }
+    return points
+}
+
 func clip_contact_plane3d(polygon:Math.Vec3[], origin:Math.Vec3,
     normal:Math.Vec3) Math.Vec3[] {
     var result:Math.Vec3[] = []

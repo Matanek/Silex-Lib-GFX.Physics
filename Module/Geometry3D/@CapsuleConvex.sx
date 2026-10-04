@@ -1,0 +1,85 @@
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+struct CapsuleConvexAxis3D {
+    let normal:Math.Vec3
+    let gap:float
+    init(normal:Math.Vec3, gap:float) { self.normal = normal; self.gap = gap }
+}
+
+// The hull minus an axial segment has hull faces and faces extruded from
+// actual hull edges along that segment. Radius offsets this entire solid.
+func capsule_convex_axis3d(axis:CapsuleAxis3D, hull:ConvexHull3D) CapsuleConvexAxis3D {
+    let direction = axis.second.subtract(axis.first).normalized()
+    var best = CapsuleConvexAxis3D(Math.Vec3.up(), -3.4028235e38)
+    var index = 0
+    while index < hull.face_count() + hull.edge_count() {
+        var normal = Math.Vec3()
+        if index < hull.face_count() { normal = hull.face_normal(index) }
+        else { normal = direction.cross(hull.edge(index - hull.face_count())) }
+        let squared = normal.length_squared()
+        if squared > 0.000000000001 {
+            normal = normal.divide(Math.sqrt(squared))
+            var low = hull.vertex(0).dot(normal); var high = low
+            var vertex = 1
+            while vertex < hull.vertex_count() {
+                let projection = hull.vertex(vertex).dot(normal)
+                low = Math.min(low, projection); high = Math.max(high, projection)
+                vertex++
+            }
+            let first = axis.first.dot(normal); let second = axis.second.dot(normal)
+            let forward = low - Math.max(first, second)
+            let backward = Math.min(first, second) - high
+            var gap = backward; var selected = normal.negated()
+            if forward > backward { gap = forward; selected = normal }
+            if gap > best.gap { best = CapsuleConvexAxis3D(selected, gap) }
+        }
+        index++
+    }
+    return best
+}
+
+func capsule_convex_distance3d(capsule:Capsule3D, transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D) DistanceResult3D {
+    // Work in the hull frame to avoid cancellation from a common translation.
+    let center = hull_transform.inverse_point(transform.position)
+    let offset = hull_transform.inverse_vector(transform.vector(Math.Vec3.up())).multiply(capsule.half_height)
+    let axis = CapsuleAxis3D(center.subtract(offset), center.add(offset))
+    let separator = capsule_convex_axis3d(axis, hull)
+    if separator.gap <= 0.0 {
+        var point = axis.first
+        let difference = axis.second.subtract(axis.first).dot(separator.normal)
+        if difference > 0.0000001 * capsule.half_height { point = axis.second }
+        else if Math.abs(difference) <= 0.0000001 * capsule.half_height { point = center }
+        var closest = closest_triangle_point3d(point, hull.triangle(0))
+        var squared = closest.subtract(point).length_squared()
+        var index = 1
+        while index < hull.triangle_count() {
+            let candidate = closest_triangle_point3d(point, hull.triangle(index))
+            let distance = candidate.subtract(point).length_squared()
+            if distance < squared { closest = candidate; squared = distance }
+            index++
+        }
+        return DistanceResult3D(hull_transform.point(point.add(separator.normal.multiply(capsule.radius))),
+            hull_transform.point(closest), hull_transform.vector(separator.normal), separator.gap - capsule.radius)
+    }
+    // A separated segment's Euclidean minimum is on the complete boundary.
+    // Facet axes alone are only a lower bound at rounded edges and vertices.
+    var best = closest_capsule_triangle3d(axis, hull.triangle(0), false)
+    var squared = best.second.subtract(best.first).length_squared()
+    var index = 1
+    while index < hull.triangle_count() {
+        let candidate = closest_capsule_triangle3d(axis, hull.triangle(index), false)
+        let distance = candidate.second.subtract(candidate.first).length_squared()
+        if distance < squared { best = candidate; squared = distance }
+        index++
+    }
+    let length = Math.sqrt(squared)
+    var local_normal = separator.normal
+    if length > 0.0 { local_normal = best.second.subtract(best.first).divide(length) }
+    let normal = hull_transform.vector(local_normal)
+    return DistanceResult3D(hull_transform.point(best.first).add(normal.multiply(capsule.radius)),
+        hull_transform.point(best.second), normal, length - capsule.radius)
+}

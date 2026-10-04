@@ -1,0 +1,34 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var points:Math.Vec3[] = []
+    let coordinates:float[] = [-1.0, 1.0]
+    for x in coordinates { for y in coordinates { for z in coordinates { points.append(Math.Vec3(x, y, z)) } } }
+    let hull = Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+    let capsule = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+    let rotation = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.right())
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = hull)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = capsule
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0), rotation:rotation) ..allow_sleep = false)
+    var step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(body.position().y - 1.25) < 0.01)
+    assert(body.angular_velocity().length() < 0.001)
+    var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].point_count() == 2)
+    let crossing_rotation = Math.Quat.angle_axis(Math.acos(1.0 / Math.sqrt(3.0)), Math.Vec3(1.0, 0.0, -1.0))
+    let crossing_shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 3.0))
+    let distance = Physics.Geometry3D.distance(Physics.ShapePlacement3D(crossing_shape,
+        Physics.Transform3D(rotation:crossing_rotation)), Physics.ShapePlacement3D(hull))
+    assert(Math.abs(distance.separation + Math.sqrt(2.0) + 0.25) < 0.0001)
+    let exit = Physics.ShapePlacement3D(crossing_shape, Physics.Transform3D(
+        position:distance.normal.multiply(distance.separation), rotation:crossing_rotation))
+    assert(Math.abs(Physics.Geometry3D.distance(exit, Physics.ShapePlacement3D(hull)).separation) < 0.0001)
+    body.set_transform(Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0), rotation:rotation))
+    body.set_continuous_collision(true); body.set_linear_velocity(Math.Vec3(0.0, -120.0, 0.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(body.position().y - 1.25) < 0.001 && body.linear_velocity().length() < 0.001)
+    print("Capsule convex native: two-point rest, axial penetration and CCD verified")
+}

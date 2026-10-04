@@ -215,7 +215,7 @@ public struct Geometry3D {
                             second_mesh, second.transform())
                     }
                     compound(_) => {}
-                    convex(_) => {}
+                    convex(hull) => { return capsule_convex_distance3d(first_capsule, first.transform(), hull, second.transform()) }
                 }
             }
             triangle(first_triangle) => {
@@ -244,6 +244,7 @@ public struct Geometry3D {
                 match second.shape() {
                     sphere(sphere) => { return reversed_distance(sphere_convex_distance(sphere, second.transform(), hull, first.transform())) }
                     box(box) => { return reversed_distance(box_convex_distance3d(box, second.transform(), hull, first.transform())) }
+                    capsule(capsule) => { return reversed_distance(capsule_convex_distance3d(capsule, second.transform(), hull, first.transform())) }
                     else => {}
                 }
             }

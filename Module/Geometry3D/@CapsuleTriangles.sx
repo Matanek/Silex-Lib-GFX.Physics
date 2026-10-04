@@ -5,7 +5,7 @@ use GFX.Physics.TriangleMesh3D.TriangleMesh3D
 use STD.Math
 
 func closest_capsule_triangle3d(axis:CapsuleAxis3D,
-    triangle:Triangle3D) CapsuleAxisPair3D {
+    triangle:Triangle3D, snap_intersection:bool = true) CapsuleAxisPair3D {
     let direction = axis.second.subtract(axis.first)
     let normal = triangle.normal()
     let denominator = normal.dot(direction)
@@ -15,7 +15,8 @@ func closest_capsule_triangle3d(axis:CapsuleAxis3D,
             let point = axis.first.add(direction.multiply(fraction))
             let closest = closest_triangle_point3d(point, triangle)
             if point.subtract(closest).length_squared() <= 0.000000000001 {
-                return CapsuleAxisPair3D(point, point)
+                if snap_intersection { return CapsuleAxisPair3D(point, point) }
+                return CapsuleAxisPair3D(point, closest)
             }
         }
     }

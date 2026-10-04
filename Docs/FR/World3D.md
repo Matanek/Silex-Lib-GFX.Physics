@@ -96,8 +96,10 @@ func main() {
 ```
 
 Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe et répondre
-aux sphères et aux boîtes, y compris par CCD linéaire. Voir les
+aux sphères, aux boîtes et aux capsules, y compris par CCD linéaire. Voir les
 [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes-fixes).
+Une capsule couchée transversalement à une pente peut rouler sous l’effet de
+la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
 
 ## Poses, masse et commandes
 

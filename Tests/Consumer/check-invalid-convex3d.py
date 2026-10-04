@@ -19,8 +19,8 @@ cases = {
     'kinematic': 'requires a fixed body',
     'mutation': 'requires a fixed body',
     'convex-pair': 'unsupported shape pair',
-    'capsule-pair': 'unsupported shape pair',
-    'world-pair': 'unsupported shape pair',
+    'triangle-pair': 'unsupported shape pair',
+    'world-query': 'unsupported shape pair',
 }
 try:
     for mode in ('--debug', '--release'):

@@ -6,10 +6,15 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Capsules collide with fixed convex hulls: signed distances using the entire
+  axial segment, solid containment, two-point face support, compound capsule
+  children and linear CCD. A capsule joins the animated wedge scene. Moving
+  hulls, convex compound children and convex/convex pairs remain unsupported.
+
 - Boxes collide with fixed convex hulls: signed distances in either order,
   up to four contact points on actual faces, compound box children and linear
-  CCD. An animated box joins the wedge scene. Capsule/convex and convex/convex
-  pairs remain unsupported.
+  CCD. An animated box joins the wedge scene. Convex/convex pairs remain
+  unsupported.
 
 - 3D CCD closes the remaining gap between its search margin and the impact
   surface. An oblique convex bounce is resolved in the step that clips motion,
@@ -18,7 +23,7 @@ first in `CHANGELOG.fr.md`.
 - `ConvexHull3D(points)` adds an immutable solid hull and `Shape3D.convex`:
   signed sphere/convex distances, rays and collisions against a fixed body,
   with linear CCD, filters and sensors. Its triangulated boundary is available
-  for rendering; moving hulls, compound children, capsule/convex and
+  for rendering; moving hulls, compound children,
   convex/convex pairs, and CharacterMover3D remain unsupported and are rejected.
 
 - Linear CCD respects front-facing fixed triangles and meshes: fast spheres,

@@ -1,5 +1,6 @@
 use GFX.Physics.Geometry3D.inside_convex3d
 use GFX.Physics.Box3D.Box3D
+use GFX.Physics.ContactManifold3D.capsule_convex_contact_points
 use GFX.Physics.ContactManifold3D.box_convex_contact_points
 use GFX.Physics.ContactManifold3D.box_box_contact_points
 use GFX.Physics.ContactManifold3D.box_surface_contact_points
@@ -1562,7 +1563,7 @@ func contact_points3d(
                     return capsule_surface_contact_points(first_capsule, first.transform(),
                         second, normal, witness)
                 }
-                convex(_) => {}
+                convex(hull) => { return capsule_convex_contact_points(first_capsule, first.transform(), hull, second.transform(), normal, witness) }
             }
         }
         triangle(_) => {
@@ -1599,6 +1600,7 @@ func contact_points3d(
         }
         convex(hull) => {
             match second.shape() {
+                capsule(capsule) => { return capsule_convex_contact_points(capsule, second.transform(), hull, first.transform(), normal.negated(), witness) }
                 box(box) => { return box_convex_contact_points(box, second.transform(), hull, first.transform(), normal.negated(), witness) }
                 else => {}
             }

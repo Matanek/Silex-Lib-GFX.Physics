@@ -67,21 +67,28 @@ a separating axis, including a fully contained box. Face contacts use up to
 four points on the actual polygon, independently of triangulation diagonals.
 A box child of a compound follows the same path.
 
-The convex body must be **fixed** in this first increment. Sphere and box
+The capsule/convex pair uses the entire axial segment. Exterior distance is
+Euclidean; penetration measures the translation needed to move the segment
+and its radius outside the solid. An oblique capsule crossing the hull remains
+a solid collision even when both endpoints are outside. A capsule parallel
+to a face uses two points clipped to the actual polygon, including when its
+caps extend beyond the edges. A capsule child of a compound uses the same pair.
+
+The convex body must be **fixed** in this first increment. Sphere, box and capsule
 collisions, sensors, filters, shape replacement and linear CCD are available. Dynamic or
-kinematic convex bodies, convex compound children, capsule/convex and
+kinematic convex bodies, convex compound children,
 convex/convex pairs, and convex obstacles for `CharacterMover3D` are rejected. The convex family remains
 partial.
 
 `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows
-two spheres and a box falling onto a wedge built from six points, bouncing, leaving its slope and landing on
+two spheres, a box and a capsule falling onto a wedge built from six points, bouncing, leaving its slope and landing on
 the lower tray. The scene starts and repeats automatically.
 
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
-and their mesh variants, as well as sphere/convex and box/convex, in either
+and their mesh variants, as well as sphere/convex, box/convex and capsule/convex, in either
 order, including oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the

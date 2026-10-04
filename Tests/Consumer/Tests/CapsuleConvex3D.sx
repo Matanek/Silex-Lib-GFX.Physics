@@ -1,0 +1,262 @@
+use GFX.Physics
+use STD.Math
+
+func solid_cube(scale:float = 1.0) Physics.Shape3D {
+    var points:Math.Vec3[] = []; var index = 0
+    while index < 8 {
+        var x = -scale; var y = -scale; var z = -scale
+        if index % 2 == 1 { x = scale }
+        if (index / 2) % 2 == 1 { y = scale }
+        if index / 4 == 1 { z = scale }
+        points.append(Math.Vec3(x, y, z)); index++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func placed_capsule(point:Math.Vec3, rotation:Math.Quat = Math.Quat()) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5)),
+        Physics.Transform3D(position:point, rotation:rotation))
+}
+func check_capsule_witness(point:Math.Vec3, pose:Physics.Transform3D, half:float, radius:float, tolerance:float) {
+    let relative = pose.inverse_point(point)
+    let axis = Math.Vec3(0.0, Math.clamp(relative.y, -half, half), 0.0)
+    assert(Math.abs(relative.subtract(axis).length() - radius) < tolerance)
+}
+
+test "capsule hull face edge corner distances and reverse witnesses are exact" {
+    let hull = Physics.ShapePlacement3D(solid_cube())
+    let points:Math.Vec3[] = [Math.Vec3(0.0, 2.0, 0.0), Math.Vec3(1.3, 1.9, 0.0),
+        Math.Vec3(1.3, 1.9, 1.4), Math.Vec3(0.0, 1.75, 0.0), Math.Vec3(0.0, 1.6, 0.0)]
+    let gaps:float[] = [0.25, 0.25, Math.sqrt(0.41) - 0.25, 0.0, -0.15]
+    var index = 0
+    while index < points.count() {
+        let capsule = placed_capsule(points[index])
+        let distance = Physics.Geometry3D.distance(capsule, hull)
+        let reversed = Physics.Geometry3D.distance(hull, capsule)
+        assert(Math.abs(distance.separation - gaps[index]) < 0.0001)
+        assert(Math.abs(reversed.separation - distance.separation) < 0.0001)
+        assert(reversed.normal.nearly_equal(distance.normal.negated(), 0.0001))
+        assert(reversed.first_point.nearly_equal(distance.second_point, 0.0001))
+        assert(Physics.Geometry3D.overlaps(capsule, hull) == (gaps[index] <= 0.0))
+        check_capsule_witness(distance.first_point, capsule.transform(), 0.5, 0.25, 0.0001)
+        let boundary = distance.second_point
+        assert(Math.abs(Math.max(Math.abs(boundary.x), Math.max(Math.abs(boundary.y), Math.abs(boundary.z))) - 1.0) < 0.0001)
+        if gaps[index] > 0.0 {
+            assert(Math.abs(distance.first_point.subtract(distance.second_point).length() - gaps[index]) < 0.0001)
+        }
+        index++
+    }
+}
+
+test "capsule hull crossing and containment use the entire axial segment" {
+    let hull = Physics.ShapePlacement3D(solid_cube())
+    let rotation = Math.Quat.angle_axis(Math.acos(1.0 / Math.sqrt(3.0)), Math.Vec3(1.0, 0.0, -1.0))
+    let shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 3.0))
+    let crossing = Physics.ShapePlacement3D(shape, Physics.Transform3D(rotation:rotation))
+    let result = Physics.Geometry3D.distance(crossing, hull)
+    assert(Math.abs(result.separation + Math.sqrt(2.0) + 0.25) < 0.0001)
+    check_capsule_witness(result.first_point, crossing.transform(), 3.0, 0.25, 0.0001)
+    let translated = Physics.ShapePlacement3D(shape, Physics.Transform3D(
+        position:result.normal.multiply(result.separation), rotation:rotation))
+    assert(Math.abs(Physics.Geometry3D.distance(translated, hull).separation) < 0.0001)
+    let inside = placed_capsule(Math.Vec3(0.0, 0.0, 0.2))
+    let interior = Physics.Geometry3D.distance(inside, hull)
+    assert(Math.abs(interior.separation + 1.05) < 0.0001)
+    assert(interior.normal.nearly_equal(Math.Vec3(0.0, 0.0, -1.0), 0.0001))
+    let exit = placed_capsule(inside.transform().position.add(interior.normal.multiply(interior.separation)))
+    assert(Math.abs(Physics.Geometry3D.distance(exit, hull).separation) < 0.0001)
+}
+
+test "capsule hull outside queries preserve common transforms scale and arbitrary orientation" {
+    let scales:float[] = [0.01, 1.0, 100.0]
+    for scale in scales {
+        let rotation = Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0))
+        let common = Physics.Transform3D(position:Math.Vec3(4.0, -3.0, 2.0).multiply(scale), rotation:rotation)
+        let hull = Physics.ShapePlacement3D(solid_cube(scale), common)
+        let box = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0 * scale))), common)
+        var index = 0
+        while index < 12 {
+            let pose = Physics.Transform3D(position:common.point(Math.Vec3(2.5, 1.2, 0.3).multiply(scale)),
+                rotation:rotation.multiply(Math.Quat.angle_axis(index as float * 0.19, Math.Vec3(1.0, 2.0, 3.0))))
+            let capsule = Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(0.25 * scale, 0.5 * scale)), pose)
+            let actual = Physics.Geometry3D.distance(capsule, hull)
+            let expected = Physics.Geometry3D.distance(capsule, box)
+            assert(Math.abs(actual.separation - expected.separation) < 0.0001 * Math.max(1.0, scale))
+            assert(actual.normal.nearly_equal(expected.normal, 0.0002))
+            check_capsule_witness(actual.first_point, pose, 0.5 * scale, 0.25 * scale, 0.0001 * Math.max(1.0, scale))
+            index++
+        }
+    }
+}
+
+
+test "capsule hull horizontal axis rests on two face points including overhanging caps" {
+    var mode = 0
+    while mode < 4 {
+        var half = 0.5
+        if mode >= 2 { half = 1.8 }
+        var world = Physics.World3D()
+        let support = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube()
+        let moving = Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, half))
+            ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0),
+                rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3(0.0, 0.0, 1.0))) ..allow_sleep = false
+        var first_settings = support; var second_settings = moving
+        if mode % 2 == 1 { first_settings = moving; second_settings = support }
+        var first = world.create_rigid_body(first_settings); var second = world.create_rigid_body(second_settings)
+        var capsule = second
+        if mode % 2 == 1 { capsule = first }
+        var step = 0
+        while step < 240 { world.step(1.0 / 60.0); step++ }
+        print("rest mode=$(mode) x=$(capsule.position().x) y=$(capsule.position().y) z=$(capsule.position().z) vx=$(capsule.linear_velocity().x) spin=$(capsule.angular_velocity().length())")
+        assert(Math.abs(capsule.position().y - 1.25) < 0.01)
+        assert(Math.abs(capsule.position().x) < 0.0001 && Math.abs(capsule.position().z) < 0.0001)
+        assert(capsule.angular_velocity().length() < 0.0001)
+        var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].point_count() == 2)
+        var points:Physics.ContactPoint3D[] = []; contacts[0].write_points(points)
+        for point in points { assert(Math.abs(point.position.x) <= 1.0001) }
+        mode++
+    }
+}
+
+test "capsule contained in a hull exits its nearest face without torque" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube())
+    var capsule = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.0, 0.2)) ..allow_sleep = false)
+    var step = 0
+    while step < 60 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(capsule.position().z - 1.25) < 0.01)
+    assert(Math.abs(capsule.position().x) < 0.0001 && Math.abs(capsule.position().y) < 0.0001)
+    assert(capsule.angular_velocity().length() < 0.0001)
+}
+
+test "capsule hull linear CCD preserves either side filters and transient sensors" {
+    var mode = 0
+    while mode < 4 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var support = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube(0.25) ..is_sensor = (mode == 3))
+        if mode == 2 { support.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0)) }
+        var origin = Math.Vec3(0.0, 1.0, 0.0); var velocity = Math.Vec3(0.0, -120.0, 0.0)
+        if mode == 1 { origin = origin.negated(); velocity = velocity.negated() }
+        var capsule = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+            ..transform = Physics.Transform3D(position:origin, rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3(0.0, 0.0, 1.0)))
+            ..linear_velocity = velocity ..continuous_collision = true ..allow_sleep = false)
+        world.step(1.0 / 60.0)
+        if mode < 2 {
+            assert(Math.abs(Math.abs(capsule.position().y) - 0.5) < 0.001)
+            assert(capsule.linear_velocity().length() < 0.001 && capsule.angular_velocity().length() < 0.001)
+            var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+            assert(contacts.count() == 1 && contacts[0].point_count() == 2)
+        } else {
+            assert(Math.abs(capsule.position().y + 1.0) < 0.001)
+            assert(Math.abs(capsule.linear_velocity().y + 120.0) < 0.001)
+            var begins:Physics.Contact3D[] = []; var ends:Physics.Contact3D[] = []
+            world.write_contact_begin_events(begins); world.write_contact_end_events(ends)
+            if mode == 3 { assert(begins.count() == 1 && ends.count() == 1 && begins[0].is_sensor()) }
+            else { assert(begins.is_empty() && ends.is_empty()) }
+        }
+        mode++
+    }
+}
+
+test "capsule hull tetrahedron distances respect the sloped face and axial extent" {
+    let tetrahedron = Physics.ShapePlacement3D(Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(), Math.Vec3(4.0, 0.0, 0.0), Math.Vec3(0.0, 4.0, 0.0), Math.Vec3(0.0, 0.0, 4.0)])))
+    let overlap = Physics.Geometry3D.distance(placed_capsule(Math.Vec3(1.5)), tetrahedron)
+    assert(Math.abs(overlap.separation + 0.25) < 0.0001)
+    assert(overlap.normal.nearly_equal(Math.Vec3(-1.0).normalized(), 0.0001))
+    let outside = Physics.Geometry3D.distance(placed_capsule(Math.Vec3(2.0)), tetrahedron)
+    assert(Math.abs(outside.separation - (1.5 / Math.sqrt(3.0) - 0.25)) < 0.0001)
+}
+
+test "capsule hull slope slides freely or rolls with friction according to axial inertia" {
+    var mode = 0
+    while mode < 2 {
+        let normal = Math.Vec3(0.5, 1.0, 0.0).normalized()
+        let point = Math.Vec3(-1.0, 1.0, 0.0).add(normal.multiply(0.25))
+        let wedge = Physics.Shape3D.convex(Physics.ConvexHull3D([
+            Math.Vec3(-3.0, -1.0, -2.0), Math.Vec3(-3.0, 2.0, -2.0), Math.Vec3(3.0, -1.0, -2.0),
+            Math.Vec3(-3.0, -1.0, 2.0), Math.Vec3(-3.0, 2.0, 2.0), Math.Vec3(3.0, -1.0, 2.0)]))
+        var friction = 0.0
+        if mode == 1 { friction = 0.8 }
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = wedge ..friction = friction)
+        var capsule = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+            ..transform = Physics.Transform3D(position:point, rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.right()))
+            ..friction = friction ..allow_sleep = false)
+        var step = 0
+        while step < 40 { world.step(1.0 / 60.0); step++ }
+        print("slope mode=$(mode) x=$(capsule.position().x) y=$(capsule.position().y) z=$(capsule.position().z) vx=$(capsule.linear_velocity().x) vy=$(capsule.linear_velocity().y) spin=$(capsule.angular_velocity().length())")
+        assert(Math.abs(capsule.position().z) < 0.0001)
+        if mode == 0 {
+            assert(capsule.angular_velocity().length() < 0.001)
+            let acceleration = Math.Vec3(9.81 * 0.4, -9.81 * 0.2, 0.0)
+            assert(capsule.linear_velocity().nearly_equal(acceleration.multiply(40.0 / 60.0), 0.001))
+            assert(capsule.position().nearly_equal(point.add(acceleration.multiply(820.0 / 3600.0)), 0.001))
+        } else {
+            // Cylinder mass fraction is 3/4; hemispheres together are 1/4.
+            // I_axis / (mass * radius^2) = 0.5 * 3/4 + 0.4 * 1/4 = 0.475.
+            let acceleration = Math.Vec3(9.81 * 0.4, -9.81 * 0.2, 0.0).divide(1.475)
+            assert(capsule.linear_velocity().nearly_equal(acceleration.multiply(40.0 / 60.0), 0.01))
+            assert(Math.abs(capsule.angular_velocity().length() * 0.25 - capsule.linear_velocity().length()) < 0.01)
+        }
+        var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].point_count() == 2)
+        mode++
+    }
+}
+
+test "capsule hull zero gravity impact has the intended restitution without angular kick" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = solid_cube() ..friction = 0.0 ..restitution = 0.65)
+    var capsule = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.35, 0.0), rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.right()))
+        ..linear_velocity = Math.Vec3(0.0, -6.0, 0.0) ..friction = 0.0 ..restitution = 0.65 ..allow_sleep = false)
+    var step = 0
+    while step < 3 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(capsule.linear_velocity().y - 3.9) < 0.01)
+    assert(capsule.angular_velocity().length() < 0.0001)
+}
+
+test "capsule hull replacement refreshes queries and retains compound leaf identities" {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube())
+    let child = Physics.CompoundChild3D(43, Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 0.5)),
+        Physics.Transform3D(rotation:Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.right())))
+    var capsule = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.compound(Physics.Compound3D([child]))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)) ..allow_sleep = false)
+    var step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].second_child_id() == 43 && contacts[0].point_count() == 2)
+    var identity = support; support.set_shape(solid_cube(0.5))
+    while step < 240 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(capsule.position().y - 0.75) < 0.01 && support.same_body(identity))
+    let probe = placed_capsule(Math.Vec3(0.0, 2.0, 0.0))
+    var hits:Physics.WorldOverlap3D[] = []; world.write_overlaps(probe, hits, ignore_body:capsule)
+    assert(hits.is_empty())
+}
+
+
+test "capsule hull uses middle axial witnesses and keeps submicron gaps finite" {
+    let hull = Physics.ShapePlacement3D(solid_cube())
+    let horizontal = Physics.Shape3D.capsule(Physics.Capsule3D(0.25, 3.0))
+    let rotation = Math.Quat.angle_axis(Math.half_pi(), Math.Vec3(0.0, 0.0, 1.0))
+    let distance = Physics.Geometry3D.distance(Physics.ShapePlacement3D(horizontal,
+        Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0), rotation:rotation)), hull)
+    assert(Math.abs(distance.separation - 0.75) < 0.0001)
+    assert(Math.abs(distance.first_point.x) <= 1.0001)
+    let x = 1.0000005
+    let thin = Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(0.0000001, 3.0)),
+        Physics.Transform3D(position:Math.Vec3(x, 0.0, 0.0)))
+    let close = Physics.Geometry3D.distance(thin, hull)
+    assert(Math.abs(close.separation - (x - 1.0 - 0.0000001)) < 0.0000001)
+    assert(close.normal.nearly_equal(Math.Vec3.right().negated(), 0.0001))
+    assert(!Physics.Geometry3D.overlaps(thin, hull))
+}
