@@ -1,0 +1,79 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+// Per nearby pair and pose: three box axes, hull faces and actual edge crosses.
+// Hull vertices, polygons and edge directions are immutable cold data.
+func box_convex_axis3d(box:Box3D, transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D) BoxAxis3D {
+    let basis = BoxBasis3D(box, transform)
+    let center = hull_transform.inverse_point(transform.position)
+    var best = BoxAxis3D(Math.Vec3.up(), -3.4028235e38)
+    var index = 0
+    let face_end = 3 + hull.face_count()
+    while index < face_end + hull.edge_count() * 3 {
+        var axis = Math.Vec3()
+        if index < 3 { axis = basis.axis(index) }
+        else if index < face_end { axis = hull_transform.vector(hull.face_normal(index - 3)) }
+        else {
+            let cross_index = index - face_end
+            axis = basis.axis(cross_index % 3).cross(hull_transform.vector(hull.edge(cross_index / 3)))
+        }
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            let local_axis = hull_transform.inverse_vector(axis)
+            var low = hull.vertex(0).dot(local_axis)
+            var high = low
+            var vertex = 1
+            while vertex < hull.vertex_count() {
+                let projection = hull.vertex(vertex).dot(local_axis)
+                low = Math.min(low, projection); high = Math.max(high, projection)
+                vertex++
+            }
+            let position = center.dot(local_axis)
+            let radius = basis.projection(axis)
+            let forward = low - position - radius
+            let backward = position - radius - high
+            var gap = backward
+            var normal = axis.negated()
+            if forward > backward { gap = forward; normal = axis }
+            if gap > best.gap { best = BoxAxis3D(normal, gap) }
+        }
+        index++
+    }
+    return best
+}
+
+func convex_support3d(hull:ConvexHull3D, transform:Transform3D, direction:Math.Vec3) Math.Vec3 {
+    let axis = transform.inverse_vector(direction)
+    var best = hull.vertex(0)
+    var index = 1
+    while index < hull.vertex_count() {
+        let point = hull.vertex(index)
+        if point.dot(axis) > best.dot(axis) { best = point }
+        index++
+    }
+    return transform.point(best)
+}
+
+func box_convex_distance3d(box:Box3D, transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D,
+    contact_only:bool = false) DistanceResult3D {
+    let axis = box_convex_axis3d(box, transform, hull, hull_transform)
+    if axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001) {
+        return DistanceResult3D(box_support(box, transform, axis.normal),
+            convex_support3d(hull, hull_transform, axis.normal.negated()), axis.normal, axis.gap)
+    }
+    // SAT gives a separating lower bound, not Euclidean distance at an edge.
+    // When separated, minimizing against the complete boundary is exact.
+    var best = box_triangle_distance(box, transform, hull.triangle(0), hull_transform)
+    var index = 1
+    while index < hull.triangle_count() {
+        let candidate = box_triangle_distance(box, transform, hull.triangle(index), hull_transform)
+        if candidate.separation < best.separation { best = candidate }
+        index++
+    }
+    return best
+}

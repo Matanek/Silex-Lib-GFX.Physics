@@ -18,7 +18,7 @@ cases = {
     'dynamic': 'requires a fixed body',
     'kinematic': 'requires a fixed body',
     'mutation': 'requires a fixed body',
-    'box-pair': 'unsupported shape pair',
+    'convex-pair': 'unsupported shape pair',
     'capsule-pair': 'unsupported shape pair',
     'world-pair': 'unsupported shape pair',
 }

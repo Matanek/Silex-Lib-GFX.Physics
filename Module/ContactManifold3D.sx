@@ -1,3 +1,4 @@
+use GFX.Physics.ConvexHull3D.ConvexHull3D
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
@@ -49,6 +50,66 @@ package func box_box_contact_points(
         )
     }
     return [witness]
+}
+
+// One boundary polygon, independent of the hull's triangulation diagonals.
+package func box_convex_contact_points(box:Box3D, transform:Transform3D,
+    hull:ConvexHull3D, hull_transform:Transform3D,
+    normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    let box_face = box_face3d(box, transform, normal)
+    var face = 0
+    var alignment = -1.0
+    var index = 0
+    while index < hull.face_count() {
+        let candidate = hull_transform.vector(hull.face_normal(index)).dot(normal.negated())
+        if candidate > alignment { alignment = candidate; face = index }
+        index++
+    }
+    let boundary = hull.face_polygon(face)
+    var polygon:Math.Vec3[] = []
+    for point in boundary { polygon.append(hull_transform.point(point)) }
+    if box_face.alignment >= alignment && box_face.alignment > 0.99999 {
+        return clipped_box_face3d(box, transform, box_face, polygon, witness)
+    }
+    if alignment < 0.99999 { return [witness] }
+    let outward = hull_transform.vector(hull.face_normal(face))
+    let origin = hull_transform.point(hull.face_origin(face))
+    var incident = box_face.corners
+    index = 0
+    while index < polygon.count() {
+        let point = polygon[index]
+        let edge = polygon[(index + 1) % polygon.count()].subtract(point)
+        incident = clip_contact_plane3d(incident, point, edge.cross(outward).normalized())
+        index++
+    }
+    var points:Math.Vec3[] = []
+    for point in incident {
+        let depth = point.subtract(origin).dot(outward)
+        if depth <= 0.0001 {
+            append_unique_contact3d(points, point.subtract(outward.multiply(depth * 0.5)))
+        }
+    }
+    if points.is_empty() { return [witness] }
+    let tangent = polygon[1].subtract(polygon[0]).normalized()
+    return reduce_contact_points3d(points, tangent, outward.cross(tangent))
+}
+
+func clip_contact_plane3d(polygon:Math.Vec3[], origin:Math.Vec3,
+    normal:Math.Vec3) Math.Vec3[] {
+    var result:Math.Vec3[] = []
+    if polygon.is_empty() { return result }
+    var previous = polygon[polygon.count() - 1]
+    var previous_value = previous.subtract(origin).dot(normal)
+    for current in polygon {
+        let value = current.subtract(origin).dot(normal)
+        if (value <= 0.0) != (previous_value <= 0.0) {
+            let fraction = previous_value / (previous_value - value)
+            result.append(previous.add(current.subtract(previous).multiply(fraction)))
+        }
+        if value <= 0.0 { result.append(current) }
+        previous = current; previous_value = value
+    }
+    return result
 }
 
 func clipped_box_face3d(

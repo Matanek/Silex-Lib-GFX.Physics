@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les boîtes rencontrent les enveloppes convexes fixes : distances signées
+  dans les deux ordres, appui jusqu’à quatre points sur les vraies faces,
+  composés de boîtes et CCD linéaire. Une boîte animée rejoint la scène du coin.
+  Les paires capsule/convexe et convexe/convexe restent refusées.
+
 - Le CCD 3D referme l’écart restant entre sa marge de recherche et la
   surface d’impact. Un rebond oblique sur un convexe est résolu dans le pas
   qui freine le déplacement, sans image d’accrochage avant l’impulsion.
@@ -14,7 +19,8 @@ puis traduits dans `CHANGELOG.md`.
   `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
   contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière
   triangulée accessible pour le rendu ; convexes mobiles, enfants de composés,
-  paires boîte/capsule/convexe et CharacterMover3D restent refusés.
+  paires capsule/convexe et convexe/convexe, ainsi que CharacterMover3D, restent
+  refusés.
 
 - Le CCD linéaire respecte le côté avant des triangles et maillages fixes :
   sphères, boîtes et capsules rapides traversent les faces arrière et les

@@ -6,6 +6,9 @@ public class ConvexHull3D {
     private var triangles:Triangle3D[]
     private var normals:Math.Vec3[]
     private var origins:Math.Vec3[]
+    private var polygons:Math.Vec3[][]
+    private var vertices:Math.Vec3[]
+    private var edges:Math.Vec3[]
 
     init(points:Math.Vec3[]) {
         if points.count() < 4 { panic("GFX.Physics.ConvexHull3D requires a solid point cloud") }
@@ -30,6 +33,9 @@ public class ConvexHull3D {
         self.triangles = []
         self.normals = []
         self.origins = []
+        self.polygons = []
+        self.vertices = []
+        self.edges = []
         var first = 0
         while first < unique.count() {
             var second = first + 1
@@ -54,6 +60,11 @@ public class ConvexHull3D {
     package func face_count() int { return self.normals.count() }
     package func face_normal(index:int) Math.Vec3 { return self.normals[index] }
     package func face_origin(index:int) Math.Vec3 { return self.origins[index] }
+    package func face_polygon(index:int) Math.Vec3[] { return self.polygons[index] }
+    package func vertex_count() int { return self.vertices.count() }
+    package func vertex(index:int) Math.Vec3 { return self.vertices[index] }
+    package func edge_count() int { return self.edges.count() }
+    package func edge(index:int) Math.Vec3 { return self.edges[index] }
 
     private func add_supporting_face(points:Math.Vec3[], first:int, second:int,
         third:int, scale:float, tolerance:float) {
@@ -93,6 +104,19 @@ public class ConvexHull3D {
         index = 1
         while index + 1 < polygon.count() {
             self.triangles.append(Triangle3D(polygon[0], polygon[index], polygon[index + 1]))
+            index++
+        }
+        self.polygons.append(polygon)
+        index = 0
+        while index < polygon.count() {
+            let point = polygon[index]
+            var found = false
+            for vertex in self.vertices {
+                if point.subtract(vertex).length_squared() == 0.0 { found = true; break }
+            }
+            if !found { self.vertices.append(point) }
+            // Face boundaries contain actual edges, never triangulation diagonals.
+            self.edges.append(polygon[(index + 1) % polygon.count()].subtract(point).normalized())
             index++
         }
         self.normals.append(normal)

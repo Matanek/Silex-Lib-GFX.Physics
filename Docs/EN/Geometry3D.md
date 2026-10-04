@@ -61,22 +61,28 @@ sphere out. Rays clip against the solid's half-spaces and return the exit when
 the origin is inside. `triangle_count()` and `triangle(index)` expose the outward
 triangulated boundary for visualization.
 
-The convex body must be **fixed** in this first increment. Sphere collisions,
-sensors, filters, shape replacement and linear CCD are available. Dynamic or
-kinematic convex bodies, convex compound children, box/capsule/convex pairs and
-convex obstacles for `CharacterMover3D` are rejected. The convex family remains
+The box/convex pair uses the solid boundary in either order. Its exterior
+separation is Euclidean; penetration measures the minimum translation along
+a separating axis, including a fully contained box. Face contacts use up to
+four points on the actual polygon, independently of triangulation diagonals.
+A box child of a compound follows the same path.
+
+The convex body must be **fixed** in this first increment. Sphere and box
+collisions, sensors, filters, shape replacement and linear CCD are available. Dynamic or
+kinematic convex bodies, convex compound children, capsule/convex and
+convex/convex pairs, and convex obstacles for `CharacterMover3D` are rejected. The convex family remains
 partial.
 
-`Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows two spheres falling
-onto a wedge built from six points, bouncing, leaving its slope and landing on
+`Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows
+two spheres and a box falling onto a wedge built from six points, bouncing, leaving its slope and landing on
 the lower tray. The scene starts and repeats automatically.
 
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
-and their mesh variants, as well as sphere/convex, in either order, including
-oriented poses.
+and their mesh variants, as well as sphere/convex and box/convex, in either
+order, including oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
 second. The two witness points lie on their respective surfaces. When several

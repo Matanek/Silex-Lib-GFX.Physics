@@ -1,0 +1,234 @@
+use GFX.Physics
+use STD.Math
+
+func solid_cube(scale:float = 1.0) Physics.Shape3D {
+    var points:Math.Vec3[] = []
+    var index = 0
+    while index < 8 {
+        var x = -scale; var y = -scale; var z = -scale
+        if index % 2 == 1 { x = scale }
+        if (index / 2) % 2 == 1 { y = scale }
+        if index / 4 == 1 { z = scale }
+        points.append(Math.Vec3(x, y, z)); index++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func solid_wedge() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(-3.0, -1.0, -2.0), Math.Vec3(-3.0, 2.0, -2.0), Math.Vec3(3.0, -1.0, -2.0),
+        Math.Vec3(-3.0, -1.0, 2.0), Math.Vec3(-3.0, 2.0, 2.0), Math.Vec3(3.0, -1.0, 2.0)]))
+}
+func small_box(point:Math.Vec3) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))), Physics.Transform3D(position:point))
+}
+
+test "box hull distances face edge corner penetration and inclusion are exact" {
+    let hull = Physics.ShapePlacement3D(solid_cube())
+    let points:Math.Vec3[] = [Math.Vec3(0.0, 2.0, 0.0), Math.Vec3(1.8, 1.9, 0.0),
+        Math.Vec3(1.8, 1.9, 1.9), Math.Vec3(0.0, 1.5, 0.0), Math.Vec3(0.0, 1.3, 0.0), Math.Vec3(0.0, 0.2, 0.0)]
+    let gaps:float[] = [0.5, 0.5, Math.sqrt(0.41), 0.0, -0.2, -1.3]
+    var index = 0
+    while index < points.count() {
+        let box = small_box(points[index])
+        let distance = Physics.Geometry3D.distance(box, hull)
+        let reversed = Physics.Geometry3D.distance(hull, box)
+        assert(Math.nearly_equal(distance.separation, gaps[index], 0.0001))
+        assert(Math.nearly_equal(reversed.separation, distance.separation, 0.0001))
+        assert(reversed.normal.nearly_equal(distance.normal.negated(), 0.0001))
+        assert(reversed.first_point.nearly_equal(distance.second_point, 0.0001))
+        assert(Physics.Geometry3D.overlaps(box, hull) == (gaps[index] <= 0.0))
+        if gaps[index] > 0.0 {
+            assert(Math.nearly_equal(distance.first_point.subtract(distance.second_point).length(), gaps[index], 0.0001))
+        }
+        index++
+    }
+    let inside = Physics.Geometry3D.distance(small_box(Math.Vec3(0.0, 0.2, 0.0)), hull)
+    assert(inside.normal.nearly_equal(Math.Vec3.up().negated(), 0.0001))
+}
+
+test "box hull agrees with oriented boxes under common transforms and scale" {
+    let scales:float[] = [0.01, 1.0, 100.0]
+    for scale in scales {
+        let rotation = Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0))
+        let common = Physics.Transform3D(position:Math.Vec3(4.0, -3.0, 2.0).multiply(scale), rotation:rotation)
+        let hull = Physics.ShapePlacement3D(solid_cube(scale), common)
+        let reference = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0 * scale))), common)
+        var index = 0
+        while index < 12 {
+            let angle = index as float * 0.19
+            let offset = Math.Vec3(1.3 + index as float * 0.08, 1.1, 0.3).multiply(scale)
+            let box = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(scale))),
+                Physics.Transform3D(position:common.point(offset), rotation:rotation.multiply(Math.Quat.angle_axis(angle, Math.Vec3(1.0, 2.0, 3.0)))))
+            let actual = Physics.Geometry3D.distance(box, hull)
+            let expected = Physics.Geometry3D.distance(box, reference)
+            assert(Math.abs(actual.separation - expected.separation) < 0.0001 * Math.max(1.0, scale))
+            assert(actual.normal.nearly_equal(expected.normal, 0.0002))
+            index++
+        }
+    }
+}
+
+test "box on a hull rests on four points in either body order without torque" {
+    var order = 0
+    while order < 2 {
+        var world = Physics.World3D()
+        let support = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube()
+        let moving = Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+            ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)) ..allow_sleep = false
+        var first_settings = support
+        var second_settings = moving
+        if order == 1 { first_settings = moving; second_settings = support }
+        var first = world.create_rigid_body(first_settings)
+        var second = world.create_rigid_body(second_settings)
+        var box = second
+        if order == 1 { box = first }
+        var step = 0
+        while step < 240 { world.step(1.0 / 60.0); step++ }
+        assert(Math.abs(box.position().y - 1.5) < 0.01)
+        assert(Math.abs(box.position().x) < 0.0001 && Math.abs(box.position().z) < 0.0001)
+        assert(box.angular_velocity().length() < 0.0001)
+        var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].point_count() == 4)
+        order++
+    }
+}
+
+test "box contained in a hull exits the nearest face as a solid" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube())
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.2, 0.0)) ..allow_sleep = false)
+    var step = 0
+    while step < 60 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(box.position().y - 1.5) < 0.01)
+    assert(Math.abs(box.position().x) < 0.0001 && Math.abs(box.position().z) < 0.0001)
+    assert(box.angular_velocity().length() < 0.0001)
+}
+
+test "box hull linear CCD resolves either side and preserves filters and sensors" {
+    var mode = 0
+    while mode < 4 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube(0.25) ..is_sensor = (mode == 3))
+        if mode == 2 { floor.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0)) }
+        var origin = Math.Vec3(0.0, 1.0, 0.0); var velocity = Math.Vec3(0.0, -120.0, 0.0)
+        if mode == 1 { origin = origin.negated(); velocity = velocity.negated() }
+        var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5)))
+            ..transform = Physics.Transform3D(position:origin) ..linear_velocity = velocity
+            ..continuous_collision = true ..allow_sleep = false)
+        world.step(1.0 / 60.0)
+        if mode < 2 {
+            assert(Math.abs(Math.abs(box.position().y) - 0.5) < 0.001)
+            assert(box.linear_velocity().length() < 0.001)
+            var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].point_count() == 4)
+        } else {
+            assert(Math.abs(box.position().y + 1.0) < 0.001)
+            assert(Math.abs(box.linear_velocity().y + 120.0) < 0.001)
+            var begins:Physics.Contact3D[] = []; var ends:Physics.Contact3D[] = []
+            world.write_contact_begin_events(begins); world.write_contact_end_events(ends)
+            if mode == 3 { assert(begins.count() == 1 && ends.count() == 1 && begins[0].is_sensor()) }
+            else { assert(begins.is_empty() && ends.is_empty()) }
+        }
+        mode++
+    }
+}
+
+test "box hull nonparallel tetrahedron face has its actual penetration depth" {
+    let tetrahedron = Physics.ShapePlacement3D(Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(), Math.Vec3(4.0, 0.0, 0.0), Math.Vec3(0.0, 4.0, 0.0), Math.Vec3(0.0, 0.0, 4.0)])))
+    let overlap = Physics.Geometry3D.distance(small_box(Math.Vec3(1.5)), tetrahedron)
+    assert(Math.nearly_equal(overlap.separation, -1.0 / Math.sqrt(3.0), 0.0001))
+    assert(overlap.normal.nearly_equal(Math.Vec3(-1.0).normalized(), 0.0001))
+    let outside = Physics.Geometry3D.distance(small_box(Math.Vec3(2.0)), tetrahedron)
+    assert(Math.nearly_equal(outside.separation, 0.5 / Math.sqrt(3.0), 0.0001))
+    assert(outside.normal.nearly_equal(Math.Vec3(-1.0).normalized(), 0.0001))
+}
+
+test "box hull slope friction agrees with the existing oriented box response" {
+    var mode = 0
+    while mode < 2 {
+        let normal = Math.Vec3(0.5, 1.0, 0.0).normalized()
+        let rotation = Math.Quat.angle_axis(-0.463647609, Math.Vec3(0.0, 0.0, 1.0))
+        let point = Math.Vec3(-1.0, 1.0, 0.0).add(normal.multiply(0.5))
+        var friction = 0.0
+        if mode == 1 { friction = 0.8 }
+        var world = Physics.World3D()
+        var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = solid_wedge() ..friction = friction)
+        var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+            ..transform = Physics.Transform3D(position:point, rotation:rotation) ..friction = friction ..allow_sleep = false)
+        var step = 0
+        while step < 40 { world.step(1.0 / 60.0); step++ }
+        var reference_world = Physics.World3D()
+        reference_world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(8.0, 1.0, 4.0)))
+            ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 0.5, 0.0).subtract(normal.multiply(0.5)), rotation:rotation)
+            ..friction = friction)
+        var reference_box = reference_world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+            ..transform = Physics.Transform3D(position:point, rotation:rotation) ..friction = friction ..allow_sleep = false)
+        step = 0
+        while step < 40 { reference_world.step(1.0 / 60.0); step++ }
+        assert(box.position().nearly_equal(reference_box.position(), 0.0001))
+        assert(box.linear_velocity().nearly_equal(reference_box.linear_velocity(), 0.0001))
+        assert(Math.abs(box.position().z) < 0.0001)
+        assert(box.angular_velocity().length() < 0.001)
+        if mode == 0 { assert(box.position().x > -0.4 && box.linear_velocity().x > 1.0) }
+        else {
+            // Shared integration predicts gravity before friction impulses.
+            // Its per-step tangent displacement is g*sin(slope)*dt^2.
+            let discrete_drift = 9.81 * normal.x * 40.0 / 3600.0
+            assert(Math.abs(box.position().subtract(point).length() - discrete_drift) < 0.0001)
+            assert(box.linear_velocity().length() < 0.01)
+        }
+        var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].point_count() == 4)
+        mode++
+    }
+}
+
+test "box hull zero gravity impact conserves the intended normal restitution" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube() ..friction = 0.0 ..restitution = 0.65)
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.6, 0.0))
+        ..linear_velocity = Math.Vec3(0.0, -6.0, 0.0) ..friction = 0.0 ..restitution = 0.65 ..allow_sleep = false)
+    var step = 0
+    while step < 3 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(box.linear_velocity().y - 3.9) < 0.01)
+    assert(box.angular_velocity().length() < 0.0001)
+}
+
+test "box hull replacement updates queries and preserves composed leaf identities" {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = solid_cube())
+    let child = Physics.CompoundChild3D(42, Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))))
+    var box = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([child]))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 2.0, 0.0)) ..allow_sleep = false)
+    var step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].second_child_id() == 42 && contacts[0].point_count() == 4)
+    var identity = floor
+    floor.set_shape(solid_cube(0.5))
+    while step < 240 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(box.position().y - 1.0) < 0.01)
+    assert(floor.same_body(identity))
+    let placement = small_box(Math.Vec3(0.0, 2.0, 0.0))
+    var hits:Physics.WorldOverlap3D[] = []
+    world.write_overlaps(placement, hits, ignore_body:box)
+    assert(hits.is_empty())
+}

@@ -63,22 +63,29 @@ Les rayons sont découpés par les demi-espaces du solide et retournent la sorti
 quand leur origine est intérieure. `triangle_count()` et `triangle(index)`
 exposent la frontière triangulée orientée vers l’extérieur pour la visualiser.
 
-Le corps convexe est **fixe** dans cette première tranche. Les collisions,
-capteurs, filtres, remplacements de forme et CCD linéaire avec les sphères sont
-disponibles. Les corps convexes dynamiques ou cinématiques, les enfants convexes
-de composés, les paires boîte/capsule/convexe et les obstacles convexes de
-`CharacterMover3D` sont refusés. La famille convexe demeure partielle.
+La paire boîte/convexe utilise la frontière du solide dans les deux ordres.
+Sa séparation extérieure est euclidienne ; en pénétration, elle mesure la
+translation minimale le long d’un axe séparateur, y compris lorsqu’une boîte
+est entièrement incluse. Les contacts de face utilisent jusqu’à quatre points
+sur le polygone réel, indépendamment des diagonales de la triangulation.
+Une boîte enfant d’un composé suit le même parcours.
 
-La scène `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` montre deux sphères
-qui tombent sur un coin construit avec six points, rebondissent, quittent sa
+Le corps convexe est **fixe** dans cette première tranche. Les collisions,
+capteurs, filtres, remplacements de forme et CCD linéaire avec les sphères et
+les boîtes sont disponibles. Les corps convexes dynamiques ou cinématiques, les enfants convexes
+de composés, les paires capsule/convexe et convexe/convexe, ainsi que les
+obstacles convexes de `CharacterMover3D`, sont refusés. La famille convexe demeure partielle.
+
+La scène `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` montre
+deux sphères et une boîte qui tombent sur un coin construit avec six points, rebondissent, quittent sa
 pente puis touchent le plateau inférieur. Elle démarre et recommence automatiquement.
 
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
 et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
-boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe, dans les
-deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
+boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe et
+boîte/convexe, dans les deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.

@@ -183,7 +183,7 @@ public struct Geometry3D {
                             second_mesh, second.transform())
                     }
                     compound(_) => {}
-                    convex(_) => {}
+                    convex(hull) => { return box_convex_distance3d(first_box, first.transform(), hull, second.transform()) }
                 }
             }
             capsule(first_capsule) => {
@@ -243,6 +243,7 @@ public struct Geometry3D {
             convex(hull) => {
                 match second.shape() {
                     sphere(sphere) => { return reversed_distance(sphere_convex_distance(sphere, second.transform(), hull, first.transform())) }
+                    box(box) => { return reversed_distance(box_convex_distance3d(box, second.transform(), hull, first.transform())) }
                     else => {}
                 }
             }
@@ -565,7 +566,7 @@ package func contact_distance3d(
                     return box_mesh_distance(first_box, first.transform(),
                         second_mesh, second.transform(), true, true)
                 }
-                convex(_) => {}
+                convex(hull) => { return box_convex_distance3d(first_box, first.transform(), hull, second.transform(), true) }
             }
         }
         compound(_) => {}
@@ -583,7 +584,12 @@ package func contact_distance3d(
                 convex(_) => {}
             }
         }
-        convex(_) => {}
+        convex(hull) => {
+            match second.shape() {
+                box(box) => { return reversed_distance(box_convex_distance3d(box, second.transform(), hull, first.transform(), true)) }
+                else => {}
+            }
+        }
     }
     return Geometry3D.distance(first, second)
 }

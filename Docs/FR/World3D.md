@@ -96,8 +96,8 @@ func main() {
 ```
 
 Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe et répondre
-aux sphères, y compris par CCD linéaire. Voir les [enveloppes convexes et leurs
-limites](Geometry3D.md#enveloppes-convexes-fixes).
+aux sphères et aux boîtes, y compris par CCD linéaire. Voir les
+[enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes-fixes).
 
 ## Poses, masse et commandes
 
