@@ -77,8 +77,9 @@ caps extend beyond the edges. A capsule child of a compound uses the same pair.
 The convex body must be **fixed** in this first increment. Sphere, box and capsule
 collisions, sensors, filters, shape replacement and linear CCD are available. Dynamic or
 kinematic convex bodies, convex compound children,
-convex/convex pairs, and convex obstacles for `CharacterMover3D` are rejected. The convex family remains
-partial.
+and convex/convex pairs are rejected. `CharacterMover3D` uses fixed hulls for
+movement and support; see the [character guide](Character3D.md). The convex
+family remains partial.
 
 `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows
 two spheres, a box and a capsule falling onto a wedge built from six points, bouncing, leaving its slope and landing on

@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` se déplace et prend appui sur les convexes fixes : pentes,
+  murs, marches et plafonds, glissement et récupération bornée. Les capteurs,
+  filtres, retraits et changements d'état coupent l'appui. Le parcours montant
+  et descendant concorde avec Jolt ; `CharacterConvexScene.sx` permet de
+  l'essayer. Les convexes mobiles et personnages physiques restent à venir.
+
 - Les capsules rencontrent les enveloppes convexes fixes : distances signées
   du segment axial entier, inclusion solide, appui de face à deux points,
   enfants capsules de composés et CCD linéaire. Une capsule rejoint la scène
@@ -25,8 +31,7 @@ puis traduits dans `CHANGELOG.md`.
   `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
   contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière
   triangulée accessible pour le rendu ; convexes mobiles, enfants de composés,
-  paire convexe/convexe, ainsi que CharacterMover3D, restent
-  refusés.
+  paire convexe/convexe restent refusés.
 
 - Le CCD linéaire respecte le côté avant des triangles et maillages fixes :
   sphères, boîtes et capsules rapides traversent les faces arrière et les

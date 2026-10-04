@@ -37,6 +37,15 @@ before applying motion: upward velocity retained after projection represents
 an upward intention and disables downward floor following. Gravity and
 jumping remain application rules.
 
+A fixed convex hull can act as a slope, wall, step or ceiling. The
+[convex consumer](../../Tests/Consumer/Tests/CharacterConvex3D.sx) checks sliding,
+corners, slope and step limits, bounded overlap recovery and support loss.
+The path on a `y=0.25z` slope agrees with Jolt Debug and Release within 5 mm in
+both directions, including after horizontal rotation.
+`Physics3D/CharacterConvexScene.sx` in Silex-Examples shows automatic walking;
+Tab switches to manual control, WASD or arrows move the capsule, Space jumps
+and R restarts.
+
 ## Configure support
 
 - `max_slope_angle` is in radians, strictly between 0 and π/2; default 45°.
@@ -58,7 +67,7 @@ passes; a capsule deeply enclosed in geometry is not guaranteed to escape.
 
 The mover is virtual and registers no rigid body. It reads current poses of
 enabled boxes, spheres, capsules and compound children, plus the front faces
-of fixed triangles and meshes. A kinematic support
+of fixed triangles and meshes, as well as fixed convex hulls. A kinematic support
 keeps the character's point in its local frame between calls: translation and
 rotation carry the capsule, even away from the centre of rotation. Call
 `world.step(delta)` before `calculate_move`, and reuse the same mover with the

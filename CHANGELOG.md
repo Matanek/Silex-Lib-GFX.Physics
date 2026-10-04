@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D` moves and finds support on fixed convex hulls: slopes,
+  walls, steps and ceilings, sliding and bounded overlap recovery. Sensors,
+  filters, removal and state changes release support. Uphill and downhill
+  paths agree with Jolt; `CharacterConvexScene.sx` provides an interactive
+  example. Moving hulls and physical characters remain under development.
+
 - Capsules collide with fixed convex hulls: signed distances using the entire
   axial segment, solid containment, two-point face support, compound capsule
   children and linear CCD. A capsule joins the animated wedge scene. Moving
@@ -24,7 +30,7 @@ first in `CHANGELOG.fr.md`.
   signed sphere/convex distances, rays and collisions against a fixed body,
   with linear CCD, filters and sensors. Its triangulated boundary is available
   for rendering; moving hulls, compound children,
-  convex/convex pairs, and CharacterMover3D remain unsupported and are rejected.
+  and convex/convex pairs remain unsupported and are rejected.
 
 - Linear CCD respects front-facing fixed triangles and meshes: fast spheres,
   boxes and capsules pass through back faces and openings without clipped

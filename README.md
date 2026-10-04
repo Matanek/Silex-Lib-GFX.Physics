@@ -10,7 +10,7 @@ identical reactions at terrain seams. Fixed convex hulls collide with spheres,
 boxes and capsules, with signed distances, face contacts and linear CCD. It also supports
 rigid or spring distance constraints,
 contact events, sleeping, linear CCD for the qualified pairs, and a virtual
-capsule character mover. Other shape families remain under development.
+capsule character mover that also walks on fixed convex hulls. Other shape families remain under development.
 
 ```text
 silex install GFX.Physics

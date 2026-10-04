@@ -2549,6 +2549,6 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
         capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         triangle(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         mesh(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        convex(_) => { panic("GFX.Physics.CharacterMover3D convex hull obstacles are not supported") }
+        convex(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
     }
 }

@@ -81,9 +81,10 @@ Une capsule enfant d’un composé utilise la même paire.
 Le corps convexe est **fixe** dans cette première tranche. Les collisions,
 capteurs, filtres, remplacements de forme et CCD linéaire avec les sphères,
 les boîtes et les capsules sont disponibles. Les corps convexes dynamiques ou
-cinématiques, les enfants convexes de composés, la paire convexe/convexe et les
-obstacles convexes de `CharacterMover3D` sont refusés. La famille convexe demeure
-partielle.
+cinématiques, les enfants convexes de composés et la paire convexe/convexe
+sont refusés. `CharacterMover3D` utilise les convexes fixes pour le déplacement
+et l’appui ; voir [le guide du personnage](Character3D.md). La famille convexe
+demeure partielle.
 
 La scène `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` montre
 deux sphères, une boîte et une capsule qui tombent sur un coin construit avec six points, rebondissent, quittent sa

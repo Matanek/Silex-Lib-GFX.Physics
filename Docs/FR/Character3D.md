@@ -40,6 +40,15 @@ une vitesse ascendante conservée après projection représente une intention
 de montée et désactive le suivi descendant. La gravité et le saut restent
 les règles de l'application.
 
+Un convexe fixe peut servir de pente, mur, marche ou plafond. Le
+[consommateur convexe](../../Tests/Consumer/Tests/CharacterConvex3D.sx) vérifie
+le glissement, les angles, les limites de pente et de marche, la récupération
+bornée d'un chevauchement et la perte d'appui. Le parcours sur une pente
+`y=0,25z` concorde avec Jolt Debug et Release à 5 mm près dans les deux sens,
+y compris après rotation horizontale. `Physics3D/CharacterConvexScene.sx` dans
+Silex-Examples montre la marche automatique ; Tab passe au contrôle manuel,
+WASD ou les flèches déplacent la capsule, Espace saute et R recommence.
+
 ## Régler les appuis
 
 - `max_slope_angle` est en radians, strictement entre 0 et π/2 ; défaut 45°.
@@ -62,7 +71,8 @@ capsule profondément enfermée dans une géométrie ne garantit pas une sortie.
 
 Le contrôleur est virtuel et n'enregistre aucun corps rigide. Il lit les poses
 courantes des boîtes, sphères, capsules et enfants de composés activés, ainsi
-que les faces avant des triangles et maillages fixes. Un
+que les faces avant des triangles et maillages fixes et les enveloppes
+convexes fixes. Un
 support cinématique conserve le point du personnage dans son repère local entre
 deux appels : sa translation et sa rotation transportent la capsule, même hors
 du centre de rotation. Appeler `world.step(delta)` avant `calculate_move` et
