@@ -95,9 +95,9 @@ func main() {
 }
 ```
 
-Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe et répondre
-aux sphères, aux boîtes et aux capsules, y compris par CCD linéaire. Voir les
-[enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes-fixes).
+Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe,
+cinématique ou dynamique et répondre aux sphères, boîtes et capsules.
+Voir les [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes).
 Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
 
@@ -112,7 +112,12 @@ secondes et rejette une durée négative ou non finie.
 
 Par défaut, un corps est dynamique, porte une sphère de rayon 0,5 et reçoit
 une densité de 1. La masse et les moments d'inertie sont calculés pour la
-sphère, la boîte, la capsule ou un composé homogène de ces primitives.
+sphère, la boîte, la capsule, l’enveloppe convexe ou un composé homogène de
+primitives. Un convexe utilise les moments volumiques de sa frontière fermée :
+son centre de masse peut être décalé et son tenseur peut avoir des termes
+croisés, même sans rotation du corps. Les corps fixes et cinématiques ne
+calculent pas de masse dynamique ; une masse explicite remplace le calcul
+automatique à la création.
 `MassProperties3D` accepte soit trois moments locaux positifs sous forme
 `Vec3`, soit un tenseur symétrique défini positif sous forme `Mat3` ; les
 anciens appels avec `Vec3` conservent leurs axes principaux locaux. Le champ

@@ -6,16 +6,25 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Convex hulls can be kinematic or dynamic against spheres, boxes and capsules.
+  Density computes their mass, center of mass and full inertia tensor;
+  impulses, mutations, sensors and linear CCD use the same commands as
+  primitives. `MovingConvexScene.sx` shows falling, rotation and a moving
+  platform. Convex/convex and convex/terrain pairs, convex compound children
+  and rotational CCD remain pending.
+- Hull construction identifies a face by its supporting points, avoiding a
+  duplicate face after rotating and translating a parallelepiped.
+
 - `CharacterMover3D` moves and finds support on fixed convex hulls: slopes,
   walls, steps and ceilings, sliding and bounded overlap recovery. Sensors,
   filters, removal and state changes release support. Uphill and downhill
   paths agree with Jolt; `CharacterConvexScene.sx` provides an interactive
-  example. Moving hulls and physical characters remain under development.
+  example. Physical characters remain under development.
 
 - Capsules collide with fixed convex hulls: signed distances using the entire
   axial segment, solid containment, two-point face support, compound capsule
-  children and linear CCD. A capsule joins the animated wedge scene. Moving
-  hulls, convex compound children and convex/convex pairs remain unsupported.
+  children and linear CCD. A capsule joins the animated wedge scene. Convex
+  compound children and convex/convex pairs remain unsupported.
 
 - Boxes collide with fixed convex hulls: signed distances in either order,
   up to four contact points on actual faces, compound box children and linear
@@ -29,7 +38,7 @@ first in `CHANGELOG.fr.md`.
 - `ConvexHull3D(points)` adds an immutable solid hull and `Shape3D.convex`:
   signed sphere/convex distances, rays and collisions against a fixed body,
   with linear CCD, filters and sensors. Its triangulated boundary is available
-  for rendering; moving hulls, compound children,
+  for rendering; convex compound children,
   and convex/convex pairs remain unsupported and are rejected.
 
 - Linear CCD respects front-facing fixed triangles and meshes: fast spheres,

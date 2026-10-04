@@ -43,7 +43,7 @@ The conventions follow `STD.Math`: right-handed coordinates with Y up. A pose
 has no scale; dimensions belong to the shape. Transforms do not silently fix
 an invalid quaternion.
 
-## Fixed convex hulls
+## Convex hulls
 
 `ConvexHull3D(points)` builds a closed solid from at least four finite,
 non-coplanar points. `Shape3D.convex(hull)` retains this immutable hull.
@@ -74,16 +74,27 @@ a solid collision even when both endpoints are outside. A capsule parallel
 to a face uses two points clipped to the actual polygon, including when its
 caps extend beyond the edges. A capsule child of a compound uses the same pair.
 
-The convex body must be **fixed** in this first increment. Sphere, box and capsule
-collisions, sensors, filters, shape replacement and linear CCD are available. Dynamic or
-kinematic convex bodies, convex compound children,
-and convex/convex pairs are rejected. `CharacterMover3D` uses fixed hulls for
-movement and support; see the [character guide](Character3D.md). The convex
-family remains partial.
+A hull can be the shape of a **fixed, kinematic or dynamic** body. Its density
+determines the mass, local center of mass and full inertia tensor of a
+homogeneous solid; see [body commands](World3D.md#poses-mass-and-commands).
+The pose still places the origin of the supplied points, which can differ
+from the center of mass. The boundary remains immutable; `set_shape` replaces
+the shape and recomputes a dynamic body's mass properties.
+
+Collisions against spheres, boxes and capsules work in both orders, with
+sensors, filters and linear CCD. A kinematic hull can push a dynamic primitive.
+Convex compound children and convex/convex, convex/triangle and convex/mesh
+pairs are rejected. This qualification does not cover rotational CCD.
+`CharacterMover3D` is qualified on fixed hulls for movement and support;
+see [the character guide](Character3D.md). The convex family remains partial.
 
 `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` shows
 two spheres, a box and a capsule falling onto a wedge built from six points, bouncing, leaving its slope and landing on
 the lower tray. The scene starts and repeats automatically.
+
+`Silex-Examples/Sources/Physics3D/MovingConvexScene.sx` shows two convex solids
+falling and rotating, including an offset center of mass, and a kinematic
+convex platform carrying a sphere. Space pauses, R restarts and Escape exits.
 
 ## Query results
 

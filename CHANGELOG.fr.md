@@ -6,17 +6,25 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les enveloppes convexes peuvent être cinématiques ou dynamiques face aux
+  sphères, boîtes et capsules. La densité calcule leur masse, centre de masse
+  et tenseur complet ; impulsions, mutations, capteurs et CCD linéaire suivent
+  les mêmes commandes que les primitives. `MovingConvexScene.sx` montre chute,
+  rotation et plateforme mobile. Les paires convexe/convexe et convexe/terrain,
+  les enfants convexes et le CCD rotationnel restent à venir.
+- La construction d’une enveloppe reconnaît une face par ses points de support,
+  évitant une face doublée après rotation et translation d’un parallélépipède.
+
 - `CharacterMover3D` se déplace et prend appui sur les convexes fixes : pentes,
   murs, marches et plafonds, glissement et récupération bornée. Les capteurs,
   filtres, retraits et changements d'état coupent l'appui. Le parcours montant
   et descendant concorde avec Jolt ; `CharacterConvexScene.sx` permet de
-  l'essayer. Les convexes mobiles et personnages physiques restent à venir.
+  l'essayer. Les personnages physiques restent à venir.
 
 - Les capsules rencontrent les enveloppes convexes fixes : distances signées
   du segment axial entier, inclusion solide, appui de face à deux points,
   enfants capsules de composés et CCD linéaire. Une capsule rejoint la scène
-  animée du coin. Les convexes mobiles, enfants convexes et paires
-  convexe/convexe restent refusés.
+  animée du coin. Les enfants convexes et paires convexe/convexe restent refusés.
 
 - Les boîtes rencontrent les enveloppes convexes fixes : distances signées
   dans les deux ordres, appui jusqu’à quatre points sur les vraies faces,
@@ -30,7 +38,7 @@ puis traduits dans `CHANGELOG.md`.
 - `ConvexHull3D(points)` ajoute une enveloppe solide immuable et
   `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
   contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière
-  triangulée accessible pour le rendu ; convexes mobiles, enfants de composés,
+  triangulée accessible pour le rendu ; enfants convexes de composés,
   paire convexe/convexe restent refusés.
 
 - Le CCD linéaire respecte le côté avant des triangles et maillages fixes :

@@ -24,12 +24,6 @@ func main() {
         Physics.ConvexHull3D([Math.Vec3(value, 0.0, 0.0), Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()])
     }
     if selected("compound") { Physics.CompoundChild3D(0, hull()) }
-    if selected("dynamic") { var world = Physics.World3D(); world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = hull()) }
-    if selected("kinematic") {
-        var world = Physics.World3D()
-        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic ..shape = hull())
-    }
-    if selected("mutation") { var world = Physics.World3D(); var body = world.create_rigid_body(); body.set_shape(hull()) }
     if selected("convex-pair") {
         Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
             Physics.ShapePlacement3D(hull()))

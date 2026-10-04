@@ -87,10 +87,18 @@ public class ConvexHull3D {
         if positive { normal = normal.negated() }
         var index = 0
         while index < self.normals.count() {
-            if normal.dot(self.normals[index]) > 0.0 &&
-                normal.cross(self.normals[index]).length() <= 0.000001 &&
-                Math.abs(origin.subtract(self.origins[index]).dot(normal)) <= tolerance {
-                return
+            // A face is identified by its supporting point set. Normals built
+            // from different triples can disagree beyond an angular epsilon
+            // after translating/rotating float coordinates of the same face.
+            if normal.dot(self.normals[index]) > 0.0 {
+                var same_face = true
+                for point in points {
+                    let on_face = Math.abs(point.subtract(origin).dot(normal)) <= tolerance
+                    let on_existing = Math.abs(point.subtract(self.origins[index])
+                        .dot(self.normals[index])) <= tolerance
+                    if on_face != on_existing { same_face = false; break }
+                }
+                if same_face { return }
             }
             index++
         }

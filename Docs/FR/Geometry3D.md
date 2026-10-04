@@ -44,7 +44,7 @@ La convention est celle de `STD.Math` : repère droit, Y vers le haut. La pose
 est sans échelle ; les dimensions appartiennent à la forme. Les transformations
 ne corrigent pas silencieusement un quaternion invalide.
 
-## Enveloppes convexes fixes
+## Enveloppes convexes
 
 `ConvexHull3D(points)` construit un solide fermé depuis au moins quatre points
 finis non coplanaires. `Shape3D.convex(hull)` conserve cette enveloppe immuable.
@@ -78,17 +78,29 @@ extérieures. Une capsule parallèle à une face utilise deux points découpés 
 le polygone réel, y compris lorsque ses extrémités dépassent les bords.
 Une capsule enfant d’un composé utilise la même paire.
 
-Le corps convexe est **fixe** dans cette première tranche. Les collisions,
-capteurs, filtres, remplacements de forme et CCD linéaire avec les sphères,
-les boîtes et les capsules sont disponibles. Les corps convexes dynamiques ou
-cinématiques, les enfants convexes de composés et la paire convexe/convexe
-sont refusés. `CharacterMover3D` utilise les convexes fixes pour le déplacement
-et l’appui ; voir [le guide du personnage](Character3D.md). La famille convexe
-demeure partielle.
+Une enveloppe peut être la forme d’un corps **fixe, cinématique ou dynamique**.
+Sa densité détermine la masse, le centre de masse local et le tenseur complet
+d’un solide homogène ; voir [les commandes du corps](World3D.md#poses-masse-et-commandes).
+La pose place toujours l’origine des points fournis, qui peut différer du
+centre de masse. La frontière reste immuable ; `set_shape` remplace la forme
+et recalcule les propriétés de masse d’un corps dynamique.
+
+Les collisions face aux sphères, boîtes et capsules fonctionnent dans les deux
+ordres, avec capteurs, filtres et CCD linéaire. Un convexe cinématique peut
+pousser une primitive dynamique. Les enfants convexes de composés et les
+paires convexe/convexe, convexe/triangle et convexe/maillage sont refusés.
+Cette qualification ne couvre pas le CCD rotationnel. `CharacterMover3D`
+est qualifié sur les convexes fixes pour le déplacement et l’appui ; voir
+[le guide du personnage](Character3D.md). La famille convexe demeure partielle.
 
 La scène `Silex-Examples/Sources/Physics3D/ConvexHullScene.sx` montre
 deux sphères, une boîte et une capsule qui tombent sur un coin construit avec six points, rebondissent, quittent sa
 pente puis touchent le plateau inférieur. Elle démarre et recommence automatiquement.
+
+La scène `Silex-Examples/Sources/Physics3D/MovingConvexScene.sx` montre deux
+solides convexes en chute et rotation, dont un centre de masse décalé, ainsi
+qu’une plateforme convexe cinématique portant une sphère. Espace met en pause,
+R recommence et Échap ferme la scène.
 
 ## Résultats des requêtes
 

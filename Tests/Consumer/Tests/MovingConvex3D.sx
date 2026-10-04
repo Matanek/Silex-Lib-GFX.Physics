@@ -1,0 +1,233 @@
+use GFX.Physics
+use STD.Math
+
+func hull_box(size:Math.Vec3, offset:Math.Vec3 = Math.Vec3(), rotation:Math.Quat = Math.Quat(), shear:float = 0.0) Physics.Shape3D {
+    var points:Math.Vec3[] = []
+    var x = -1
+    while x <= 1 {
+        var y = -1
+        while y <= 1 {
+            var z = -1
+            while z <= 1 {
+                points.append(rotation.rotate(Math.Vec3(size.x * (x as float) * 0.5 + shear * size.y * (y as float) * 0.5,
+                    size.y * (y as float) * 0.5, size.z * (z as float) * 0.5)).add(offset))
+                z += 2
+            }
+            y += 2
+        }
+        x += 2
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func tetrahedron() Physics.Shape3D {
+    return Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(), Math.Vec3(2.0, 0.0, 0.0), Math.Vec3(0.0, 3.0, 0.0), Math.Vec3(0.0, 0.0, 4.0)]))
+}
+func near(actual:float, expected:float, relative:float = 0.00001) {
+    assert(Math.abs(actual - expected) <= Math.max(1e-30, Math.abs(expected) * relative))
+}
+func tensor_near(actual:Math.Mat3, expected:Math.Mat3, tolerance:float) {
+    assert(actual.x.nearly_equal(expected.x, tolerance))
+    assert(actual.y.nearly_equal(expected.y, tolerance))
+    assert(actual.z.nearly_equal(expected.z, tolerance))
+}
+func report(name:str, body:Physics.RigidBody3D) {
+    let p = body.mass_properties()
+    print("mass name=$(name) m=$(p.mass) c=$(p.local_center.x),$(p.local_center.y),$(p.local_center.z) i=$(p.inertia_tensor.x.x),$(p.inertia_tensor.y.y),$(p.inertia_tensor.z.z) off=$(p.inertia_tensor.x.y),$(p.inertia_tensor.x.z),$(p.inertia_tensor.y.z)")
+}
+func mass_cases() {
+    var world = Physics.World3D()
+    let sizes = Math.Vec3(2.0, 4.0, 6.0)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = hull_box(sizes) ..density = 2.0)
+    let p = body.mass_properties()
+    near(p.mass, 96.0)
+    assert(p.local_center.nearly_equal(Math.Vec3(), 0.000001))
+    assert(p.local_inertia.nearly_equal(Math.Vec3(416.0, 320.0, 160.0), 0.004))
+    report("box", body)
+    let rotation = Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0).normalized())
+    let offset = Math.Vec3(12.0, -23.0, 34.0)
+    body.set_shape(hull_box(sizes, offset, rotation))
+    let basis = Math.Mat3(rotation.rotate(Math.Vec3.right()), rotation.rotate(Math.Vec3.up()), rotation.rotate(Math.Vec3(0.0, 0.0, 1.0)))
+    near(body.mass_properties().mass, 96.0)
+    assert(body.mass_properties().local_center.nearly_equal(offset, 0.00001))
+    tensor_near(body.mass_properties().inertia_tensor, basis.multiply(p.inertia_tensor).multiply(basis.transposed()), 0.004)
+    report("oriented", body)
+    body.set_shape(hull_box(sizes, shear:0.5))
+    near(body.mass_properties().mass, 96.0)
+    tensor_near(body.mass_properties().inertia_tensor,
+        Math.Mat3(Math.Vec3(416.0, -64.0, 0.0), Math.Vec3(-64.0, 352.0, 0.0), Math.Vec3(0.0, 0.0, 192.0)), 0.004)
+    report("sheared", body)
+    body.set_shape(tetrahedron())
+    let t = body.mass_properties()
+    near(t.mass, 8.0)
+    assert(t.local_center.nearly_equal(Math.Vec3(0.5, 0.75, 1.0), 0.000001))
+    tensor_near(t.inertia_tensor, Math.Mat3(Math.Vec3(7.5, 0.6, 0.8), Math.Vec3(0.6, 6.0, 1.2), Math.Vec3(0.8, 1.2, 3.9)), 0.00001)
+    report("tetra", body)
+    let scales:float[] = [0.001, 1.0, 100.0]
+    for scale in scales {
+        body.set_shape(hull_box(sizes.multiply(scale)))
+        near(body.mass_properties().mass, 96.0 * scale * scale * scale)
+        near(body.mass_properties().local_inertia.x, 416.0 * scale * scale * scale * scale * scale)
+    }
+    body.set_shape(hull_box(sizes, Math.Vec3(1234.0, -2345.0, 3456.0)))
+    near(body.mass_properties().mass, 96.0)
+    assert(body.mass_properties().local_center.nearly_equal(Math.Vec3(1234.0, -2345.0, 3456.0), 0.001))
+    tensor_near(body.mass_properties().inertia_tensor, p.inertia_tensor, 0.004)
+    // Geometry can be valid even when its automatic inertia exceeds float range.
+    let huge = hull_box(Math.Vec3(200000000.0))
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = huge)
+    var kinematic = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic ..shape = huge)
+    fixed.set_shape(huge); kinematic.set_shape(huge)
+    assert(fixed.mass_properties().mass == 0.0 && kinematic.mass_properties().mass == 0.0)
+    var custom = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = huge
+        ..mass_properties = Physics.MassProperties3D(1.0, Math.Vec3(2.0)))
+    near(custom.mass_properties().mass, 1.0)
+
+}
+func impulse_and_mutation() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.7, Math.Vec3.up())
+    let offset = Math.Vec3(1.0, 2.0, 3.0)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = hull_box(Math.Vec3(2.0, 4.0, 6.0), offset)
+        ..density = 2.0 ..transform = Physics.Transform3D(Math.Vec3(10.0), rotation) ..allow_sleep = false)
+    let center = body.world_center_of_mass()
+    body.apply_impulse(rotation.rotate(Math.Vec3(0.0, 96.0, 0.0)), center.add(rotation.rotate(Math.Vec3.right())))
+    assert(body.linear_velocity().nearly_equal(Math.Vec3.up(), 0.00001))
+    assert(body.angular_velocity().nearly_equal(rotation.rotate(Math.Vec3(0.0, 0.0, 0.6)), 0.00001))
+    body.set_linear_velocity(Math.Vec3())
+    body.set_angular_velocity(rotation.rotate(Math.Vec3(0.0, 1.0, 0.0)))
+    world.step(0.1)
+    assert(body.world_center_of_mass().nearly_equal(center, 0.0001))
+    let before_center = body.world_center_of_mass()
+    let omega = body.angular_velocity()
+    body.set_shape(tetrahedron())
+    assert(body.linear_velocity().nearly_equal(omega.cross(body.world_center_of_mass().subtract(before_center)), 0.0001))
+    body.set_mass_properties(Physics.MassProperties3D(4.0, Math.Vec3(2.0), Math.Vec3()))
+    near(body.mass_properties().mass, 4.0)
+    body.set_angular_velocity(Math.Vec3())
+    body.apply_angular_impulse(Math.Vec3(0.0, 0.0, 2.0))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, 1.0), 0.000001))
+    body.set_shape(hull_box(Math.Vec3(2.0)))
+    near(body.mass_properties().mass, 16.0)
+    body.set_shape(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
+    near(body.mass_properties().mass, 16.0)
+}
+func advance(world:Physics.World3D, count:int) {
+    var index = 0
+    while index < count { world.step(1.0 / 120.0); index++ }
+}
+func rest_case(kind:int, reverse:bool) {
+    var world = Physics.World3D()
+    var floor_shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(8.0, 1.0, 8.0)))
+    var expected = 1.0
+    if kind == 1 { floor_shape = Physics.Shape3D.sphere(Physics.Sphere3D(1.0)); expected = 1.5 }
+    if kind == 2 { floor_shape = Physics.Shape3D.capsule(Physics.Capsule3D(1.0, 0.5)); expected = 2.0 }
+    let moving_settings = Physics.RigidBody3DSettings() ..shape = hull_box(Math.Vec3(1.0))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 4.0, 0.0)) ..friction = 0.0 ..allow_sleep = false
+    let fixed_settings = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = floor_shape ..friction = 0.0
+    var first_settings = fixed_settings
+    var second_settings = moving_settings
+    if reverse { first_settings = moving_settings; second_settings = fixed_settings }
+    var moving = world.create_rigid_body(first_settings)
+    var floor = world.create_rigid_body(second_settings)
+    if !reverse { moving = floor }
+    advance(world, 480)
+    print("rest kind=$(kind) reverse=$(reverse) y=$(moving.position().y) vy=$(moving.linear_velocity().y)")
+    assert(Math.abs(moving.position().y - expected) < 0.005)
+    assert(Math.abs(moving.linear_velocity().y) < 0.05)
+    assert(world.contact_count() == 1)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts[0].point_count() > 0)
+}
+func kinematic_and_sensors() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = hull_box(Math.Vec3(3.0, 1.0, 3.0)))
+    platform.move_kinematic(Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)), 1.0)
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(position:Math.Vec3(0.0, 1.0, 0.0)) ..allow_sleep = false)
+    advance(world, 120)
+    assert(platform.position().nearly_equal(Math.Vec3.up(), 0.00001))
+    assert(ball.position().y > 1.9 && ball.linear_velocity().y > 0.9)
+    world.destroy_rigid_body(ball)
+    platform.set_sensor(true)
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = hull_box(Math.Vec3(1.0))
+        ..transform = Physics.Transform3D(position:Math.Vec3(10.0, 0.0, 0.0)) ..is_sensor = true)
+    // The second convex is kept spatially separate: convex/convex is still unsupported.
+    world.destroy_rigid_body(platform)
+    var obstacle = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))
+        ..transform = Physics.Transform3D(position:Math.Vec3(10.0, 0.0, 0.0)))
+    world.step(0.01)
+    var contacts:Physics.Contact3D[] = []
+    world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].is_sensor() && contacts[0].point_count() == 0)
+    assert(payload.position().nearly_equal(Math.Vec3(10.0, 0.0, 0.0), 0.000001))
+    payload.set_enabled(false)
+    world.step(0.01)
+    world.write_contact_end_events(contacts)
+    assert(contacts.count() == 1)
+    world.destroy_rigid_body(obstacle)
+}
+func ccd_and_filters() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var wall = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.02, 5.0, 5.0))) ..friction = 0.0)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = hull_box(Math.Vec3(0.2))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(240.0, 0.0, 0.0) ..continuous_collision = true ..friction = 0.0)
+    world.step(1.0 / 120.0)
+    assert(body.position().x < -0.109 && body.position().x > -0.112)
+    assert(Math.abs(body.linear_velocity().x) < 0.001)
+    body.set_collision_filter(Physics.CollisionFilter3D(category_bits:2, mask_bits:2))
+    body.set_transform(Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0)))
+    body.set_linear_velocity(Math.Vec3(240.0, 0.0, 0.0))
+    world.step(1.0 / 120.0)
+    assert(body.position().x > 0.99 && world.contact_count() == 0)
+    world.destroy_rigid_body(wall)
+    assert(!wall.is_valid())
+}
+func dynamic_impact(reverse:bool) {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let hull_settings = Physics.RigidBody3DSettings() ..shape = hull_box(Math.Vec3(1.0))
+        ..transform = Physics.Transform3D(position:Math.Vec3(-1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3.right() ..friction = 0.0 ..restitution = 1.0 ..allow_sleep = false
+    let ball_settings = Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0, Math.Vec3(0.1))
+        ..transform = Physics.Transform3D(position:Math.Vec3(1.0, 0.0, 0.0))
+        ..linear_velocity = Math.Vec3(-1.0, 0.0, 0.0) ..friction = 0.0 ..restitution = 1.0 ..allow_sleep = false
+    var first_settings = hull_settings
+    var second_settings = ball_settings
+    if reverse { first_settings = ball_settings; second_settings = hull_settings }
+    var first = world.create_rigid_body(first_settings)
+    var second = world.create_rigid_body(second_settings)
+    advance(world, 120)
+    assert(first.linear_velocity().nearly_equal(first_settings.linear_velocity.negated(), 0.00001))
+    assert(second.linear_velocity().nearly_equal(second_settings.linear_velocity.negated(), 0.00001))
+    assert(first.linear_velocity().add(second.linear_velocity()).length() < 0.00001)
+    assert(Math.abs(first.linear_velocity().length_squared() + second.linear_velocity().length_squared() - 2.0) < 0.00001)
+    assert(first.angular_velocity().length() < 0.00001 && second.angular_velocity().length() < 0.00001)
+}
+func main() {
+    mass_cases()
+    impulse_and_mutation()
+    let kinds:int[] = [0, 1, 2]
+    for kind in kinds { rest_case(kind, false); rest_case(kind, true) }
+    kinematic_and_sensors()
+    ccd_and_filters()
+    dynamic_impact(false); dynamic_impact(true)
+    print("Moving convex: all scenarios passed")
+}
+test "convex solid moments match analytic boxes and asymmetric tetrahedra" { mass_cases() }
+test "moving convex impulses preserve the offset center and shape mutation" { impulse_and_mutation() }
+test "moving convex rests on box sphere and capsule in both insertion orders" {
+    let kinds:int[] = [0, 1, 2]
+    for kind in kinds { rest_case(kind, false); rest_case(kind, true) }
+}
+test "kinematic convex pushes a primitive and sensor events survive removal" { kinematic_and_sensors() }
+test "dynamic convex CCD and collision masks reject thin wall tunneling" { ccd_and_filters() }
+
+test "dynamic convex primitive impact conserves equal mass momentum and energy" { dynamic_impact(false); dynamic_impact(true) }

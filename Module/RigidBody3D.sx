@@ -1,3 +1,4 @@
+use GFX.Physics.ConvexHull3D.ConvexHull3D
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
@@ -162,9 +163,7 @@ package class BodyState3D {
                     panic("GFX.Physics.Triangle3D requires a fixed body")
                 }
             }
-            convex(_) => {
-                if settings.body_type != BodyType3D.fixed { panic("GFX.Physics.ConvexHull3D requires a fixed body") }
-            }
+            convex(_) => {}
             mesh(_) => {
                 if settings.body_type != BodyType3D.fixed {
                     panic("GFX.Physics.TriangleMesh3D requires a fixed body")
@@ -191,8 +190,12 @@ package class BodyState3D {
         self.angular_velocity = settings.angular_velocity
         self.force = Math.Vec3()
         self.torque = Math.Vec3()
-        var properties = shape_mass_properties3d(settings.shape, settings.density)
-        if let selected = settings.mass_properties { properties = selected }
+        var properties = MassProperties3D(0.0, Math.Vec3())
+        if let selected = settings.mass_properties {
+            properties = selected
+        } else if settings.body_type == BodyType3D.dynamic {
+            properties = shape_mass_properties3d(settings.shape, settings.density)
+        }
         if settings.body_type == BodyType3D.dynamic {
             require_dynamic_mass3d(properties)
             self.mass_properties = properties
@@ -466,9 +469,7 @@ public class RigidBody3D {
                     panic("GFX.Physics.Triangle3D requires a fixed body")
                 }
             }
-            convex(_) => {
-                if state.body_type != BodyType3D.fixed { panic("GFX.Physics.ConvexHull3D requires a fixed body") }
-            }
+            convex(_) => {}
             mesh(_) => {
                 if state.body_type != BodyType3D.fixed {
                     panic("GFX.Physics.TriangleMesh3D requires a fixed body")
@@ -479,8 +480,11 @@ public class RigidBody3D {
             capsule(_) => {}
             compound(_) => {}
         }
-        let properties = shape_mass_properties3d(shape, state.density)
-        if state.body_type == BodyType3D.dynamic { require_dynamic_mass3d(properties) }
+        var properties = MassProperties3D(0.0, Math.Vec3())
+        if state.body_type == BodyType3D.dynamic {
+            properties = shape_mass_properties3d(shape, state.density)
+            require_dynamic_mass3d(properties)
+        }
         state.shape = shape
         state.shape_revision++
         if state.body_type == BodyType3D.dynamic {
@@ -628,7 +632,7 @@ package func shape_mass_properties3d(shape:Shape3D, density:float) MassPropertie
     match shape {
         triangle(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         mesh(_) => { return MassProperties3D(0.0, Math.Vec3()) }
-        convex(_) => { return MassProperties3D(0.0, Math.Vec3()) }
+        convex(hull) => { return convex_mass_properties3d(hull, density) }
         sphere(value) => {
             let mass = density * (4.0 / 3.0) * Math.pi() * value.radius * value.radius * value.radius
             let inertia = 0.4 * mass * value.radius * value.radius
@@ -739,4 +743,67 @@ func invert_inertia3d(tensor:Math.Mat3) Math.Mat3 {
     let second = row2.cross(row0)
     let third = row0.cross(row1)
     return Math.Mat3(first, second, third).multiply(1.0 / (row0.dot(first) * scale))
+}
+
+// Cold body creation/shape replacement only. Normalize around an interior point
+// before integrating tetrahedra, then integrate centered second moments directly
+// to avoid subtracting large origin moments for translated small solids.
+func convex_mass_properties3d(hull:ConvexHull3D, density:float) MassProperties3D {
+    let anchor = hull.vertex(0)
+    var offset = Math.Vec3()
+    var scale = 0.0
+    var index = 0
+    while index < hull.vertex_count() {
+        let delta = hull.vertex(index).subtract(anchor)
+        offset = offset.add(delta.divide(hull.vertex_count() as float))
+        scale = Math.max(scale, delta.length())
+        index++
+    }
+    var volume = 0.0
+    var first_moment = Math.Vec3()
+    index = 0
+    while index < hull.triangle_count() {
+        let triangle = hull.triangle(index)
+        let a = triangle.first.subtract(anchor).subtract(offset).divide(scale)
+        let b = triangle.second.subtract(anchor).subtract(offset).divide(scale)
+        let c = triangle.third.subtract(anchor).subtract(offset).divide(scale)
+        let tetra_volume = a.dot(b.cross(c)) / 6.0
+        volume += tetra_volume
+        first_moment = first_moment.add(a.add(b).add(c).multiply(tetra_volume * 0.25))
+        index++
+    }
+    let center = first_moment.divide(volume)
+    var second_moment = Math.Mat3.zero()
+    index = 0
+    while index < hull.triangle_count() {
+        let triangle = hull.triangle(index)
+        let a = triangle.first.subtract(anchor).subtract(offset).divide(scale)
+        let b = triangle.second.subtract(anchor).subtract(offset).divide(scale)
+        let c = triangle.third.subtract(anchor).subtract(offset).divide(scale)
+        let tetra_volume = a.dot(b.cross(c)) / 6.0
+        let first = a.subtract(center)
+        let second = b.subtract(center)
+        let third = c.subtract(center)
+        let fourth = center.negated()
+        let sum = first.add(second).add(third).add(fourth)
+        second_moment = second_moment.add(outer_moment3d(first)
+            .add(outer_moment3d(second)).add(outer_moment3d(third))
+            .add(outer_moment3d(fourth)).add(outer_moment3d(sum))
+            .multiply(tetra_volume / 20.0))
+        index++
+    }
+    let mass = density * volume * scale * scale * scale
+    let inertia_scale = mass * scale * scale / volume
+    let tensor = Math.Mat3(
+        Math.Vec3(second_moment.y.y + second_moment.z.z,
+            -second_moment.x.y, -second_moment.x.z),
+        Math.Vec3(-second_moment.y.x, second_moment.x.x + second_moment.z.z,
+            -second_moment.y.z),
+        Math.Vec3(-second_moment.z.x, -second_moment.z.y,
+            second_moment.x.x + second_moment.y.y)).multiply(inertia_scale)
+    return MassProperties3D(mass, tensor, anchor.add(offset).add(center.multiply(scale)))
+}
+
+func outer_moment3d(point:Math.Vec3) Math.Mat3 {
+    return Math.Mat3(point.multiply(point.x), point.multiply(point.y), point.multiply(point.z))
 }
