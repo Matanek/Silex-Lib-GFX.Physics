@@ -78,6 +78,14 @@ extérieures. Une capsule parallèle à une face utilise deux points découpés 
 le polygone réel, y compris lorsque ses extrémités dépassent les bords.
 Une capsule enfant d’un composé utilise la même paire.
 
+La paire convexe/convexe utilise les deux frontières dans les deux ordres.
+La distance extérieure est euclidienne, y compris entre des arêtes obliques.
+En pénétration ou inclusion, la séparation mesure la plus courte translation
+séparatrice parmi les normales de faces et les axes croisés des arêtes.
+Les contacts de face gardent jusqu’à quatre points sur leurs polygones réels ;
+un contact d’arêtes utilise les témoins de leurs segments supports.
+En cas de minima égaux, le moteur choisit un axe déterministe.
+
 Une enveloppe peut être la forme d’un corps **fixe, cinématique ou dynamique**.
 Sa densité détermine la masse, le centre de masse local et le tenseur complet
 d’un solide homogène ; voir [les commandes du corps](World3D.md#poses-masse-et-commandes).
@@ -85,10 +93,10 @@ La pose place toujours l’origine des points fournis, qui peut différer du
 centre de masse. La frontière reste immuable ; `set_shape` remplace la forme
 et recalcule les propriétés de masse d’un corps dynamique.
 
-Les collisions face aux sphères, boîtes et capsules fonctionnent dans les deux
-ordres, avec capteurs, filtres et CCD linéaire. Un convexe cinématique peut
-pousser une primitive dynamique. Les enfants convexes de composés et les
-paires convexe/convexe, convexe/triangle et convexe/maillage sont refusés.
+Les collisions face aux sphères, boîtes, capsules et autres convexes fonctionnent
+dans les deux ordres, avec capteurs, filtres et CCD linéaire. Un convexe
+cinématique peut pousser un corps dynamique. Les enfants convexes de composés
+et les paires convexe/triangle et convexe/maillage sont refusés.
 Cette qualification ne couvre pas le CCD rotationnel. `CharacterMover3D`
 est qualifié sur les convexes fixes pour le déplacement et l’appui ; voir
 [le guide du personnage](Character3D.md). La famille convexe demeure partielle.
@@ -102,12 +110,17 @@ solides convexes en chute et rotation, dont un centre de masse décalé, ainsi
 qu’une plateforme convexe cinématique portant une sphère. Espace met en pause,
 R recommence et Échap ferme la scène.
 
+La scène `Silex-Examples/Sources/Physics3D/ConvexPairsScene.sx` montre un
+tétraèdre en rotation heurtant une base convexe dynamique et une plateforme
+convexe cinématique soulevant un cube convexe. Toutes les formes physiques de
+cette scène sont des enveloppes ; les commandes restent Espace, R et Échap.
+
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
 et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
 boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe et
-boîte/convexe et capsule/convexe, dans les deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
+boîte/convexe, capsule/convexe et convexe/convexe, dans les deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
 seconde. Les deux points témoins appartiennent aux surfaces respectives.

@@ -74,6 +74,13 @@ a solid collision even when both endpoints are outside. A capsule parallel
 to a face uses two points clipped to the actual polygon, including when its
 caps extend beyond the edges. A capsule child of a compound uses the same pair.
 
+The convex/convex pair uses both boundaries in either order. Exterior distance
+is Euclidean, including between oblique edges. During penetration or containment,
+separation measures the shortest separating translation among face normals and
+crossed edge axes. Face contacts retain up to four points on their actual
+polygons; an edge contact uses witnesses on its supporting segments.
+When minima tie, the engine chooses a deterministic axis.
+
 A hull can be the shape of a **fixed, kinematic or dynamic** body. Its density
 determines the mass, local center of mass and full inertia tensor of a
 homogeneous solid; see [body commands](World3D.md#poses-mass-and-commands).
@@ -81,9 +88,9 @@ The pose still places the origin of the supplied points, which can differ
 from the center of mass. The boundary remains immutable; `set_shape` replaces
 the shape and recomputes a dynamic body's mass properties.
 
-Collisions against spheres, boxes and capsules work in both orders, with
-sensors, filters and linear CCD. A kinematic hull can push a dynamic primitive.
-Convex compound children and convex/convex, convex/triangle and convex/mesh
+Collisions against spheres, boxes, capsules and other hulls work in both
+orders, with sensors, filters and linear CCD. A kinematic hull can push a
+dynamic body. Convex compound children and convex/triangle and convex/mesh
 pairs are rejected. This qualification does not cover rotational CCD.
 `CharacterMover3D` is qualified on fixed hulls for movement and support;
 see [the character guide](Character3D.md). The convex family remains partial.
@@ -96,11 +103,16 @@ the lower tray. The scene starts and repeats automatically.
 falling and rotating, including an offset center of mass, and a kinematic
 convex platform carrying a sphere. Space pauses, R restarts and Escape exits.
 
+`Silex-Examples/Sources/Physics3D/ConvexPairsScene.sx` shows a rotating
+tetrahedron hitting a dynamic convex base, and a kinematic convex platform
+lifting a convex cube. Every physical shape in this scene is a hull;
+Space, R and Escape retain the same controls.
+
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
-and their mesh variants, as well as sphere/convex, box/convex and capsule/convex, in either
+and their mesh variants, as well as sphere/convex, box/convex, capsule/convex and convex/convex, in either
 order, including oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the

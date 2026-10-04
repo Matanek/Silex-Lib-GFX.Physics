@@ -8,7 +8,7 @@ triangle meshes against dynamic spheres, capsules and boxes. Boxes retain
 simultaneous support on both pans of a qualified valley without duplicating
 identical reactions at terrain seams. Convex hulls can be fixed, kinematic or
 dynamic against spheres,
-boxes and capsules, with solid mass properties, signed distances, face contacts
+boxes, capsules and other convex hulls, with solid mass properties, signed distances, face contacts
 and linear CCD. It also supports
 rigid or spring distance constraints,
 contact events, sleeping, linear CCD for the qualified pairs, and a virtual

@@ -24,19 +24,9 @@ func main() {
         Physics.ConvexHull3D([Math.Vec3(value, 0.0, 0.0), Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()])
     }
     if selected("compound") { Physics.CompoundChild3D(0, hull()) }
-    if selected("convex-pair") {
-        Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
-            Physics.ShapePlacement3D(hull()))
-    }
     if selected("triangle-pair") {
         Physics.Geometry3D.distance(Physics.ShapePlacement3D(hull()),
             Physics.ShapePlacement3D(Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(), Math.Vec3.right(), Math.Vec3.up()))))
-    }
-    if selected("world-query") {
-        var world = Physics.World3D()
-        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = hull())
-        var hits:Physics.WorldOverlap3D[] = []
-        world.write_overlaps(Physics.ShapePlacement3D(hull()), hits)
     }
     panic("invalid convex use was accepted")
 }

@@ -6,11 +6,19 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Deux enveloppes convexes peuvent se rencontrer dans les deux ordres :
+  distance extérieure euclidienne, profondeur d’inclusion, contacts de face
+  jusqu’à quatre points et témoins d’arêtes. Le monde conserve les filtres,
+  capteurs, événements et CCD de translation. `ConvexPairsScene.sx` montre
+  un contact entre deux corps dynamiques et une plateforme cinématique portant
+  un cube convexe. Les paires avec les terrains et les enfants convexes restent
+  à qualifier ; les piles sans friction gardent les limites du solveur partagé.
+
 - Les enveloppes convexes peuvent être cinématiques ou dynamiques face aux
   sphères, boîtes et capsules. La densité calcule leur masse, centre de masse
   et tenseur complet ; impulsions, mutations, capteurs et CCD linéaire suivent
   les mêmes commandes que les primitives. `MovingConvexScene.sx` montre chute,
-  rotation et plateforme mobile. Les paires convexe/convexe et convexe/terrain,
+  rotation et plateforme mobile. Les paires convexe/terrain,
   les enfants convexes et le CCD rotationnel restent à venir.
 - La construction d’une enveloppe reconnaît une face par ses points de support,
   évitant une face doublée après rotation et translation d’un parallélépipède.
@@ -24,12 +32,11 @@ puis traduits dans `CHANGELOG.md`.
 - Les capsules rencontrent les enveloppes convexes fixes : distances signées
   du segment axial entier, inclusion solide, appui de face à deux points,
   enfants capsules de composés et CCD linéaire. Une capsule rejoint la scène
-  animée du coin. Les enfants convexes et paires convexe/convexe restent refusés.
+  animée du coin. Les enfants convexes restent refusés.
 
 - Les boîtes rencontrent les enveloppes convexes fixes : distances signées
   dans les deux ordres, appui jusqu’à quatre points sur les vraies faces,
   composés de boîtes et CCD linéaire. Une boîte animée rejoint la scène du coin.
-  La paire convexe/convexe reste refusée.
 
 - Le CCD 3D referme l’écart restant entre sa marge de recherche et la
   surface d’impact. Un rebond oblique sur un convexe est résolu dans le pas
@@ -38,8 +45,8 @@ puis traduits dans `CHANGELOG.md`.
 - `ConvexHull3D(points)` ajoute une enveloppe solide immuable et
   `Shape3D.convex` : distances signées sphère/convexe, rayons et collisions
   contre un corps fixe, avec CCD linéaire, filtres et capteurs. Frontière
-  triangulée accessible pour le rendu ; enfants convexes de composés,
-  paire convexe/convexe restent refusés.
+  triangulée accessible pour le rendu ; les enfants convexes de composés
+  restent refusés.
 
 - Le CCD linéaire respecte le côté avant des triangles et maillages fixes :
   sphères, boîtes et capsules rapides traversent les faces arrière et les

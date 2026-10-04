@@ -6,11 +6,18 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Two convex hulls can collide in either order: Euclidean exterior distance,
+  containment depth, up to four face contact points and edge witnesses. The
+  world retains filters, sensors, events and translational CCD.
+  `ConvexPairsScene.sx` shows two dynamic bodies making contact and a kinematic
+  platform carrying a convex cube. Terrain pairs and convex compound children
+  remain to be qualified; frictionless stacks retain shared solver limits.
+
 - Convex hulls can be kinematic or dynamic against spheres, boxes and capsules.
   Density computes their mass, center of mass and full inertia tensor;
   impulses, mutations, sensors and linear CCD use the same commands as
   primitives. `MovingConvexScene.sx` shows falling, rotation and a moving
-  platform. Convex/convex and convex/terrain pairs, convex compound children
+  platform. Convex/terrain pairs, convex compound children
   and rotational CCD remain pending.
 - Hull construction identifies a face by its supporting points, avoiding a
   duplicate face after rotating and translating a parallelepiped.
@@ -24,12 +31,11 @@ first in `CHANGELOG.fr.md`.
 - Capsules collide with fixed convex hulls: signed distances using the entire
   axial segment, solid containment, two-point face support, compound capsule
   children and linear CCD. A capsule joins the animated wedge scene. Convex
-  compound children and convex/convex pairs remain unsupported.
+  compound children remain unsupported.
 
 - Boxes collide with fixed convex hulls: signed distances in either order,
   up to four contact points on actual faces, compound box children and linear
-  CCD. An animated box joins the wedge scene. Convex/convex pairs remain
-  unsupported.
+  CCD. An animated box joins the wedge scene.
 
 - 3D CCD closes the remaining gap between its search margin and the impact
   surface. An oblique convex bounce is resolved in the step that clips motion,
@@ -38,8 +44,7 @@ first in `CHANGELOG.fr.md`.
 - `ConvexHull3D(points)` adds an immutable solid hull and `Shape3D.convex`:
   signed sphere/convex distances, rays and collisions against a fixed body,
   with linear CCD, filters and sensors. Its triangulated boundary is available
-  for rendering; convex compound children,
-  and convex/convex pairs remain unsupported and are rejected.
+  for rendering; convex compound children remain unsupported and are rejected.
 
 - Linear CCD respects front-facing fixed triangles and meshes: fast spheres,
   boxes and capsules pass through back faces and openings without clipped

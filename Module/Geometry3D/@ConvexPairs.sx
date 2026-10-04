@@ -1,0 +1,168 @@
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+struct ConvexPairAxis3D {
+    let normal:Math.Vec3
+    let gap:float
+    init(normal:Math.Vec3, gap:float) { self.normal = normal; self.gap = gap }
+}
+
+// Per nearby pair/pose, never per solver iteration. Immutable face normals and
+// actual edge directions supply the complete separating-axis set.
+func convex_pair_axis3d(first:ConvexHull3D, first_transform:Transform3D,
+    second:ConvexHull3D, second_transform:Transform3D,
+    contact_only:bool) ConvexPairAxis3D {
+    var best = ConvexPairAxis3D(Math.Vec3.up(), -3.4028235e38)
+    let face_end = first.face_count() + second.face_count()
+    var index = 0
+    while index < face_end + first.edge_count() * second.edge_count() {
+        var axis = Math.Vec3()
+        if index < first.face_count() { axis = first_transform.vector(first.face_normal(index)) }
+        else if index < face_end { axis = second_transform.vector(second.face_normal(index - first.face_count())) }
+        else {
+            let edge = index - face_end
+            axis = first_transform.vector(first.edge(edge / second.edge_count()))
+                .cross(second_transform.vector(second.edge(edge % second.edge_count())))
+        }
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            let first_axis = first_transform.inverse_vector(axis)
+            let second_axis = second_transform.inverse_vector(axis)
+            let offset = second_transform.position.subtract(first_transform.position).dot(axis)
+            var first_low = first.vertex(0).dot(first_axis); var first_high = first_low
+            var vertex = 1
+            while vertex < first.vertex_count() {
+                let value = first.vertex(vertex).dot(first_axis)
+                first_low = Math.min(first_low, value); first_high = Math.max(first_high, value)
+                vertex++
+            }
+            var second_low = second.vertex(0).dot(second_axis); var second_high = second_low
+            vertex = 1
+            while vertex < second.vertex_count() {
+                let value = second.vertex(vertex).dot(second_axis)
+                second_low = Math.min(second_low, value); second_high = Math.max(second_high, value)
+                vertex++
+            }
+            let forward = second_low + offset - first_high
+            let backward = first_low - second_high - offset
+            var gap = backward; var normal = axis.negated()
+            if forward > backward { gap = forward; normal = axis }
+            if gap > best.gap { best = ConvexPairAxis3D(normal, gap) }
+            if contact_only && gap > 0.000001 { return best }
+        }
+        index++
+    }
+    return best
+}
+
+func convex_extent3d(hull:ConvexHull3D) float {
+    var extent = 0.0; var index = 1
+    while index < hull.vertex_count() {
+        extent = Math.max(extent, hull.vertex(index).subtract(hull.vertex(0)).length())
+        index++
+    }
+    return extent
+}
+
+func convex_relative_point3d(point:Math.Vec3, transform:Transform3D,
+    anchor:Math.Vec3, scale:float) Math.Vec3 {
+    return transform.vector(point).add(transform.position.subtract(anchor)).divide(scale)
+}
+
+// A separated minimum lies on an edge/face or vertex/face pair. Running both
+// orders includes a small face above the interior of a larger one. Normalize
+// coordinates before the existing segment/triangle query to preserve scale.
+func convex_boundary_pair3d(first:ConvexHull3D, first_transform:Transform3D,
+    second:ConvexHull3D, second_transform:Transform3D,
+    anchor:Math.Vec3, scale:float) CapsuleAxisPair3D {
+    var best = CapsuleAxisPair3D(Math.Vec3(), Math.Vec3())
+    var best_squared = 3.4028235e38
+    var face = 0
+    while face < first.face_count() {
+        let polygon = first.face_polygon(face)
+        var edge = 0
+        while edge < polygon.count() {
+            let axis = CapsuleAxis3D(
+                convex_relative_point3d(polygon[edge], first_transform, anchor, scale),
+                convex_relative_point3d(polygon[(edge + 1) % polygon.count()], first_transform, anchor, scale))
+            var index = 0
+            while index < second.triangle_count() {
+                let boundary = second.triangle(index)
+                let triangle = Triangle3D(
+                    convex_relative_point3d(boundary.first, second_transform, anchor, scale),
+                    convex_relative_point3d(boundary.second, second_transform, anchor, scale),
+                    convex_relative_point3d(boundary.third, second_transform, anchor, scale))
+                let pair = closest_capsule_triangle3d(axis, triangle, false)
+                let squared = pair.second.subtract(pair.first).length_squared()
+                if squared < best_squared { best = pair; best_squared = squared }
+                index++
+            }
+            edge++
+        }
+        face++
+    }
+    return best
+}
+
+// Support features are true boundary segments, not arbitrary opposite corners.
+// Their closest points avoid a spurious lever arm for an edge/edge contact.
+func convex_support_segment3d(hull:ConvexHull3D, transform:Transform3D,
+    direction:Math.Vec3) CapsuleAxis3D {
+    let axis = transform.inverse_vector(direction)
+    var first = hull.vertex(0); var index = 1
+    while index < hull.vertex_count() {
+        if hull.vertex(index).dot(axis) > first.dot(axis) { first = hull.vertex(index) }
+        index++
+    }
+    var second = first; var farthest = 0.0
+    let projection = first.dot(axis)
+    let tolerance = convex_extent3d(hull) * 0.000001
+    index = 0
+    while index < hull.vertex_count() {
+        let point = hull.vertex(index)
+        if projection - point.dot(axis) <= tolerance {
+            let squared = point.subtract(first).length_squared()
+            if squared > farthest { second = point; farthest = squared }
+        }
+        index++
+    }
+    return CapsuleAxis3D(transform.point(first), transform.point(second))
+}
+
+func convex_feature_pair3d(first:CapsuleAxis3D, second:CapsuleAxis3D) CapsuleAxisPair3D {
+    let first_length = first.second.subtract(first.first).length()
+    let second_length = second.second.subtract(second.first).length()
+    if first_length == 0.0 && second_length == 0.0 { return CapsuleAxisPair3D(first.first, second.first) }
+    if first_length == 0.0 { return CapsuleAxisPair3D(first.first, closest_capsule_axis_point3d(second, first.first)) }
+    if second_length == 0.0 { return CapsuleAxisPair3D(closest_capsule_axis_point3d(first, second.first), second.first) }
+    let scale = Math.max(first_length, second_length)
+    let pair = closest_capsule_axes3d(CapsuleAxis3D(Math.Vec3(), first.second.subtract(first.first).divide(scale)),
+        CapsuleAxis3D(second.first.subtract(first.first).divide(scale), second.second.subtract(first.first).divide(scale)))
+    return CapsuleAxisPair3D(first.first.add(pair.first.multiply(scale)), first.first.add(pair.second.multiply(scale)))
+}
+
+func convex_convex_distance3d(first:ConvexHull3D, first_transform:Transform3D,
+    second:ConvexHull3D, second_transform:Transform3D,
+    contact_only:bool = false) DistanceResult3D {
+    let axis = convex_pair_axis3d(first, first_transform, second, second_transform, contact_only)
+    if axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001) {
+        let pair = convex_feature_pair3d(convex_support_segment3d(first, first_transform, axis.normal),
+            convex_support_segment3d(second, second_transform, axis.normal.negated()))
+        return DistanceResult3D(pair.first, pair.second, axis.normal, axis.gap)
+    }
+    let scale = Math.max(convex_extent3d(first), convex_extent3d(second))
+    let anchor = first_transform.position
+    var pair = convex_boundary_pair3d(first, first_transform, second, second_transform, anchor, scale)
+    let reverse = convex_boundary_pair3d(second, second_transform, first, first_transform, anchor, scale)
+    if reverse.second.subtract(reverse.first).length_squared() < pair.second.subtract(pair.first).length_squared() {
+        pair = CapsuleAxisPair3D(reverse.second, reverse.first)
+    }
+    let offset = pair.second.subtract(pair.first)
+    let length = offset.length()
+    var normal = axis.normal
+    if length > 0.0 { normal = offset.divide(length) }
+    return DistanceResult3D(anchor.add(pair.first.multiply(scale)), anchor.add(pair.second.multiply(scale)), normal, length * scale)
+}

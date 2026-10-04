@@ -15,9 +15,7 @@ cases = {
     'duplicate': 'requires a finite solid point cloud',
     'finite': 'requires finite points',
     'compound': 'cannot contain a convex hull',
-    'convex-pair': 'unsupported shape pair',
     'triangle-pair': 'unsupported shape pair',
-    'world-query': 'unsupported shape pair',
 }
 try:
     for mode in ('--debug', '--release'):

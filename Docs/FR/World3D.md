@@ -96,7 +96,8 @@ func main() {
 ```
 
 Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe,
-cinématique ou dynamique et répondre aux sphères, boîtes et capsules.
+cinématique ou dynamique et répondre aux sphères, boîtes, capsules et autres
+enveloppes.
 Voir les [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes).
 Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.

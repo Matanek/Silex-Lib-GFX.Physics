@@ -65,25 +65,61 @@ package func box_convex_contact_points(box:Box3D, transform:Transform3D,
         if candidate > alignment { alignment = candidate; face = index }
         index++
     }
-    let boundary = hull.face_polygon(face)
-    var polygon:Math.Vec3[] = []
-    for point in boundary { polygon.append(hull_transform.point(point)) }
     if box_face.alignment >= alignment && box_face.alignment > 0.99999 {
+        var polygon:Math.Vec3[] = []
+        for point in hull.face_polygon(face) { polygon.append(hull_transform.point(point)) }
         return clipped_box_face3d(box, transform, box_face, polygon, witness)
     }
     if alignment < 0.99999 { return [witness] }
+    return clipped_convex_face3d(hull, hull_transform, face, box_face.corners, witness)
+}
+
+func convex_face3d(hull:ConvexHull3D, transform:Transform3D, direction:Math.Vec3) int {
+    var face = 0; var best = -1.0; var index = 0
+    while index < hull.face_count() {
+        let alignment = transform.vector(hull.face_normal(index)).dot(direction)
+        if alignment > best { best = alignment; face = index }
+        index++
+    }
+    return face
+}
+
+package func convex_convex_contact_points(first:ConvexHull3D, first_transform:Transform3D,
+    second:ConvexHull3D, second_transform:Transform3D,
+    normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    let first_face = convex_face3d(first, first_transform, normal)
+    let second_face = convex_face3d(second, second_transform, normal.negated())
+    let first_alignment = first_transform.vector(first.face_normal(first_face)).dot(normal)
+    let second_alignment = second_transform.vector(second.face_normal(second_face)).dot(normal.negated())
+    if first_alignment >= second_alignment && first_alignment >= 0.99999 {
+        var polygon:Math.Vec3[] = []
+        for point in second.face_polygon(second_face) { polygon.append(second_transform.point(point)) }
+        return clipped_convex_face3d(first, first_transform, first_face, polygon, witness)
+    }
+    if second_alignment >= 0.99999 {
+        var polygon:Math.Vec3[] = []
+        for point in first.face_polygon(first_face) { polygon.append(first_transform.point(point)) }
+        return clipped_convex_face3d(second, second_transform, second_face, polygon, witness)
+    }
+    return [witness]
+}
+
+func clipped_convex_face3d(hull:ConvexHull3D, hull_transform:Transform3D,
+    face:int, incident:Math.Vec3[], witness:Math.Vec3) Math.Vec3[] {
     let outward = hull_transform.vector(hull.face_normal(face))
     let origin = hull_transform.point(hull.face_origin(face))
-    var incident = box_face.corners
-    index = 0
+    var polygon:Math.Vec3[] = []
+    for point in hull.face_polygon(face) { polygon.append(hull_transform.point(point)) }
+    var clipped = incident
+    var index = 0
     while index < polygon.count() {
         let point = polygon[index]
         let edge = polygon[(index + 1) % polygon.count()].subtract(point)
-        incident = clip_contact_plane3d(incident, point, edge.cross(outward).normalized())
+        clipped = clip_contact_plane3d(clipped, point, edge.cross(outward).normalized())
         index++
     }
     var points:Math.Vec3[] = []
-    for point in incident {
+    for point in clipped {
         let depth = point.subtract(origin).dot(outward)
         if depth <= 0.0001 {
             append_unique_contact3d(points, point.subtract(outward.multiply(depth * 0.5)))

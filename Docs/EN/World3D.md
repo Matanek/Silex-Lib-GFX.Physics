@@ -92,7 +92,7 @@ func main() {
 ```
 
 A solid `Shape3D.convex(ConvexHull3D(points))` can also be fixed, kinematic or
-dynamic and respond to spheres, boxes and capsules. See
+dynamic and respond to spheres, boxes, capsules and other hulls. See
 [convex hulls and their limits](Geometry3D.md#convex-hulls).
 A capsule lying across a slope can roll under friction; friction does not
 guarantee that a rounded shape stays still.
