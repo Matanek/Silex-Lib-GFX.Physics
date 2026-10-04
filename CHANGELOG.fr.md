@@ -6,6 +6,21 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le maillage convexe écarte les faces éloignées avec des bornes conservatives,
+  puis conserve le témoin exact le plus proche et son identité. Les directions
+  d’arêtes strictement identiques ne sont stockées qu’une fois dans l’enveloppe
+  immuable. Ces deux coûts ralentissaient fortement la nouvelle scène Debug ;
+  les directions presque parallèles et le CCD restent actifs. Les projections
+  SAT sur les faces de l’enveloppe sont partagées entre triangles pour chaque
+  passe de contact, avec les mêmes axes et la même tolérance. Mesures de scène
+  sur macOS ARM64 Native Debug/Release ; aucune borne par frame ou autre cible.
+
+- Les convexes heurtent les maillages fixes : distance bilatérale et identité
+  de face, quatre points d’appui sur les coutures planes, réactions distinctes
+  dans une vallée et fusion à la crête. Les trous, capteurs, filtres et CCD
+  linéaire respectent les faces présentes et leur côté admissible.
+  `ConvexMeshScene.sx` montre le glissement, la vallée et un tétraèdre en rotation.
+
 - Le CCD de translation écarte les paires dont les volumes parcourus ne se
   rencontrent pas avant de calculer leur distance exacte. Les bornes d’un
   convexe suivent ses vrais sommets, y compris une origine locale décalée.

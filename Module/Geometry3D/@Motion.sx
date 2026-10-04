@@ -25,6 +25,13 @@ package func motion_distance3d(first:ShapePlacement3D, second:ShapePlacement3D,
             return best
         }
         mesh(mesh) => {
+            match second.shape() {
+                convex(hull) => {
+                    return reversed_distance(convex_mesh_distance3d(hull, second.transform(),
+                        mesh, first.transform(), true, false, second_start, first_start))
+                }
+                else => {}
+            }
             var best = empty_motion_distance3d()
             var index = 0
             while index < mesh.triangle_count() {

@@ -19,7 +19,14 @@ indépendant de la géométrie de rendu.
 Pour un convexe, le centre qui sélectionne la face avant est celui du volume
 homogène de l’enveloppe, indépendamment de son origine locale et d’une masse
 explicitement fournie. Le contact de face couvre jusqu’à quatre points.
-Convexe/maillage et ses coutures restent refusés.
+Ces règles s’appliquent aussi à un maillage fixe. Une enveloppe convexe
+utilise plusieurs appuis quand leurs normales ou plans diffèrent, comme une
+boîte. Les coutures planes sont regroupées et les points couvrent les
+triangles réellement touchés. Repos, traversée sans friction, vallée de pente
+±0,25, crête et passage dans une ouverture plane sont qualifiés, y compris
+les deux ordres et une origine locale décalée. Les plis arbitraires, terrains
+mobiles, composés à enfants convexes et CCD rotationnel restent à qualifier.
+`Physics3D/ConvexMeshScene.sx` présente les coutures planes et la vallée.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
 chaque sphère ou capsule dynamique primitive ou enfant de composé,
@@ -102,7 +109,7 @@ func main() {
 
 Un solide `Shape3D.convex(ConvexHull3D(points))` peut aussi être fixe,
 cinématique ou dynamique et répondre aux sphères, boîtes, capsules et autres
-enveloppes, ainsi qu’aux triangles fixes.
+enveloppes, ainsi qu’aux triangles et maillages fixes.
 Voir les [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexes).
 Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
@@ -285,9 +292,9 @@ enfant de composé. Ces preuves concernent une translation linéaire à pose
 fixe ; elles ne garantissent pas les plis arbitraires ni les appuis rasants.
 
 Le CCD d’une enveloppe convexe est également qualifié contre un triangle
-fixe : approche avant arrêtée, passage arrière libre, poses communes inclinées,
-origine locale décalée, filtres et capteurs. Cette qualification ne couvre
-pas la paire convexe/maillage ni le balayage rotationnel.
+ou un maillage fixe : approche avant arrêtée, passage arrière libre, poses
+communes inclinées, origine locale décalée, filtres et capteurs. Un triangle
+arrière proche ne masque pas l’impact sur une face avant du même maillage. Le CCD rotationnel reste à qualifier.
 
 Pour un capteur entièrement traversé dans un seul pas, le monde émet un début
 et une fin transitoires dans ce pas, sans contact persistant ni réponse.

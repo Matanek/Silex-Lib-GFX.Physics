@@ -18,7 +18,14 @@ Physics triangles are independent of render geometry.
 
 For a hull, the center selecting the front side is its homogeneous volume
 center, independently of its local origin and explicit body mass properties.
-Face contacts cover up to four points. Convex/mesh and its seams remain rejected.
+Face contacts cover up to four points. These rules also apply to fixed meshes.
+A convex hull uses multiple supports
+when their normals or planes differ, like a box. Planar seams are grouped and
+points cover the triangles actually touched. Rest, frictionless travel, a
+valley with slopes ±0.25, a ridge and a planar opening are qualified, including
+both orders and a shifted local origin. Arbitrary folds, moving terrain,
+convex compound children and rotational CCD remain unqualified.
+`Physics3D/ConvexMeshScene.sx` shows planar seams and the valley.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
 sphere or capsule primitive or compound child, the world produces at
@@ -96,7 +103,8 @@ func main() {
 ```
 
 A solid `Shape3D.convex(ConvexHull3D(points))` can also be fixed, kinematic or
-dynamic and respond to spheres, boxes, capsules and other hulls and fixed triangles. See
+dynamic and respond to spheres, boxes, capsules, other hulls, and fixed
+triangles and meshes. See
 [convex hulls and their limits](Geometry3D.md#convex-hulls).
 A capsule lying across a slope can roll under friction; friction does not
 guarantee that a rounded shape stays still.
@@ -265,10 +273,10 @@ as is a box child in a compound. These proofs concern linear translation
 with a fixed orientation; they do not guarantee arbitrary folds or grazing
 supports.
 
-Hull CCD is also qualified against a fixed triangle: front approaches stop,
+Hull CCD is also qualified against a fixed triangle or mesh: front approaches stop,
 back approaches pass freely, with shared tilted poses, shifted local origins,
-filters and sensors. This qualification covers neither convex/mesh pairs nor
-rotational sweeps.
+filters and sensors. A nearby back-facing triangle does not hide an impact
+on a farther front face of the same mesh. Rotational sweeps remain unqualified.
 
 When a sensor is crossed completely within one step, the world emits a
 transient begin and end in that step, without persistent contact or physical

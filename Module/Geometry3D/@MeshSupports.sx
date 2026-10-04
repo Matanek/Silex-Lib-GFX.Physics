@@ -1,0 +1,186 @@
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+// First remove internal coplanar seams, then merge identical reactions on
+// distinct geometric planes (a ridge). Valleys retain both support normals.
+func write_mesh_supports3d(candidates:DistanceResult3D[], mesh:TriangleMesh3D,
+    mesh_transform:Transform3D, output:&DistanceResult3D[]) {
+    var planes:DistanceResult3D[] = []
+    for contact in candidates {
+        let triangle = mesh.triangle(contact.second_child_id)
+        let normal = mesh_transform.vector(triangle.normal())
+        let origin = mesh_transform.point(triangle.first)
+        var selected = -1; var index = 0
+        while index < planes.count() {
+            let existing = mesh.triangle(planes[index].second_child_id)
+            if normal.dot(mesh_transform.vector(existing.normal())) > 0.99999 &&
+                Math.abs(origin.subtract(mesh_transform.point(existing.first)).dot(normal)) < 0.00001 {
+                selected = index; break
+            }
+            index++
+        }
+        if selected < 0 { planes.append(contact) }
+        else if contact.separation < planes[selected].separation { planes[selected] = contact }
+    }
+    var supports:DistanceResult3D[] = []
+    for plane in planes {
+        var selected = -1; var index = 0
+        while index < supports.count() {
+            let existing = supports[index]
+            if plane.normal.dot(existing.normal) > 0.99999 &&
+                Math.abs(plane.second_point.subtract(existing.second_point).dot(plane.normal)) < 0.00001 {
+                selected = index; break
+            }
+            index++
+        }
+        if selected < 0 { supports.append(plane) }
+        else if plane.separation < supports[selected].separation { supports[selected] = plane }
+    }
+    for support in supports { output.append(support) }
+}
+
+struct MeshBounds3D {
+    let lower:Math.Vec3
+    let upper:Math.Vec3
+    init(lower:Math.Vec3, upper:Math.Vec3) { self.lower = lower; self.upper = upper }
+}
+
+func convex_mesh_bounds3d(hull:ConvexHull3D, pose:Transform3D, surface:Transform3D) MeshBounds3D {
+    let transform = Transform3D(surface.inverse_point(pose.position),
+        surface.rotation.conjugated().multiply(pose.rotation))
+    var lower = transform.point(hull.vertex(0)); var upper = lower; var index = 1
+    while index < hull.vertex_count() {
+        let point = transform.point(hull.vertex(index))
+        lower = mesh_minimum3d(lower, point); upper = mesh_maximum3d(upper, point); index++
+    }
+    return MeshBounds3D(lower, upper)
+}
+
+// A conservative Euclidean lower bound. Compute cheap face bounds first so
+// a nearby witness can reject distant exact boundary queries in this pose.
+func convex_mesh_face_bound3d(bounds:MeshBounds3D, triangle:Triangle3D) float {
+    let first = triangle.first; let second = triangle.second; let third = triangle.third
+    let lower = mesh_minimum3d(mesh_minimum3d(first, second), third); let upper = mesh_maximum3d(mesh_maximum3d(first, second), third)
+    let gap = mesh_maximum3d(mesh_maximum3d(lower.subtract(bounds.upper), bounds.lower.subtract(upper)), Math.Vec3())
+    return gap.length_squared()
+}
+
+func convex_mesh_distance3d(hull:ConvexHull3D, transform:Transform3D,
+    mesh:TriangleMesh3D, surface:Transform3D,
+    front_only:bool = false, contact_only:bool = false,
+    hull_start:Transform3D? = null, surface_start:Transform3D? = null) DistanceResult3D {
+    var front_pose = transform; var front_surface = surface
+    if let start = hull_start { front_pose = start }
+    if let start = surface_start { front_surface = start }
+    let bounds = convex_mesh_bounds3d(hull, transform, surface)
+    let front_center = front_surface.inverse_point(front_pose.point(hull.center()))
+    var limits:float[] = []; var closest = -1; var closest_squared = 3.4028235e38
+    var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        var limit = 3.4028235e38
+        if !front_only || front_center.subtract(triangle.first).dot(triangle.normal()) >= 0.0 {
+            limit = convex_mesh_face_bound3d(bounds, triangle)
+            if limit < closest_squared { closest = index; closest_squared = limit }
+        }
+        limits.append(limit); index++
+    }
+    var best = empty_motion_distance3d()
+    if closest < 0 { return best }
+    let initial = convex_triangle_distance3d(hull, transform, mesh.triangle(closest), surface, contact_only)
+    best = DistanceResult3D(initial.first_point, initial.second_point, initial.normal, initial.separation, -1, closest)
+    index = 0
+    while index < mesh.triangle_count() {
+        // Negative separation requires intersecting bounds. Positive contact-only
+        // SAT gaps are not Euclidean, so retain their exhaustive search.
+        let limit = Math.max(0.000001, best.separation)
+        if index != closest && (limits[index] <= limit * limit ||
+            (contact_only && best.separation > 0.0 && limits[index] < 3.4028235e38)) {
+            let distance = convex_triangle_distance3d(hull, transform, mesh.triangle(index), surface, contact_only)
+            if distance.separation < best.separation ||
+                (distance.separation == best.separation && index < best.second_child_id) {
+                best = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, -1, index)
+            }
+        }
+        index++
+    }
+    return best
+}
+
+package func write_convex_mesh_contacts3d(hull:ConvexHull3D, transform:Transform3D,
+    mesh:TriangleMesh3D, surface:Transform3D, output:&DistanceResult3D[]) {
+    var candidates:DistanceResult3D[] = []
+    for index in convex_mesh_contact_faces3d(hull, transform, mesh, surface) {
+        let triangle = mesh.triangle(index)
+        let distance = convex_triangle_distance3d(hull, transform, triangle, surface, true)
+        if distance.separation <= 0.000001 {
+            candidates.append(DistanceResult3D(distance.first_point, distance.second_point,
+                distance.normal, distance.separation, -1, index))
+        }
+    }
+    write_mesh_supports3d(candidates, mesh, surface, output)
+}
+
+struct MeshContactAxis3D {
+    let direction:Math.Vec3
+    let lower:float
+    let upper:float
+    let offset:float
+    init(direction:Math.Vec3, lower:float, upper:float, offset:float) {
+        self.direction = direction; self.lower = lower; self.upper = upper; self.offset = offset
+    }
+}
+
+// Reuse the hull-face projections from the exact SAT, with identical
+// normalization, arithmetic and tolerance. A rejected face already has a
+// separating SAT axis; surviving faces still receive the complete test.
+package func convex_mesh_contact_faces3d(hull:ConvexHull3D, transform:Transform3D,
+    mesh:TriangleMesh3D, surface:Transform3D) int[] {
+    var axes:MeshContactAxis3D[] = []; var face = 0
+    while face < hull.face_count() {
+        var axis = transform.vector(hull.face_normal(face))
+        let squared = axis.length_squared()
+        if squared > 0.000000000001 {
+            axis = axis.divide(Math.sqrt(squared))
+            let local_axis = transform.inverse_vector(axis)
+            var lower = hull.vertex(0).dot(local_axis); var upper = lower; var vertex = 1
+            while vertex < hull.vertex_count() {
+                let value = hull.vertex(vertex).dot(local_axis)
+                lower = Math.min(lower, value); upper = Math.max(upper, value); vertex++
+            }
+            axes.append(MeshContactAxis3D(surface.inverse_vector(axis), lower, upper,
+                surface.position.subtract(transform.position).dot(axis)))
+        }
+        face++
+    }
+    let center = surface.inverse_point(transform.point(hull.center()))
+    var selected:int[] = []; var index = 0
+    while index < mesh.triangle_count() {
+        let triangle = mesh.triangle(index)
+        if center.subtract(triangle.first).dot(triangle.normal()) >= 0.0 {
+            var separated = false
+            for axis in axes {
+                let first = triangle.first.dot(axis.direction)
+                let second = triangle.second.dot(axis.direction)
+                let third = triangle.third.dot(axis.direction)
+                let forward = Math.min(first, Math.min(second, third)) + axis.offset - axis.upper
+                let backward = axis.lower - Math.max(first, Math.max(second, third)) - axis.offset
+                if forward > 0.000001 || backward > 0.000001 { separated = true; break }
+            }
+            if !separated { selected.append(index) }
+        }
+        index++
+    }
+    return selected
+}
+
+func mesh_minimum3d(first:Math.Vec3, second:Math.Vec3) Math.Vec3 {
+    return Math.Vec3(Math.min(first.x, second.x), Math.min(first.y, second.y), Math.min(first.z, second.z))
+}
+func mesh_maximum3d(first:Math.Vec3, second:Math.Vec3) Math.Vec3 {
+    return Math.Vec3(Math.max(first.x, second.x), Math.max(first.y, second.y), Math.max(first.z, second.z))
+}

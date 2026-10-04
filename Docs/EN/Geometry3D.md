@@ -90,6 +90,14 @@ A geometric volume center, independent of the local origin and explicit body
 mass properties, determines the side of the plane. A shifted hull therefore
 remains equivalent when its pose compensates for the shift.
 
+Convex/mesh uses these same triangles in either order. Bilateral distance
+keeps the minimum separation and its face index, retaining the first index
+on ties. In the world, coplanar triangles share a support with up to four
+points, while distinct valley slopes retain both reactions. Identical ridge
+reactions merge. An opening with no triangles lets a narrower hull fall
+through; present edges remain real supports. See [terrain contacts](World3D.md)
+for the front/back policy.
+
 A hull can be the shape of a **fixed, kinematic or dynamic** body. Its density
 determines the mass, local center of mass and full inertia tensor of a
 homogeneous solid; see [body commands](World3D.md#poses-mass-and-commands).
@@ -99,7 +107,7 @@ the shape and recomputes a dynamic body's mass properties.
 
 Collisions against spheres, boxes, capsules and other hulls work in both
 orders, with sensors, filters and linear CCD. A kinematic hull can push a
-dynamic body. Convex compound children and convex/mesh pairs are rejected.
+dynamic body. Convex compound children are rejected.
 This qualification does not cover rotational CCD.
 `CharacterMover3D` is qualified on fixed hulls for movement and support;
 see [the character guide](Character3D.md). The convex family remains partial.
@@ -122,12 +130,17 @@ fixed triangles: a falling and rotating tetrahedron, a supported cube with
 shifted local vertices, and a cube crossing the back face before landing on
 the front. Space pauses, R restarts and Escape exits.
 
+`Silex-Examples/Sources/Physics3D/ConvexMeshScene.sx` shows a shifted cube
+crossing planar seams, a cube supported in a valley and a rotating tetrahedron
+landing. Alternating shades reveal the triangles. Space pauses, R restarts
+and Escape closes the scene.
+
 ## Query results
 
 `Geometry3D.distance(first, second)` accepts every pair of spheres, boxes,
 and capsules, as well as sphere/triangle, capsule/triangle and box/triangle
 and their mesh variants, as well as sphere/convex, box/convex, capsule/convex,
-convex/convex and convex/triangle, in either
+convex/convex, convex/triangle and convex/mesh, in either
 order, including oriented poses.
 `DistanceResult3D.separation` is positive when surfaces are apart, zero at tangency, and negative in
 penetration. `normal` is a unit direction from the first shape toward the
@@ -162,7 +175,7 @@ supported.
 `TriangleMesh3D([triangle, ...])` copies a nonempty list of `Triangle3D`
 values. Each triangle's zero-based index remains its identity until the mesh
 is replaced. `triangle_count()` and `triangle(index)` expose the list. Sphere,
-capsule and box distance selects the smallest separation and keeps the first index
+capsule, box and convex hull distance selects the smallest separation and keeps the first index
 on a tie.
 The result reports that index as `second_child_id` or `first_child_id` according
 to shape order; a ray reports it as `child_id`. Standalone distance, overlap,

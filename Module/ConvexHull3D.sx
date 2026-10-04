@@ -126,8 +126,18 @@ public class ConvexHull3D {
                 if point.subtract(vertex).length_squared() == 0.0 { found = true; break }
             }
             if !found { self.vertices.append(point) }
-            // Face boundaries contain actual edges, never triangulation diagonals.
-            self.edges.append(polygon[(index + 1) % polygon.count()].subtract(point).normalized())
+            // SAT needs edge directions, not their multiplicity on faces.
+            // Keep the first exact direction (up to sign); nearly parallel
+            // edges remain distinct so no separating axis is approximated.
+            let direction = polygon[(index + 1) % polygon.count()].subtract(point).normalized()
+            var duplicate_direction = false
+            for existing in self.edges {
+                if (direction.x == existing.x && direction.y == existing.y && direction.z == existing.z) ||
+                    (direction.x == -existing.x && direction.y == -existing.y && direction.z == -existing.z) {
+                    duplicate_direction = true; break
+                }
+            }
+            if !duplicate_direction { self.edges.append(direction) }
             index++
         }
         self.normals.append(normal)

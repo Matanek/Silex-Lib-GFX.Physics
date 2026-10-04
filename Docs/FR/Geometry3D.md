@@ -96,6 +96,15 @@ volumique géométrique, indépendant de l’origine locale et des propriétés 
 masse explicites du corps, détermine le côté du plan. Une enveloppe décalée
 reste donc équivalente après compensation de sa pose.
 
+La paire convexe/maillage utilise ces mêmes triangles dans les deux ordres.
+La distance bilatérale conserve la séparation minimale et l’index de sa face ;
+en cas d’égalité, le premier index est retenu. Dans le monde, les triangles
+coplanaires partagent un appui couvrant jusqu’à quatre points, tandis que les
+pans distincts d’une vallée gardent leurs deux réactions. Les réactions
+identiques d’une crête sont fusionnées. Une ouverture sans triangles laisse
+passer un convexe plus étroit ; les bords présents restent des appuis réels.
+Voir [les contacts de terrain](World3D.md) pour la politique avant/arrière.
+
 Une enveloppe peut être la forme d’un corps **fixe, cinématique ou dynamique**.
 Sa densité détermine la masse, le centre de masse local et le tenseur complet
 d’un solide homogène ; voir [les commandes du corps](World3D.md#poses-masse-et-commandes).
@@ -106,7 +115,7 @@ et recalcule les propriétés de masse d’un corps dynamique.
 Les collisions face aux sphères, boîtes, capsules et autres convexes fonctionnent
 dans les deux ordres, avec capteurs, filtres et CCD linéaire. Un convexe
 cinématique peut pousser un corps dynamique. Les enfants convexes de composés
-et la paire convexe/maillage sont refusés.
+sont refusés.
 Cette qualification ne couvre pas le CCD rotationnel. `CharacterMover3D`
 est qualifié sur les convexes fixes pour le déplacement et l’appui ; voir
 [le guide du personnage](Character3D.md). La famille convexe demeure partielle.
@@ -130,12 +139,17 @@ fixes distincts : chute et rotation d’un tétraèdre, appui d’un cube dont l
 sommets locaux sont décalés, et cube traversant la face arrière avant de
 retomber sur l’avant. Espace met en pause, R recommence et Échap ferme.
 
+`Silex-Examples/Sources/Physics3D/ConvexMeshScene.sx` montre la traversée de
+coutures planes par un cube décalé, l’appui d’un cube dans une vallée et la
+chute en rotation d’un tétraèdre. Les triangles sont visibles grâce à leurs
+teintes alternées ; Espace met en pause, R recommence et Échap ferme.
+
 ## Résultats des requêtes
 
 `Geometry3D.distance(first, second)` accepte toute paire de sphères, boîtes
 et capsules, ainsi que les paires sphère/triangle, capsule/triangle et
 boîte/triangle et leurs variantes maillées, ainsi que sphère/convexe et
-boîte/convexe, capsule/convexe, convexe/convexe et convexe/triangle, dans les
+boîte/convexe, capsule/convexe, convexe/convexe, convexe/triangle et convexe/maillage, dans les
 deux ordres, y compris les poses orientées. `DistanceResult3D.separation` est positive
 quand les surfaces sont distinctes, nulle à la tangence et négative en
 pénétration. `normal` est une direction unitaire de la première forme vers la
@@ -173,7 +187,7 @@ triangles ne sont pas pris en charge.
 `TriangleMesh3D([triangle, ...])` copie une liste non vide de `Triangle3D`.
 L'index de chaque triangle, à partir de zéro, reste son identité tant que le
 maillage n'est pas remplacé. `triangle_count()` et `triangle(index)` permettent
-de consulter cette liste. La distance à une sphère, une capsule ou une boîte
+de consulter cette liste. La distance à une sphère, une capsule, une boîte ou une enveloppe convexe
 choisit la plus petite séparation ; en cas d’égalité, elle conserve le premier
 index. Cet index est
 renvoyé par `second_child_id` ou `first_child_id` selon l'ordre des formes ; un

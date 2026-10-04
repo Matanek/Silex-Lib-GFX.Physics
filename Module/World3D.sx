@@ -1,4 +1,5 @@
 use GFX.Physics.ContactManifold3D.convex_triangle_contact_points
+use GFX.Physics.ContactManifold3D.convex_mesh_contact_points
 use GFX.Physics.ContactManifold3D.convex_convex_contact_points
 use GFX.Physics.Geometry3D.inside_convex3d
 use GFX.Physics.Box3D.Box3D
@@ -22,6 +23,7 @@ use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.sphere_centers_distance3d
 use GFX.Physics.Geometry3D.write_box_mesh_contacts3d
+use GFX.Physics.Geometry3D.write_convex_mesh_contacts3d
 use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.motion_distance3d
 use GFX.Physics.Geometry3D.contact_separation3d
@@ -665,7 +667,7 @@ public class World3D {
                             let second_id = BodyId3D(
                                 second_slot, self.store.generations[second_slot])
                             if is_compound3d(first.shape) || is_compound3d(second.shape) ||
-                                is_box_mesh_pair3d(first.shape, second.shape) {
+                                is_polyhedral_mesh_pair3d(first.shape, second.shape) {
                                 var distances:DistanceResult3D[] = []
                                 write_leaf_contacts3d(
                                     ShapePlacement3D(first.shape, first.transform),
@@ -891,7 +893,7 @@ public class World3D {
                     var second_shape = contact_placement3d(
                         pair.second, pair.second_child_id
                     )
-                    if is_box_mesh_pair3d(first_shape.shape(), second_shape.shape()) {
+                    if is_polyhedral_mesh_pair3d(first_shape.shape(), second_shape.shape()) {
                         first_shape = mesh_contact_face3d(first_shape, pair.first_child_id)
                         second_shape = mesh_contact_face3d(second_shape, pair.second_child_id)
                     }
@@ -1002,9 +1004,15 @@ func is_compound3d(shape:Shape3D) bool {
     return false
 }
 
-func is_box_mesh_pair3d(first:Shape3D, second:Shape3D) bool {
+func is_polyhedral_mesh_pair3d(first:Shape3D, second:Shape3D) bool {
     match first {
         box(_) => {
+            match second {
+                mesh(_) => { return true }
+                else => {}
+            }
+        }
+        convex(_) => {
             match second {
                 mesh(_) => { return true }
                 else => {}
@@ -1013,6 +1021,7 @@ func is_box_mesh_pair3d(first:Shape3D, second:Shape3D) bool {
         mesh(_) => {
             match second {
                 box(_) => { return true }
+                convex(_) => { return true }
                 else => {}
             }
         }
@@ -1032,7 +1041,7 @@ func mesh_contact_face3d(placement:ShapePlacement3D, child_id:int) ShapePlacemen
     return placement
 }
 
-func write_box_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
+func write_polyhedral_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
     output:&DistanceResult3D[]) {
     match first.shape() {
         box(box) => {
@@ -1054,6 +1063,20 @@ func write_box_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
                             contact.normal.negated(), contact.separation, contact.second_child_id, -1))
                     }
                 }
+                convex(hull) => {
+                    var reversed:DistanceResult3D[] = []
+                    write_convex_mesh_contacts3d(hull, second.transform(), mesh, first.transform(), reversed)
+                    for contact in reversed {
+                        output.append(DistanceResult3D(contact.second_point, contact.first_point,
+                            contact.normal.negated(), contact.separation, contact.second_child_id, -1))
+                    }
+                }
+                else => {}
+            }
+        }
+        convex(hull) => {
+            match second.shape() {
+                mesh(mesh) => { write_convex_mesh_contacts3d(hull, first.transform(), mesh, second.transform(), output) }
                 else => {}
             }
         }
@@ -1061,7 +1084,7 @@ func write_box_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
     }
 }
 
-// Compound leaves and box/mesh support planes, once per detection pass.
+// Compound leaves and polyhedral/mesh support planes, once per detection pass.
 // Child poses change with their parent, so distances cannot persist across steps.
 func write_leaf_contacts3d(
     first:ShapePlacement3D, second:ShapePlacement3D,
@@ -1105,9 +1128,9 @@ func write_leaf_contacts3d(
         mesh(_) => {}
         convex(_) => {}
     }
-    if is_box_mesh_pair3d(first.shape(), second.shape()) {
+    if is_polyhedral_mesh_pair3d(first.shape(), second.shape()) {
         var contacts:DistanceResult3D[] = []
-        write_box_surface_pairs3d(first, second, contacts)
+        write_polyhedral_surface_pairs3d(first, second, contacts)
         for contact in contacts {
             var resolved_first = first_child_id
             var resolved_second = second_child_id
@@ -1597,7 +1620,7 @@ func contact_points3d(
                 compound(_) => {}
                 triangle(_) => {}
                 mesh(_) => {}
-                convex(_) => {}
+                convex(hull) => { return convex_mesh_contact_points(hull, second.transform(), first, normal.negated(), witness) }
             }
         }
         convex(hull) => {
@@ -1606,6 +1629,7 @@ func contact_points3d(
                 box(box) => { return box_convex_contact_points(box, second.transform(), hull, first.transform(), normal.negated(), witness) }
                 convex(other) => { return convex_convex_contact_points(hull, first.transform(), other, second.transform(), normal, witness) }
                 triangle(triangle) => { return convex_triangle_contact_points(hull, first.transform(), triangle, second.transform(), normal, witness) }
+                mesh(_) => { return convex_mesh_contact_points(hull, first.transform(), second, normal, witness) }
                 else => {}
             }
         }

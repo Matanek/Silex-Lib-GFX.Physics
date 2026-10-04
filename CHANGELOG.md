@@ -6,6 +6,21 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Convex/mesh queries reject distant faces using conservative bounds while
+  retaining the exact closest witness and its identity. Strictly identical
+  edge directions are stored once in the immutable hull. These two costs
+  caused poor frame rates in the new Debug scene; nearly parallel directions
+  and CCD remain active. Hull-face SAT projections are shared across triangles
+  within each contact pass, with identical axes and tolerance. Scene measurements
+  cover macOS ARM64 Native
+  Debug/Release, with no per-frame bound or result on other targets.
+
+- Convex hulls contact fixed meshes: bilateral distance and face identity,
+  four support points across planar seams, distinct valley reactions and
+  merged ridge reactions. Openings, sensors, filters and linear CCD respect
+  the present faces and their admissible side. `ConvexMeshScene.sx` shows
+  sliding, valley support and a rotating tetrahedron.
+
 - Translation CCD rejects pairs whose swept bounds cannot intersect before
   computing their exact distance. Convex bounds follow the actual vertices,
   including shifted local origins. This removes the Debug slowdown in the

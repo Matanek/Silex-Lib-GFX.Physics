@@ -1,3 +1,5 @@
+use GFX.Physics.Geometry3D.convex_mesh_contact_faces3d
+use GFX.Physics.Geometry3D.convex_triangle_distance3d
 use GFX.Physics.ConvexHull3D.ConvexHull3D
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Capsule3D.Capsule3D
@@ -147,6 +149,33 @@ package func convex_triangle_contact_points(hull:ConvexHull3D, transform:Transfo
     var incident:Math.Vec3[] = []
     for point in hull.face_polygon(face) { incident.append(transform.point(point)) }
     return clipped_polygon_face3d(polygon, outward, polygon[0], incident, witness)
+}
+
+// Pool only triangles on the selected support plane before the final reduction.
+package func convex_mesh_contact_points(hull:ConvexHull3D, transform:Transform3D,
+    surface:ShapePlacement3D, normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    var points:Math.Vec3[] = []
+    match surface.shape() {
+        mesh(mesh) => {
+            for index in convex_mesh_contact_faces3d(hull, transform, mesh, surface.transform()) {
+                let triangle = mesh.triangle(index)
+                let distance = convex_triangle_distance3d(hull, transform, triangle, surface.transform(), true)
+                let center = distance.first_point.add(distance.second_point).multiply(0.5)
+                if distance.separation <= 0.000001 && distance.normal.dot(normal) > 0.99999 &&
+                    Math.abs(center.subtract(witness).dot(normal)) < 0.00001 {
+                    for point in convex_triangle_contact_points(hull, transform, triangle, surface.transform(), normal, witness) {
+                        append_unique_contact3d(points, point)
+                    }
+                }
+            }
+        }
+        else => {}
+    }
+    if points.is_empty() { return [witness] }
+    let face = convex_face3d(hull, transform, normal)
+    let polygon = hull.face_polygon(face)
+    let tangent = transform.vector(polygon[1].subtract(polygon[0])).normalized()
+    return reduce_contact_points3d(points, tangent, normal.cross(tangent))
 }
 
 // Clip a parallel capsule axis to the actual face polygon, including when

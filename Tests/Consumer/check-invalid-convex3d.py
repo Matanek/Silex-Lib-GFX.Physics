@@ -15,7 +15,6 @@ cases = {
     'duplicate': 'requires a finite solid point cloud',
     'finite': 'requires finite points',
     'compound': 'cannot contain a convex hull',
-    'mesh-pair': 'unsupported shape pair',
 }
 try:
     for mode in ('--debug', '--release'):
