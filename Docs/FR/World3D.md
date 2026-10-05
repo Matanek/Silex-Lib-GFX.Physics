@@ -1,8 +1,9 @@
 # Simuler des corps rigides en 3D
 
 `World3D` simule des corps fixes, cinématiques et dynamiques sans fenêtre,
-scène, renderer ni ECS. Il accepte les sphères, boîtes et capsules de `Shape3D` et
-fournit une réponse aux contacts entre ces formes. Les appuis de boîtes sur
+scène, renderer ni ECS. Il accepte les sphères, boîtes, capsules, cylindres,
+solides effilés et enveloppes convexes de `Shape3D`, avec contacts entre ces
+formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
@@ -25,7 +26,8 @@ boîte. Les coutures planes sont regroupées et les points couvrent les
 triangles réellement touchés. Repos, traversée sans friction, vallée de pente
 ±0,25, crête et passage dans une ouverture plane sont qualifiés, y compris
 les deux ordres et une origine locale décalée. Les plis arbitraires, terrains
-mobiles et CCD rotationnel restent à qualifier.
+mobiles restent à qualifier ; les limites du CCD en rotation sont décrites
+ci-dessous.
 `Physics3D/ConvexMeshScene.sx` présente les coutures planes et la vallée.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
@@ -322,7 +324,8 @@ fixe ; elles ne garantissent pas les plis arbitraires ni les appuis rasants.
 Le CCD d’une enveloppe convexe est également qualifié contre un triangle
 ou un maillage fixe : approche avant arrêtée, passage arrière libre, poses
 communes inclinées, origine locale décalée, filtres et capteurs. Un triangle
-arrière proche ne masque pas l’impact sur une face avant du même maillage. Le CCD rotationnel reste à qualifier.
+arrière proche ne masque pas l’impact sur une face avant du même maillage.
+Les limites du CCD en rotation sont décrites ci-dessous.
 
 Pour un capteur entièrement traversé dans un seul pas, le monde émet un début
 et une fin transitoires dans ce pas, sans contact persistant ni réponse.
@@ -473,3 +476,26 @@ corrigé ; contrairement à un mur mince, il ne trouve pas une extrémité libre
 de l'autre côté. Le CCD place le premier impact avec l'orientation initiale.
 Les plans actifs sont sélectionnés explicitement, indépendamment des bornes
 finies des autres corps, y compris dans les requêtes de personnage.
+
+### Ce que le CCD garantit en rotation
+
+Le balayage conserve l'orientation initiale des deux formes. La rotation est
+intégrée pendant le pas, mais aucune enveloppe de la trajectoire angulaire
+n'est balayée. Une rotation seule, ou accompagnée d'une translation parallèle
+à un obstacle, peut donc le traverser entre deux configurations séparées.
+L'option `continuous_collision` ne constitue pas un CCD rotationnel exact.
+
+Le cas qualifié utilise une lame de dimensions `(0.1, 2, 0.1)`, centrée en
+`(-0.4, 0, 0)`, contre un mur fixe de dimensions `(0.1, 4, 4)` à l'origine.
+Elle tourne de 180° autour de Z en `1/60` seconde. À 90°, elle recouvre le mur ;
+aux deux extrémités du pas, elle est séparée. Silex et Jolt épinglé manquent
+ce contact avec un seul pas, y compris avec une translation parallèle de
+120 unités/s sur Z. Les 36 pas de `1/2160` seconde trouvent un contact dans
+les deux cas. Gravité, amortissements et friction sont nuls ; la limite de
+vitesse angulaire Jolt est portée à 1000 rad/s pour préserver la vitesse demandée.
+
+Réduire le pas permet de détecter ces cas, mais un nombre fixe de sous-pas
+n'offre pas une garantie universelle en rotation. La qualification compare
+l'absence puis la présence d'un contact ; les trajectoires après impact ne
+sont pas déclarées identiques entre moteurs. Choisir le pas selon la vitesse
+angulaire, la distance balayée et l'épaisseur des obstacles.

@@ -1,9 +1,9 @@
 # Simulate rigid bodies in 3D
 
 `World3D` simulates fixed, kinematic, and dynamic bodies without a window,
-scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, and capsules and provides
-a contact response between these shapes. Boxes resting on nearly parallel
-faces use multiple points. Dynamic bodies can opt into linear continuous
+scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, capsules,
+cylinders, tapered solids and convex hulls, with contacts between these shapes.
+Boxes resting on nearly parallel faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
 A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
@@ -23,8 +23,8 @@ A convex hull uses multiple supports
 when their normals or planes differ, like a box. Planar seams are grouped and
 points cover the triangles actually touched. Rest, frictionless travel, a
 valley with slopes ±0.25, a ridge and a planar opening are qualified, including
-both orders and a shifted local origin. Arbitrary folds, moving terrain,
-and rotational CCD remain unqualified.
+both orders and a shifted local origin. Arbitrary folds and moving terrain
+remain unqualified; rotational CCD limits are described below.
 `Physics3D/ConvexMeshScene.sx` shows planar seams and the valley.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
@@ -442,3 +442,26 @@ corrected; unlike a thin wall, it cannot reach a separated endpoint on the
 other side. CCD places first impact with the initial orientation. Active planes
 are selected explicitly, independently of other bodies' finite bounds,
 including character queries.
+
+### What CCD guarantees during rotation
+
+The sweep keeps both shapes at their initial orientations. Rotation is
+integrated during the step, but no envelope of the angular trajectory is
+swept. Pure rotation, or rotation accompanied by translation parallel to an
+obstacle, can therefore cross it between two separated configurations.
+`continuous_collision` does not provide exact rotational CCD.
+
+The qualified fixture uses a blade of dimensions `(0.1, 2, 0.1)`, centered at
+`(-0.4, 0, 0)`, against a fixed wall of dimensions `(0.1, 4, 4)` at the origin.
+It rotates 180° about Z in `1/60` second. At 90°, it overlaps the wall; at both
+step endpoints it is separated. Silex and pinned Jolt miss the contact in a
+single step, including with parallel translation of 120 units/s along Z.
+Using 36 steps of `1/2160` second finds a contact in both cases. Gravity,
+damping and friction are zero; Jolt's angular velocity limit is raised to
+1000 rad/s to preserve the requested velocity.
+
+Reducing the step detects these fixtures, but a fixed number of substeps is
+not a universal rotational guarantee. Qualification compares the absence
+then presence of contact; post-impact trajectories are not declared identical
+between engines. Choose the step according to angular speed, swept distance
+and obstacle thickness.

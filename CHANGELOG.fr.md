@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La limite rotationnelle du CCD linéaire est qualifiée contre Jolt : rotation
+  seule ou translation parallèle, contact manqué en un pas et trouvé avec
+  sous-pas sur les cas testés ; aucune garantie rotationnelle exacte.
+
 - `Plane3D` représente un demi-espace infini sur corps fixe : distance, rayon,
   balayages, appuis convexes, composés mobiles, capteurs et CCD linéaire. La
   sélection des paires ne lui attribue aucune borne finie artificielle.

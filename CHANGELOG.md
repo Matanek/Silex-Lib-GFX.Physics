@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- The rotational limit of linear CCD is qualified against Jolt: pure rotation
+  or parallel translation misses contact in one step and finds it with
+  subdivisions in the tested cases; no exact rotational guarantee.
+
 - `Plane3D` represents an infinite half-space on a fixed body: distance, rays,
   sweeps, convex supports, moving compounds, sensors and linear CCD. Pair
   selection does not assign an artificial finite bound to the plane.
