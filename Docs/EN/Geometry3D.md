@@ -107,7 +107,9 @@ the shape and recomputes a dynamic body's mass properties.
 
 Collisions against spheres, boxes, capsules and other hulls work in both
 orders, with sensors, filters and linear CCD. A kinematic hull can push a
-dynamic body. Convex compound children are rejected.
+dynamic body. A hull may also be a child of a fixed, kinematic or dynamic
+compound; its local pose places the point-cloud origin independently of the
+volume center.
 This qualification does not cover rotational CCD.
 `CharacterMover3D` is qualified on fixed hulls for movement and support;
 see [the character guide](Character3D.md). The convex family remains partial.
@@ -213,7 +215,8 @@ shape casts, and world queries remain to be delivered.
 
 `Compound3D` takes a nonempty array of `CompoundChild3D(id, shape,
 transform)`. Each child has a unique nonnegative integer ID and a local pose.
-Children may be spheres, boxes, or capsules; nested compounds are rejected.
+Children may be spheres, boxes, capsules or convex hulls; triangles, meshes
+and nested compounds are rejected.
 The constructor copies the child list, which cannot be changed afterward.
 The effective pose applies the child pose, then the compound pose.
 

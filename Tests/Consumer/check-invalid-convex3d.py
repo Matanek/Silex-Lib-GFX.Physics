@@ -14,7 +14,6 @@ cases = {
     'collinear': 'requires a non-coplanar solid point cloud',
     'duplicate': 'requires a finite solid point cloud',
     'finite': 'requires finite points',
-    'compound': 'cannot contain a convex hull',
 }
 try:
     for mode in ('--debug', '--release'):

@@ -23,6 +23,5 @@ func main() {
         value *= 2.0
         Physics.ConvexHull3D([Math.Vec3(value, 0.0, 0.0), Math.Vec3(), Math.Vec3.up(), Math.Vec3.right()])
     }
-    if selected("compound") { Physics.CompoundChild3D(0, hull()) }
     panic("invalid convex use was accepted")
 }

@@ -18,7 +18,7 @@ public struct CompoundChild3D {
             triangle(_) => {
                 panic("GFX.Physics.CompoundChild3D cannot contain a triangle")
             }
-            convex(_) => { panic("GFX.Physics.CompoundChild3D cannot contain a convex hull") }
+            convex(_) => {}
             mesh(_) => {
                 panic("GFX.Physics.CompoundChild3D cannot contain a mesh")
             }

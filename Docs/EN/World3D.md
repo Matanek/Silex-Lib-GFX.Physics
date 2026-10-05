@@ -24,7 +24,7 @@ when their normals or planes differ, like a box. Planar seams are grouped and
 points cover the triangles actually touched. Rest, frictionless travel, a
 valley with slopes ±0.25, a ridge and a planar opening are qualified, including
 both orders and a shifted local origin. Arbitrary folds, moving terrain,
-convex compound children and rotational CCD remain unqualified.
+and rotational CCD remain unqualified.
 `Physics3D/ConvexMeshScene.sx` shows planar seams and the valley.
 
 `TriangleMesh3D` combines triangles into one fixed shape. For each dynamic
@@ -75,12 +75,22 @@ applying a response.
 A kinematic compound uses `move_kinematic` or linear and angular velocities,
 just like primitives. Children follow their parent pose; contact velocity
 includes rotation around the body origin. It can wake and carry a dynamic
-payload. Dynamic compounds of boxes, spheres, and capsules are also available:
+payload. Dynamic compounds of boxes, spheres, capsules and convex hulls are
+also available:
 the body's density applied to each child determines its mass, center of mass, and
 inertia tensor. Child identities remain visible in contacts. Replacing an
 existing body's shape is available; editing a `Compound3D` in place, other
 shape families, and general terrain remain to be delivered. Kinematic motion does not
 add rotational CCD.
+
+Convex children retain their own IDs in distances, rays, contacts and events.
+Each volume center is transformed by its local pose before combining masses;
+the inertia tensor is rotated and then transported to the common center.
+A vertex offset compensated by the child pose therefore preserves the body's
+geometry and response. Linear CCD visits leaves with their beginning rotation;
+mesh supports retain both the child ID and face ID, including reversed body
+order. `Silex-Examples/Sources/Physics3D/ConvexCompoundScene.sx` shows an
+all-convex compound and an assembly mixing a tetrahedron with boxes.
 
 The following program applies an impulse to a box, advances the world, and
 reads its position. Impulse uses mass × distance / second units.
@@ -120,7 +130,8 @@ takes seconds and rejects negative or non-finite values.
 
 Bodies are dynamic by default, with a radius 0.5 sphere and density 1. Mass
 and inertia are derived for a homogeneous sphere, box, capsule, convex hull,
-or compound of primitives. A hull uses the volume moments of its closed
+or compound of primitives and convex hulls. A hull uses the volume moments
+of its closed
 boundary: its center of mass can be offset and its tensor can have cross terms
 even without body rotation. Fixed and kinematic bodies do not compute dynamic
 mass; an explicit mass replaces the automatic calculation at creation.

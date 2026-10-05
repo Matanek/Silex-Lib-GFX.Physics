@@ -2262,7 +2262,12 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
         }
         sphere(_) => {}
         capsule(_) => {}
-        compound(_) => {}
+        compound(_) => {
+            let bounds = shape_pose_bounds3d(shape, Transform3D(Math.Vec3(), transform.rotation))
+            return Math.Vec3(Math.max(Math.abs(bounds.lower.x), Math.abs(bounds.upper.x)),
+                Math.max(Math.abs(bounds.lower.y), Math.abs(bounds.upper.y)),
+                Math.max(Math.abs(bounds.lower.z), Math.abs(bounds.upper.z)))
+        }
         convex(_) => {}
     }
     return Math.Vec3(radius)
@@ -2514,39 +2519,57 @@ func bounding_spheres_overlap3d(
 
 // Conservative bounds of the translation-only CCD path. The hull's actual
 // vertices retain local offsets; the search holds both beginning rotations.
-struct LinearSweepBounds3D {
+struct ShapeBounds3D {
     let lower:Math.Vec3
     let upper:Math.Vec3
     init(lower:Math.Vec3, upper:Math.Vec3) { self.lower = lower; self.upper = upper }
 }
 
-func linear_sweep_bounds3d(shape:Shape3D, start:Transform3D, end:Transform3D) LinearSweepBounds3D {
-    var lower = Math.Vec3(); var upper = Math.Vec3(); var precise = false
+// Compound bounds compose leaf poses before bounding them. A translated hull
+// may cancel its child's local translation; bounding each offset separately
+// would turn separated assemblies into expensive exact CCD candidates.
+func shape_pose_bounds3d(shape:Shape3D, pose:Transform3D) ShapeBounds3D {
     match shape {
-        convex(hull) => {
-            precise = true; lower = start.vector(hull.vertex(0)); upper = lower
+        compound(compound) => {
+            let first = compound.child(0)
+            var bounds = shape_pose_bounds3d(first.shape, compound_child_transform(pose, first))
             var index = 1
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let next = shape_pose_bounds3d(child.shape, compound_child_transform(pose, child))
+                bounds = ShapeBounds3D(
+                    Math.Vec3(Math.min(bounds.lower.x, next.lower.x), Math.min(bounds.lower.y, next.lower.y), Math.min(bounds.lower.z, next.lower.z)),
+                    Math.Vec3(Math.max(bounds.upper.x, next.upper.x), Math.max(bounds.upper.y, next.upper.y), Math.max(bounds.upper.z, next.upper.z)))
+                index++
+            }
+            return bounds
+        }
+        convex(hull) => {
+            var lower = pose.point(hull.vertex(0)); var upper = lower; var index = 1
             while index < hull.vertex_count() {
-                let point = start.vector(hull.vertex(index))
+                let point = pose.point(hull.vertex(index))
                 lower = Math.Vec3(Math.min(lower.x, point.x), Math.min(lower.y, point.y), Math.min(lower.z, point.z))
                 upper = Math.Vec3(Math.max(upper.x, point.x), Math.max(upper.y, point.y), Math.max(upper.z, point.z))
                 index++
             }
+            return ShapeBounds3D(lower, upper)
         }
-        sphere(_) => {}
-        box(_) => {}
-        capsule(_) => {}
-        triangle(_) => {}
-        mesh(_) => {}
-        compound(_) => {}
+        else => {}
     }
-    if !precise { upper = broad_extent3d(shape, start, shape_bounding_radius3d(shape)); lower = upper.negated() }
-    let minimum = Math.Vec3(Math.min(start.position.x, end.position.x), Math.min(start.position.y, end.position.y), Math.min(start.position.z, end.position.z)).add(lower)
-    let maximum = Math.Vec3(Math.max(start.position.x, end.position.x), Math.max(start.position.y, end.position.y), Math.max(start.position.z, end.position.z)).add(upper)
-    return LinearSweepBounds3D(minimum, maximum)
+    let extent = broad_extent3d(shape, pose, shape_bounding_radius3d(shape))
+    return ShapeBounds3D(pose.position.subtract(extent), pose.position.add(extent))
 }
 
-func linear_sweeps_overlap3d(first:@LinearSweepBounds3D, second:@LinearSweepBounds3D) bool {
+func linear_sweep_bounds3d(shape:Shape3D, start:Transform3D, end:Transform3D) ShapeBounds3D {
+    // The exact CCD search holds the beginning rotations for both shapes.
+    let bounds = shape_pose_bounds3d(shape, start)
+    let motion = end.position.subtract(start.position)
+    return ShapeBounds3D(
+        bounds.lower.add(Math.Vec3(Math.min(0.0, motion.x), Math.min(0.0, motion.y), Math.min(0.0, motion.z))),
+        bounds.upper.add(Math.Vec3(Math.max(0.0, motion.x), Math.max(0.0, motion.y), Math.max(0.0, motion.z))))
+}
+
+func linear_sweeps_overlap3d(first:@ShapeBounds3D, second:@ShapeBounds3D) bool {
     return first.upper.x + 0.000001 >= second.lower.x && second.upper.x + 0.000001 >= first.lower.x &&
         first.upper.y + 0.000001 >= second.lower.y && second.upper.y + 0.000001 >= first.lower.y &&
         first.upper.z + 0.000001 >= second.lower.z && second.upper.z + 0.000001 >= first.lower.z

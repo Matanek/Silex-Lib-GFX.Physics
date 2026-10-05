@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Compounds accept convex children, alone or mixed with primitives: volume
+  center and full inertia, queries, leaf IDs, mesh supports, sensors, shape
+  replacement and linear CCD. Bounds compose leaf poses before joining them
+  so compensated offsets do not cause exact sweeps between distant objects.
+  Native Debug/Release and Jolt mass and geometry controls on macOS ARM64.
+
 - Convex/mesh queries reject distant faces using conservative bounds while
   retaining the exact closest witness and its identity. Strictly identical
   edge directions are stored once in the immutable hull. These two costs

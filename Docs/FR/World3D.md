@@ -25,7 +25,7 @@ boîte. Les coutures planes sont regroupées et les points couvrent les
 triangles réellement touchés. Repos, traversée sans friction, vallée de pente
 ±0,25, crête et passage dans une ouverture plane sont qualifiés, y compris
 les deux ordres et une origine locale décalée. Les plis arbitraires, terrains
-mobiles, composés à enfants convexes et CCD rotationnel restent à qualifier.
+mobiles et CCD rotationnel restent à qualifier.
 `Physics3D/ConvexMeshScene.sx` présente les coutures planes et la vallée.
 
 `TriangleMesh3D` assemble plusieurs triangles dans une seule forme fixe. Pour
@@ -79,13 +79,24 @@ Un composé cinématique emploie `move_kinematic` ou ses vitesses linéaire et
 angulaire, comme les primitives. Ses enfants suivent la pose du parent ; leur
 vitesse au contact inclut la rotation autour de l'origine du corps. Il peut
 réveiller et transporter une charge dynamique. Un composé dynamique de boîtes,
-sphères ou capsules est également disponible : la densité du corps appliquée à chaque enfant
+sphères, capsules ou enveloppes convexes est également disponible :
+la densité du corps appliquée à chaque enfant
 détermine la masse, le centre de masse et le tenseur d'inertie du corps entier.
 Les identités des enfants restent visibles dans les contacts. Le remplacement
 de la forme d'un corps existant est disponible ; l'édition en place d'un
 `Compound3D`, les autres familles géométriques et les terrains généraux
 restent à livrer.
 Le mouvement cinématique n'ajoute pas de CCD rotationnel.
+
+Les enfants convexes conservent leur propre ID dans les distances, rayons,
+contacts et événements. Leur centre volumique est transformé par leur pose
+locale avant de combiner les masses ; le tenseur est tourné puis transporté
+au centre commun. Un décalage des sommets compensé dans la pose de l’enfant
+conserve ainsi la géométrie et la réponse du corps. Le CCD linéaire visite
+les feuilles à rotation initiale conservée ; les appuis sur maillage gardent
+l’ID de l’enfant et celui de la face, y compris lorsque les corps sont inversés.
+La scène `Silex-Examples/Sources/Physics3D/ConvexCompoundScene.sx` montre
+un composé de convexes et un composé mêlant tétraèdre et boîtes.
 
 Le programme suivant applique une impulsion à une boîte, avance le monde et
 lit sa position. L'impulsion est exprimée en masse × distance / seconde.
@@ -126,7 +137,8 @@ secondes et rejette une durée négative ou non finie.
 Par défaut, un corps est dynamique, porte une sphère de rayon 0,5 et reçoit
 une densité de 1. La masse et les moments d'inertie sont calculés pour la
 sphère, la boîte, la capsule, l’enveloppe convexe ou un composé homogène de
-primitives. Un convexe utilise les moments volumiques de sa frontière fermée :
+primitives et de convexes. Un convexe utilise les moments volumiques de sa
+frontière fermée :
 son centre de masse peut être décalé et son tenseur peut avoir des termes
 croisés, même sans rotation du corps. Les corps fixes et cinématiques ne
 calculent pas de masse dynamique ; une masse explicite remplace le calcul

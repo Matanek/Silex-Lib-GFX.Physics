@@ -3,7 +3,8 @@
 `GFX.Physics` provides optional native Silex 2D and 3D physics simulations.
 Their worlds work without windows or renderers; Application plugins connect
 them to ECS and Scene2D or Scene3D when requested. The 3D world supports
-spheres, boxes, capsules, compounds with dynamic mass, and fixed triangles or
+spheres, boxes, capsules, compounds with primitive or convex children and
+dynamic mass, and fixed triangles or
 triangle meshes against dynamic spheres, capsules and boxes. Boxes retain
 simultaneous support on both pans of a qualified valley without duplicating
 identical reactions at terrain seams. Convex hulls can be fixed, kinematic or

@@ -114,8 +114,9 @@ et recalcule les propriétés de masse d’un corps dynamique.
 
 Les collisions face aux sphères, boîtes, capsules et autres convexes fonctionnent
 dans les deux ordres, avec capteurs, filtres et CCD linéaire. Un convexe
-cinématique peut pousser un corps dynamique. Les enfants convexes de composés
-sont refusés.
+cinématique peut pousser un corps dynamique. Une enveloppe peut également
+être un enfant de composé fixe, cinématique ou dynamique ; sa pose locale
+place l’origine des points, indépendamment du centre de son volume.
 Cette qualification ne couvre pas le CCD rotationnel. `CharacterMover3D`
 est qualifié sur les convexes fixes pour le déplacement et l’appui ; voir
 [le guide du personnage](Character3D.md). La famille convexe demeure partielle.
@@ -230,7 +231,8 @@ le monde restent à livrer.
 `Compound3D` prend un tableau non vide de `CompoundChild3D(id, shape,
 transform)`. Chaque enfant possède un identifiant entier positif ou nul,
 unique dans le composé, et une pose locale. Les enfants peuvent être des
-sphères, boîtes ou capsules ; un composé imbriqué est rejeté. La liste est
+sphères, boîtes, capsules ou enveloppes convexes ; les triangles, maillages
+et composés imbriqués sont rejetés. La liste est
 copiée à la construction et ne peut plus être modifiée. La pose effective
 applique d'abord la pose de l'enfant, puis celle du composé.
 

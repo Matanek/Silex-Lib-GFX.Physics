@@ -1,0 +1,250 @@
+use GFX.Physics
+use STD.Math
+
+func hull(size:Math.Vec3 = Math.Vec3(1.0), offset:Math.Vec3 = Math.Vec3()) Physics.Shape3D {
+    var points:Math.Vec3[] = []; var index = 0
+    while index < 8 {
+        var x = -0.5; var y = -0.5; var z = -0.5
+        if index % 2 == 1 { x = 0.5 }
+        if (index / 2) % 2 == 1 { y = 0.5 }
+        if index / 4 == 1 { z = 0.5 }
+        points.append(Math.Vec3(x, y, z).multiply(size).add(offset)); index++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func near(value:float, expected:float, tolerance:float = 0.0001) {
+    assert(value == value && Math.abs(value - expected) <= tolerance)
+}
+func pair(convex:bool = true, shifted:bool = false) Physics.Shape3D {
+    var first = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 1.0, 1.0)))
+    var second = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 2.0, 1.0)))
+    var offset = Math.Vec3(); if shifted { offset = Math.Vec3(3.0, -4.0, 2.0) }
+    let rotation = Math.Quat.angle_axis(Math.pi() / 4.0, Math.Vec3.back())
+    if convex { first = hull(Math.Vec3(2.0, 1.0, 1.0), offset); second = hull(Math.Vec3(1.0, 2.0, 1.0), offset) }
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(71, first, Physics.Transform3D(Math.Vec3(-1.0, 0.0, 0.0).subtract(offset))),
+        Physics.CompoundChild3D(9, second, Physics.Transform3D(Math.Vec3(1.0, 1.0, 0.0).subtract(rotation.rotate(offset)), rotation))]))
+}
+func feet(shifted:bool = false, lift:float = 0.0) Physics.Shape3D {
+    var offset = Math.Vec3(); if shifted { offset = Math.Vec3(3.0, -4.0, 2.0) }
+    return Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(71, hull(offset:offset), Physics.Transform3D(Math.Vec3(-1.0, 0.0, 0.0).subtract(offset))),
+        Physics.CompoundChild3D(9, hull(offset:offset), Physics.Transform3D(Math.Vec3(1.0, lift, 0.0).subtract(offset)))]))
+}
+func floor() Physics.Shape3D {
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(3, 3,
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 2.0, 2.0))
+}
+
+func mass_case() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var index = 0
+    while index < 3 {
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = pair(index != 0, index == 2))
+        let mass = body.mass_properties()
+        near(mass.mass, 4.0); assert(mass.local_center.nearly_equal(Math.Vec3(0.0, 0.5, 0.0), 0.0001))
+        near(mass.inertia_tensor.x.x, 23.0 / 12.0); near(mass.inertia_tensor.y.y, 65.0 / 12.0)
+        near(mass.inertia_tensor.z.z, 20.0 / 3.0); near(mass.inertia_tensor.x.y, -1.75)
+        near(mass.inertia_tensor.y.x, -1.75); near(mass.inertia_tensor.x.z, 0.0); near(mass.inertia_tensor.y.z, 0.0)
+        body.apply_impulse(Math.Vec3.right(), body.world_center_of_mass().add(Math.Vec3.back()))
+        near(body.linear_velocity().x, 0.25); near(body.angular_velocity().x, 0.23908918)
+        near(body.angular_velocity().y, 0.26185958)
+        print("mass variant=$(index) value=$(mass.mass) center=$(mass.local_center.x),$(mass.local_center.y),$(mass.local_center.z) tensor=$(mass.inertia_tensor.x.x),$(mass.inertia_tensor.y.y),$(mass.inertia_tensor.z.z),$(mass.inertia_tensor.x.y) omega=$(body.angular_velocity().x),$(body.angular_velocity().y)")
+        world.destroy_rigid_body(body); index++
+    }
+}
+
+func mixed_mass_case() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let tetra = Physics.Shape3D.convex(Physics.ConvexHull3D([
+        Math.Vec3(), Math.Vec3(2.0, 0.0, 0.0), Math.Vec3.up(), Math.Vec3.back()]))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..density = 3.0
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(16, tetra, Physics.Transform3D(Math.Vec3(2.0, 0.0, 0.0),
+                Math.Quat.angle_axis(Math.half_pi(), Math.Vec3.back()))),
+            Physics.CompoundChild3D(35, Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0 / 3.0, 1.0, 1.0))),
+                Physics.Transform3D(Math.Vec3(-1.75, -0.5, -0.25)))])))
+    let mass = body.mass_properties()
+    near(mass.mass, 2.0); assert(mass.local_center.length() < 0.0001)
+    near(mass.inertia_tensor.x.x, 0.97916667); near(mass.inertia_tensor.y.y, 6.4175926)
+    near(mass.inertia_tensor.z.z, 6.9050926); near(mass.inertia_tensor.x.y, -1.775)
+    near(mass.inertia_tensor.x.z, -0.8875); near(mass.inertia_tensor.y.z, -0.225)
+    print("mixed mass=$(mass.mass) center=$(mass.local_center.x),$(mass.local_center.y),$(mass.local_center.z) tensor=$(mass.inertia_tensor.x.x),$(mass.inertia_tensor.y.y),$(mass.inertia_tensor.z.z),$(mass.inertia_tensor.x.y),$(mass.inertia_tensor.x.z),$(mass.inertia_tensor.y.z)")
+}
+
+func queries_case() {
+    let origin = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0), Math.Quat.angle_axis(0.6, Math.Vec3.up()))
+    let first = Physics.ShapePlacement3D(feet(true), origin)
+    let second = Physics.ShapePlacement3D(Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(42, hull(), Physics.Transform3D(Math.Vec3(3.0, 0.0, 0.0)))])), origin)
+    let gap = Physics.Geometry3D.distance(first, second)
+    let reverse = Physics.Geometry3D.distance(second, first)
+    near(gap.separation, 1.0); near(reverse.separation, 1.0)
+    assert(gap.first_child_id == 9 && gap.second_child_id == 42)
+    assert(reverse.first_child_id == 42 && reverse.second_child_id == 9)
+    assert(gap.normal.nearly_equal(reverse.normal.negated(), 0.0001))
+    print("gap name=compound value=$(gap.separation)")
+    var world = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = feet(true) ..transform = origin)
+    let ray = Physics.Ray3D(origin.point(Math.Vec3(-3.0, 0.0, 0.0)), origin.rotation.rotate(Math.Vec3(6.0, 0.0, 0.0)))
+    var hit = world.ray_cast(ray)
+    assert(hit != null && hit!.child_id() == 71); near(hit!.fraction(), 0.25)
+    var overlaps:Physics.WorldOverlap3D[] = []
+    world.write_overlaps(Physics.ShapePlacement3D(hull(), Physics.Transform3D(origin.point(Math.Vec3(1.9, 0.0, 0.0)), origin.rotation)), overlaps)
+    assert(overlaps.count() == 1 && overlaps[0].body_child_id() == 9)
+    var snapshot = hit!
+    world.destroy_rigid_body(body)
+    var replacement = world.create_rigid_body(Physics.RigidBody3DSettings())
+    assert(!snapshot.body().is_valid() && !snapshot.body().same_body(replacement))
+    assert(snapshot.child_id() == 71); near(snapshot.fraction(), 0.25)
+}
+
+func supports_case() {
+    var variant = 0
+    while variant < 4 {
+        var world = Physics.World3D()
+        let settings = Physics.RigidBody3DSettings() ..shape = feet(variant >= 2) ..allow_sleep = false
+            ..transform = Physics.Transform3D(Math.Vec3(0.0, 0.5, 0.0))
+        var selected:Physics.RigidBody3D? = null
+        if variant % 2 == 1 { selected = world.create_rigid_body(settings) }
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = floor()
+            ..transform = Physics.Transform3D(Math.Vec3(-2.0, 0.0, -2.0)))
+        if variant % 2 == 0 { selected = world.create_rigid_body(settings) }
+        var body = selected!
+        var step = 0; while step < 240 { world.step(1.0 / 120.0); step++ }
+        near(body.position().y, 0.5, 0.02); assert(body.linear_velocity().length() < 0.02 && body.angular_velocity().length() < 0.02)
+        var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+        assert(contacts.count() == 2)
+        var left = false; var right = false
+        for contact in contacts {
+            var child = contact.second_child_id(); var face = contact.first_child_id()
+            if contact.first_body().same_body(body) { child = contact.first_child_id(); face = contact.second_child_id() }
+            if child == 71 { left = true }
+            if child == 9 { right = true }
+            assert(face >= 0 && face < 8 && contact.point_count() >= 2 && contact.point_count() <= 4)
+        }
+        assert(left && right)
+        print("support variant=$(variant) y=$(body.position().y) contacts=$(contacts.count())")
+        variant++
+    }
+}
+
+func events_case() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var compound = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = feet())
+    var probe = world.create_rigid_body(Physics.RigidBody3DSettings() ..is_sensor = true
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(42, hull(), Physics.Transform3D(Math.Vec3(-1.0, 0.0, 0.0))),
+            Physics.CompoundChild3D(43, hull(), Physics.Transform3D(Math.Vec3(1.0, 0.0, 0.0)))])))
+    world.step(0.01); assert(world.contact_count() == 2)
+    var began:Physics.Contact3D[] = []; var ended:Physics.Contact3D[] = []
+    world.write_contact_begin_events(began); assert(began.count() == 2)
+    assert(began[0].first_child_id() == 9 && began[1].first_child_id() == 71)
+    assert(began[0].second_child_id() == 43 && began[1].second_child_id() == 42)
+    for contact in began { near(contact.normal_impulse(), 0.0); assert(contact.is_sensor()) }
+    compound.set_shape(feet(true)); world.step(0.01)
+    world.write_contact_begin_events(began); world.write_contact_end_events(ended)
+    assert(began.count() == 2 && ended.count() == 2)
+    probe.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0)); world.step(0.01)
+    world.write_contact_end_events(ended); assert(ended.count() == 2 && world.contact_count() == 0)
+    probe.set_collision_filter(Physics.CollisionFilter3D()); world.step(0.01)
+    world.write_contact_begin_events(began); assert(began.count() == 2)
+    var retained = began[0]
+    world.destroy_rigid_body(compound); world.step(0.01); world.write_contact_end_events(ended)
+    assert(ended.count() == 2 && !retained.first_body().is_valid() && retained.first_child_id() == 9)
+    assert(probe.linear_velocity().length() == 0.0)
+}
+
+func ccd_case() {
+    var variant = 0
+    while variant < 4 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = floor()
+            ..transform = Physics.Transform3D(Math.Vec3(-2.0, 0.0, -2.0)))
+        var y = 1.5; var velocity = -200.0; if variant >= 2 { y = -1.5; velocity = 200.0 }
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = feet(variant % 2 == 1, lift:0.5)
+            ..transform = Physics.Transform3D(Math.Vec3(0.0, y, 0.0)) ..linear_velocity = Math.Vec3(0.0, velocity, 0.0)
+            ..continuous_collision = true ..allow_sleep = false)
+        world.step(0.02)
+        if variant < 2 {
+            assert(body.position().y >= 0.48)
+            var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+            assert(contacts.count() >= 1 && contacts[0].second_child_id() == 71)
+        } else { assert(body.position().y > 2.4 && world.contact_count() == 0) }
+        print("ccd variant=$(variant) y=$(body.position().y) speed=$(body.linear_velocity().y)")
+        assert(body.position().y == body.position().y); variant++
+    }
+}
+
+func mutation_case() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = feet() ..density = 2.0
+        ..linear_velocity = Math.Vec3.right() ..angular_velocity = Math.Vec3(0.0, 0.0, 2.0)
+        ..mass_properties = Physics.MassProperties3D(10.0, Math.Vec3(2.0)))
+    body.set_shape(pair(shifted:true))
+    near(body.mass_properties().mass, 8.0); near(body.mass_properties().local_center.y, 0.5)
+    near(body.mass_properties().inertia_tensor.x.y, -3.5)
+    assert(body.linear_velocity().nearly_equal(Math.Vec3(), 0.0001))
+    assert(body.angular_velocity().nearly_equal(Math.Vec3(0.0, 0.0, 2.0), 0.0001))
+}
+
+func kinematic_case() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic
+        ..shape = feet(true) ..transform = Physics.Transform3D(Math.Vec3(0.0, 2.0, 0.0)))
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..is_sensor = true
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.6)) ..transform = Physics.Transform3D(Math.Vec3(-1.0, 0.0, 0.0)))
+    let target = Physics.Transform3D(Math.Vec3(), Math.Quat.angle_axis(0.2, Math.Vec3.up()))
+    body.move_kinematic(target, 0.5)
+    var step = 0; while step < 60 { world.step(1.0 / 120.0); step++ }
+    assert(body.position().nearly_equal(Math.Vec3(), 0.0001))
+    assert(Math.abs(body.rotation().dot(target.rotation)) > 0.99999)
+    var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].first_child_id() == 71)
+    assert(contacts[0].is_sensor()); near(contacts[0].normal_impulse(), 0.0)
+}
+
+func swept_bounds_case() {
+    var variant = 0
+    while variant < 12 {
+        var scale = 1.0
+        if variant >= 4 { scale = 0.1 }
+        if variant >= 8 { scale = 10.0 }
+        var offset = Math.Vec3(); if variant % 2 == 1 { offset = Math.Vec3(3.0, -4.0, 2.0).multiply(scale) }
+        let rotation = Math.Quat.angle_axis(0.37 * (variant % 4) as float, Math.Vec3(1.0, 2.0, 3.0).normalized())
+        let origin = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0), rotation)
+        let moving = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(17, hull(Math.Vec3(scale), offset), Physics.Transform3D(offset.negated()))]))
+        let target = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(88, hull(Math.Vec3(scale), offset), Physics.Transform3D(offset.negated()))]))
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = target ..transform = Physics.Transform3D(origin.point(Math.Vec3(3.0 * scale, 0.0, 0.0)), rotation))
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = moving ..transform = origin
+            ..linear_velocity = rotation.rotate(Math.Vec3(100.0 * scale, 0.0, 0.0))
+            ..continuous_collision = true ..allow_sleep = false ..friction = 0.0)
+        world.step(0.03)
+        let position = origin.inverse_point(body.position()).divide(scale)
+        near(position.x, 2.0, 0.02); near(position.y, 0.0, 0.02); near(position.z, 0.0, 0.02)
+        assert(body.linear_velocity().length() / scale < 0.02)
+        var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+        assert(contacts.count() == 1 && contacts[0].first_child_id() == 88 && contacts[0].second_child_id() == 17)
+        assert(contacts[0].point_count() >= 2)
+        print("sweep variant=$(variant) x=$(position.x) contacts=$(contacts.count())")
+        variant++
+    }
+}
+
+test "convex compound retains full analytic inertia and offset equivalence" { mass_case() }
+test "mixed tetrahedron compound rotates its centered inertia before parallel axes" { mixed_mass_case() }
+test "compound distance and queries retain the selected convex leaf" { queries_case() }
+test "convex compound mesh supports retain both child ids in either body order" { supports_case() }
+test "convex compound sensor filtering replacement and removal preserve events" { events_case() }
+test "convex compound linear CCD selects the low leaf and respects mesh back faces" { ccd_case() }
+test "replacing convex compound derives mass and preserves velocity at shifted center" { mutation_case() }
+test "kinematic convex compound target moves and rotates the selected sensor leaf" { kinematic_case() }
+test "convex compound bounds retain rapid contacts across offsets rotations and scales" { swept_bounds_case() }
+func main() {
+    mass_case(); mixed_mass_case(); queries_case(); supports_case(); events_case(); ccd_case(); mutation_case(); kinematic_case(); swept_bounds_case()
+    print("Convex compound: all scenarios passed")
+}

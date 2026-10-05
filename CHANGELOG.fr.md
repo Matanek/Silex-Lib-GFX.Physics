@@ -6,6 +6,13 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les composés acceptent des enfants convexes, seuls ou mêlés aux primitives :
+  centre et tenseur complet, requêtes, IDs de feuilles, appuis maillage,
+  capteurs, remplacement et CCD linéaire. Les bornes composent les poses des
+  feuilles avant de les réunir, afin de conserver les décalages compensés
+  et d’éviter des balayages exacts entre objets éloignés. Qualification
+  Native Debug/Release et témoins Jolt de masse et géométrie sur macOS ARM64.
+
 - Le maillage convexe écarte les faces éloignées avec des bornes conservatives,
   puis conserve le témoin exact le plus proche et son identité. Les directions
   d’arêtes strictement identiques ne sont stockées qu’une fois dans l’enveloppe
