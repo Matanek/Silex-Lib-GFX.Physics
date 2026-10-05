@@ -1,0 +1,55 @@
+use GFX.Physics
+use STD.Math
+
+func topology() {
+    let missing_vertices:int[] = [-1, 0, 1, 5, 6, 15]
+    let counts:int[] = [18, 16, 15, 12, 12, 16]
+    var sample = 0
+    for missing in missing_vertices {
+        var heights:float[] = []; var holes:bool[] = []; var index = 0
+        while index < 16 { heights.append(0.0); holes.append(index == missing); index++ }
+        var mesh = Physics.TriangleMesh3D.from_height_grid(4, 4, heights, 1.25, 2.0,
+            holes:holes, diagonal:Physics.HeightGridDiagonal3D.first_to_opposite)
+        // Pinned Jolt HeightFieldShape with the same absent sample has this
+        // exact oriented triangle set; hierarchy traversal and IDs may differ.
+        assert(mesh.triangle_count() == counts[sample])
+        index = 0
+        while index < mesh.triangle_count() {
+            let triangle = mesh.triangle(index)
+            assert(triangle.normal().nearly_equal(Math.Vec3.up(), 0.00001))
+            let vertices:Math.Vec3[] = [triangle.first, triangle.second, triangle.third]
+            for vertex in vertices {
+                let column = Math.round(vertex.x / 1.25) as int
+                let row = Math.round(vertex.z / 2.0) as int
+                assert(row * 4 + column != missing)
+            }
+            index++
+        }
+        holes[0] = !holes[0]; heights[0] = 50.0
+        assert(mesh.triangle_count() == counts[sample])
+        assert(mesh.triangle(0).first.y == 0.0)
+        sample++
+    }
+}
+
+func diagonals() {
+    var ordinary = Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0, 0.0, 0.0, 1.0], 1.0, 1.0)
+    var flipped = Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0, 0.0, 0.0, 1.0], 1.0, 1.0,
+        diagonal:Physics.HeightGridDiagonal3D.first_to_opposite)
+    let ray = Physics.Ray3D(Math.Vec3(0.25, 2.0, 0.25), Math.Vec3(0.0, -4.0, 0.0))
+    let first = Physics.Geometry3D.ray_cast(ray, Physics.ShapePlacement3D(Physics.Shape3D.mesh(ordinary)))
+    let second = Physics.Geometry3D.ray_cast(ray, Physics.ShapePlacement3D(Physics.Shape3D.mesh(flipped)))
+    assert(first.hit && second.hit)
+    assert(Math.abs(first.point.y) < 0.00001)
+    assert(Math.abs(second.point.y - 0.25) < 0.00001)
+    assert(first.child_id == 0 && second.child_id == 0)
+    assert(first.normal.nearly_equal(Math.Vec3.up(), 0.00001))
+    var one = Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0, 0.0, 0.0, 1.0], 1.0, 1.0,
+        holes:[false, false, false, true])
+    assert(one.triangle_count() == 1)
+    assert(one.triangle(0).first.nearly_equal(Math.Vec3(), 0.00001))
+}
+
+test "height-grid masks keep the exact pinned heightfield topology and immutable samples" { topology() }
+test "height-grid diagonal choices retain default faces and change nonplanar interpolation explicitly" { diagonals() }
+func main() { topology(); diagonals() }

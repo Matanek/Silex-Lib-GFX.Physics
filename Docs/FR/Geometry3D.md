@@ -263,27 +263,60 @@ reposer sur les faces présentes autour du trou ; ses points de manifold
 restent sur ces faces. Quitter un bord extérieur termine le contact puis
 laisse le corps tomber. Ces cas sont qualifiés à 120 Hz sur une ouverture
 carrée, y compris ordre des triangles inversé et rotation commune autour de Y.
-Les trous des terrains inclinés restent à qualifier. Le CCD linéaire des
+Les trous de terrains au relief arbitraire restent à qualifier. Le CCD linéaire des
 terrains fixes est décrit dans [World3D](World3D.md).
 
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
-row_spacing)` construit un maillage fixe à partir d'une grille régulière.
-`heights` est rangé par lignes Z, puis par colonnes X : l'échantillon
-`(column, row)` occupe `(column × column_spacing, height, row × row_spacing)`
-dans le repère local. Il faut au moins deux échantillons par axe, exactement
-`columns × rows` hauteurs finies et deux espacements positifs finis. Chaque
-cellule produit deux faces orientées vers le haut, dans l'ordre des lignes puis
-des colonnes ; leurs IDs sont `2 × (row × (columns - 1) + column)` et cet ID
-plus un. La liste de triangles obtenue est immuable et s'utilise avec
-`Shape3D.mesh(grid)` pour un corps fixe. Les requêtes existantes parcourent
-encore les faces une par une ; cette API n'affirme pas un coût adapté aux très
-grands terrains. Elle ne gère ni trous ni données de hauteur mutables.
+row_spacing, holes:[], diagonal:HeightGridDiagonal3D.column_to_row)` construit
+un maillage fixe à partir d'une grille régulière. `heights` est rangé par lignes
+Z puis colonnes X : l'échantillon `(column, row)` occupe
+`(column × column_spacing, height, row × row_spacing)` dans le repère local.
+Il faut au moins deux échantillons par axe, exactement `columns × rows`
+hauteurs finies et des espacements positifs finis, indépendants sur X et Z.
+
+Le masque optionnel `holes` contient un booléen par échantillon : `true`
+supprime les triangles qui utilisent ce sommet. L'autre triangle d'une cellule
+peut donc survivre. Le masque doit être vide ou compter autant d'éléments que
+`heights` ; au moins un triangle doit rester. Les hauteurs masquées restent
+finies. Sans masque, chaque cellule produit deux triangles vers le haut,
+par lignes puis colonnes, d'IDs `2 × (row × (columns - 1) + column)` et cet ID
+plus un. Avec masque, les IDs numérotent les faces survivantes dans cet ordre.
+
+La diagonale par défaut relie le sommet de la colonne suivante à celui de la
+ligne suivante. `HeightGridDiagonal3D.first_to_opposite` relie le premier
+sommet au sommet opposé, comme le heightfield Jolt épinglé. Ce choix change
+l'interpolation d'une cellule non plane et les triangles retirés par un trou.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var grid = Physics.TriangleMesh3D.from_height_grid(2, 2,
+        [0.0, 0.0, 0.0, 0.0], 1.25, 2.0,
+        holes:[true, false, false, false])
+    assert(grid.triangle_count() == 1)
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(grid))
+    floor.set_shape(Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(
+        2, 2, [0.0, 0.0, 0.0, 0.0], 1.25, 2.0)))
+}
+```
+
+Les triangles possèdent une géométrie immuable : modifier les tableaux sources
+ne modifie pas le terrain. Reconstruire puis appeler `set_shape` remplace le
+maillage et termine les contacts de l'ancienne révision. Le maillage reste
+fixe, exact et non compressé ; il ne fournit ni mise à jour quantifiée de
+hauteurs ni terrain dynamique. Une grille entièrement trouée est refusée ;
+retirer le corps du monde pour retirer tout le terrain. Les requêtes parcourent
+les faces, sans garantie de coût pour les très grands terrains.
 
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
 arêtes. Les capsules utilisent le segment axial et les rayons testent aussi
 leurs hémisphères. Les requêtes n'allouent pas de cache persistant ; le monde
-sélectionne les paires candidates avant ces requêtes fines. Les balayages publics
-des autres volumes restent à livrer ; les
+sélectionne les paires candidates avant ces requêtes fines. Les
+[balayages de volumes](#balayer-une-capsule-boîte-ou-enveloppe-convexe) et les
 [requêtes du monde](World3D.md#interroger-les-corps-du-monde) sont disponibles.
 
 ## Balayer une sphère

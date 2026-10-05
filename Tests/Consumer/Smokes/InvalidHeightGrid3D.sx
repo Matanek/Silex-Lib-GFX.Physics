@@ -30,5 +30,11 @@ func main() {
         Physics.TriangleMesh3D.from_height_grid(2, 2,
             [0.0, 0.0, 0.0, Math.sqrt(-1.0)], 1.0, 1.0)
     }
+    if selected("mask") {
+        Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0,0.0,0.0,0.0],1.0,1.0,holes:[true])
+    }
+    if selected("empty") {
+        Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0,0.0,0.0,0.0],1.0,1.0,holes:[true,true,true,true])
+    }
     panic("invalid height grid was accepted")
 }

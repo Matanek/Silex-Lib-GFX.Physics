@@ -1,0 +1,123 @@
+use GFX.Physics
+use STD.Math
+func shapes() Physics.Shape3D[] {
+    var points:Math.Vec3[] = []
+    let signs:float[] = [-0.2, 0.2]
+    for x in signs { for y in signs { for z in signs { points.append(Math.Vec3(x,y,z)) } } }
+    return [Physics.Shape3D.sphere(Physics.Sphere3D(0.2)), Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4))),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.2, 0.2)), Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2, 0.2)),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.convex(Physics.ConvexHull3D(points))]
+}
+func terrain(diagonal:Physics.HeightGridDiagonal3D, opening:bool = true) Physics.Shape3D {
+    var heights:float[] = []; var holes:bool[] = []; var index = 0
+    while index < 25 { heights.append(0.0); holes.append(opening && index == 12); index++ }
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(5, 5, heights, 1.25, 2.0,
+        holes:holes, diagonal:diagonal))
+}
+func crossings() {
+    let pose = Physics.Transform3D(Math.Vec3(4.0,2.0,-3.0), Math.Quat.angle_axis(0.31, Math.Vec3.right()))
+    let diagonals:Physics.HeightGridDiagonal3D[] = [Physics.HeightGridDiagonal3D.column_to_row, Physics.HeightGridDiagonal3D.first_to_opposite]
+    for diagonal in diagonals {
+        let floor = Physics.ShapePlacement3D(terrain(diagonal), pose)
+        var index = 0
+        for shape in shapes() {
+            for rim in [false,true] {
+                var origin = Math.Vec3(2.5, 2.0, 4.0)
+                if rim { origin = Math.Vec3(1.35,2.0,5.0); if diagonal == Physics.HeightGridDiagonal3D.first_to_opposite { origin.z = 3.0 } }
+                let motion = pose.vector(Math.Vec3(0.0,-4.0,0.0))
+                let placement = Physics.ShapePlacement3D(shape, Physics.Transform3D(pose.point(origin),pose.rotation))
+                let cast = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(placement,motion),floor)
+                print("cast=$(index) rim=$(rim) hit=$(cast.hit) fraction=$(cast.fraction)")
+                assert(cast.hit == rim)
+                var height = 0.2
+                if index == 0 { height = Math.sqrt(0.03) }
+                if index == 2 || index == 5 { height = 0.2 + Math.sqrt(0.03) }
+                if rim {
+                    assert(Math.abs(2.0 - 4.0 * cast.fraction - height) < 0.0002)
+                    let point = pose.inverse_point(cast.point)
+                    assert(point.x <= 1.2501 && Math.abs(point.y) < 0.0001)
+                    let witness = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)), Physics.Transform3D(cast.point))
+                    let stop = Physics.ShapePlacement3D(shape, Physics.Transform3D(placement.transform().position.add(motion.multiply(cast.fraction)), pose.rotation))
+                    assert(Math.abs(Physics.Geometry3D.distance(witness,floor).separation + 0.00001) < 0.0001)
+                    assert(Math.abs(Physics.Geometry3D.distance(witness,stop).separation + 0.00001) < 0.0001)
+                }
+                for reversed in [false,true] {
+                  for continuous in [false,true] {
+                    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+                    let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false ..continuous_collision = continuous
+                        ..transform = placement.transform() ..linear_velocity = motion.multiply(60.0) ..friction = 0.0
+                    var selected:Physics.RigidBody3D? = null
+                    if reversed { selected = world.create_rigid_body(settings) }
+                    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                        ..shape = floor.shape() ..transform = pose ..friction = 0.0)
+                    if !reversed { selected = world.create_rigid_body(settings) }
+                    if let body = selected {
+                        world.step(1.0 / 60.0)
+                        let position = pose.inverse_point(body.position())
+                        print("ccd=$(index) rim=$(rim) reversed=$(reversed) continuous=$(continuous) y=$(position.y) contacts=$(world.contact_count())")
+                        if rim && continuous { assert(Math.abs(position.y - height) < 0.002); assert(world.contact_count() > 0) }
+                        else { assert(Math.abs(position.y + 2.0) < 0.001); assert(world.contact_count() == 0) }
+                    } else { panic("missing height-grid body") }
+                  }
+                }
+            }
+            index++
+        }
+    }
+}
+
+test "masked height grids preserve seven convex shape sweeps and CCD at holes and real rims" { crossings() }
+func main() { crossings(); falls(); replacement() }
+
+func falls() {
+    let diagonals:Physics.HeightGridDiagonal3D[] = [Physics.HeightGridDiagonal3D.column_to_row, Physics.HeightGridDiagonal3D.first_to_opposite]
+    for diagonal in diagonals { for opening in [false,true] {
+        var index = 0
+        for shape in shapes() {
+            var world = Physics.World3D()
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                ..shape = terrain(diagonal, opening:opening))
+            var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape
+                ..transform = Physics.Transform3D(Math.Vec3(2.5, 2.0, 4.0)) ..allow_sleep = false
+                ..continuous_collision = true)
+            var step = 0
+            while step < 120 { world.step(1.0 / 120.0); step++ }
+            let position = body.position()
+            print("fall index=$(index) opening=$(opening) y=$(position.y) contacts=$(world.contact_count())")
+            if opening { assert(position.y < -2.0); assert(world.contact_count() == 0) }
+            else { assert(position.y > 0.15 && position.y < 0.45); assert(world.contact_count() > 0) }
+            index++
+        }
+    } }
+}
+func replacement() {
+    let diagonal = Physics.HeightGridDiagonal3D.first_to_opposite
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = terrain(diagonal, opening:false))
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2))
+        ..transform = Physics.Transform3D(Math.Vec3(2.5, 0.15, 4.0)) ..is_sensor = true)
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 1)
+    var events:Physics.Contact3D[] = []
+    floor.set_shape(terrain(diagonal))
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 0)
+    world.write_contact_end_events(events); assert(events.count() == 1)
+    floor.set_shape(terrain(diagonal, opening:false))
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 1)
+    world.write_contact_begin_events(events); assert(events.count() == 1)
+    floor.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0))
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 0)
+    world.write_contact_end_events(events); assert(events.count() == 1)
+    floor.set_collision_filter(Physics.CollisionFilter3D())
+    world.step(1.0 / 120.0)
+    assert(world.contact_count() == 1)
+    world.write_contact_begin_events(events); assert(events.count() == 1)
+}
+test "seven convex families fall through masked vertices and rest on filled height grids" { falls() }
+test "replacing a masked terrain and changing filters ends and recreates sensor contacts" { replacement() }

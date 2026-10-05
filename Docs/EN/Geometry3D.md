@@ -246,25 +246,58 @@ support on missing faces. A wider box can rest on the existing faces around
 the hole; its manifold points stay on those faces. Leaving an outer edge
 ends contact and lets the body fall. These cases are qualified at 120 Hz
 on a square opening, including reversed triangle order and a shared rotation
-around Y. Holes on sloped terrain remain to be qualified. Linear CCD against
+around Y. Holes in terrain with arbitrary relief remain to be qualified. Linear CCD against
 fixed terrain is described in [World3D](World3D.md).
 
 `TriangleMesh3D.from_height_grid(columns, rows, heights, column_spacing,
-row_spacing)` builds a fixed mesh from a regular grid. `heights` is laid out
-by Z rows, then X columns: sample `(column, row)` lies at
+row_spacing, holes:[], diagonal:HeightGridDiagonal3D.column_to_row)` builds a
+fixed mesh from a regular grid. `heights` is laid out by Z rows, then X columns:
+sample `(column, row)` lies at
 `(column × column_spacing, height, row × row_spacing)` in local coordinates.
 At least two samples per axis, exactly `columns × rows` finite heights, and
-positive finite spacing on both axes are required. Each cell generates two
-upward-facing triangles, ordered by row and then column. Their IDs are
-`2 × (row × (columns - 1) + column)` and the next ID. The resulting triangle
-list is immutable and can be used as `Shape3D.mesh(grid)` on a fixed body.
-Existing queries still walk individual triangles; this API does not claim
-large-terrain query performance. Holes and mutable heights are not supported.
+positive finite spacing independently on X and Z are required.
+
+The optional `holes` mask has one bool per sample: `true` removes triangles
+using that vertex. The other triangle in a cell may survive. The mask must be
+empty or have as many elements as `heights`; at least one triangle must remain.
+Masked heights must also be finite. Without holes, cells generate two upward
+triangles in row then column order, with IDs
+`2 × (row × (columns - 1) + column)` and the next ID. With holes, IDs enumerate
+the surviving faces in that order.
+
+The default diagonal joins the next-column vertex to the next-row vertex.
+`HeightGridDiagonal3D.first_to_opposite` joins the first vertex to the opposite
+vertex, as in the pinned Jolt heightfield. This choice changes interpolation
+in a nonplanar cell and which triangles a hole removes.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var grid = Physics.TriangleMesh3D.from_height_grid(2, 2,
+        [0.0, 0.0, 0.0, 0.0], 1.25, 2.0,
+        holes:[true, false, false, false])
+    assert(grid.triangle_count() == 1)
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(grid))
+    floor.set_shape(Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(
+        2, 2, [0.0, 0.0, 0.0, 0.0], 1.25, 2.0)))
+}
+```
+
+Triangles own immutable geometry: changing the source arrays does not change
+the terrain. Rebuild and call `set_shape` to replace the mesh and end contacts
+from its previous revision. The mesh remains fixed, exact and uncompressed;
+quantized height updates and dynamic terrains are not provided. A fully masked
+grid is rejected; remove the body from the world to remove the entire terrain.
+Queries visit the faces, without a large-terrain cost guarantee.
 
 Separated box pairs compare vertices against faces and edges against edges.
 Capsules use their axial segment; ray queries also test their hemispheres.
 The queries retain no cache; the world selects candidate pairs before these
-narrow queries. Sweeps of other volumes remain to be delivered;
+narrow queries. Convex volume sweeps and
 [world queries](World3D.md#query-bodies-in-the-world) are available.
 
 ## Sweep a sphere

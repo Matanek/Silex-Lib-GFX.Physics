@@ -1,0 +1,14 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var grid = Physics.TriangleMesh3D.from_height_grid(2, 2,
+        [0.0, 0.0, 0.0, 0.0], 1.25, 2.0,
+        holes:[true, false, false, false])
+    assert(grid.triangle_count() == 1)
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.mesh(grid))
+    floor.set_shape(Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(
+        2, 2, [0.0, 0.0, 0.0, 0.0], 1.25, 2.0)))
+}

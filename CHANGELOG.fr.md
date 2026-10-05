@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les grilles de hauteurs acceptent un masque de trous par sommet et un choix
+  explicite de diagonale. Les triangles survivants restent immuables, orientés
+  vers le haut et remplaçables sur un corps fixe ; balayages, chutes, CCD et
+  événements respectent les ouvertures et leurs bords réels.
+
 - `Cylinder3D`, `TaperedCylinder3D` et `TaperedCapsule3D` ajoutent des solides
   ronds d’axe local Y : géométrie continue, rayons et balayages, paires obliques,
   caps d’appui, terrains et CCD de translation. Les sections circulaires donnent

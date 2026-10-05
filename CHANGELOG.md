@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Height grids accept a per-vertex hole mask and an explicit diagonal choice.
+  Surviving triangles remain immutable, upward facing and replaceable on a
+  fixed body; sweeps, falls, CCD and events respect openings and their real rims.
+
 - `Cylinder3D`, `TaperedCylinder3D` and `TaperedCapsule3D` add round local-Y
   solids: continuous geometry, rays and sweeps, oblique pairs, supporting caps,
   terrain contacts and translation CCD. Circular sections provide geometric
