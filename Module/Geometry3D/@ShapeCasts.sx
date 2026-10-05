@@ -5,6 +5,7 @@ use STD.Math
 
 // A separating-plane speed bound requires a convex leaf, not a target union.
 func convex_shape_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D {
+    if plane_shape3d(target.shape()) { return plane_shape_cast3d(cast, target) }
     match target.shape() {
         compound(compound) => {
             var result = CastResult3D(); var index = 0

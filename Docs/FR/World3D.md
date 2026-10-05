@@ -466,3 +466,10 @@ emploient leur centre de masse géométrique et un tenseur axial exact. Le CCD
 translationnel accepte leurs surfaces rondes ; un choc sur un bord peut laisser
 une vitesse du centre et produire une rotation, tout en annulant la vitesse
 normale au point de contact. L’orientation balayée reste celle du début du pas.
+
+Les [plans](Geometry3D.md#plan-et-demi-espace) fixes occupent leur demi-espace
+négatif. Un corps discret qui traverse la surface reste recouvrant et est
+corrigé ; contrairement à un mur mince, il ne trouve pas une extrémité libre
+de l'autre côté. Le CCD place le premier impact avec l'orientation initiale.
+Les plans actifs sont sélectionnés explicitement, indépendamment des bornes
+finies des autres corps, y compris dans les requêtes de personnage.

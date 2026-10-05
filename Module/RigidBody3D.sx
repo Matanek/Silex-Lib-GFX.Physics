@@ -172,6 +172,7 @@ package class BodyState3D {
             cylinder(_) => {}
             tapered_cylinder(_) => {}
             tapered_capsule(_) => {}
+            plane(_) => { if settings.body_type != BodyType3D.fixed { panic("GFX.Physics.Plane3D requires a fixed body") } }
         }
         if settings.body_type == BodyType3D.fixed &&
             (settings.linear_velocity.length_squared() > 0.0 ||
@@ -485,6 +486,7 @@ public class RigidBody3D {
             cylinder(_) => {}
             tapered_cylinder(_) => {}
             tapered_capsule(_) => {}
+            plane(_) => { if state.body_type != BodyType3D.fixed { panic("GFX.Physics.Plane3D requires a fixed body") } }
         }
         var properties = MassProperties3D(0.0, Math.Vec3())
         if state.body_type == BodyType3D.dynamic {
@@ -636,6 +638,7 @@ package func require_dynamic_mass3d(properties:MassProperties3D) {
 
 package func shape_mass_properties3d(shape:Shape3D, density:float) MassProperties3D {
     match shape {
+        plane(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         triangle(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         mesh(_) => { return MassProperties3D(0.0, Math.Vec3()) }
         convex(hull) => { return convex_mass_properties3d(hull, density) }

@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `Plane3D` représente un demi-espace infini sur corps fixe : distance, rayon,
+  balayages, appuis convexes, composés mobiles, capteurs et CCD linéaire. La
+  sélection des paires ne lui attribue aucune borne finie artificielle.
+
 - Les grilles de hauteurs acceptent un masque de trous par sommet et un choix
   explicite de diagonale. Les triangles survivants restent immuables, orientés
   vers le haut et remplaçables sur un corps fixe ; balayages, chutes, CCD et

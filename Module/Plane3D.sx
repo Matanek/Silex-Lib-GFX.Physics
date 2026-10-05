@@ -1,0 +1,24 @@
+use STD.Math
+
+public struct Plane3D {
+    let normal:Math.Vec3
+    let offset:float
+
+    init(normal:Math.Vec3 = Math.Vec3.up(), offset:float = 0.0) {
+        if !finite_plane3d_value(normal.x) || !finite_plane3d_value(normal.y) ||
+            !finite_plane3d_value(normal.z) || !finite_plane3d_value(offset) {
+            panic("GFX.Physics.Plane3D requires a finite nonzero normal and finite offset")
+        }
+        let scale = Math.max(Math.abs(normal.x), Math.max(Math.abs(normal.y), Math.abs(normal.z)))
+        if scale == 0.0 {
+            panic("GFX.Physics.Plane3D requires a finite nonzero normal and finite offset")
+        }
+        let direction = normal.divide(scale)
+        self.normal = direction.divide(direction.length())
+        self.offset = offset
+    }
+}
+
+func finite_plane3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

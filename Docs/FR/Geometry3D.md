@@ -1,6 +1,6 @@
 # Géométrie 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes, des capsules, des cylindres et formes effilées, des enveloppes convexes, des triangles, des maillages, des composés immuables et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules, des cylindres et formes effilées, des enveloppes convexes, des triangles, des plans, des maillages, des composés immuables et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -43,6 +43,52 @@ quaternion nul, non fini ou éloigné de l'unité est rejeté.
 La convention est celle de `STD.Math` : repère droit, Y vers le haut. La pose
 est sans échelle ; les dimensions appartiennent à la forme. Les transformations
 ne corrigent pas silencieusement un quaternion invalide.
+
+## Plan et demi-espace
+
+`Plane3D(normal:Math.Vec3.up(), offset:0.0)` définit le demi-espace local
+`normal.dot(point) <= offset`. La direction finie non nulle est normalisée ;
+`offset` reste la distance signée en unités de longueur sur cette direction.
+`Plane3D(Math.Vec3(0.0, 2.0, 0.0), 1.0)` a donc sa surface à `y=1`.
+La pose transforme ce plan, sans lui donner une taille ni une épaisseur.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let floor = Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D()))
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5, 0.5)),
+        Physics.Transform3D(Math.Vec3(10000.0, 2.0, 0.0))), Math.Vec3(0.0, -4.0, 0.0))
+    let hit = Physics.Geometry3D.shape_cast(cast, floor)
+    assert(hit.hit && Math.abs(hit.fraction - 0.375) < 0.00001)
+}
+```
+
+`Shape3D.plane` sert aux distances et recouvrements avec les volumes convexes
+ou composés, et comme cible de rayon, balayage de sphère ou de forme convexe.
+La distance prend le support le plus profond du volume vers le demi-espace,
+avec projection sur le plan et normale du volume vers le plan. Un rayon
+commencé dans le demi-espace occupé retourne `fraction=0`, son origine comme
+point et la normale extérieure ; il ne recherche pas la sortie. Un balayage
+déjà recouvrant retourne également une fraction nulle, avec point sur le plan.
+Le plan ne peut pas être le volume mobile d'un ShapeCast3D.
+
+Dans le monde, le plan doit appartenir à un corps fixe ; les corps dynamiques,
+cinématiques, enfants de composé et distances plan/plan sont refusés.
+Contacts, capteurs, filtres, mutations et CCD de translation visitent les
+volumes ou feuilles de composé. Les caps plats et faces convexes conservent
+jusqu'à quatre appuis ; aucun rayon géant ne limite la sélection des corps.
+Le coût de sélection comprend chaque plan actif contre les corps activés.
+Les coordonnées flottantes gardent leur précision habituelle : une surface
+infinie ne supprime pas les limites numériques aux grandes coordonnées.
+
+La géométrie analytique est infinie. Jolt épinglé utilise pour sa broad phase
+une boîte virtuelle de demi-étendue configurable (1000 par défaut) et annonce
+des contacts inconsistants près de cette frontière ; cette option interne
+n'appartient pas à l'API Silex. Les témoins Jolt de requêtes sont qualifiés
+à l'intérieur de cette zone, les contacts éloignés Silex indépendamment.
 
 ## Cylindres et formes effilées
 

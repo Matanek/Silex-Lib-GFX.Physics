@@ -1,0 +1,164 @@
+use GFX.Physics
+use STD.Math
+
+func shapes() Physics.Shape3D[] {
+    var points:Math.Vec3[] = []
+    let signs:float[] = [-0.2, 0.2]
+    for x in signs { for y in signs { for z in signs { points.append(Math.Vec3(x,y,z)) } } }
+    return [Physics.Shape3D.sphere(Physics.Sphere3D(0.2)), Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4))),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.2, 0.2)), Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2, 0.2)),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.convex(Physics.ConvexHull3D(points))]
+}
+
+func geometry() {
+    let plane = Physics.Plane3D(Math.Vec3(0.0,2.0,0.0),1.0)
+    assert(plane.normal.nearly_equal(Math.Vec3.up(),0.00001))
+    let pose = Physics.Transform3D(Math.Vec3(4.0,2.0,-3.0), Math.Quat.angle_axis(0.31,Math.Vec3.right()))
+    let surface = Physics.ShapePlacement3D(Physics.Shape3D.plane(plane),pose)
+    var index = 0
+    for shape in shapes() {
+        let placed = Physics.ShapePlacement3D(shape, Physics.Transform3D(pose.point(Math.Vec3(10000.0,3.0,-10000.0)),pose.rotation))
+        let distance = Physics.Geometry3D.distance(placed,surface)
+        let reversed = Physics.Geometry3D.distance(surface,placed)
+        var radius = 0.2; if index == 2 || index == 5 { radius = 0.4 }
+        assert(Math.abs(distance.separation - (2.0 - radius)) < 0.002)
+        assert(Math.abs(reversed.separation - distance.separation) < 0.00001)
+        assert(distance.normal.nearly_equal(pose.vector(Math.Vec3.down()),0.00001))
+        assert(distance.first_point.subtract(distance.second_point).nearly_equal(distance.normal.multiply(-distance.separation),0.003))
+        let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(placed,pose.vector(Math.Vec3(0.0,-4.0,0.0))),surface)
+        assert(hit.hit && Math.abs(hit.fraction - (2.0-radius)/4.0) < 0.0005)
+        assert(Math.abs(pose.inverse_point(hit.point).y - 1.0) < 0.002)
+        print("plane index=$(index) gap=$(distance.separation) fraction=$(hit.fraction)")
+        index++
+    }
+    let origins:Math.Vec3[] = [Math.Vec3(3.0,3.0,2.0),Math.Vec3(3.0,0.0,2.0),Math.Vec3(3.0,1.0,2.0)]
+    index = 0
+    for origin in origins {
+        let ray = Physics.Ray3D(pose.point(origin),pose.vector(Math.Vec3(0.0,-4.0,0.0)))
+        let hit = Physics.Geometry3D.ray_cast(ray,surface)
+        assert(hit.hit && hit.normal.nearly_equal(pose.vector(Math.Vec3.up()),0.00001))
+        if index == 0 { assert(Math.abs(hit.fraction-0.5) < 0.00001) }
+        else { assert(hit.fraction == 0.0 && hit.point.nearly_equal(ray.origin,0.00001)) }
+        index++
+    }
+    assert(!Physics.Geometry3D.ray_cast(Physics.Ray3D(pose.point(Math.Vec3(0.0,2.0,0.0)),pose.vector(Math.Vec3.up())),surface).hit)
+}
+func worlds() {
+    for reversed in [false,true] {
+        var index = 0
+        for shape in shapes() {
+            var world = Physics.World3D()
+            let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false
+                ..transform = Physics.Transform3D(Math.Vec3(10000.0,2.0,-10000.0))
+            var selected:Physics.RigidBody3D? = null
+            if reversed { selected = world.create_rigid_body(settings) }
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+            if !reversed { selected = world.create_rigid_body(settings) }
+            if let body = selected {
+                var step = 0
+                while step < 120 { world.step(1.0/120.0); step++ }
+                var height = 0.2; if index == 2 || index == 5 { height = 0.4 }
+                let position = body.position()
+                print("rest index=$(index) reversed=$(reversed) height=$(position.y) speed=$(body.linear_velocity().length())")
+                assert(Math.abs(position.y-height) < 0.003 && world.contact_count() == 1)
+                assert(body.linear_velocity().length() < 0.01)
+                var contacts:Physics.Contact3D[] = [];world.write_contacts(contacts)
+                assert(contacts[0].point_count() >= 1 && contacts[0].point_count() <= 4)
+                if index == 1 || index == 3 || index == 4 || index == 6 { assert(contacts[0].point_count() == 4) }
+            } else { panic("missing plane body") }
+            index++
+        }
+    }
+}
+func continuous() {
+    for reversed in [false,true] { for enabled in [false,true] {
+        var index = 0
+        for shape in shapes() {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false
+                ..continuous_collision = enabled ..transform = Physics.Transform3D(Math.Vec3(10000.0,2.0,-10000.0))
+                ..linear_velocity = Math.Vec3(0.0,-240.0,0.0)
+            var selected:Physics.RigidBody3D? = null
+            if reversed { selected = world.create_rigid_body(settings) }
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+            if !reversed { selected = world.create_rigid_body(settings) }
+            if let body = selected {
+                world.step(1.0/60.0)
+                print("ccd index=$(index) reversed=$(reversed) enabled=$(enabled) y=$(body.position().y) speed=$(body.linear_velocity().y)")
+                assert(world.contact_count() == 1 && Math.abs(body.linear_velocity().y) < 0.001)
+                var height = 0.2; if index == 2 || index == 5 { height = 0.4 }
+                assert(Math.abs(body.position().y-height)<0.001)
+                // Unlike a thin bounded wall, a half-space cannot be traversed
+                // to a separated endpoint: discrete overlap is also corrected.
+            } else { panic("missing plane CCD body") }
+            index++
+        }
+    } }
+}
+test "plane support distance rays and sweeps preserve remote tangential coordinates and poses" { geometry() }
+test "seven convex families rest on the infinite plane in both body orders" { worlds() }
+test "plane CCD places first impact while discrete crossing retains deep overlap" { continuous() }
+func main() { geometry(); worlds(); continuous(); controls(); grid_branch(); character() }
+
+func controls() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D()) ..is_sensor = true
+        ..collision_filter = Physics.CollisionFilter3D(category_bits:4))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(71,Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2,0.2)))]))
+        ..transform = Physics.Transform3D(Math.Vec3(20000.0,0.15,10000.0)))
+    world.step(1.0/120.0)
+    var contacts:Physics.Contact3D[] = [];world.write_contacts(contacts)
+    assert(contacts.count() == 1 && contacts[0].is_sensor() && contacts[0].second_child_id() == 71)
+    assert(body.position().y == 0.15)
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4))),
+        Physics.Transform3D(Math.Vec3(10000.0,2.0,10000.0))),Math.Vec3(0.0,-4.0,0.0))
+    if let hit = world.shape_cast(cast,filter:Physics.QueryFilter3D(mask_bits:4)) {
+        assert(hit.body().same_body(floor) && hit.child_id() == -1)
+        assert(Math.abs(hit.fraction()-0.45)<0.00001)
+    } else { panic("infinite plane query missing") }
+    assert(world.shape_cast(cast,filter:Physics.QueryFilter3D(mask_bits:2)) == null)
+    assert(world.shape_cast(cast,filter:Physics.QueryFilter3D(include_sensors:false)) == null)
+    assert(world.shape_cast(cast,ignore_body:floor) == null)
+    floor.set_collision_filter(Physics.CollisionFilter3D(category_bits:4,mask_bits:0))
+    world.step(1.0/120.0)
+    world.write_contact_end_events(contacts);assert(contacts.count() == 1 && world.contact_count() == 0)
+    floor.set_collision_filter(Physics.CollisionFilter3D(category_bits:4))
+    world.step(1.0/120.0)
+    world.write_contact_begin_events(contacts);assert(contacts.count() == 1)
+    floor.set_shape(Physics.Shape3D.plane(Physics.Plane3D(offset:-1.0)))
+    world.step(1.0/120.0)
+    world.write_contact_end_events(contacts);assert(contacts.count() == 1 && world.contact_count() == 0)
+}
+func grid_branch() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+    var index = 0
+    while index < 128 {
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.05))
+            ..transform = Physics.Transform3D(Math.Vec3(10000.0+index as float*3.0,0.04,20000.0)))
+        index++
+    }
+    world.step(1.0/120.0)
+    assert(world.contact_count() == 128)
+}
+test "infinite plane sensors retain compound identities filters queries and replacement events" { controls() }
+test "infinite plane contacts survive the grid broadphase branch with remote bodies" { grid_branch() }
+
+func character() {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+    var mover = Physics.CharacterMover3D()
+    let result = mover.calculate_move(world,Math.Vec3(10000.0,2.0,20000.0),Math.Vec3(1.0,-3.0,0.0),false)
+    assert(result.grounded && Math.abs(result.position.y-0.852)<0.001)
+    assert(Math.abs(result.position.x-10001.0)<0.001)
+}
+test "character queries retain the infinite supporting plane at distant coordinates" { character() }

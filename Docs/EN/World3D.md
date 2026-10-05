@@ -435,3 +435,10 @@ use their geometric mass center and exact axial inertia. Translation CCD accepts
 their round boundaries; an edge impact can retain center velocity and produce
 rotation while cancelling normal velocity at the contact point. The swept
 orientation remains the one at the beginning of the step.
+
+Fixed [planes](Geometry3D.md#plane-and-half-space) occupy their negative
+half-space. A discrete body crossing the surface remains overlapping and is
+corrected; unlike a thin wall, it cannot reach a separated endpoint on the
+other side. CCD places first impact with the initial orientation. Active planes
+are selected explicitly, independently of other bodies' finite bounds,
+including character queries.

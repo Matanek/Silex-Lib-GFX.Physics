@@ -1,3 +1,5 @@
+use GFX.Physics.Geometry3D.plane_shape3d
+use GFX.Physics.ContactManifold3D.plane_surface_contact_points
 use GFX.Physics.ContactManifold3D.axial_surface_contact_points
 use GFX.Physics.Geometry3D.axial_shape3d
 use GFX.Physics.ContactManifold3D.convex_triangle_contact_points
@@ -405,6 +407,10 @@ public class World3D {
         while slot < self.store.slots.count() {
             if let state = self.store.slots[slot] {
                 if state.is_enabled && filter.allows(state.collision_filter, state.is_sensor) {
+                    if plane_shape3d(state.shape) {
+                        append_character_shapes3d(state.shape, state.transform, BodyId3D(slot,self.store.generations[slot]),output)
+                        slot++; continue
+                    }
                     let extent = broad_extent3d(state.shape, state.transform, shape_bounding_radius3d(state.shape))
                     let lo = state.transform.position.subtract(extent)
                     let hi = state.transform.position.add(extent)
@@ -1084,6 +1090,7 @@ func is_compound3d(shape:Shape3D) bool {
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     return false
 }
@@ -1215,6 +1222,7 @@ func write_leaf_contacts3d(
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     match second.shape() {
         compound(compound) => {
@@ -1237,6 +1245,7 @@ func write_leaf_contacts3d(
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     if supports_mesh_manifolds3d(first.shape(), second.shape()) {
         var contacts:DistanceResult3D[] = []
@@ -1610,6 +1619,7 @@ func primitive_sphere_radius3d(shape:Shape3D) float {
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     return 0.0
 }
@@ -1651,6 +1661,7 @@ func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     return ShapePlacement3D(state.shape, state.transform)
 }
@@ -1661,6 +1672,8 @@ func contact_points3d(
     normal:Math.Vec3,
     witness:Math.Vec3
 ) Math.Vec3[] {
+    if plane_shape3d(first.shape()) { return plane_surface_contact_points(second, first, normal) }
+    if plane_shape3d(second.shape()) { return plane_surface_contact_points(first, second, normal) }
     if axial_shape3d(first.shape()) { return axial_surface_contact_points(first, second, normal, witness) }
     if axial_shape3d(second.shape()) { return axial_surface_contact_points(second, first, normal.negated(), witness) }
     match first.shape() {
@@ -1685,6 +1698,7 @@ func contact_points3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         sphere(_) => {}
@@ -1713,6 +1727,7 @@ func contact_points3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         triangle(triangle) => {
@@ -1732,6 +1747,7 @@ func contact_points3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         mesh(_) => {
@@ -1751,6 +1767,7 @@ func contact_points3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         convex(hull) => {
@@ -1766,6 +1783,7 @@ func contact_points3d(
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     return [witness]
 }
@@ -1794,6 +1812,7 @@ func contact_normal3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         box(box) => {
@@ -1816,6 +1835,7 @@ func contact_normal3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         capsule(_) => {
@@ -1834,6 +1854,7 @@ func contact_normal3d(
                 cylinder(_) => {}
                 tapered_cylinder(_) => {}
                 tapered_capsule(_) => {}
+                plane(_) => {}
             }
         }
         compound(_) => {}
@@ -1850,6 +1871,7 @@ func contact_normal3d(
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     return geometric_normal
 }
@@ -2417,6 +2439,7 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => { panic("GFX.Physics an infinite plane has no finite extent") }
     }
     return Math.Vec3(radius)
 }
@@ -2520,10 +2543,12 @@ func grid_pairs3d(proxies:@BroadProxy3D[], cell_size:float) BroadPair3D[] {
 
 func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     var proxies:BroadProxy3D[] = []
+    var plane_slots:int[] = []
     var slot = 0
     while slot < store.slots.count() {
         if var body = store.slots[slot] {
-            if body.is_enabled {
+            if body.is_enabled && plane_shape3d(body.shape) { plane_slots.append(slot) }
+            if body.is_enabled && !plane_shape3d(body.shape) {
                 let radius = shape_bounding_radius3d(body.shape)
                 proxies.append(BroadProxy3D(slot, body.transform.position,
                     radius, broad_extent3d(body.shape, body.transform, radius)))
@@ -2541,7 +2566,7 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
             }
         }
         if dynamic_radius > 0.0 && dynamic_radius < 1000000.0 {
-            return grid_pairs3d(proxies, dynamic_radius * 2.0 + 0.000002)
+            return include_plane_pairs3d(store, plane_slots, grid_pairs3d(proxies, dynamic_radius * 2.0 + 0.000002))
         }
     }
     Sort.sort<BroadProxy3D>(&proxies[0:proxies.count()],
@@ -2573,7 +2598,7 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
         first_index++
     }
     Sort.sort<BroadPair3D>(&pairs[0:pairs.count()], broad_pair_before3d)
-    return pairs
+    return include_plane_pairs3d(store, plane_slots, pairs)
 }
 
 // Contacts are ordered by body slots, then by the two child IDs.
@@ -2614,6 +2639,7 @@ func contact_index_at_pair3d(
 
 func shape_bounding_radius3d(shape:Shape3D) float {
     match shape {
+        plane(_) => { panic("GFX.Physics an infinite plane has no bounding radius") }
         triangle(triangle) => {
             return Math.max(triangle.first.length(), Math.max(
                 triangle.second.length(), triangle.third.length()))
@@ -2738,9 +2764,11 @@ func continuous_fraction3d(
     let target_translation = target_end.position.subtract(target_start.position)
     let relative_speed = moving_translation.subtract(target_translation).length()
     if relative_speed <= 0.000001 { return null }
-    let moving_proxy = linear_sweep_bounds3d(moving_shape, moving_start, moving_end)
-    let target_proxy = linear_sweep_bounds3d(target_shape, target_start, target_end)
-    if !linear_sweeps_overlap3d(moving_proxy, target_proxy) { return null }
+    if !plane_shape3d(moving_shape) && !plane_shape3d(target_shape) {
+        let moving_proxy = linear_sweep_bounds3d(moving_shape, moving_start, moving_end)
+        let target_proxy = linear_sweep_bounds3d(target_shape, target_start, target_end)
+        if !linear_sweeps_overlap3d(moving_proxy, target_proxy) { return null }
+    }
     let initial = motion_distance3d(
         ShapePlacement3D(moving_shape, moving_start),
         ShapePlacement3D(target_shape, target_start), moving_start, target_start
@@ -2798,5 +2826,27 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
         cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         tapered_cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         tapered_capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        plane(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
     }
+}
+
+// Infinite surfaces bypass finite proxies. Keep canonical slot ordering in
+// both the grid and sweep branches; no artificial extent enters either path.
+func include_plane_pairs3d(store:@BodyStore3D, plane_slots:int[], pairs:BroadPair3D[]) BroadPair3D[] {
+    if plane_slots.is_empty() { return pairs }
+    var result = pairs
+    for slot in plane_slots {
+        var other_slot = 0
+        while other_slot < store.slots.count() {
+            if let other = store.slots[other_slot] {
+                if other.is_enabled && !plane_shape3d(other.shape) {
+                    if slot < other_slot { result.append(BroadPair3D(slot,other_slot)) }
+                    else { result.append(BroadPair3D(other_slot,slot)) }
+                }
+            }
+            other_slot++
+        }
+    }
+    Sort.sort<BroadPair3D>(&result[0:result.count()], broad_pair_before3d)
+    return result
 }

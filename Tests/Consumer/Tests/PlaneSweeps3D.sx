@@ -1,0 +1,53 @@
+use GFX.Physics
+use STD.Math
+
+func shapes() Physics.Shape3D[] {
+    var points:Math.Vec3[] = []
+    let signs:float[] = [-0.2, 0.2]
+    for x in signs { for y in signs { for z in signs { points.append(Math.Vec3(x,y,z)) } } }
+    return [Physics.Shape3D.sphere(Physics.Sphere3D(0.2)), Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4))),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.2, 0.2)), Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2, 0.2)),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1, 0.2, 0.2)),
+        Physics.Shape3D.convex(Physics.ConvexHull3D(points))]
+}
+
+func qualification() {
+    let pose = Physics.Transform3D(Math.Vec3(4.0,2.0,-3.0),Math.Quat.angle_axis(0.31,Math.Vec3.right()))
+    let floor = Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D(offset:1.0)),pose)
+    let angles:float[] = [0.0,0.37,1.2]
+    var angle_index = 0
+    for angle in angles {
+        let rotation = pose.rotation.multiply(Math.Quat.angle_axis(angle,Math.Vec3(0.0,0.0,1.0)))
+        var kind = 0
+        for shape in shapes() {
+            var route = 0
+            while route < 3 {
+                var height = 3.0;var speed = -4.0
+                if route == 2 { height = 0.0 }
+                if route == 1 { speed = 4.0 }
+                let placement = Physics.ShapePlacement3D(shape,Physics.Transform3D(pose.point(Math.Vec3(2.5,height,4.0)),rotation))
+                let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(placement,pose.vector(Math.Vec3(0.0,speed,0.0))),floor)
+                print("cast name=plane$(angle_index)-$(kind)-$(route) hit=$(hit.hit) fraction=$(hit.fraction) point=$(hit.point.x),$(hit.point.y),$(hit.point.z) normal=$(hit.normal.x),$(hit.normal.y),$(hit.normal.z)")
+                assert(hit.hit == (route != 1))
+                if hit.hit {
+                    assert(Math.abs(pose.inverse_point(hit.point).y-1.0)<0.00001)
+                    if route == 2 { assert(hit.fraction == 0.0) }
+                    else {
+                        let stop = Physics.ShapePlacement3D(shape,Physics.Transform3D(placement.transform().position.add(pose.vector(Math.Vec3(0.0,speed*hit.fraction,0.0))),rotation))
+                        let distance = Physics.Geometry3D.distance(stop,floor)
+                        assert(Math.abs(distance.separation)<0.00001)
+                        let witness = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)),Physics.Transform3D(hit.point))
+                        assert(Math.abs(Physics.Geometry3D.distance(witness,stop).separation+0.00001)<0.00005)
+                    }
+                }
+                route++
+            }
+            kind++
+        }
+        angle_index++
+    }
+}
+
+test "plane sweeps cover independent convex poses initial overlap and separation" { qualification() }
+func main() { qualification() }

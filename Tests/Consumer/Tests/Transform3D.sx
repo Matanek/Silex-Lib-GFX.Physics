@@ -16,6 +16,7 @@ test "construct the first 3D shapes as finite values" {
         compound(_) => { assert(false) }
         triangle(_) => { assert(false) }
         mesh(_) => { assert(false) }
+        plane(_) => { assert(false) }
         convex(_) => { assert(false) }
         cylinder(_) => { assert(false) }
         tapered_cylinder(_) => { assert(false) }
@@ -28,6 +29,7 @@ test "construct the first 3D shapes as finite values" {
         compound(_) => { assert(false) }
         triangle(_) => { assert(false) }
         mesh(_) => { assert(false) }
+        plane(_) => { assert(false) }
         convex(_) => { assert(false) }
         cylinder(_) => { assert(false) }
         tapered_cylinder(_) => { assert(false) }

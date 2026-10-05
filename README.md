@@ -5,7 +5,7 @@ Their worlds work without windows or renderers; Application plugins connect
 them to ECS and Scene2D or Scene3D when requested. The 3D world supports
 spheres, boxes, capsules, cylinders, tapered cylinders, tapered capsules and
 convex hulls as fixed, kinematic or dynamic solids, plus compounds of these
-shapes and fixed triangles or meshes. Round solids retain continuous collision
+shapes and fixed triangles, planes or meshes. Round solids retain continuous collision
 boundaries and geometric mass properties. Qualified terrain pairs preserve
 simultaneous valley supports and merge duplicate seam or ridge reactions.
 Public translation sweeps and filtered world queries accompany rigid or spring

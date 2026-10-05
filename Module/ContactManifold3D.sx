@@ -1,3 +1,4 @@
+use GFX.Physics.Geometry3D.plane_contact_points3d
 use GFX.Physics.Geometry3D.axial_shape3d
 use GFX.Physics.Geometry3D.axial_pair_contact_points3d
 use GFX.Physics.Geometry3D.axial_contact_feature3d
@@ -382,6 +383,7 @@ package func box_surface_contact_points(box:Box3D, transform:Transform3D,
         cylinder(_) => {}
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
+        plane(_) => {}
     }
     if points.is_empty() { return [witness] }
     return reduce_contact_points3d(points,
@@ -579,4 +581,12 @@ func contact_tangent3d(normal:Math.Vec3) Math.Vec3 {
     var axis = Math.Vec3.up()
     if Math.abs(normal.y) > 0.9 { axis = Math.Vec3.right() }
     return normal.cross(axis).normalized()
+}
+
+package func plane_surface_contact_points(volume:ShapePlacement3D, surface:ShapePlacement3D,
+    normal:Math.Vec3) Math.Vec3[] {
+    var axis = Math.Vec3.right()
+    if Math.abs(normal.x) > 0.8 { axis = Math.Vec3.up() }
+    let tangent = normal.cross(axis).normalized()
+    return reduce_contact_points3d(plane_contact_points3d(volume,surface), tangent, normal.cross(tangent))
 }

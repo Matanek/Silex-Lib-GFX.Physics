@@ -25,6 +25,7 @@ public struct CompoundChild3D {
             cylinder(_) => {}
             tapered_cylinder(_) => {}
             tapered_capsule(_) => {}
+            plane(_) => { panic("GFX.Physics.CompoundChild3D cannot contain a plane") }
         }
         self.id = id
         self.shape = shape

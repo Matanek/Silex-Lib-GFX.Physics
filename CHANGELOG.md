@@ -6,6 +6,10 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `Plane3D` represents an infinite half-space on a fixed body: distance, rays,
+  sweeps, convex supports, moving compounds, sensors and linear CCD. Pair
+  selection does not assign an artificial finite bound to the plane.
+
 - Height grids accept a per-vertex hole mask and an explicit diagonal choice.
   Surviving triangles remain immutable, upward facing and replaceable on a
   fixed body; sweeps, falls, CCD and events respect openings and their real rims.

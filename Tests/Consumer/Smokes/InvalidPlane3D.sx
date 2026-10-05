@@ -1,0 +1,26 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => {
+            for argument in arguments { if argument == expected { return true } }
+        }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+
+func main() {
+    if selected("zero") { Physics.Plane3D(Math.Vec3()) }
+    if selected("normal") { Physics.Plane3D(Math.Vec3(Math.sqrt(-1.0),1.0,0.0)) }
+    if selected("offset") { Physics.Plane3D(offset:Math.sqrt(-1.0)) }
+    if selected("dynamic") { var world = Physics.World3D();world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.plane(Physics.Plane3D())) }
+    if selected("kinematic") { var world = Physics.World3D();world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic ..shape = Physics.Shape3D.plane(Physics.Plane3D())) }
+    if selected("replace") { var world = Physics.World3D();var body = world.create_rigid_body();body.set_shape(Physics.Shape3D.plane(Physics.Plane3D())) }
+    if selected("compound") { Physics.CompoundChild3D(7,Physics.Shape3D.plane(Physics.Plane3D())) }
+    if selected("pair") { Physics.Geometry3D.distance(Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D())),Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D()))) }
+    if selected("cast") { Physics.ShapeCast3D(Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D())),Math.Vec3.right()) }
+    panic("invalid plane was accepted")
+}

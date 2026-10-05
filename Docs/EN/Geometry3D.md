@@ -1,6 +1,6 @@
 # Standalone 3D geometry
 
-`GFX.Physics` provides spheres, boxes, capsules, cylinders and tapered shapes, convex hulls, triangles, meshes, immutable compounds, and rigid poses as Silex values. They
+`GFX.Physics` provides spheres, boxes, capsules, cylinders and tapered shapes, convex hulls, triangles, planes, meshes, immutable compounds, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
 The [3D world](World3D.md) uses these first shapes for free body motion.
 
@@ -42,6 +42,51 @@ rejected.
 The conventions follow `STD.Math`: right-handed coordinates with Y up. A pose
 has no scale; dimensions belong to the shape. Transforms do not silently fix
 an invalid quaternion.
+
+## Plane and half-space
+
+`Plane3D(normal:Math.Vec3.up(), offset:0.0)` defines the local half-space
+`normal.dot(point) <= offset`. A finite nonzero direction is normalized;
+`offset` remains the signed length along that direction.
+`Plane3D(Math.Vec3(0.0, 2.0, 0.0), 1.0)` therefore has its surface at `y=1`.
+The pose transforms the plane without giving it a size or thickness.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let floor = Physics.ShapePlacement3D(Physics.Shape3D.plane(Physics.Plane3D()))
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5, 0.5)),
+        Physics.Transform3D(Math.Vec3(10000.0, 2.0, 0.0))), Math.Vec3(0.0, -4.0, 0.0))
+    let hit = Physics.Geometry3D.shape_cast(cast, floor)
+    assert(hit.hit && Math.abs(hit.fraction - 0.375) < 0.00001)
+}
+```
+
+`Shape3D.plane` supports distances and overlaps with convex volumes or
+compounds, and is a target for rays, sphere sweeps and convex shape sweeps.
+Distance uses the deepest volume support towards the half-space, its
+projection on the plane, and a normal from the volume towards the plane.
+A ray starting inside the occupied half-space returns `fraction=0`, its origin
+as point and the outward normal; it does not search for an exit. An initially
+overlapping sweep also returns fraction zero, with a point on the plane.
+The plane cannot be the moving volume in ShapeCast3D.
+
+In the world, a plane requires a fixed body; dynamic bodies, kinematic bodies,
+compound children and plane/plane distances are rejected. Contacts, sensors,
+filters, mutations and translation CCD visit volumes or compound leaves.
+Flat caps and convex faces retain up to four supporting points; no giant
+radius limits body selection. Selection visits each active plane against
+enabled bodies. Floating coordinates retain their usual precision: an infinite
+surface does not remove numerical limits at large coordinates.
+
+The analytic geometry is infinite. Pinned Jolt uses a virtual broadphase box
+with configurable half-extent (1000 by default) and states that contacts near
+that boundary are inconsistent; this internal option is not part of the Silex
+API. Jolt query controls are qualified inside that region, distant Silex
+contacts independently.
 
 ## Cylinders and tapered shapes
 

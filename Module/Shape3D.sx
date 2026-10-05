@@ -1,3 +1,4 @@
+use GFX.Physics.Plane3D.Plane3D
 use GFX.Physics.Cylinder3D.Cylinder3D
 use GFX.Physics.TaperedCylinder3D.TaperedCylinder3D
 use GFX.Physics.TaperedCapsule3D.TaperedCapsule3D
@@ -10,6 +11,7 @@ use GFX.Physics.Triangle3D.Triangle3D
 use GFX.Physics.TriangleMesh3D.TriangleMesh3D
 
 public enum Shape3D {
+    plane(Plane3D)
     box(Box3D)
     sphere(Sphere3D)
     capsule(Capsule3D)
