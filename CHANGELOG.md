@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `ShapeCast3D`, `Geometry3D.shape_cast` and `World3D.shape_cast` add capsule,
+  box and convex hull translation sweeps with independent initial poses,
+  bilateral triangles, identities and filters. Contact witnesses use the
+  geometric boundary; orientation stays fixed and the simulation solver's
+  CCD contract is unchanged.
+
 - `SphereCast3D` and `Geometry3D.sphere_cast` sweep a sphere volume against
   qualified shapes: first face/edge/vertex impact, tangency, initial overlap and
   identities. `World3D.sphere_cast` adds filters, exclusion and a safe body handle

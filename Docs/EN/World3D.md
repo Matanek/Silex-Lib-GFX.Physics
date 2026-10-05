@@ -249,6 +249,13 @@ from its nearest child; `child_id()` gives its ID and is `-1` for a primitive.
 Each `WorldRayHit3D` also exposes `body()`, `point()`, `normal()`, and a
 `fraction()` between 0 and 1.
 
+`shape_cast(cast, ignore_body, filter)` returns `WorldCastHit3D?` for a capsule,
+box, convex hull or sphere. `body()`, `point()`, `normal()`, `fraction()` and
+`child_id()` follow the world's other hit conventions; filters, exclusion and
+snapshot lifetime are identical. `ShapeCast3D` carries the volume's initial
+pose; bodies are queried at their current poses, without a simulation step or
+mutation. See [volume sweeps](Geometry3D.md#sweep-a-capsule-box-or-convex-hull).
+
 `sphere_cast(cast, ignore_body, filter)` returns the first impact of a
 `SphereCast3D` volume, or `null`. `WorldSphereHit3D` exposes `body()`, `point()`,
 `normal()`, `fraction()` and `child_id()` with the

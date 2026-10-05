@@ -252,11 +252,58 @@ equally close faces have a deterministic witness, without a guarantee of
 complete physical recovery.
 
 The target remains stationary throughout the query. There is no rotation
-sweep, implicit body movement, or public box/capsule/convex sweep. Meshes and
+sweep or implicit body movement. For other convex volumes, see
+[their sweep](#sweep-a-capsule-box-or-convex-hull). Meshes and
 convex hulls traverse their boundary per query; this API does not qualify very
 large terrains. Numerical witnesses cover scales 0.1, 1 and 10 with rigid
 poses and compensated vertex offsets; they do not bound every possible float
 coordinate. To filter bodies in a world, see [World3D](World3D.md#query-bodies-in-the-world).
+
+## Sweep a capsule, box or convex hull
+
+To move a volume up to its first obstacle, describe its initial placement and
+translation with `ShapeCast3D(placement, translation)`:
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let obstacle = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    let probe = Physics.ShapePlacement3D(Physics.Shape3D.capsule(
+        Physics.Capsule3D(0.5, 0.5)), Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.8)))
+    let cast = Physics.ShapeCast3D(probe, Math.Vec3(6.0, 0.0, 0.0))
+    let hit = Physics.Geometry3D.shape_cast(cast, obstacle)
+    assert(hit.hit)
+    print(hit.fraction) // 0.35
+}
+```
+
+`Geometry3D.shape_cast(cast, target)` returns `CastResult3D`, using the sphere
+sweep's fields and conventions. The impact pose keeps
+`placement.transform().rotation`; its position is
+`placement.transform().position + translation × fraction`. Translation must
+be finite, nonzero, have finite squared length, and keep a finite endpoint.
+The moving volume may be a sphere, capsule, box or convex hull; the constructor
+rejects moving triangles, meshes and compounds.
+
+All current target families are accepted, including bilateral triangles,
+meshes and compounds. The first obstacle and its `child_id` are retained;
+strict ties preserve construction order. Initial overlap or tangency returns
+fraction zero, even when moving outward. The initial distance witness is
+deterministic; it does not provide complete recovery from deep penetration.
+Several contact points or normals may be geometrically valid; uniqueness is
+not guaranteed.
+
+The target and the moving volume's orientation remain fixed. Spheres reuse
+analytic sweeps; other pairs advance by separating planes or distances, with
+a convergence margin of `10⁻⁷` times the moving volume's extent. Rounded
+tangencies may therefore be reported slightly before exact contact.
+Qualification covers fractions within `0.0002`, normals within `0.002`, scales
+0.1/1/10, independent poses, compensated offsets and 2,000-unit translations.
+It does not bound all float values or very large terrains. Queries traverse
+target leaves and do not modify bodies. See
+[filtered world queries](World3D.md#query-bodies-in-the-world).
 
 ## Immutable compound
 

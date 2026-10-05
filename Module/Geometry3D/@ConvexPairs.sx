@@ -146,9 +146,9 @@ func convex_feature_pair3d(first:CapsuleAxis3D, second:CapsuleAxis3D) CapsuleAxi
 
 func convex_convex_distance3d(first:ConvexHull3D, first_transform:Transform3D,
     second:ConvexHull3D, second_transform:Transform3D,
-    contact_only:bool = false) DistanceResult3D {
+    contact_only:bool = false, boundary_only:bool = false) DistanceResult3D {
     let axis = convex_pair_axis3d(first, first_transform, second, second_transform, contact_only)
-    if axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001) {
+    if !boundary_only && (axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001)) {
         let pair = convex_feature_pair3d(convex_support_segment3d(first, first_transform, axis.normal),
             convex_support_segment3d(second, second_transform, axis.normal.negated()))
         return DistanceResult3D(pair.first, pair.second, axis.normal, axis.gap)

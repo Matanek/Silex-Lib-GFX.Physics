@@ -1,0 +1,148 @@
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+// A separating-plane speed bound requires a convex leaf, not a target union.
+func convex_shape_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D {
+    match target.shape() {
+        compound(compound) => {
+            var result = CastResult3D(); var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let hit = convex_shape_cast3d(cast, ShapePlacement3D(child.shape,
+                    compound_child_transform(target.transform(), child)))
+                if hit.hit { result = nearest_sphere_cast3d(result,
+                    CastResult3D(hit.point, hit.normal, hit.fraction, child.id)) }
+                index++
+            }
+            return result
+        }
+        mesh(mesh) => {
+            var result = CastResult3D(); var index = 0
+            while index < mesh.triangle_count() {
+                let hit = convex_shape_cast3d(cast, ShapePlacement3D(
+                    Shape3D.triangle(mesh.triangle(index)), target.transform()))
+                if hit.hit { result = nearest_sphere_cast3d(result,
+                    CastResult3D(hit.point, hit.normal, hit.fraction, index)) }
+                index++
+            }
+            return result
+        }
+        else => {}
+    }
+    match cast.placement.shape() {
+        sphere(sphere) => { return sphere_shape_cast3d(SphereCast3D(sphere,
+            cast.placement.transform().position, cast.translation), target) }
+        else => {}
+    }
+    let start = Geometry3D.distance(cast.placement, target)
+    if start.separation <= 0.0 { return CastResult3D(start.second_point, start.normal.negated(), 0.0) }
+    match target.shape() {
+        sphere(sphere) => {
+            let hit = sphere_shape_cast3d(SphereCast3D(sphere,
+                target.transform().position, cast.translation.negated()), cast.placement)
+            if !hit.hit { return hit }
+            return CastResult3D(hit.point.add(cast.translation.multiply(hit.fraction)),
+                hit.normal.negated(), hit.fraction)
+        }
+        else => {}
+    }
+    let pose = cast.placement.transform()
+    let tolerance = shape_cast_extent3d(cast.placement.shape()) * 0.0000001
+    var fraction = 0.0
+    var normal = start.normal
+    var iteration = 0
+    while iteration < 128 && fraction <= 1.0 {
+        let moving = ShapePlacement3D(cast.placement.shape(),
+            Transform3D(pose.position.add(cast.translation.multiply(fraction)), pose.rotation))
+        let separating_plane = shape_cast_plane3d(moving, target)
+        var distance = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
+        if let plane = separating_plane {
+            // SAT supplies a true separating plane for polyhedra, including at
+            // contact where a tiny boundary vector has no reliable direction.
+            distance = DistanceResult3D(Math.Vec3(), Math.Vec3(), plane.normal, plane.gap)
+        } else { distance = Geometry3D.distance(moving, target) }
+        if distance.separation <= tolerance {
+            if separating_plane != null { distance = shape_cast_boundary3d(moving, target) }
+            return CastResult3D(distance.second_point, normal.negated(), fraction)
+        }
+        normal = distance.normal
+        let closing = cast.translation.dot(normal)
+        if closing <= 0.0 { return CastResult3D() }
+        let next = fraction + distance.separation / closing
+        if next <= fraction { return CastResult3D() }
+        fraction = next
+        iteration++
+    }
+    return CastResult3D()
+}
+
+func shape_cast_extent3d(shape:Shape3D) float {
+    match shape {
+        sphere(value) => { return value.radius }
+        box(value) => { return value.half_size().length() }
+        capsule(value) => { return value.radius + value.half_height }
+        convex(value) => { return convex_extent3d(value) }
+        else => { panic("GFX.Physics.ShapeCast3D requires a convex moving volume") }
+    }
+}
+
+func shape_cast_plane3d(first:ShapePlacement3D, second:ShapePlacement3D) ConvexPairAxis3D? {
+    match first.shape() {
+        box(box) => {
+            match second.shape() {
+                box(target) => {
+                    let axis = box_box_axis(box, first.transform(), target, second.transform())
+                    return ConvexPairAxis3D(axis.normal, axis.gap)
+                }
+                convex(target) => {
+                    let axis = box_convex_axis3d(box, first.transform(), target, second.transform())
+                    return ConvexPairAxis3D(axis.normal, axis.gap)
+                }
+                triangle(target) => {
+                    let pose = second.transform()
+                    let world = Triangle3D(pose.point(target.first), pose.point(target.second), pose.point(target.third))
+                    let axis = box_triangle_axis3d(box, first.transform(), world)
+                    return ConvexPairAxis3D(axis.normal, axis.gap)
+                }
+                else => {}
+            }
+        }
+        convex(hull) => {
+            match second.shape() {
+                box(_) => {
+                    if let reverse = shape_cast_plane3d(second, first) { return ConvexPairAxis3D(reverse.normal.negated(), reverse.gap) }
+                }
+                convex(target) => { return convex_pair_axis3d(hull, first.transform(), target, second.transform(), false) }
+                triangle(target) => { return convex_triangle_axis3d(hull, first.transform(), target, second.transform(), false) }
+                else => {}
+            }
+        }
+        else => {}
+    }
+    return null
+}
+
+func shape_cast_boundary3d(first:ShapePlacement3D, second:ShapePlacement3D) DistanceResult3D {
+    match first.shape() {
+        box(box) => {
+            match second.shape() {
+                box(target) => { return box_box_distance(box, first.transform(), target, second.transform(), false, true) }
+                convex(target) => { return box_convex_distance3d(box, first.transform(), target, second.transform(), false, true) }
+                triangle(target) => { return box_triangle_distance(box, first.transform(), target, second.transform(), false, true) }
+                else => {}
+            }
+        }
+        convex(hull) => {
+            match second.shape() {
+                box(_) => { return reversed_distance(shape_cast_boundary3d(second, first)) }
+                convex(target) => { return convex_convex_distance3d(hull, first.transform(), target, second.transform(), false, true) }
+                triangle(target) => { return convex_triangle_distance3d(hull, first.transform(), target, second.transform(), false, true) }
+                else => {}
+            }
+        }
+        else => {}
+    }
+    return Geometry3D.distance(first, second)
+}

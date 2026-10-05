@@ -1,0 +1,207 @@
+use GFX.Physics
+use STD.Math
+
+func hull(scale:float = 1.0, offset:Math.Vec3 = Math.Vec3()) Physics.Shape3D {
+    var points:Math.Vec3[] = []; var index = 0
+    while index < 8 {
+        var x = -0.5; var y = -0.5; var z = -0.5
+        if index % 2 == 1 { x = 0.5 }
+        if (index / 2) % 2 == 1 { y = 0.5 }
+        if index / 4 == 1 { z = 0.5 }
+        points.append(Math.Vec3(x, y, z).multiply(scale).add(offset)); index++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func movers(scale:float = 1.0) Physics.Shape3D[] {
+    return [Physics.Shape3D.sphere(Physics.Sphere3D(0.5 * scale)),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.5 * scale, 0.5 * scale)),
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(scale))), hull(scale)]
+}
+func cast(shape:Physics.Shape3D, origin:Math.Vec3, translation:Math.Vec3,
+    target:Physics.ShapePlacement3D, rotation:Math.Quat = Math.Quat.identity()) Physics.CastResult3D {
+    let result = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(Physics.ShapePlacement3D(shape,
+        Physics.Transform3D(origin, rotation)), translation), target)
+    if result.hit && result.fraction > 0.0 {
+        let point = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)), Physics.Transform3D(result.point))
+        let stopped = Physics.ShapePlacement3D(shape, Physics.Transform3D(origin.add(translation.multiply(result.fraction)), rotation))
+        let moving_gap = Physics.Geometry3D.distance(point, stopped).separation
+        let target_gap = Physics.Geometry3D.distance(point, target).separation
+        assert(Math.abs(moving_gap + 0.00001) < 0.0001)
+        assert(Math.abs(target_gap + 0.00001) < 0.0001)
+    }
+    return result
+}
+func expect(name:str, result:Physics.CastResult3D, fraction:float, normal:Math.Vec3, child:int = -1) {
+    print("cast name=$(name) hit=$(result.hit) fraction=$(result.fraction) point=$(result.point.x),$(result.point.y),$(result.point.z) normal=$(result.normal.x),$(result.normal.y),$(result.normal.z) child=$(result.child_id)")
+    assert(result.hit && Math.abs(result.fraction - fraction) <= 0.0002)
+    assert(result.normal.nearly_equal(normal, 0.001)); assert(result.child_id == child)
+}
+func face_cases() {
+    var mover_index = 0
+    for mover in movers() {
+        var target_index = 0
+        for shape in movers() {
+            let target = Physics.ShapePlacement3D(shape)
+            let result = cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), target)
+            expect("face$(mover_index)$(target_index)", result, 1.0 / 3.0, Math.Vec3(-1.0, 0.0, 0.0))
+            let witness = Physics.Geometry3D.distance(Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.0001)), Physics.Transform3D(result.point)), target)
+            assert(Math.abs(witness.separation + 0.0001) < 0.0001)
+            expect("end$(mover_index)$(target_index)", cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(2.0, 0.0, 0.0), target), 1.0, Math.Vec3(-1.0, 0.0, 0.0))
+            assert(!cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(1.99, 0.0, 0.0), target).hit)
+            assert(!cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(-6.0, 0.0, 0.0), target).hit)
+            expect("long$(mover_index)$(target_index)", cast(mover, Math.Vec3(-1000.0, 0.0, 0.0), Math.Vec3(2000.0, 0.0, 0.0), target), 0.4995, Math.Vec3(-1.0, 0.0, 0.0))
+            target_index++
+        }
+        mover_index++
+    }
+}
+test "all convex mover and primitive target faces, endpoints, short, away and long routes" { face_cases() }
+func capsule_edges() {
+    let capsule = Physics.Shape3D.capsule(Physics.Capsule3D(0.5, 0.5))
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    expect("capsedge", cast(capsule, Math.Vec3(-3.0, 0.0, 0.8), Math.Vec3(6.0, 0.0, 0.0), target), 0.35, Math.Vec3(-0.8, 0.0, 0.6))
+    expect("capstangent", cast(capsule, Math.Vec3(-3.0, 0.0, 1.0), Math.Vec3(6.0, 0.0, 0.0), target), 2.5 / 6.0, Math.Vec3.back())
+    assert(!cast(capsule, Math.Vec3(-3.0, 0.0, 1.001), Math.Vec3(6.0, 0.0, 0.0), target).hit)
+    let caps_target = Physics.ShapePlacement3D(capsule)
+    expect("capsjoin", cast(capsule, Math.Vec3(-3.0, 1.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), caps_target), 1.0 / 3.0, Math.Vec3(-1.0, 0.0, 0.0))
+    expect("capscap", cast(capsule, Math.Vec3(-3.0, 1.6, 0.0), Math.Vec3(6.0, 0.0, 0.0), caps_target), 2.2 / 6.0, Math.Vec3(-0.8, 0.6, 0.0))
+    expect("capsroundtangent", cast(capsule, Math.Vec3(-3.0, 2.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), caps_target), 0.5, Math.Vec3.up())
+}
+test "capsule edges, cap joins and tangencies preserve the first impact" { capsule_edges() }
+func initial_cases() {
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    for mover in movers() {
+        expect("initial", cast(mover, Math.Vec3(-0.9, 0.0, 0.0), Math.Vec3(-6.0, 0.0, 0.0), target), 0.0, Math.Vec3(-1.0, 0.0, 0.0))
+        expect("initialtangent", cast(mover, Math.Vec3(-1.0, 0.0, 0.0), Math.Vec3(-6.0, 0.0, 0.0), target), 0.0, Math.Vec3(-1.0, 0.0, 0.0))
+    }
+}
+test "initial overlaps and tangencies return zero even while receding" { initial_cases() }
+func main() { face_cases(); capsule_edges(); initial_cases(); terrain_cases(); rotated_cases(); transformed_cases(); world_cases(); world_child_cases(); print("Shape casts: all cases passed") }
+
+func triangle() Physics.Triangle3D {
+    return Physics.Triangle3D(Math.Vec3(0.0, -2.0, -2.0), Math.Vec3(0.0, 2.0, -2.0), Math.Vec3(0.0, 0.0, 2.0))
+}
+func terrain_cases() {
+    let face = triangle()
+    let later = Physics.Triangle3D(face.first.add(Math.Vec3.right()), face.second.add(Math.Vec3.right()), face.third.add(Math.Vec3.right()))
+    var index = 0
+    for mover in movers() {
+        let target = Physics.ShapePlacement3D(Physics.Shape3D.triangle(face))
+        expect("trifront$(index)", cast(mover, Math.Vec3(3.0, 0.0, 0.0), Math.Vec3(-6.0, 0.0, 0.0), target), 2.5 / 6.0, Math.Vec3.right())
+        expect("triback$(index)", cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), target), 2.5 / 6.0, Math.Vec3(-1.0, 0.0, 0.0))
+        var mesh = Physics.ShapePlacement3D(Physics.Shape3D.mesh(Physics.TriangleMesh3D([later, face])))
+        expect("mesh$(index)", cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), mesh), 2.5 / 6.0, Math.Vec3(-1.0, 0.0, 0.0), 1)
+        var tied = Physics.ShapePlacement3D(Physics.Shape3D.mesh(Physics.TriangleMesh3D([face, face])))
+        expect("meshtie$(index)", cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), tied), 2.5 / 6.0, Math.Vec3(-1.0, 0.0, 0.0), 0)
+        assert(!cast(mover, Math.Vec3(-3.0, 0.0, 3.0), Math.Vec3(6.0, 0.0, 0.0), mesh).hit)
+        index++
+    }
+}
+test "shape casts see bilateral triangles, nearest mesh faces, stable ties and holes" { terrain_cases() }
+func transformed_cases() {
+    let scales:float[] = [0.1, 1.0, 10.0]
+    var variant = 0
+    for scale in scales {
+        var step = 0
+        while step < 4 {
+            let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0).multiply(scale),
+                Math.Quat.angle_axis(0.37 * step as float, Math.Vec3(1.0, 2.0, 3.0).normalized()))
+            let offset = Math.Vec3(3.0, -4.0, 2.0).multiply(scale)
+            var compound = Physics.Shape3D.compound(Physics.Compound3D([
+                Physics.CompoundChild3D(9, hull(scale), Physics.Transform3D(Math.Vec3(2.0 * scale, 0.0, 0.0))),
+                Physics.CompoundChild3D(71, hull(scale, offset), Physics.Transform3D(offset.negated()))]))
+            var index = 0
+            for mover in movers(scale) {
+                let origin = pose.point(Math.Vec3(-3.0, 0.0, 0.0).multiply(scale))
+                let translation = pose.vector(Math.Vec3(6.0 * scale, 0.0, 0.0))
+                let hit = cast(mover, origin, translation, Physics.ShapePlacement3D(compound, pose), pose.rotation)
+                expect("pose$(variant)_$(index)", hit, 1.0 / 3.0, pose.vector(Math.Vec3(-1.0, 0.0, 0.0)), 71)
+                let stop = Physics.ShapePlacement3D(mover, Physics.Transform3D(origin.add(translation.multiply(hit.fraction)), pose.rotation))
+                let distance = Physics.Geometry3D.distance(stop, Physics.ShapePlacement3D(compound, pose))
+                assert(Math.abs(distance.separation) < 0.00005 * scale)
+                index++
+            }
+            step++; variant++
+        }
+    }
+}
+test "shape casts preserve scales, rotations and compensated hull children" { transformed_cases() }
+
+func near(value:float, expected:float) { assert(Math.abs(value - expected) < 0.0002) }
+func world_cases() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+    var sensor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = shape
+        ..is_sensor = true ..collision_filter = Physics.CollisionFilter3D(category_bits:2))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic ..shape = shape
+        ..transform = Physics.Transform3D(Math.Vec3(2.0, 0.0, 0.0)) ..collision_filter = Physics.CollisionFilter3D(category_bits:4))
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(hull(), Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0))), Math.Vec3(6.0, 0.0, 0.0))
+    let before = body.transform(); let count = world.body_count()
+    if let hit = world.shape_cast(cast) { assert(hit.body().same_body(sensor)); near(hit.fraction(), 1.0 / 3.0) } else { panic("sensor hit missing") }
+    if let hit = world.shape_cast(cast, filter:Physics.QueryFilter3D(include_sensors:false)) {
+        assert(hit.body().same_body(body)); near(hit.fraction(), 2.0 / 3.0)
+    } else { panic("body hit missing") }
+    if let hit = world.shape_cast(cast, ignore_body:sensor) { assert(hit.body().same_body(body)) } else { panic("ignore failed") }
+    if let hit = world.shape_cast(cast, filter:Physics.QueryFilter3D(mask_bits:4)) { assert(hit.body().same_body(body)) } else { panic("mask failed") }
+    assert(world.shape_cast(cast, filter:Physics.QueryFilter3D(mask_bits:8)) == null)
+    sensor.set_enabled(false)
+    if let hit = world.shape_cast(cast) { assert(hit.body().same_body(body)) } else { panic("disabled failed") }
+    sensor.set_enabled(true); body.set_transform(Physics.Transform3D())
+    if let hit = world.shape_cast(cast) { assert(hit.body().same_body(sensor)) } else { panic("stable tie failed") }
+    body.set_transform(before); sensor.set_sensor(false)
+    assert(body.transform().position == before.position && world.body_count() == count && world.contact_count() == 0)
+    if let snapshot = world.shape_cast(cast) {
+        let fraction = snapshot.fraction(); let point = snapshot.point(); let normal = snapshot.normal()
+        world.destroy_rigid_body(sensor)
+        var recycled = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = shape)
+        assert(!snapshot.body().is_valid() && !snapshot.body().same_body(recycled))
+        near(snapshot.fraction(), fraction); assert(snapshot.point() == point && snapshot.normal() == normal)
+        recycled.set_enabled(false)
+    } else { panic("snapshot missing") }
+    assert(world.body_count() == count)
+}
+
+func world_child_cases() {
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(hull(), Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0))), Math.Vec3(6.0, 0.0, 0.0))
+    var retained:Physics.WorldCastHit3D? = null
+    {
+        var world = Physics.World3D()
+        var compound = Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(71, hull()), Physics.CompoundChild3D(9, hull())]))
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = compound ..allow_sleep = false)
+        if let hit = world.shape_cast(cast) {
+            assert(hit.body().same_body(body) && hit.child_id() == 71); near(hit.fraction(), 1.0 / 3.0)
+            retained = hit
+        } else { panic("compound hit missing") }
+        let original_point = retained!.point()
+        body.set_shape(Physics.Shape3D.compound(Physics.Compound3D([
+            Physics.CompoundChild3D(9, hull(), Physics.Transform3D(Math.Vec3(2.0, 0.0, 0.0)))])))
+        if let hit = world.shape_cast(cast) { assert(hit.child_id() == 9); near(hit.fraction(), 2.0 / 3.0) } else { panic("mutated hit missing") }
+        assert(retained!.child_id() == 71 && retained!.point() == original_point)
+    }
+    assert(!retained!.body().is_valid() && retained!.child_id() == 71)
+}
+test "shape world query retains child identities across mutation and world destruction" { world_child_cases() }
+
+test "shape world query respects filters, exclusion, ties and snapshots" { world_cases() }
+
+func rotated_cases() {
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    let rotation = Math.Quat.angle_axis(Math.pi() * 0.25, Math.Vec3.up())
+    var rotated:Physics.Shape3D[] = [Physics.Shape3D.box(Physics.Box3D()), hull()]
+    var index = 0
+    for mover in rotated {
+        expect("skew$(index)", cast(mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), target, rotation),
+            (2.5 - Math.sqrt(0.5)) / 6.0, Math.Vec3(-1.0, 0.0, 0.0)); index++
+    }
+    let capsule = Physics.Shape3D.capsule(Physics.Capsule3D(0.5, 0.5))
+    expect("tiltedcaps", cast(capsule, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), target,
+        Math.Quat.angle_axis(Math.pi() * 0.25, Math.Vec3.back())), (2.0 - Math.sqrt(0.125)) / 6.0, Math.Vec3(-1.0, 0.0, 0.0))
+    expect("horizontalcaps", cast(capsule, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), target,
+        Math.Quat.angle_axis(Math.pi() * 0.5, Math.Vec3.back())), 0.25, Math.Vec3(-1.0, 0.0, 0.0))
+    let offset = Math.Vec3(3.0, -4.0, 2.0)
+    expect("offsetmover", cast(hull(1.0, offset), Math.Vec3(-3.0, 0.0, 0.0).subtract(rotation.rotate(offset)),
+        Math.Vec3(6.0, 0.0, 0.0), target, rotation), (2.5 - Math.sqrt(0.5)) / 6.0, Math.Vec3(-1.0, 0.0, 0.0))
+    assert(!cast(hull(), Math.Vec3(-3.0, 0.0, 2.0), Math.Vec3(6.0, 0.0, 0.0), target, rotation).hit)
+}
+test "shape casts preserve independent rotations and a compensated moving hull origin" { rotated_cases() }

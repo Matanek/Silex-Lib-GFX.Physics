@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `ShapeCast3D`, `Geometry3D.shape_cast` et `World3D.shape_cast` ajoutent les
+  balayages translationnels de capsule, boîte et enveloppe convexe, avec
+  poses initiales indépendantes, triangles bilatéraux, identités et filtres.
+  Les témoins au contact utilisent la frontière géométrique ; l'orientation
+  reste constante et le solveur de simulation conserve son contrat de CCD.
+
 - `SphereCast3D` et `Geometry3D.sphere_cast` balayent un volume sphérique contre
   les formes qualifiées : premier impact face/arête/sommet, tangence, recouvrement
   initial et identités. `World3D.sphere_cast` ajoute filtres, exclusion et handle

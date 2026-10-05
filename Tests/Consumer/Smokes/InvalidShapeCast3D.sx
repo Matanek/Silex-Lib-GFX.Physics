@@ -1,0 +1,32 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var translation = Math.Vec3.right()
+    var overflow:float = 3.4028235e38; overflow *= 2.0
+    if selected("zero") { translation = Math.Vec3() }
+    if selected("translation") { translation = Math.Vec3(overflow, 0.0, 0.0) }
+    if selected("squared") { translation = Math.Vec3(1.0e30, 0.0, 0.0) }
+    if selected("nan") { translation = Math.Vec3(overflow - overflow, 0.0, 0.0) }
+    var shape = Physics.Shape3D.box(Physics.Box3D())
+    let triangle = Physics.Triangle3D(Math.Vec3(), Math.Vec3.right(), Math.Vec3.up())
+    if selected("triangle") { shape = Physics.Shape3D.triangle(triangle) }
+    if selected("mesh") { shape = Physics.Shape3D.mesh(Physics.TriangleMesh3D([triangle])) }
+    if selected("compound") { shape = Physics.Shape3D.compound(Physics.Compound3D([Physics.CompoundChild3D(1, shape)])) }
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(shape), translation)
+    var world = Physics.World3D(); var other = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape)
+    if selected("foreign") {
+        var foreign = other.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape)
+        world.shape_cast(cast, ignore_body:foreign)
+    }
+    if selected("stale") { world.destroy_rigid_body(body); world.shape_cast(cast, ignore_body:body) }
+    panic("invalid shape cast was accepted")
+}

@@ -62,11 +62,11 @@ func triangle_support_segment3d(triangle:Triangle3D, surface:Transform3D,
 }
 
 package func convex_triangle_distance3d(hull:ConvexHull3D, transform:Transform3D,
-    triangle:Triangle3D, surface:Transform3D, contact_only:bool = false) DistanceResult3D {
+    triangle:Triangle3D, surface:Transform3D, contact_only:bool = false, boundary_only:bool = false) DistanceResult3D {
     let axis = convex_triangle_axis3d(hull, transform, triangle, surface, contact_only)
     // Contact detection uses the SAT normal even just outside the surface.
     // Normalizing a sub-micrometer boundary witness amplifies rounding noise.
-    if contact_only || axis.gap <= 0.0 {
+    if !boundary_only && (contact_only || axis.gap <= 0.0) {
         let pair = convex_feature_pair3d(convex_support_segment3d(hull, transform, axis.normal),
             triangle_support_segment3d(triangle, surface, axis.normal.negated()))
         return DistanceResult3D(pair.first, pair.second, axis.normal, axis.gap)

@@ -54,12 +54,12 @@ func triangle_support3d(triangle:Triangle3D, direction:Math.Vec3) Math.Vec3 {
 package func box_triangle_distance(
     box:Box3D, transform:Transform3D,
     triangle:Triangle3D, triangle_transform:Transform3D,
-    contact_only:bool = false
+    contact_only:bool = false, boundary_only:bool = false
 ) DistanceResult3D {
     let world = Triangle3D(triangle_transform.point(triangle.first),
         triangle_transform.point(triangle.second), triangle_transform.point(triangle.third))
     let separating = box_triangle_axis3d(box, transform, world)
-    if separating.gap <= 0.0 || (contact_only && separating.gap > 0.000001) {
+    if !boundary_only && (separating.gap <= 0.0 || (contact_only && separating.gap > 0.000001)) {
         return DistanceResult3D(box_support(box, transform, separating.normal),
             triangle_support3d(world, separating.normal.negated()),
             separating.normal, separating.gap)

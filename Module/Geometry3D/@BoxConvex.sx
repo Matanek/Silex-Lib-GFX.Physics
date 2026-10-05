@@ -60,18 +60,18 @@ func convex_support3d(hull:ConvexHull3D, transform:Transform3D, direction:Math.V
 
 func box_convex_distance3d(box:Box3D, transform:Transform3D,
     hull:ConvexHull3D, hull_transform:Transform3D,
-    contact_only:bool = false) DistanceResult3D {
+    contact_only:bool = false, boundary_only:bool = false) DistanceResult3D {
     let axis = box_convex_axis3d(box, transform, hull, hull_transform)
-    if axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001) {
+    if !boundary_only && (axis.gap <= 0.0 || (contact_only && axis.gap > 0.000001)) {
         return DistanceResult3D(box_support(box, transform, axis.normal),
             convex_support3d(hull, hull_transform, axis.normal.negated()), axis.normal, axis.gap)
     }
     // SAT gives a separating lower bound, not Euclidean distance at an edge.
     // When separated, minimizing against the complete boundary is exact.
-    var best = box_triangle_distance(box, transform, hull.triangle(0), hull_transform)
+    var best = box_triangle_distance(box, transform, hull.triangle(0), hull_transform, false, boundary_only)
     var index = 1
     while index < hull.triangle_count() {
-        let candidate = box_triangle_distance(box, transform, hull.triangle(index), hull_transform)
+        let candidate = box_triangle_distance(box, transform, hull.triangle(index), hull_transform, false, boundary_only)
         if candidate.separation < best.separation { best = candidate }
         index++
     }

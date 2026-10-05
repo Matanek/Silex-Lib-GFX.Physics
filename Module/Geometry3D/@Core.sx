@@ -60,6 +60,29 @@ public struct SphereCast3D {
     }
 }
 
+// A convex volume moves by translation, keeping its initial orientation.
+public struct ShapeCast3D {
+    let placement:ShapePlacement3D
+    let translation:Math.Vec3
+
+    init(placement:ShapePlacement3D, translation:Math.Vec3) {
+        match placement.shape() {
+            sphere(_) => {}
+            box(_) => {}
+            capsule(_) => {}
+            convex(_) => {}
+            else => { panic("GFX.Physics.ShapeCast3D requires a sphere, box, capsule or convex hull") }
+        }
+        if !finite_geometry3d_vector(translation) || translation.length_squared() <= 0.0 ||
+            !finite_geometry3d_value(translation.length_squared()) ||
+            !finite_geometry3d_vector(placement.transform().position.add(translation)) {
+            panic("GFX.Physics.ShapeCast3D requires a finite endpoint and nonzero finite translation")
+        }
+        self.placement = placement
+        self.translation = translation
+    }
+}
+
 public struct DistanceResult3D {
     let first_point:Math.Vec3
     let second_point:Math.Vec3
@@ -326,6 +349,10 @@ public struct Geometry3D {
             convex(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
+    }
+
+    static func shape_cast(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D {
+        return convex_shape_cast3d(cast, target)
     }
 
     static func sphere_cast(cast:SphereCast3D, target:ShapePlacement3D) CastResult3D {

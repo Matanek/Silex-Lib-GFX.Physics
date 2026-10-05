@@ -265,6 +265,14 @@ impact est celui de son enfant le plus proche ; `child_id()` donne son ID et
 vaut `-1` pour une primitive. Chaque `WorldRayHit3D` expose aussi `body()`,
 `point()`, `normal()` et `fraction()` entre 0 et 1.
 
+`shape_cast(cast, ignore_body, filter)` retourne `WorldCastHit3D?` pour une
+capsule, boîte, enveloppe convexe ou sphère. `body()`, `point()`, `normal()`,
+`fraction()` et `child_id()` suivent les conventions des autres impacts du
+monde ; filtres, exclusion et durée de vie des snapshots sont identiques.
+La pose initiale du volume est portée par `ShapeCast3D` et les corps sont
+interrogés à leur pose courante, sans pas de simulation ni mutation. Voir
+[le balayage de volume](Geometry3D.md#balayer-une-capsule-boîte-ou-enveloppe-convexe).
+
 `sphere_cast(cast, ignore_body, filter)` retourne le premier impact du
 volume de `SphereCast3D`, ou `null`. `WorldSphereHit3D` expose `body()`,
 `point()`, `normal()`, `fraction()` et `child_id()` avec le contrat du

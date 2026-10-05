@@ -267,12 +267,60 @@ proche. Les configurations concentriques et les faces également proches ont
 un témoin déterministe, sans garantie de récupération physique complète.
 
 La cible reste immobile pendant la requête. Il n’y a ni balayage de rotation,
-ni déplacement implicite de corps, ni balayage public de boîte/capsule/convexe.
+ni déplacement implicite de corps. Pour les autres volumes convexes, voir
+[leur balayage](#balayer-une-capsule-boîte-ou-enveloppe-convexe).
 Les maillages et convexes parcourent leur frontière par requête ; les très
 grands terrains ne sont pas qualifiés par cette API. Les témoins numériques
 couvrent les échelles 0,1, 1 et 10, avec poses rigides et sommets décalés
 compensés ; ils ne constituent pas une borne pour toutes les coordonnées
 float possibles. Pour filtrer les corps d’un monde, voir [World3D](World3D.md#interroger-les-corps-du-monde).
+
+## Balayer une capsule, boîte ou enveloppe convexe
+
+Pour déplacer un volume jusqu'au premier obstacle, décrivez sa pose initiale
+et sa translation dans `ShapeCast3D(placement, translation)` :
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let obstacle = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    let probe = Physics.ShapePlacement3D(Physics.Shape3D.capsule(
+        Physics.Capsule3D(0.5, 0.5)), Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.8)))
+    let cast = Physics.ShapeCast3D(probe, Math.Vec3(6.0, 0.0, 0.0))
+    let hit = Physics.Geometry3D.shape_cast(cast, obstacle)
+    assert(hit.hit)
+    print(hit.fraction) // 0.35
+}
+```
+
+`Geometry3D.shape_cast(cast, target)` retourne `CastResult3D` avec les mêmes
+champs et conventions que le balayage de sphère. La pose à l'impact conserve
+`placement.transform().rotation` et sa position vaut
+`placement.transform().position + translation × fraction`. La translation doit
+être finie, non nulle, de longueur au carré finie, et son extrémité doit rester
+finie. Le volume mobile peut être une sphère, capsule, boîte ou enveloppe
+convexe ; triangle, maillage et composé mobiles sont rejetés par le constructeur.
+
+Toutes les familles de cibles actuelles sont acceptées, y compris les triangles
+bilatéraux, maillages et composés. Le premier obstacle et son `child_id` sont
+conservés ; une égalité stricte conserve l'ordre de construction. Une requête
+commençant en recouvrement ou tangence donne fraction zéro, même si elle sort.
+Le témoin de distance initial est déterministe ; il ne représente pas une
+récupération complète de pénétration profonde. Au contact, plusieurs points ou
+normales peuvent être géométriquement valides : aucune unicité n'est promise.
+
+La cible et l'orientation du volume restent fixes. Les sphères réemploient les
+balayages analytiques ; les autres paires avancent selon leurs plans séparateurs
+ou distances, avec une marge de convergence de `10⁻⁷` fois l'étendue du volume
+mobile. Les tangences arrondies peuvent donc être signalées légèrement avant
+le contact exact. La qualification couvre fractions à `0,0002`, normales à
+`0,002`, échelles 0,1/1/10, poses indépendantes, décalages compensés et trajets
+linéaires de 2 000 unités. Elle n'établit pas une borne pour toutes les valeurs
+float ni pour de très grands terrains. Les requêtes parcourent les feuilles de
+la cible et ne modifient aucun corps. Voir
+[les requêtes filtrées du monde](World3D.md#interroger-les-corps-du-monde).
 
 ## Composé immuable
 

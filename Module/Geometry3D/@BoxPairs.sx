@@ -115,15 +115,15 @@ func box_box_distance(
     first_transform:Transform3D,
     second:Box3D,
     second_transform:Transform3D,
-    contact_only:bool = false
+    contact_only:bool = false, boundary_only:bool = false
 ) DistanceResult3D {
     let separating_axis = box_box_axis(
         first, first_transform, second, second_transform
     )
     // Contacts need exact witnesses only within the contact tolerance.
     // A positive SAT gap is a lower bound on Euclidean separation.
-    if separating_axis.gap < 0.0 ||
-        (contact_only && separating_axis.gap > 0.000001) {
+    if !boundary_only && (separating_axis.gap < 0.0 ||
+        (contact_only && separating_axis.gap > 0.000001)) {
         return DistanceResult3D(
             box_support(first, first_transform, separating_axis.normal),
             box_support(second, second_transform, separating_axis.normal.negated()),
