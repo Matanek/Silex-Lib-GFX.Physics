@@ -1,3 +1,5 @@
+use GFX.Physics.ContactManifold3D.axial_surface_contact_points
+use GFX.Physics.Geometry3D.axial_shape3d
 use GFX.Physics.ContactManifold3D.convex_triangle_contact_points
 use GFX.Physics.ContactManifold3D.convex_mesh_contact_points
 use GFX.Physics.ContactManifold3D.convex_convex_contact_points
@@ -23,6 +25,7 @@ use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.sphere_centers_distance3d
 use GFX.Physics.Geometry3D.write_box_mesh_contacts3d
+use GFX.Physics.Geometry3D.write_axial_mesh_contacts3d
 use GFX.Physics.Geometry3D.write_convex_mesh_contacts3d
 use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.motion_distance3d
@@ -745,7 +748,7 @@ public class World3D {
                             let second_id = BodyId3D(
                                 second_slot, self.store.generations[second_slot])
                             if is_compound3d(first.shape) || is_compound3d(second.shape) ||
-                                is_polyhedral_mesh_pair3d(first.shape, second.shape) {
+                                supports_mesh_manifolds3d(first.shape, second.shape) {
                                 var distances:DistanceResult3D[] = []
                                 write_leaf_contacts3d(
                                     ShapePlacement3D(first.shape, first.transform),
@@ -971,7 +974,7 @@ public class World3D {
                     var second_shape = contact_placement3d(
                         pair.second, pair.second_child_id
                     )
-                    if is_polyhedral_mesh_pair3d(first_shape.shape(), second_shape.shape()) {
+                    if supports_mesh_manifolds3d(first_shape.shape(), second_shape.shape()) {
                         first_shape = mesh_contact_face3d(first_shape, pair.first_child_id)
                         second_shape = mesh_contact_face3d(second_shape, pair.second_child_id)
                     }
@@ -1078,11 +1081,22 @@ func is_compound3d(shape:Shape3D) bool {
         triangle(_) => {}
         mesh(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return false
 }
 
-func is_polyhedral_mesh_pair3d(first:Shape3D, second:Shape3D) bool {
+func supports_mesh_manifolds3d(first:Shape3D, second:Shape3D) bool {
+    if axial_shape3d(first) {
+        match second { mesh(_) => { return true }
+            else => {} }
+    }
+    if axial_shape3d(second) {
+        match first { mesh(_) => { return true }
+            else => {} }
+    }
     match first {
         box(_) => {
             match second {
@@ -1119,8 +1133,20 @@ func mesh_contact_face3d(placement:ShapePlacement3D, child_id:int) ShapePlacemen
     return placement
 }
 
-func write_polyhedral_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
+func write_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
     output:&DistanceResult3D[]) {
+    if axial_shape3d(first.shape()) {
+        write_axial_mesh_contacts3d(first, second, output); return
+    }
+    if axial_shape3d(second.shape()) {
+        var reversed:DistanceResult3D[] = []
+        write_axial_mesh_contacts3d(second, first, reversed)
+        for contact in reversed {
+            output.append(DistanceResult3D(contact.second_point, contact.first_point,
+                contact.normal.negated(), contact.separation, contact.second_child_id, -1))
+        }
+        return
+    }
     match first.shape() {
         box(box) => {
             match second.shape() {
@@ -1162,7 +1188,7 @@ func write_polyhedral_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacem
     }
 }
 
-// Compound leaves and polyhedral/mesh support planes, once per detection pass.
+// Compound leaves and distinct mesh support planes, once per detection pass.
 // Child poses change with their parent, so distances cannot persist across steps.
 func write_leaf_contacts3d(
     first:ShapePlacement3D, second:ShapePlacement3D,
@@ -1186,6 +1212,9 @@ func write_leaf_contacts3d(
         triangle(_) => {}
         mesh(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     match second.shape() {
         compound(compound) => {
@@ -1205,10 +1234,13 @@ func write_leaf_contacts3d(
         triangle(_) => {}
         mesh(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
-    if is_polyhedral_mesh_pair3d(first.shape(), second.shape()) {
+    if supports_mesh_manifolds3d(first.shape(), second.shape()) {
         var contacts:DistanceResult3D[] = []
-        write_polyhedral_surface_pairs3d(first, second, contacts)
+        write_surface_pairs3d(first, second, contacts)
         for contact in contacts {
             var resolved_first = first_child_id
             var resolved_second = second_child_id
@@ -1575,6 +1607,9 @@ func primitive_sphere_radius3d(shape:Shape3D) float {
         triangle(_) => {}
         mesh(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return 0.0
 }
@@ -1613,6 +1648,9 @@ func contact_placement3d(state:BodyState3D, child_id:int) ShapePlacement3D {
         triangle(_) => {}
         mesh(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return ShapePlacement3D(state.shape, state.transform)
 }
@@ -1623,6 +1661,8 @@ func contact_points3d(
     normal:Math.Vec3,
     witness:Math.Vec3
 ) Math.Vec3[] {
+    if axial_shape3d(first.shape()) { return axial_surface_contact_points(first, second, normal, witness) }
+    if axial_shape3d(second.shape()) { return axial_surface_contact_points(second, first, normal.negated(), witness) }
     match first.shape() {
         box(first_box) => {
             match second.shape() {
@@ -1642,6 +1682,9 @@ func contact_points3d(
                     return box_surface_contact_points(first_box, first.transform(), second, normal, witness)
                 }
                 convex(hull) => { return box_convex_contact_points(first_box, first.transform(), hull, second.transform(), normal, witness) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         sphere(_) => {}
@@ -1667,6 +1710,9 @@ func contact_points3d(
                         second, normal, witness)
                 }
                 convex(hull) => { return capsule_convex_contact_points(first_capsule, first.transform(), hull, second.transform(), normal, witness) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         triangle(triangle) => {
@@ -1683,6 +1729,9 @@ func contact_points3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return convex_triangle_contact_points(hull, second.transform(), triangle, first.transform(), normal.negated(), witness) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         mesh(_) => {
@@ -1699,6 +1748,9 @@ func contact_points3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return convex_mesh_contact_points(hull, second.transform(), first, normal.negated(), witness) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         convex(hull) => {
@@ -1711,6 +1763,9 @@ func contact_points3d(
                 else => {}
             }
         }
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return [witness]
 }
@@ -1736,6 +1791,9 @@ func contact_normal3d(
                 convex(hull) => {
                     if inside_convex3d(first.transform().position, hull, second.transform()) { return geometric_normal.negated() }
                 }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         box(box) => {
@@ -1755,6 +1813,9 @@ func contact_normal3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         capsule(_) => {
@@ -1770,6 +1831,9 @@ func contact_normal3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         compound(_) => {}
@@ -1783,6 +1847,9 @@ func contact_normal3d(
                 else => {}
             }
         }
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return geometric_normal
 }
@@ -2347,6 +2414,9 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
                 Math.max(Math.abs(bounds.lower.z), Math.abs(bounds.upper.z)))
         }
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return Math.Vec3(radius)
 }
@@ -2584,6 +2654,9 @@ func shape_bounding_radius3d(shape:Shape3D) float {
             }
             return radius
         }
+        cylinder(value) => { return value.radius + value.half_height }
+        tapered_cylinder(value) => { let radius = Math.max(value.top_radius, value.bottom_radius); return radius + value.half_height }
+        tapered_capsule(value) => { return value.half_height + Math.max(value.top_radius, value.bottom_radius) }
     }
 }
 
@@ -2722,5 +2795,8 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
         triangle(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         mesh(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
         convex(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        tapered_cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        tapered_capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
     }
 }

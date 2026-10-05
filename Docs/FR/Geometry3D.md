@@ -1,6 +1,6 @@
 # Géométrie 3D autonome
 
-`GFX.Physics` fournit des sphères, des boîtes, des capsules, des triangles, des composés immuables et des poses rigides en valeurs
+`GFX.Physics` fournit des sphères, des boîtes, des capsules, des cylindres et formes effilées, des enveloppes convexes, des triangles, des maillages, des composés immuables et des poses rigides en valeurs
 Silex. Leurs requêtes de distance, recouvrement et rayon fonctionnent sans
 monde, scène ni renderer. Le [monde 3D](World3D.md) utilise ces premières
 formes pour le mouvement libre des corps.
@@ -43,6 +43,66 @@ quaternion nul, non fini ou éloigné de l'unité est rejeté.
 La convention est celle de `STD.Math` : repère droit, Y vers le haut. La pose
 est sans échelle ; les dimensions appartiennent à la forme. Les transformations
 ne corrigent pas silencieusement un quaternion invalide.
+
+## Cylindres et formes effilées
+
+`Cylinder3D(radius, half_height)` est un cylindre plein à caps plats, d’axe local
+Y et de hauteur `2 × half_height`. Rayon et demi-hauteur sont finis et positifs.
+`TaperedCylinder3D(top_radius, bottom_radius, half_height)` joint deux disques
+par une surface conique ; un seul rayon peut être nul pour former un cône.
+`TaperedCapsule3D(top_radius, bottom_radius, half_height)` est l’enveloppe
+convexe de deux sphères centrées à `y=±half_height`, raccordées tangentiellement.
+Ses rayons sont positifs et sa demi-hauteur peut être nulle. Si une sphère
+contient l’autre, la géométrie devient cette sphère décalée. Les étendues
+calculées doivent aussi rester finies.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let cylinder = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5, 0.5))
+    let cone = Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.0, 0.5, 0.5))
+    let capsule = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.25, 0.5, 0.5))
+    let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(
+        Physics.ShapePlacement3D(cylinder, Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0))),
+        Math.Vec3(6.0, 0.0, 0.0)), Physics.ShapePlacement3D(cone))
+    assert(hit.hit)
+    var world = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = capsule)
+    print(body.mass_properties().local_center.y)
+}
+```
+
+Les variantes `Shape3D.cylinder`, `tapered_cylinder` et `tapered_capsule` servent
+aux corps fixes, cinématiques et dynamiques, aux enfants composés et aux
+requêtes autonomes ou filtrées du monde. Rayons et balayages gardent la vraie
+surface ronde ; aucune enveloppe à facettes ne remplace la collision. Les
+requêtes avec triangles et maillages sont bilatérales ; leurs contacts physiques
+respectent la face avant. Un cap plat utilise jusqu’à quatre contraintes
+préparées depuis ses points d’appui et découpées par la surface rencontrée.
+Les maillages gardent les deux appuis distincts d’une vallée ; les réactions
+identiques aux coutures ou sur une crête sont fusionnées. Les caps sphériques
+exposés d’une capsule effilée gardent leur normale analytique sur les arêtes.
+
+La séparation extérieure est euclidienne ; en pénétration, l’axe indique la
+translation minimale estimée pour séparer les volumes (`premier` déplacé à
+l’opposé de la normale). L’inclusion sphère/forme axiale suit cette convention,
+contrairement à la normale géométrique de sortie historique sphère/boîte.
+Les requêtes par support sont normalisées à l’étendue commune : convergence de
+distance à `10⁻⁷`, pénétration à `10⁻⁵`, tangence classée dans `10⁻⁶`. Les
+balayages axiaux utilisent la surface continue,
+avec une marge `10⁻⁶` de cette étendue. La qualification couvre les paires
+obliques, caps, raccords, inclusions et témoins sur les deux surfaces ; elle
+n’établit pas une garantie pour tous les floats ou des coordonnées extrêmes.
+
+Les masses, centres et inerties sont ceux du solide homogène, intégrés sur ses
+sections circulaires. La pose conserve l’origine des deux caps ; elle peut donc
+différer du centre de masse. Cette masse géométrique de capsule effilée diffère
+de l’approximation par boîte employée par Jolt. Les limites cylindre égal,
+cône, capsule égale et sphère contenante sont qualifiées. Une masse ou inertie
+automatique hors plage est rejetée pour un corps dynamique ; un corps fixe ou
+cinématique et une masse explicite restent disponibles comme pour les convexes.
 
 ## Enveloppes convexes
 
@@ -300,8 +360,8 @@ champs et conventions que le balayage de sphère. La pose à l'impact conserve
 `placement.transform().rotation` et sa position vaut
 `placement.transform().position + translation × fraction`. La translation doit
 être finie, non nulle, de longueur au carré finie, et son extrémité doit rester
-finie. Le volume mobile peut être une sphère, capsule, boîte ou enveloppe
-convexe ; triangle, maillage et composé mobiles sont rejetés par le constructeur.
+finie. Le volume mobile peut être une sphère, capsule, boîte, cylindre,
+cylindre effilé, capsule effilée ou enveloppe convexe ; triangle, maillage et composé mobiles sont rejetés par le constructeur.
 
 Toutes les familles de cibles actuelles sont acceptées, y compris les triangles
 bilatéraux, maillages et composés. Le premier obstacle et son `child_id` sont
@@ -327,7 +387,7 @@ la cible et ne modifient aucun corps. Voir
 `Compound3D` prend un tableau non vide de `CompoundChild3D(id, shape,
 transform)`. Chaque enfant possède un identifiant entier positif ou nul,
 unique dans le composé, et une pose locale. Les enfants peuvent être des
-sphères, boîtes, capsules ou enveloppes convexes ; les triangles, maillages
+sphères, boîtes, capsules, cylindres, formes effilées ou enveloppes convexes ; les triangles, maillages
 et composés imbriqués sont rejetés. La liste est
 copiée à la construction et ne peut plus être modifiée. La pose effective
 applique d'abord la pose de l'enfant, puis celle du composé.

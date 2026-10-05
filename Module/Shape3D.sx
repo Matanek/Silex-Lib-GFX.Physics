@@ -1,3 +1,6 @@
+use GFX.Physics.Cylinder3D.Cylinder3D
+use GFX.Physics.TaperedCylinder3D.TaperedCylinder3D
+use GFX.Physics.TaperedCapsule3D.TaperedCapsule3D
 use GFX.Physics.ConvexHull3D.ConvexHull3D
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Capsule3D.Capsule3D
@@ -14,4 +17,7 @@ public enum Shape3D {
     triangle(Triangle3D)
     mesh(TriangleMesh3D)
     convex(ConvexHull3D)
+    cylinder(Cylinder3D)
+    tapered_cylinder(TaperedCylinder3D)
+    tapered_capsule(TaperedCapsule3D)
 }

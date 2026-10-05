@@ -1,3 +1,6 @@
+use GFX.Physics.Geometry3D.axial_shape3d
+use GFX.Physics.Geometry3D.axial_pair_contact_points3d
+use GFX.Physics.Geometry3D.axial_contact_feature3d
 use GFX.Physics.Geometry3D.convex_mesh_contact_faces3d
 use GFX.Physics.Geometry3D.convex_triangle_distance3d
 use GFX.Physics.ConvexHull3D.ConvexHull3D
@@ -376,6 +379,9 @@ package func box_surface_contact_points(box:Box3D, transform:Transform3D,
         box(_) => {}
         capsule(_) => {}
         compound(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     if points.is_empty() { return [witness] }
     return reduce_contact_points3d(points,
@@ -515,4 +521,62 @@ func box_axis3d(axis:int) Math.Vec3 {
 func corner_sign3d(bit:int) float {
     if bit == 0 { return -1.0 }
     return 1.0
+}
+
+package func axial_surface_contact_points(shape:ShapePlacement3D, surface:ShapePlacement3D,
+    normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    if axial_shape3d(surface.shape()) {
+        var points = axial_pair_contact_points3d(shape, surface, normal, witness)
+        let tangent = contact_tangent3d(normal)
+        return reduce_contact_points3d(points, tangent, normal.cross(tangent))
+    }
+    match surface.shape() {
+        mesh(mesh) => {
+            var points:Math.Vec3[] = []; var index = 0
+            while index < mesh.triangle_count() {
+                let face = ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), surface.transform())
+                if shape_triangle_front3d(shape.transform(), mesh.triangle(index), surface.transform()) {
+                    let distance = contact_distance3d(shape, face)
+                    if distance.separation <= 0.000001 && distance.normal.dot(normal) > 0.9999 &&
+                        Math.abs(distance.first_point.add(distance.second_point).multiply(0.5).subtract(witness).dot(normal)) < 0.0001 {
+                        for point in axial_surface_contact_points(shape, face, normal, witness) { append_unique_contact3d(points, point) }
+                    }
+                }
+                index++
+            }
+            if points.is_empty() { return [witness] }
+            let tangent = contact_tangent3d(normal)
+            return reduce_contact_points3d(points, tangent, normal.cross(tangent))
+        }
+        else => {}
+    }
+    var incident = axial_contact_feature3d(shape, normal)
+    if incident.count() < 2 { return [witness] }
+    match surface.shape() {
+        box(box) => {
+            let face = box_face3d(box, surface.transform(), normal.negated())
+            if face.alignment >= 0.99999 { return clipped_box_face3d(box, surface.transform(), face, incident, witness) }
+        }
+        convex(hull) => {
+            let face = convex_face3d(hull, surface.transform(), normal.negated())
+            if surface.transform().vector(hull.face_normal(face)).dot(normal.negated()) >= 0.99999 {
+                return clipped_convex_face3d(hull, surface.transform(), face, incident, witness)
+            }
+        }
+        triangle(triangle) => {
+            let outward = surface.transform().vector(triangle.normal())
+            if outward.dot(normal.negated()) >= 0.99999 {
+                let polygon:Math.Vec3[] = [surface.transform().point(triangle.first), surface.transform().point(triangle.second), surface.transform().point(triangle.third)]
+                return clipped_polygon_face3d(polygon, outward, polygon[0], incident, witness)
+            }
+        }
+        else => {}
+    }
+    return [witness]
+}
+
+func contact_tangent3d(normal:Math.Vec3) Math.Vec3 {
+    var axis = Math.Vec3.up()
+    if Math.abs(normal.y) > 0.9 { axis = Math.Vec3.right() }
+    return normal.cross(axis).normalized()
 }

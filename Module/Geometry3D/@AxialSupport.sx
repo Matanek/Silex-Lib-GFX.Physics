@@ -1,0 +1,525 @@
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.ConvexHull3D.ConvexHull3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+struct AxialDimensions3D {
+    let half_height:float
+    let top_radius:float
+    let bottom_radius:float
+    init(half_height:float, top_radius:float, bottom_radius:float) {
+        self.half_height = half_height; self.top_radius = top_radius; self.bottom_radius = bottom_radius
+    }
+}
+enum SupportVolume3D {
+    sphere(float)
+    cylinder(AxialDimensions3D)
+    tapered_cylinder(AxialDimensions3D)
+    tapered_capsule(AxialDimensions3D)
+    box(Math.Vec3)
+    capsule(Capsule3D)
+    convex(ConvexHull3D)
+    triangle(Triangle3D)
+}
+struct SupportPlacement3D {
+    var volume:SupportVolume3D
+    let position:Math.Vec3
+    let rotation:Math.Quat
+    let scale:float
+    init(volume:SupportVolume3D, position:Math.Vec3 = Math.Vec3(), rotation:Math.Quat = Math.Quat.identity(), scale:float = 1.0) {
+        self.scale = scale
+        self.volume = volume; self.position = position; self.rotation = rotation
+    }
+}
+func support_support3d(placed:SupportPlacement3D, direction:Math.Vec3) Math.Vec3 {
+    let axis = placed.rotation.conjugated().rotate(direction)
+    var point = Math.Vec3()
+    let radial = Math.sqrt(axis.x * axis.x + axis.z * axis.z)
+    match placed.volume {
+        sphere(radius) => { point = axis.normalized().multiply(radius) }
+        box(half) => {
+            point = Math.Vec3(Math.sign(axis.x) * half.x, Math.sign(axis.y) * half.y, Math.sign(axis.z) * half.z)
+        }
+        capsule(value) => {
+            point = axis.normalized().multiply(value.radius).add(Math.Vec3(0.0, Math.sign(axis.y) * value.half_height, 0.0))
+        }
+        convex(value) => {
+            point = value.vertex(0); var index = 1
+            while index < value.vertex_count() {
+                if value.vertex(index).dot(axis) > point.dot(axis) { point = value.vertex(index) }
+                index++
+            }
+        }
+        triangle(value) => {
+            point = value.first
+            if value.second.dot(axis) > point.dot(axis) { point = value.second }
+            if value.third.dot(axis) > point.dot(axis) { point = value.third }
+        }
+        cylinder(value) => {
+            point = Math.Vec3(0.0, Math.sign(axis.y) * value.half_height, 0.0)
+            if radial > 0.0 { point = Math.Vec3(axis.x * value.top_radius / radial, point.y, axis.z * value.top_radius / radial) }
+        }
+        tapered_cylinder(value) => {
+            let top = value.half_height * axis.y + value.top_radius * radial
+            let bottom = -value.half_height * axis.y + value.bottom_radius * radial
+            var radius = value.top_radius; var height = value.half_height
+            if bottom > top { radius = value.bottom_radius; height = -value.half_height }
+            point = Math.Vec3(0.0, height, 0.0)
+            if radial > 0.0 { point = Math.Vec3(axis.x * radius / radial, height, axis.z * radius / radial) }
+        }
+        tapered_capsule(value) => {
+            let length = axis.length()
+            let top = value.half_height * axis.y + value.top_radius * length
+            let bottom = -value.half_height * axis.y + value.bottom_radius * length
+            var radius = value.top_radius; var height = value.half_height
+            if bottom > top { radius = value.bottom_radius; height = -value.half_height }
+            point = axis.normalized().multiply(radius).add(Math.Vec3(0.0, height, 0.0))
+        }
+    }
+    return placed.position.add(placed.rotation.rotate(point.multiply(placed.scale)))
+}
+struct SupportVertex3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+    let difference:Math.Vec3
+    var weight:float = 0.0
+    init(first:Math.Vec3 = Math.Vec3(), second:Math.Vec3 = Math.Vec3()) {
+        self.first = first; self.second = second; self.difference = first.subtract(second)
+    }
+}
+struct SupportClosest3D {
+    let point:Math.Vec3
+    let weights:Math.Vec3
+    init(point:Math.Vec3, weights:Math.Vec3) { self.point = point; self.weights = weights }
+}
+func support_segment3d(first:Math.Vec3, second:Math.Vec3) SupportClosest3D {
+    let edge = second.subtract(first)
+    var fraction = 0.0
+    if edge.length_squared() > 0.0 { fraction = Math.clamp(-first.dot(edge) / edge.length_squared(), 0.0, 1.0) }
+    return SupportClosest3D(first.add(edge.multiply(fraction)), Math.Vec3(1.0 - fraction, fraction, 0.0))
+}
+func support_triangle3d(a:Math.Vec3, b:Math.Vec3, c:Math.Vec3) SupportClosest3D {
+    let ab = b.subtract(a); let ac = c.subtract(a)
+    let normal = ab.cross(ac); let area = normal.length_squared()
+    if area > 0.0 {
+        let projection = normal.multiply(a.dot(normal) / area)
+        let offset = projection.subtract(a)
+        let v = offset.cross(ac).dot(normal) / area
+        let w = ab.cross(offset).dot(normal) / area
+        let u = 1.0 - v - w
+        if u >= 0.0 && v >= 0.0 && w >= 0.0 {
+            return SupportClosest3D(projection, Math.Vec3(u, v, w))
+        }
+    }
+    var best = support_segment3d(a, b)
+    let second = support_segment3d(a, c)
+    if second.point.length_squared() < best.point.length_squared() { best = SupportClosest3D(second.point, Math.Vec3(second.weights.x, 0.0, second.weights.y)) }
+    let third = support_segment3d(b, c)
+    if third.point.length_squared() < best.point.length_squared() { best = SupportClosest3D(third.point, Math.Vec3(0.0, third.weights.x, third.weights.y)) }
+    return best
+}
+class SupportSimplex3D {
+    var first:SupportVertex3D = SupportVertex3D()
+    var second:SupportVertex3D = SupportVertex3D()
+    var third:SupportVertex3D = SupportVertex3D()
+    var fourth:SupportVertex3D = SupportVertex3D()
+    var count:int = 0
+    func vertex(index:int) SupportVertex3D {
+        if index == 0 { return self.first }
+        if index == 1 { return self.second }
+        if index == 2 { return self.third }
+        return self.fourth
+    }
+    func set_vertex(index:int, value:SupportVertex3D) {
+        if index == 0 { self.first = value }
+        else if index == 1 { self.second = value }
+        else if index == 2 { self.third = value }
+        else { self.fourth = value }
+    }
+    func reduce() Math.Vec3 {
+        if self.count == 1 { self.first.weight = 1.0; return self.first.difference }
+        var closest_point = Math.Vec3()
+        if self.count == 2 {
+            let closest = support_segment3d(self.first.difference, self.second.difference)
+            self.first.weight = closest.weights.x; self.second.weight = closest.weights.y
+            closest_point = closest.point
+        }
+        if self.count == 3 {
+            let closest = support_triangle3d(self.first.difference, self.second.difference, self.third.difference)
+            self.first.weight = closest.weights.x; self.second.weight = closest.weights.y; self.third.weight = closest.weights.z
+            closest_point = closest.point
+        }
+        if self.count == 4 {
+            let a = self.first.difference; let b = self.second.difference; let c = self.third.difference; let d = self.fourth.difference
+            let ab = b.subtract(a); let ac = c.subtract(a); let ad = d.subtract(a)
+            let determinant = ab.dot(ac.cross(ad))
+            if Math.abs(determinant) > 0.000000000001 {
+                let u = a.negated().dot(ac.cross(ad)) / determinant
+                let v = ab.dot(a.negated().cross(ad)) / determinant
+                let w = ab.dot(ac.cross(a.negated())) / determinant
+                let t = 1.0 - u - v - w
+                if t >= 0.0 && u >= 0.0 && v >= 0.0 && w >= 0.0 {
+                    self.first.weight = t; self.second.weight = u; self.third.weight = v; self.fourth.weight = w
+                    return Math.Vec3()
+                }
+            }
+            var best = support_triangle3d(a, b, c)
+            var selected = 0
+            let abd = support_triangle3d(a, b, d)
+            if abd.point.length_squared() < best.point.length_squared() { best = abd; selected = 1 }
+            let acd = support_triangle3d(a, c, d)
+            if acd.point.length_squared() < best.point.length_squared() { best = acd; selected = 2 }
+            let bcd = support_triangle3d(b, c, d)
+            if bcd.point.length_squared() < best.point.length_squared() { best = bcd; selected = 3 }
+            closest_point = best.point
+            self.first.weight = 0.0; self.second.weight = 0.0; self.third.weight = 0.0; self.fourth.weight = 0.0
+            if selected == 0 { self.first.weight = best.weights.x; self.second.weight = best.weights.y; self.third.weight = best.weights.z }
+            if selected == 1 { self.first.weight = best.weights.x; self.second.weight = best.weights.y; self.fourth.weight = best.weights.z }
+            if selected == 2 { self.first.weight = best.weights.x; self.third.weight = best.weights.y; self.fourth.weight = best.weights.z }
+            if selected == 3 { self.second.weight = best.weights.x; self.third.weight = best.weights.y; self.fourth.weight = best.weights.z }
+        }
+        let first = self.first; let second = self.second; let third = self.third; let fourth = self.fourth
+        let count = self.count
+        self.count = 0
+        if first.weight > 0.0 { self.set_vertex(self.count, first); self.count++ }
+        if count > 1 && second.weight > 0.0 { self.set_vertex(self.count, second); self.count++ }
+        if count > 2 && third.weight > 0.0 { self.set_vertex(self.count, third); self.count++ }
+        if count > 3 && fourth.weight > 0.0 { self.set_vertex(self.count, fourth); self.count++ }
+        return closest_point
+    }
+    func witness() SupportVertex3D {
+        var first = self.first.first; var second = self.first.second; var index = 1
+        while index < self.count {
+            let vertex = self.vertex(index)
+            first = first.add(vertex.first.subtract(self.first.first).multiply(vertex.weight))
+            second = second.add(vertex.second.subtract(self.first.second).multiply(vertex.weight)); index++
+        }
+        return SupportVertex3D(first, second)
+    }
+}
+struct SupportDistance3D {
+    let first:Math.Vec3
+    let second:Math.Vec3
+    let separation:float
+    let normal:Math.Vec3
+    let iterations:int
+    init(first:Math.Vec3, second:Math.Vec3, separation:float, iterations:int, normal:Math.Vec3 = Math.Vec3()) {
+        var axis = normal
+        if axis.length_squared() == 0.0 {
+            axis = second.subtract(first).normalized()
+            if separation < 0.0 { axis = axis.negated() }
+        }
+        self.normal = axis
+        self.first = first; self.second = second; self.separation = separation; self.iterations = iterations
+    }
+}
+func support_distance_normalized3d(first:SupportPlacement3D, second:SupportPlacement3D) SupportDistance3D {
+    var simplex = SupportSimplex3D()
+    simplex.first = SupportVertex3D(support_support3d(first, Math.Vec3.right()), support_support3d(second, Math.Vec3(-1.0, 0.0, 0.0)))
+    simplex.count = 1
+    var index = 0
+    while index < 96 {
+        let closest = simplex.reduce()
+        if closest.length_squared() < 0.000000000001 { return support_penetration3d(first, second, simplex) }
+        let next = SupportVertex3D(support_support3d(first, closest.negated()), support_support3d(second, closest))
+        let progress = closest.length_squared() - closest.dot(next.difference)
+        if progress <= 0.0000001 * closest.length() { break }
+        var repeated = false; var vertex = 0
+        while vertex < simplex.count {
+            if next.difference.subtract(simplex.vertex(vertex).difference).length_squared() <= 0.000000000001 { repeated = true }
+            vertex++
+        }
+        if repeated { break }
+        simplex.set_vertex(simplex.count, next); simplex.count++
+        index++
+    }
+    let witness = simplex.witness()
+    return SupportDistance3D(witness.first, witness.second, witness.first.subtract(witness.second).length(), index)
+}
+func support_extent3d(volume:SupportVolume3D) float {
+    match volume {
+        sphere(radius) => { return radius }
+        cylinder(value) => { return value.half_height + value.top_radius }
+        tapered_cylinder(value) => { return value.half_height + Math.max(value.top_radius, value.bottom_radius) }
+        tapered_capsule(value) => { return value.half_height + Math.max(value.top_radius, value.bottom_radius) }
+        box(half) => { return half.length() }
+        capsule(value) => { return value.radius + value.half_height }
+        convex(value) => { return convex_extent3d(value) }
+        triangle(value) => { return Math.max(value.first.length(), Math.max(value.second.length(), value.third.length())) }
+    }
+}
+func support_distance3d(first:SupportPlacement3D, second:SupportPlacement3D) SupportDistance3D {
+    let scale = Math.max(support_extent3d(first.volume), support_extent3d(second.volume))
+    let anchor = first.position
+    let a = SupportPlacement3D(first.volume, Math.Vec3(), first.rotation, 1.0 / scale)
+    let b = SupportPlacement3D(second.volume, second.position.subtract(anchor).divide(scale), second.rotation, 1.0 / scale)
+    var normalized = SupportDistance3D(Math.Vec3(), Math.Vec3(), 0.0, 0)
+    let axis = a.rotation.rotate(Math.Vec3.up())
+    if support_round_axis3d(a.volume) && support_round_axis3d(b.volume) &&
+        axis.cross(b.rotation.rotate(Math.Vec3.up())).length_squared() <= 0.00000000000001 {
+        normalized = support_axis_distance3d(a, b, axis)
+    } else { normalized = support_distance_normalized3d(a, b) }
+    return SupportDistance3D(anchor.add(normalized.first.multiply(scale)), anchor.add(normalized.second.multiply(scale)), normalized.separation * scale, normalized.iterations, normalized.normal)
+}
+struct SupportFace3D {
+    let a:int
+    let b:int
+    let c:int
+    let normal:Math.Vec3
+    let offset:float
+    init(a:int, b:int, c:int, normal:Math.Vec3, offset:float) {
+        self.a = a; self.b = b; self.c = c; self.normal = normal; self.offset = offset
+    }
+}
+struct SupportEdge3D {
+    let first:int
+    let second:int
+    init(first:int, second:int) { self.first = first; self.second = second }
+}
+func support_face3d(points:SupportVertex3D[], a:int, b:int, c:int, opposite:int = -1) SupportFace3D? {
+    var normal = points[b].difference.subtract(points[a].difference).cross(points[c].difference.subtract(points[a].difference))
+    if normal.length_squared() < 0.00000000000000000001 { return null }
+    normal = normal.normalized()
+    var reverse = points[a].difference.dot(normal) < 0.0
+    if opposite >= 0 { reverse = normal.dot(points[opposite].difference.subtract(points[a].difference)) > 0.0 }
+    if reverse { return SupportFace3D(a, c, b, normal.negated(), -points[a].difference.dot(normal)) }
+    return SupportFace3D(a, b, c, normal, points[a].difference.dot(normal))
+}
+func support_horizon3d(edges:&SupportEdge3D[], a:int, b:int) {
+    var index = 0
+    while index < edges.count() {
+        let edge = edges[index]
+        if edge.first == b && edge.second == a { edges.take(index); return }
+        index++
+    }
+    edges.append(SupportEdge3D(a, b))
+}
+func support_append_support3d(points:&SupportVertex3D[], first:SupportPlacement3D, second:SupportPlacement3D, direction:Math.Vec3) {
+    let vertex = SupportVertex3D(support_support3d(first, direction), support_support3d(second, direction.negated()))
+    for existing in points {
+        if vertex.difference.subtract(existing.difference).length_squared() < 0.000000000001 { return }
+    }
+    points.append(vertex)
+}
+func support_seed3d(first:SupportPlacement3D, second:SupportPlacement3D, simplex:SupportSimplex3D) SupportVertex3D[] {
+    if simplex.count == 4 { return [simplex.first, simplex.second, simplex.third, simplex.fourth] }
+    var pool:SupportVertex3D[] = []; var index = 0
+    while index < simplex.count { pool.append(simplex.vertex(index)); index++ }
+    let directions:Math.Vec3[] = [Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back(),
+        Math.Vec3(1.0, 1.0, 1.0), Math.Vec3(1.0, -1.0, 1.0), Math.Vec3(1.0, 1.0, -1.0), Math.Vec3(-1.0, 1.0, 1.0)]
+    for direction in directions { support_append_support3d(pool, first, second, direction); support_append_support3d(pool, first, second, direction.negated()) }
+    var best:SupportVertex3D[] = []; var quality = -1.0
+    var a = 0
+    while a < pool.count() {
+        var b = a + 1
+        while b < pool.count() {
+            var c = b + 1
+            while c < pool.count() {
+                var d = c + 1
+                while d < pool.count() {
+                    let ab = pool[b].difference.subtract(pool[a].difference)
+                    let ac = pool[c].difference.subtract(pool[a].difference)
+                    let ad = pool[d].difference.subtract(pool[a].difference)
+                    let determinant = ab.dot(ac.cross(ad))
+                    if Math.abs(determinant) > 0.000000000001 {
+                        let offset = pool[a].difference.negated()
+                        let u = offset.dot(ac.cross(ad)) / determinant
+                        let v = ab.dot(offset.cross(ad)) / determinant
+                        let w = ab.dot(ac.cross(offset)) / determinant
+                        let t = 1.0 - u - v - w
+                        let score = Math.min(t, Math.min(u, Math.min(v, w)))
+                        if score >= 0.0 && score > quality { best = [pool[a], pool[b], pool[c], pool[d]]; quality = score }
+                    }
+                    d++
+                }
+                c++
+            }
+            b++
+        }
+        a++
+    }
+    return best
+}
+func support_penetration3d(first:SupportPlacement3D, second:SupportPlacement3D, simplex:SupportSimplex3D) SupportDistance3D {
+    // GJK's near-zero region includes exact tangencies. A real supporting
+    // plane bounds their penetration before building a degenerate EPA hull.
+    if let touch = support_near_touch3d(first, second, simplex) { return touch }
+    var points = support_seed3d(first, second, simplex)
+    if points.count() == 0 {
+        let witness = simplex.witness()
+        return SupportDistance3D(witness.first, witness.second, 0.0, 0)
+    }
+    var faces:SupportFace3D[] = []
+    if let value = support_face3d(points, 0, 1, 2, 3) { faces.append(value) }
+    if let value = support_face3d(points, 0, 1, 3, 2) { faces.append(value) }
+    if let value = support_face3d(points, 0, 2, 3, 1) { faces.append(value) }
+    if let value = support_face3d(points, 1, 2, 3, 0) { faces.append(value) }
+    var iteration = 0
+    while iteration < 1024 && faces.count() > 0 {
+        var best = 0; var index = 1
+        var closest = support_triangle3d(points[faces[0].a].difference, points[faces[0].b].difference, points[faces[0].c].difference)
+        while index < faces.count() {
+            let face = faces[index]
+            let candidate = support_triangle3d(points[face.a].difference, points[face.b].difference, points[face.c].difference)
+            if candidate.point.length_squared() < closest.point.length_squared() { best = index; closest = candidate }
+            index++
+        }
+        let selected = faces[best]
+        var depth = closest.point.length()
+        var normal = selected.normal
+        // Do not amplify tangential float residue by a vanishing depth on a
+        // planar facet. An actual edge closest point keeps its own direction.
+        if closest.point.subtract(selected.normal.multiply(selected.offset)).length() <= 0.000001 {
+            depth = selected.offset
+        } else if depth > 0.0 { normal = closest.point.divide(depth) }
+        let next = SupportVertex3D(support_support3d(first, normal), support_support3d(second, normal.negated()))
+        let progress = next.difference.dot(normal) - depth
+        if progress <= 0.00001 {
+            let weights = closest.weights
+            let first_point = points[selected.a].first.add(points[selected.b].first.subtract(points[selected.a].first).multiply(weights.y)).add(points[selected.c].first.subtract(points[selected.a].first).multiply(weights.z))
+            let second_point = points[selected.a].second.add(points[selected.b].second.subtract(points[selected.a].second).multiply(weights.y)).add(points[selected.c].second.subtract(points[selected.a].second).multiply(weights.z))
+            return SupportDistance3D(first_point, second_point, -depth, iteration, normal)
+        }
+        var edges:SupportEdge3D[] = []; index = 0
+        while index < faces.count() {
+            let existing = faces[index]
+            if existing.normal.dot(next.difference.subtract(points[existing.a].difference)) > 0.0 {
+                support_horizon3d(edges, existing.a, existing.b); support_horizon3d(edges, existing.b, existing.c); support_horizon3d(edges, existing.c, existing.a)
+                faces.take(index)
+            } else { index++ }
+        }
+        let added = points.count(); points.append(next)
+        for edge in edges { if let value = support_face3d(points, edge.first, edge.second, added) { faces.append(value) } }
+        iteration++
+    }
+    panic("EPA did not converge")
+}
+
+// Parallel bodies of revolution share one exact meridian plane. The distance
+// and minimum translation belong to it, avoiding a tessellation of the full
+// circular Minkowski boundary for coaxial overlaps.
+func support_round_axis3d(volume:SupportVolume3D) bool {
+    match volume {
+        cylinder(_) => { return true }
+        tapered_cylinder(_) => { return true }
+        tapered_capsule(_) => { return true }
+        capsule(_) => { return true }
+        else => { return false }
+    }
+}
+func support_axis_vertex3d(first:SupportPlacement3D, second:SupportPlacement3D, direction:Math.Vec3) SupportVertex3D {
+    return SupportVertex3D(support_support3d(first, direction), support_support3d(second, direction.negated()))
+}
+func support_axis_distance3d(first:SupportPlacement3D, second:SupportPlacement3D, axis:Math.Vec3) SupportDistance3D {
+    let offset = second.position.subtract(first.position)
+    var radial = offset.subtract(axis.multiply(offset.dot(axis))).normalized()
+    if radial.length_squared() == 0.0 { radial = first.rotation.rotate(Math.Vec3.right()) }
+    var simplex = SupportSimplex3D(); simplex.first = support_axis_vertex3d(first, second, radial); simplex.count = 1
+    var index = 0
+    while index < 96 {
+        let closest = simplex.reduce()
+        if closest.length_squared() < 0.000000000001 { return support_axis_penetration3d(first, second, simplex, radial, axis) }
+        let next = support_axis_vertex3d(first, second, closest.negated())
+        if closest.length_squared() - closest.dot(next.difference) <= 0.0000001 * closest.length() { break }
+        var repeated = false; var vertex = 0
+        while vertex < simplex.count {
+            if next.difference.subtract(simplex.vertex(vertex).difference).length_squared() <= 0.000000000001 { repeated = true }
+            vertex++
+        }
+        if repeated { break }
+        simplex.set_vertex(simplex.count, next); simplex.count++; index++
+    }
+    let witness = simplex.witness()
+    return SupportDistance3D(witness.first, witness.second, witness.difference.length(), index)
+}
+func support_axis_turn3d(a:SupportVertex3D, b:SupportVertex3D, c:SupportVertex3D, radial:Math.Vec3, axis:Math.Vec3) float {
+    let ab = b.difference.subtract(a.difference); let ac = c.difference.subtract(a.difference)
+    return ab.dot(radial) * ac.dot(axis) - ab.dot(axis) * ac.dot(radial)
+}
+func support_axis_penetration3d(first:SupportPlacement3D, second:SupportPlacement3D,
+    simplex:SupportSimplex3D, radial:Math.Vec3, axis:Math.Vec3) SupportDistance3D {
+    if let touch = support_near_touch3d(first, second, simplex) { return touch }
+    var pool:SupportVertex3D[] = []; var index = 0
+    while index < simplex.count { pool.append(simplex.vertex(index)); index++ }
+    index = 0
+    while index < 16 {
+        let angle = index as float * Math.pi() / 8.0
+        support_append_support3d(pool, first, second, radial.multiply(Math.cos(angle)).add(axis.multiply(Math.sin(angle))))
+        index++
+    }
+    index = 1
+    while index < pool.count() {
+        let value = pool[index]; var position = index
+        while position > 0 && (pool[position - 1].difference.dot(radial) > value.difference.dot(radial) ||
+            (pool[position - 1].difference.dot(radial) == value.difference.dot(radial) && pool[position - 1].difference.dot(axis) > value.difference.dot(axis))) {
+            pool[position] = pool[position - 1]; position--
+        }
+        pool[position] = value; index++
+    }
+    var polygon:SupportVertex3D[] = []; index = 0
+    while index < pool.count() {
+        while polygon.count() >= 2 && support_axis_turn3d(polygon[polygon.count() - 2], polygon[polygon.count() - 1], pool[index], radial, axis) <= 0.0 { polygon.take(polygon.count() - 1) }
+        polygon.append(pool[index]); index++
+    }
+    let lower = polygon.count(); index = pool.count() - 2
+    while index >= 0 {
+        while polygon.count() > lower && support_axis_turn3d(polygon[polygon.count() - 2], polygon[polygon.count() - 1], pool[index], radial, axis) <= 0.0 { polygon.take(polygon.count() - 1) }
+        polygon.append(pool[index]); index--
+    }
+    polygon.take(polygon.count() - 1)
+    if polygon.count() < 2 { let witness = simplex.witness(); return SupportDistance3D(witness.first, witness.second, 0.0, 0, axis) }
+    var iteration = 0
+    while iteration < 256 {
+        var best = 0; var closest = support_segment3d(polygon[0].difference, polygon[1].difference); index = 1
+        while index < polygon.count() {
+            let candidate = support_segment3d(polygon[index].difference, polygon[(index + 1) % polygon.count()].difference)
+            if candidate.point.length_squared() < closest.point.length_squared() { best = index; closest = candidate }
+            index++
+        }
+        let a = polygon[best]; let b = polygon[(best + 1) % polygon.count()]
+        var depth = closest.point.length(); var normal = closest.point.normalized()
+        let edge = b.difference.subtract(a.difference)
+        let outward = radial.multiply(edge.dot(axis)).subtract(axis.multiply(edge.dot(radial))).normalized()
+        let offset = a.difference.dot(outward)
+        if closest.point.subtract(outward.multiply(offset)).length() <= 0.000001 {
+            normal = outward; depth = Math.max(0.0, offset)
+        }
+        let next = support_axis_vertex3d(first, second, normal)
+        if next.difference.dot(normal) - depth <= 0.000001 {
+            let pa = a.first.multiply(closest.weights.x).add(b.first.multiply(closest.weights.y))
+            let pb = a.second.multiply(closest.weights.x).add(b.second.multiply(closest.weights.y))
+            return SupportDistance3D(pa, pb, -depth, iteration, normal)
+        }
+        polygon.append(next); index = polygon.count() - 1
+        while index > best + 1 { polygon[index] = polygon[index - 1]; index-- }
+        polygon[best + 1] = next; iteration++
+    }
+    panic("GFX.Physics meridian penetration did not converge")
+}
+
+func support_near_touch3d(first:SupportPlacement3D, second:SupportPlacement3D,
+    simplex:SupportSimplex3D) SupportDistance3D? {
+    var directions:Math.Vec3[] = [Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back()]
+    match first.volume {
+        triangle(value) => { directions.append(first.rotation.rotate(value.normal())) }
+        else => {}
+    }
+    match second.volume {
+        triangle(value) => { directions.append(second.rotation.rotate(value.normal())) }
+        else => {}
+    }
+    let witness = simplex.witness()
+    if witness.difference.length_squared() > 0.0 { directions.append(witness.difference.normalized()) }
+    for direction in directions {
+        let signs:float[] = [-1.0, 1.0]
+        for sign in signs {
+            let normal = direction.multiply(sign)
+            let support = SupportVertex3D(support_support3d(first, normal), support_support3d(second, normal.negated()))
+            if support.difference.dot(normal) <= 0.000001 {
+                let point = witness.first.add(witness.second).multiply(0.5)
+                return SupportDistance3D(point, point, 0.0, 0, normal)
+            }
+        }
+    }
+    return null
+}

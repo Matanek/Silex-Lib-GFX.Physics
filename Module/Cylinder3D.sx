@@ -1,0 +1,20 @@
+public struct Cylinder3D {
+    let radius:float
+    let half_height:float
+
+    init(radius:float = 0.5, half_height:float = 0.5) {
+        if !finite_cylinder3d_value(radius + half_height) ||
+            !finite_cylinder3d_value(radius) ||
+            !finite_cylinder3d_value(half_height) ||
+            radius <= 0.0 ||
+            half_height <= 0.0 {
+            panic("GFX.Physics.Cylinder3D requires finite valid radii and half-height")
+        }
+        self.radius = radius
+        self.half_height = half_height
+    }
+}
+
+func finite_cylinder3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

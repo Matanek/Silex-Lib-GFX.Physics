@@ -6,6 +6,12 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `Cylinder3D`, `TaperedCylinder3D` et `TaperedCapsule3D` ajoutent des solides
+  ronds d’axe local Y : géométrie continue, rayons et balayages, paires obliques,
+  caps d’appui, terrains et CCD de translation. Les sections circulaires donnent
+  masse, centre et inertie géométriques, y compris cône et sphère contenante.
+  Les composés, filtres et mutations acceptent ces nouvelles familles.
+
 - `ShapeCast3D`, `Geometry3D.shape_cast` et `World3D.shape_cast` ajoutent les
   balayages translationnels de capsule, boîte et enveloppe convexe, avec
   poses initiales indépendantes, triangles bilatéraux, identités et filtres.

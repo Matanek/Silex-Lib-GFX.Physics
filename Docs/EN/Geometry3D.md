@@ -1,6 +1,6 @@
 # Standalone 3D geometry
 
-`GFX.Physics` provides spheres, boxes, capsules, triangles, immutable compounds, and rigid poses as Silex values. They
+`GFX.Physics` provides spheres, boxes, capsules, cylinders and tapered shapes, convex hulls, triangles, meshes, immutable compounds, and rigid poses as Silex values. They
 support distance, overlap, and ray queries without a world, scene, or renderer.
 The [3D world](World3D.md) uses these first shapes for free body motion.
 
@@ -42,6 +42,62 @@ rejected.
 The conventions follow `STD.Math`: right-handed coordinates with Y up. A pose
 has no scale; dimensions belong to the shape. Transforms do not silently fix
 an invalid quaternion.
+
+## Cylinders and tapered shapes
+
+`Cylinder3D(radius, half_height)` is a solid cylinder with flat caps, local Y
+axis and height `2 × half_height`. Radius and half-height must be finite and
+positive. `TaperedCylinder3D(top_radius, bottom_radius, half_height)` joins two
+disks with a conical surface; one radius may be zero to form a cone.
+`TaperedCapsule3D(top_radius, bottom_radius, half_height)` is the convex hull of
+two spheres centered at `y=±half_height`, joined tangentially. Its radii must be
+positive and its half-height may be zero. When one sphere contains the other,
+the geometry becomes that offset sphere. Computed extents must also stay finite.
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let cylinder = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5, 0.5))
+    let cone = Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.0, 0.5, 0.5))
+    let capsule = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.25, 0.5, 0.5))
+    let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(
+        Physics.ShapePlacement3D(cylinder, Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0))),
+        Math.Vec3(6.0, 0.0, 0.0)), Physics.ShapePlacement3D(cone))
+    assert(hit.hit)
+    var world = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = capsule)
+    print(body.mass_properties().local_center.y)
+}
+```
+
+The `Shape3D.cylinder`, `tapered_cylinder` and `tapered_capsule` variants work
+with fixed, kinematic and dynamic bodies, compound children and standalone or
+filtered world queries. Rays and sweeps retain the true round boundary;
+collision never substitutes a faceted hull. Triangle and mesh queries are
+two-sided; physical contacts follow the front-face policy. A flat cap uses up
+to four constraints prepared from its support points and clipped to the surface.
+Meshes retain both distinct supports in a valley and merge identical seam or
+ridge reactions. Exposed spherical caps of a tapered capsule retain their
+analytic edge-contact normal.
+
+Outside separation is Euclidean; in penetration, the axis gives the estimated
+minimum translation needed to separate the volumes (move `first` opposite the
+normal). Sphere/axial containment follows this convention, unlike the historic
+sphere/box geometric exit normal. Support queries use a common extent for
+normalization: distance convergence `10⁻⁷`, penetration `10⁻⁵`, tangency within
+`10⁻⁶`. Axial sweeps use the continuous boundary, with a `10⁻⁶` margin of that extent. Qualification covers oblique pairs,
+caps, joins, containment and witnesses on both boundaries; it does not establish
+a guarantee for every float or extreme coordinates.
+
+Mass, center and inertia belong to the homogeneous solid, integrated over its
+circular sections. The pose retains the origin between the two caps, which may
+differ from the mass center. This geometric tapered-capsule mass differs from
+Jolt's box approximation. Equal cylinder, cone, equal capsule and containing
+sphere limits are qualified. Out-of-range automatic mass or inertia is rejected
+for dynamic bodies; fixed or kinematic bodies and explicit mass properties
+remain available as for convex hulls.
 
 ## Convex hulls
 
@@ -284,7 +340,7 @@ sweep's fields and conventions. The impact pose keeps
 `placement.transform().rotation`; its position is
 `placement.transform().position + translation × fraction`. Translation must
 be finite, nonzero, have finite squared length, and keep a finite endpoint.
-The moving volume may be a sphere, capsule, box or convex hull; the constructor
+The moving volume may be a sphere, capsule, box, cylinder, tapered cylinder, tapered capsule or convex hull; the constructor
 rejects moving triangles, meshes and compounds.
 
 All current target families are accepted, including bilateral triangles,
@@ -309,7 +365,7 @@ target leaves and do not modify bodies. See
 
 `Compound3D` takes a nonempty array of `CompoundChild3D(id, shape,
 transform)`. Each child has a unique nonnegative integer ID and a local pose.
-Children may be spheres, boxes, capsules or convex hulls; triangles, meshes
+Children may be spheres, boxes, capsules, cylinders, tapered shapes or convex hulls; triangles, meshes
 and nested compounds are rejected.
 The constructor copies the child list, which cannot be changed afterward.
 The effective pose applies the child pose, then the compound pose.

@@ -1,0 +1,35 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var inf:float = 3.4028235e38; inf *= 2.0
+    let nan = inf - inf
+    if selected("cylinder-radius") { Physics.Cylinder3D(-1.0, 0.5) }
+    if selected("cylinder-height") { Physics.Cylinder3D(0.5, 0.0) }
+    if selected("cylinder-inf") { Physics.Cylinder3D(inf, 0.5) }
+    if selected("cylinder-nan") { Physics.Cylinder3D(0.5, nan) }
+    if selected("cylinder-extent") { Physics.Cylinder3D(3.0e38, 3.0e38) }
+    if selected("tapered-negative") { Physics.TaperedCylinder3D(-0.1, 0.5, 0.5) }
+    if selected("tapered-empty") { Physics.TaperedCylinder3D(0.0, 0.0, 0.5) }
+    if selected("tapered-height") { Physics.TaperedCylinder3D(0.25, 0.5, 0.0) }
+    if selected("tapered-inf") { Physics.TaperedCylinder3D(0.25, inf, 0.5) }
+    if selected("tapered-nan") { Physics.TaperedCylinder3D(nan, 0.5, 0.5) }
+    if selected("tapered-extent") { Physics.TaperedCylinder3D(3.0e38, 0.5, 3.0e38) }
+    if selected("capsule-radius") { Physics.TaperedCapsule3D(0.0, 0.5, 0.5) }
+    if selected("capsule-bottom") { Physics.TaperedCapsule3D(0.25, -0.5, 0.5) }
+    if selected("capsule-height") { Physics.TaperedCapsule3D(0.25, 0.5, -0.5) }
+    if selected("capsule-inf") { Physics.TaperedCapsule3D(0.25, 0.5, inf) }
+    if selected("capsule-nan") { Physics.TaperedCapsule3D(0.25, nan, 0.5) }
+    if selected("capsule-extent") { Physics.TaperedCapsule3D(3.0e38, 0.5, 3.0e38) }
+    var world = Physics.World3D()
+    if selected("mass-overflow") { world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.cylinder(Physics.Cylinder3D(1.0e8, 1.0e8))) }
+    if selected("mass-underflow") { world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(1.0e-10, 1.0e-10, 1.0e-10))) }
+    panic("invalid axial shape was accepted")
+}

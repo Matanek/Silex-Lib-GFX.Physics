@@ -1,0 +1,53 @@
+use GFX.Physics
+use STD.Math
+func hull() Physics.Shape3D {
+    var vertices:Math.Vec3[] = []
+    var i = 0
+    while i < 8 {
+        var x = -0.5; var y = -0.5; var z = -0.5
+        if i % 2 == 1 { x = 0.5 }
+        if (i / 2) % 2 == 1 { y = 0.5 }
+        if i / 4 == 1 { z = 0.5 }
+        vertices.append(Math.Vec3(x, y, z)); i++
+    }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(vertices))
+}
+class ExpectedSweep3D {
+    var index:int = 0
+    var fractions:float[] = [0.292441487, -1.0, 0.292441487, -1.0, 0.289677113, -1.0, 0.291728735, -1.0, 0.289677143, -1.0, 0.291728735, -1.0, 0.395099223, 0.293488592, -1.0, 0.293488532, -1.0, 0.289677233, -1.0, 0.293269515, -1.0, 0.289677233, -1.0, 0.293269485, -1.0, 0.395099342, 0.292546302, -1.0, 0.292546332, -1.0, 0.283821434, -1.0, 0.291979402, -1.0, 0.283821315, -1.0, 0.291979313, -1.0, 0.337361515, 0.286624223, -1.0, 0.286624074, -1.0, 0.282466441, -1.0, 0.390090793, 0.292441517, -1.0, 0.292441398, -1.0, 0.283821374, -1.0, 0.337361455, 0.286624163, -1.0, 0.286624074, -1.0, 0.282466322, -1.0, 0.390090793]
+    var normals:Math.Vec3[] = [Math.Vec3(-0.959551215,-0.274101555,-0.0642629713), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.959592044,-0.274335295,-0.0626355559), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.965378165,0.254578173,-0.0568781756), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.953534603,-0.260935813,-0.150612593), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.965312302,0.254802585,-0.0569894835), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.953534722,-0.260935575,-0.150612533), Math.Vec3(0.0,0.0,0.0), Math.Vec3(1.19207954e-07,1,-5.96036251e-08), Math.Vec3(-0.863229573,-0.501744866,-0.0555596687), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.863234401,-0.501667023,-0.0561827347), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.965309918,0.254968911,-0.056282118), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.862724364,-0.495806456,-0.0994122475), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.965357125,0.254731238,-0.0565469153), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.862724304,-0.495806307,-0.0994120911), Math.Vec3(0.0,0.0,0.0), Math.Vec3(0,1,0), Math.Vec3(-0.945296466,-0.320278764,-0.0619357228), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.944942474,-0.320922136,-0.063974224), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.995194852,-0.00401917845,-0.0978322923), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.933043122,-0.332918912,-0.136365533), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.99519515,-0.00364456489,-0.0978428647), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.932976425,-0.333123058,-0.136323228), Math.Vec3(0.0,0.0,0.0), Math.Vec3(5.96046128e-08,1,2.98023295e-08), Math.Vec3(-0.937161207,-0.299604744,0.178790212), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.937160909,-0.299604863,0.178791344), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.943297505,0.250152022,0.21820581), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0,1,-0), Math.Vec3(-0.959552765,-0.274124682,-0.0641427115), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.959554374,-0.274133533,-0.0640801638), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.995196819,-0.00383056211,-0.0978194922), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0,1,-0), Math.Vec3(-0.937161982,-0.299602926,0.178788766), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.937162876,-0.299601257,0.178787306), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0.943484724,0.249454126,0.218195587), Math.Vec3(0.0,0.0,0.0), Math.Vec3(-0,1,-0)]
+}
+func cast_cases() {
+    var expected = ExpectedSweep3D()
+    var all:Physics.Shape3D[] = [Physics.Shape3D.cylinder(Physics.Cylinder3D()), Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D()), Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D()), Physics.Shape3D.box(Physics.Box3D()), Physics.Shape3D.capsule(Physics.Capsule3D()), hull()]
+    let rotation = Math.Quat.angle_axis(0.37, Math.Vec3(1.0, 2.0, 3.0).normalized())
+    let pose = Physics.Transform3D(rotation:Math.Quat.angle_axis(-0.4, Math.Vec3(1.0, 2.0, 3.0).normalized()))
+    var i = 0
+    for mover in all {
+        var j = 0
+        for target in all {
+            if i < 3 || j < 3 {
+                report("$(i)_$(j)", mover, Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), rotation, Physics.ShapePlacement3D(target, pose), expected)
+                report("miss$(i)_$(j)", mover, Math.Vec3(-3.0, 4.0, 0.0), Math.Vec3(6.0, 0.0, 0.0), rotation, Physics.ShapePlacement3D(target, pose), expected)
+            }
+            j++
+        }
+        report("terrain$(i)", mover, Math.Vec3(0.0, 3.0, 0.0), Math.Vec3(0.0, -6.0, 0.0), rotation, Physics.ShapePlacement3D(Physics.Shape3D.triangle(Physics.Triangle3D(Math.Vec3(-2.0, 0.0, -2.0), Math.Vec3(0.0, 0.0, 2.0), Math.Vec3(2.0, 0.0, -2.0)))), expected)
+        i++
+    }
+}
+
+func report(name:str, mover:Physics.Shape3D, origin:Math.Vec3, translation:Math.Vec3,
+    rotation:Math.Quat, target:Physics.ShapePlacement3D, expected:ExpectedSweep3D) {
+    let result = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(Physics.ShapePlacement3D(mover, Physics.Transform3D(origin, rotation)), translation), target)
+    let fraction = expected.fractions[expected.index]; let normal = expected.normals[expected.index]; expected.index++
+    if fraction < 0.0 { assert(!result.hit); return }
+    assert(result.hit); assert(Math.abs(result.fraction - fraction) <= 0.0002)
+    assert(result.normal.nearly_equal(normal, 0.002))
+    let point = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)), Physics.Transform3D(result.point))
+    let stop = Physics.ShapePlacement3D(mover, Physics.Transform3D(origin.add(translation.multiply(result.fraction)), rotation))
+    assert(Math.abs(Physics.Geometry3D.distance(point, stop).separation + 0.00001) < 0.0001)
+    assert(Math.abs(Physics.Geometry3D.distance(point, target).separation + 0.00001) < 0.0001)
+}
+func main() { cast_cases(); print("Axial sweeps: 60 pinned oracle controls passed") }
+test "axial oblique sweeps preserve pinned Jolt fractions, analytic smooth normals and both boundary witnesses" { cast_cases() }

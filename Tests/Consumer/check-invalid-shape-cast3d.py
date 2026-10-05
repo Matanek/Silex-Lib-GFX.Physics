@@ -8,7 +8,7 @@ binary = Path.cwd() / '.silex/invalid-shape-cast3d'
 env = os.environ.copy()
 env.setdefault('ZIG_GLOBAL_CACHE_DIR', str(Path.cwd() / '.silex/zig-global'))
 cases = dict.fromkeys(['zero', 'translation', 'squared', 'nan'], 'requires a finite endpoint and nonzero finite translation')
-cases.update(dict.fromkeys(['triangle','mesh','compound'], 'requires a sphere, box, capsule or convex hull'))
+cases.update(dict.fromkeys(['triangle','mesh','compound'], 'requires a convex volume primitive or convex hull'))
 cases.update(dict.fromkeys(['foreign','stale'], 'requires a live ignored body from this world'))
 try:
     for mode in ('--debug', '--release'):

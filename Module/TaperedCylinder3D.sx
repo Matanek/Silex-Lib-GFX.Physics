@@ -1,0 +1,26 @@
+public struct TaperedCylinder3D {
+    let top_radius:float
+    let bottom_radius:float
+    let half_height:float
+
+    init(top_radius:float = 0.25, bottom_radius:float = 0.5, half_height:float = 0.5) {
+        if !finite_taperedcylinder3d_value(top_radius + half_height) ||
+            !finite_taperedcylinder3d_value(bottom_radius + half_height) ||
+            !finite_taperedcylinder3d_value(top_radius) ||
+            !finite_taperedcylinder3d_value(bottom_radius) ||
+            !finite_taperedcylinder3d_value(half_height) ||
+            top_radius < 0.0 ||
+            bottom_radius < 0.0 ||
+            half_height <= 0.0 ||
+            (top_radius <= 0.0 && bottom_radius <= 0.0) {
+            panic("GFX.Physics.TaperedCylinder3D requires finite valid radii and half-height")
+        }
+        self.top_radius = top_radius
+        self.bottom_radius = bottom_radius
+        self.half_height = half_height
+    }
+}
+
+func finite_taperedcylinder3d_value(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}

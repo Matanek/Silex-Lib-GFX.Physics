@@ -6,6 +6,12 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `Cylinder3D`, `TaperedCylinder3D` and `TaperedCapsule3D` add round local-Y
+  solids: continuous geometry, rays and sweeps, oblique pairs, supporting caps,
+  terrain contacts and translation CCD. Circular sections provide geometric
+  mass, center and inertia, including cone and containing-sphere limits.
+  Compounds, filters and mutations accept the new families.
+
 - `ShapeCast3D`, `Geometry3D.shape_cast` and `World3D.shape_cast` add capsule,
   box and convex hull translation sweeps with independent initial poses,
   bilateral triangles, identities and filters. Contact witnesses use the

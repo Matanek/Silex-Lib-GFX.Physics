@@ -146,3 +146,7 @@ public use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
 public use GFX.Physics.CharacterMover3D.CharacterMoveResult3D
 
 public use GFX.Physics.ConvexHull3D.ConvexHull3D
+
+public use GFX.Physics.Cylinder3D.Cylinder3D
+public use GFX.Physics.TaperedCylinder3D.TaperedCylinder3D
+public use GFX.Physics.TaperedCapsule3D.TaperedCapsule3D

@@ -1,0 +1,252 @@
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Triangle3D.Triangle3D
+use STD.Math
+
+package func axial_shape3d(shape:Shape3D) bool {
+    match shape {
+        cylinder(_) => { return true }
+        tapered_cylinder(_) => { return true }
+        tapered_capsule(_) => { return true }
+        else => { return false }
+    }
+}
+func axial_dimensions3d(shape:Shape3D) AxialDimensions3D {
+    match shape {
+        cylinder(value) => { return AxialDimensions3D(value.half_height, value.radius, value.radius) }
+        tapered_cylinder(value) => { return AxialDimensions3D(value.half_height, value.top_radius, value.bottom_radius) }
+        tapered_capsule(value) => { return AxialDimensions3D(value.half_height, value.top_radius, value.bottom_radius) }
+        else => { panic("GFX.Physics expected an axial primitive") }
+    }
+}
+func axial_rounded3d(shape:Shape3D) bool {
+    match shape {
+        tapered_capsule(_) => { return true }
+        else => { return false }
+    }
+}
+func support_volume3d(shape:Shape3D) SupportVolume3D {
+    match shape {
+        sphere(value) => { return SupportVolume3D.sphere(value.radius) }
+        box(value) => { return SupportVolume3D.box(value.half_size()) }
+        capsule(value) => { return SupportVolume3D.capsule(value) }
+        convex(value) => { return SupportVolume3D.convex(value) }
+        triangle(value) => { return SupportVolume3D.triangle(value) }
+        cylinder(_) => { return SupportVolume3D.cylinder(axial_dimensions3d(shape)) }
+        tapered_cylinder(_) => { return SupportVolume3D.tapered_cylinder(axial_dimensions3d(shape)) }
+        tapered_capsule(_) => { return SupportVolume3D.tapered_capsule(axial_dimensions3d(shape)) }
+        else => { panic("GFX.Physics support query requires a convex leaf") }
+    }
+}
+struct AxialPoint3D {
+    let point:Math.Vec3
+    let normal:Math.Vec3
+    let separation:float
+    init(point:Math.Vec3, normal:Math.Vec3, separation:float) {
+        self.point = point; self.normal = normal; self.separation = separation
+    }
+}
+func axial_point3d(point:Math.Vec3, target:ShapePlacement3D) AxialPoint3D {
+    let pose = target.transform(); let local_point = pose.inverse_point(point)
+    let radial = Math.sqrt(local_point.x * local_point.x + local_point.z * local_point.z)
+    let dimensions = axial_dimensions3d(target.shape())
+    let scale = dimensions.half_height + Math.max(dimensions.top_radius, dimensions.bottom_radius)
+    let profile = axial_signed_profile3d(Math.Vec2(radial, local_point.y).divide(scale),
+        AxialDimensions3D(dimensions.half_height / scale, dimensions.top_radius / scale, dimensions.bottom_radius / scale), axial_rounded3d(target.shape()))
+    var axis = Math.Vec3.right()
+    if radial > 0.0 { axis = Math.Vec3(local_point.x / radial, 0.0, local_point.z / radial) }
+    let closest = axis.multiply(profile.point.x * scale).add(Math.Vec3(0.0, profile.point.y * scale, 0.0))
+    let normal = axis.multiply(profile.normal.x).add(Math.Vec3(0.0, profile.normal.y, 0.0))
+    return AxialPoint3D(pose.point(closest), pose.vector(normal), profile.signed_distance * scale)
+}
+func axial_pair_distance3d(first:ShapePlacement3D, second:ShapePlacement3D) DistanceResult3D {
+    match first.shape() {
+        compound(compound) => { return compound_first_distance(compound, first.transform(), second) }
+        mesh(mesh) => {
+            var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(), 3.4028235e38)
+            var index = 0
+            while index < mesh.triangle_count() {
+                let distance = Geometry3D.distance(ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), first.transform()), second)
+                if distance.separation < best.separation { best = DistanceResult3D(distance.first_point, distance.second_point,
+                    distance.normal, distance.separation, index, distance.second_child_id) }
+                index++
+            }
+            return best
+        }
+        sphere(sphere) => {
+            if axial_shape3d(second.shape()) {
+                let distance = axial_point3d(first.transform().position, second)
+                let normal = distance.normal.negated()
+                return DistanceResult3D(first.transform().position.add(normal.multiply(sphere.radius)),
+                    distance.point, normal, distance.separation - sphere.radius)
+            }
+        }
+        else => {}
+    }
+    match second.shape() {
+        compound(_) => { return reversed_distance(axial_pair_distance3d(second, first)) }
+        mesh(_) => { return reversed_distance(axial_pair_distance3d(second, first)) }
+        sphere(_) => { return reversed_distance(axial_pair_distance3d(second, first)) }
+        else => {}
+    }
+    let result = support_distance3d(SupportPlacement3D(support_volume3d(first.shape()), first.transform().position, first.transform().rotation),
+        SupportPlacement3D(support_volume3d(second.shape()), second.transform().position, second.transform().rotation))
+    return DistanceResult3D(result.first, result.second, result.normal, result.separation)
+}
+
+func axial_contact_distance3d(first:ShapePlacement3D, second:ShapePlacement3D) DistanceResult3D {
+    match first.shape() {
+        mesh(mesh) => {
+            var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(), 3.4028235e38)
+            var index = 0
+            while index < mesh.triangle_count() {
+                let placement = ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), first.transform())
+                if front_triangle_contact3d(placement, second) {
+                    let candidate = axial_contact_distance3d(placement, second)
+                    if candidate.separation < best.separation { best = DistanceResult3D(candidate.first_point,
+                        candidate.second_point, candidate.normal, candidate.separation, index, candidate.second_child_id) }
+                }
+                index++
+            }
+            return best
+        }
+        else => {}
+    }
+    match second.shape() {
+        mesh(_) => { return reversed_distance(axial_contact_distance3d(second, first)) }
+        else => {}
+    }
+    match second.shape() {
+        triangle(triangle) => {
+            if axial_shape3d(first.shape()) {
+                // Contact constraints use the real support plane when its
+                // witness lies inside this finite front face. Edge contacts
+                // retain the full Minkowski query.
+                let outward = second.transform().vector(triangle.normal())
+                let support = support_support3d(SupportPlacement3D(support_volume3d(first.shape()), first.transform().position, first.transform().rotation), outward.negated())
+                let origin = second.transform().point(triangle.first)
+                let separation = support.subtract(origin).dot(outward)
+                let projected = support.subtract(outward.multiply(separation))
+                let closest = second.transform().point(closest_triangle_point3d(second.transform().inverse_point(projected), triangle))
+                let tolerance = support_extent3d(support_volume3d(first.shape())) * 0.000001
+                if projected.subtract(closest).length() <= tolerance {
+                    return DistanceResult3D(support, projected, outward.negated(), separation)
+                }
+                match first.shape() {
+                    tapered_capsule(_) => {
+                        if let cap = axial_cap_triangle_contact3d(first, second, triangle) { return cap }
+                    }
+                    else => {}
+                }
+            }
+        }
+        else => {}
+    }
+    match first.shape() {
+        triangle(_) => { if axial_shape3d(second.shape()) { return reversed_distance(axial_contact_distance3d(second, first)) } }
+        else => {}
+    }
+    return Geometry3D.distance(first, second)
+}
+
+// Exact exposed cap disk / side generator, sampled only for contact constraints.
+// Collision queries retain their continuous support and never use this polygon.
+package func axial_contact_feature3d(shape:ShapePlacement3D, direction:Math.Vec3) Math.Vec3[] {
+    let pose = shape.transform(); let axis = pose.inverse_vector(direction)
+    let dimensions = axial_dimensions3d(shape.shape())
+    let radial = Math.sqrt(axis.x * axis.x + axis.z * axis.z)
+    let rounded = axial_rounded3d(shape.shape())
+    let length = axis.length()
+    var factor = radial
+    if rounded { factor = length }
+    let top = dimensions.half_height * axis.y + dimensions.top_radius * factor
+    let bottom = -dimensions.half_height * axis.y + dimensions.bottom_radius * factor
+    var height = dimensions.half_height; var radius = dimensions.top_radius
+    if bottom > top { height = -height; radius = dimensions.bottom_radius }
+    if !rounded && Math.abs(axis.y) > 0.95 * length && radius > 0.0 {
+        var points:Math.Vec3[] = []; var index = 0
+        while index < 8 {
+            let angle = index as float * Math.pi() / 4.0
+            points.append(pose.point(Math.Vec3(radius * Math.cos(angle), height, radius * Math.sin(angle))))
+            index++
+        }
+        return points
+    }
+    var outward = axis.normalized()
+    if !rounded && radial > 0.0 { outward = Math.Vec3(axis.x / radial, 0.0, axis.z / radial) }
+    if Math.abs(top - bottom) <= (dimensions.half_height + Math.max(dimensions.top_radius, dimensions.bottom_radius)) * 0.0001 {
+        return [pose.point(outward.multiply(dimensions.bottom_radius).add(Math.Vec3(0.0, -dimensions.half_height, 0.0))),
+            pose.point(outward.multiply(dimensions.top_radius).add(Math.Vec3(0.0, dimensions.half_height, 0.0)))]
+    }
+    return [pose.point(outward.multiply(radius).add(Math.Vec3(0.0, height, 0.0)))]
+}
+
+package func axial_pair_contact_points3d(first:ShapePlacement3D, second:ShapePlacement3D,
+    normal:Math.Vec3, witness:Math.Vec3) Math.Vec3[] {
+    var points:Math.Vec3[] = []
+    for point in axial_contact_feature3d(first, normal) {
+        let boundary = axial_point3d(point, second)
+        if boundary.separation <= 0.0001 && boundary.normal.dot(normal.negated()) > 0.9999 {
+            points.append(point.add(boundary.point).multiply(0.5))
+        }
+    }
+    for point in axial_contact_feature3d(second, normal.negated()) {
+        let boundary = axial_point3d(point, first)
+        if boundary.separation <= 0.0001 && boundary.normal.dot(normal) > 0.9999 {
+            var duplicate = false
+            let middle = point.add(boundary.point).multiply(0.5)
+            for previous in points { if middle.subtract(previous).length_squared() < 0.00000001 { duplicate = true } }
+            if !duplicate { points.append(middle) }
+        }
+    }
+    if points.is_empty() { return [witness] }
+    return points
+}
+
+// Collect each real front-face support once per detection pass. Shared mesh
+// grouping removes coplanar seams and duplicate ridge responses, not valleys.
+package func write_axial_mesh_contacts3d(first:ShapePlacement3D, second:ShapePlacement3D,
+    output:&DistanceResult3D[]) {
+    match second.shape() {
+        mesh(mesh) => {
+            var candidates:DistanceResult3D[] = []; var index = 0
+            while index < mesh.triangle_count() {
+                let triangle = ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), second.transform())
+                if front_triangle_contact3d(first, triangle) {
+                    let distance = axial_contact_distance3d(first, triangle)
+                    if distance.separation <= 0.000001 {
+                        candidates.append(DistanceResult3D(distance.first_point, distance.second_point,
+                            distance.normal, distance.separation, -1, index))
+                    }
+                }
+                index++
+            }
+            write_mesh_supports3d(candidates, mesh, second.transform(), output)
+        }
+        else => {}
+    }
+}
+
+// A spherical cap retains its analytic normal even at a shallow ridge impact.
+// Accept it only when the sphere witness is also the exact exposed support of
+// the complete capsule; hidden caps and the tangent cone keep the general path.
+func axial_cap_triangle_contact3d(first:ShapePlacement3D, second:ShapePlacement3D,
+    triangle:Triangle3D) DistanceResult3D? {
+    let dimensions = axial_dimensions3d(first.shape())
+    let support = SupportPlacement3D(support_volume3d(first.shape()), first.transform().position, first.transform().rotation)
+    let tolerance = support_extent3d(support_volume3d(first.shape())) * 0.000001
+    var best:DistanceResult3D? = null
+    for top in [false, true] {
+        var height = -dimensions.half_height; var radius = dimensions.bottom_radius
+        if top { height = dimensions.half_height; radius = dimensions.top_radius }
+        let center = first.transform().point(Math.Vec3(0.0, height, 0.0))
+        let candidate = sphere_triangle_distance(Sphere3D(radius), Transform3D(center), triangle, second.transform())
+        if support_support3d(support, candidate.normal).subtract(candidate.first_point).length() <= tolerance {
+            if let previous = best {
+                if candidate.separation > previous.separation { best = candidate }
+            } else { best = candidate }
+        }
+    }
+    return best
+}

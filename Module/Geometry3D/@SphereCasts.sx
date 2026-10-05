@@ -77,6 +77,7 @@ func sphere_cast_triangle3d(cast:SphereCast3D, triangle:Triangle3D) CastResult3D
 }
 
 func sphere_shape_cast3d(cast:SphereCast3D, target:ShapePlacement3D) CastResult3D {
+    if axial_shape3d(target.shape()) { return axial_sphere_cast3d(cast, target) }
     match target.shape() {
         compound(compound) => {
             var result = CastResult3D(); var index = 0

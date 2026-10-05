@@ -1,0 +1,188 @@
+use GFX.Physics
+use STD.Math
+
+func grid(crest:bool = false, reversed:bool = false) Physics.TriangleMesh3D {
+    var heights:float[] = []
+    var row = 0
+    while row < 3 {
+        var column = 0
+        while column < 5 {
+            var height = 0.25 * Math.abs(column as float - 2.0)
+            if crest { height = 0.5 - height }
+            heights.append(height); column++
+        }
+        row++
+    }
+    var mesh = Physics.TriangleMesh3D.from_height_grid(5, 3, heights, 1.0, 2.0)
+    if !reversed { return mesh }
+    var triangles:Physics.Triangle3D[] = []
+    var index = mesh.triangle_count()
+    while index > 0 { index--; triangles.append(mesh.triangle(index)) }
+    return Physics.TriangleMesh3D(triangles)
+}
+
+func valley(primitive:Physics.Shape3D, expected_height:float, reverse_bodies:bool, reverse_triangles:bool, compound:bool, yaw:float) {
+    var world = Physics.World3D()
+    let pose = Physics.Transform3D(Math.Vec3(3.0, 0.0, -7.0),
+        Math.Quat.angle_axis(yaw, Math.Vec3.up()))
+    var shape = primitive
+    if compound { shape = Physics.Shape3D.compound(Physics.Compound3D([
+        Physics.CompoundChild3D(7, shape)])) }
+    let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false
+        ..transform = Physics.Transform3D(pose.point(Math.Vec3(2.0, 1.5, 2.0)), pose.rotation)
+    var selected:Physics.RigidBody3D? = null
+    if reverse_bodies { selected = world.create_rigid_body(settings) }
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.mesh(grid(reversed:reverse_triangles)) ..transform = pose)
+    if !reverse_bodies { selected = world.create_rigid_body(settings) }
+    if let body = selected {
+        var step = 0
+        while step < 480 {
+            world.step(1.0 / 120.0); step++
+            if step >= 120 {
+                let relative = pose.inverse_point(body.position())
+                assert(Math.abs(relative.x - 2.0) < 0.01 && Math.abs(relative.z - 2.0) < 0.01)
+                assert(Math.abs(relative.y - expected_height) < 0.005)
+                assert(body.linear_velocity().length() < 0.01)
+                assert(body.angular_velocity().length() < 0.01)
+            }
+        }
+        let relative = pose.inverse_point(body.position())
+        print("valley reverse=$(reverse_bodies),$(reverse_triangles) compound=$(compound) yaw=$(yaw) local=$(relative.x),$(relative.y),$(relative.z) speed=$(body.linear_velocity().length()) spin=$(body.angular_velocity().length())")
+        var contacts:Physics.Contact3D[] = []
+        world.write_contacts(contacts)
+        assert(contacts.count() == 2)
+        var left = false
+        var right = false
+        for contact in contacts {
+            var normal = contact.normal()
+            var face = contact.first_child_id()
+            var child = contact.second_child_id()
+            if contact.first_body().same_body(body) {
+                normal = normal.negated()
+                face = contact.second_child_id()
+                child = contact.first_child_id()
+            }
+            normal = pose.rotation.conjugated().rotate(normal)
+            assert(Math.abs(normal.y - 1.0 / Math.sqrt(1.0625)) < 0.0001)
+            assert(Math.abs(Math.abs(normal.x) - 0.25 / Math.sqrt(1.0625)) < 0.0001)
+            assert(Math.abs(normal.z) < 0.0001)
+            if normal.x > 0.0 { left = true } else { right = true }
+            assert(face >= 0 && face < 16)
+            if compound { assert(child == 7) } else { assert(child == -1) }
+            assert(contact.point_count() >= 1 && contact.point_count() <= 4)
+        }
+        assert(left && right)
+        body.set_transform(Physics.Transform3D(pose.point(Math.Vec3(2.0, -1.0, 2.0)), pose.rotation))
+        body.set_linear_velocity(Math.Vec3())
+        body.set_angular_velocity(Math.Vec3())
+        world.step(1.0 / 120.0)
+        assert(world.contact_count() == 0)
+        world.write_contact_end_events(contacts)
+        assert(contacts.count() == 2)
+    } else { panic("valley body not created") }
+}
+
+func check_valleys() {
+    var shapes:Physics.Shape3D[] = [Physics.Shape3D.cylinder(Physics.Cylinder3D()),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D()),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D())]
+    var index = 0
+    for shape in shapes {
+        var height = 0.625
+        if index == 2 { break }
+        valley(shape, height, false, false, false, 0.0)
+        valley(shape, height, true, true, false, 0.0)
+        valley(shape, height, false, true, true, 0.37)
+        index++
+    }
+}
+func sensor_supports() {
+    var shapes:Physics.Shape3D[] = [Physics.Shape3D.cylinder(Physics.Cylinder3D()),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D()),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D())]
+    var index = 0
+    for shape in shapes {
+        for crest in [false, true] {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                ..shape = Physics.Shape3D.mesh(grid(crest:crest)))
+            var height = 0.6
+            if index == 2 { height = 0.5 + 0.5 * Math.sqrt(1.0625) - 0.01 }
+            if crest { height = 0.99; if index == 2 { height = 1.49 } }
+            var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape ..is_sensor = true
+                ..transform = Physics.Transform3D(position:Math.Vec3(2.0, height, 2.0)))
+            world.step(1.0 / 120.0)
+            var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+            print("sensor shape=$(index) crest=$(crest) contacts=$(contacts.count())")
+            var expected = 2; if crest { expected = 1 }
+            assert(contacts.count() == expected)
+            for contact in contacts {
+                assert(contact.is_sensor() && contact.point_count() == 0)
+                if crest { assert(contact.normal().nearly_equal(Math.Vec3.up(), 0.001)) }
+                else {
+                    let normal = contact.normal()
+                    assert(Math.abs(normal.y - 1.0 / Math.sqrt(1.0625)) < 0.0001)
+                    assert(Math.abs(Math.abs(normal.x) - 0.25 / Math.sqrt(1.0625)) < 0.0001)
+                }
+                assert(contact.first_child_id() >= 0 && contact.first_child_id() < 16)
+            }
+            assert(Math.abs(body.position().y - height) < 0.000001)
+            body.set_transform(Physics.Transform3D(position:Math.Vec3(2.0, -2.0, 2.0)))
+            world.step(1.0 / 120.0)
+            world.write_contact_end_events(contacts)
+            assert(contacts.count() == expected && world.contact_count() == 0)
+        }
+        index++
+    }
+}
+test "flat axial caps rest on both valley pans across orders and compound poses" { check_valleys() }
+test "all axial primitives merge ridge reactions and retain valley sensor identities" { sensor_supports() }
+func main() { check_valleys(); sensor_supports(); continuous_front_faces() }
+
+func continuous_front_faces() {
+    var shapes:Physics.Shape3D[] = [Physics.Shape3D.cylinder(Physics.Cylinder3D()),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D()),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D())]
+    let mesh = Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(2, 2, [0.0,0.0,0.0,0.0], 8.0, 8.0))
+    let pose = Physics.Transform3D(Math.Vec3(3.0, 2.0, -4.0), Math.Quat.angle_axis(0.31, Math.Vec3.right()))
+    var index = 0
+    for shape in shapes {
+        for reversed in [false, true] {
+            for back in [false, true] {
+                var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+                var y = 2.0; var speed = -240.0
+                if back { y = -2.0; speed = 240.0 }
+                let settings = Physics.RigidBody3DSettings() ..shape = shape ..allow_sleep = false
+                    ..continuous_collision = true ..friction = 0.0
+                    ..transform = Physics.Transform3D(pose.point(Math.Vec3(3.0, y, 3.0)), pose.rotation)
+                    ..linear_velocity = pose.vector(Math.Vec3(0.0, speed, 0.0))
+                var selected:Physics.RigidBody3D? = null
+                if reversed { selected = world.create_rigid_body(settings) }
+                world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                    ..shape = mesh ..transform = pose ..friction = 0.0)
+                if !reversed { selected = world.create_rigid_body(settings) }
+                if let body = selected {
+                    world.step(1.0 / 60.0)
+                    let position = pose.inverse_point(body.position())
+                    let velocity = pose.inverse_vector(body.linear_velocity())
+                    print("index=$(index) reversed=$(reversed) back=$(back) y=$(position.y) vy=$(velocity.y) contacts=$(world.contact_count())")
+                    if back {
+                        assert(Math.abs(position.y - 2.0) < 0.001)
+                        assert(Math.abs(velocity.y - 240.0) < 0.001)
+                        assert(world.contact_count() == 0)
+                    } else {
+                        var height = 0.5; if index == 2 { height = 1.0 }
+                        assert(Math.abs(position.y - height) < 0.001)
+                        assert(Math.abs(velocity.y) < 0.001)
+                        assert(world.contact_count() == 1)
+                    }
+                } else { panic("missing axial CCD body") }
+            }
+        }
+        index++
+    }
+}
+
+test "axial linear CCD stops on the front and crosses mesh backs in both body orders" { continuous_front_faces() }

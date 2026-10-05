@@ -22,6 +22,9 @@ public struct CompoundChild3D {
             mesh(_) => {
                 panic("GFX.Physics.CompoundChild3D cannot contain a mesh")
             }
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         self.id = id
         self.shape = shape

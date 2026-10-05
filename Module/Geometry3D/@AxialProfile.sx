@@ -1,0 +1,88 @@
+use GFX.Physics.Shape3D.Shape3D
+use STD.Math
+
+struct AxialProfile3D {
+    let point:Math.Vec2
+    let normal:Math.Vec2
+    let signed_distance:float
+    init(point:Math.Vec2, normal:Math.Vec2, signed_distance:float) {
+        self.point = point; self.normal = normal; self.signed_distance = signed_distance
+    }
+}
+func axial_profile_segment3d(point:Math.Vec2, first:Math.Vec2, second:Math.Vec2, normal:Math.Vec2) AxialProfile3D {
+    let edge = second.subtract(first)
+    var fraction = 0.0
+    if edge.length_squared() > 0.0 { fraction = Math.clamp(point.subtract(first).dot(edge) / edge.length_squared(), 0.0, 1.0) }
+    let closest = first.add(edge.multiply(fraction))
+    return AxialProfile3D(closest, normal, point.subtract(closest).length())
+}
+func axial_profile_arc3d(point:Math.Vec2, center:Math.Vec2, radius:float, top:bool, alpha:float) AxialProfile3D {
+    var offset = point.subtract(center)
+    if offset.length_squared() == 0.0 {
+        offset = Math.Vec2(0.0, -1.0)
+        if top { offset = Math.Vec2(0.0, 1.0) }
+    }
+    var normal = offset.normalized()
+    if (top && normal.y < alpha) || (!top && normal.y > alpha) {
+        normal = Math.Vec2(Math.sqrt(1.0 - alpha * alpha), alpha)
+    }
+    let closest = center.add(normal.multiply(radius))
+    return AxialProfile3D(closest, normal, point.subtract(closest).length())
+}
+func axial_signed_profile3d(point:Math.Vec2, value:AxialDimensions3D, rounded:bool) AxialProfile3D {
+    var best = AxialProfile3D(Math.Vec2(), Math.Vec2(), 3.4028235e38)
+    var inside = false
+    if rounded && Math.abs(value.top_radius - value.bottom_radius) >= 2.0 * value.half_height {
+        var radius = value.top_radius; var height = value.half_height
+        if value.bottom_radius > radius { radius = value.bottom_radius; height = -value.half_height }
+        let center = Math.Vec2(0.0, height)
+        var offset = point.subtract(center)
+        if offset.length_squared() == 0.0 { offset = Math.Vec2(1.0, 0.0) }
+        let normal = offset.normalized()
+        return AxialProfile3D(center.add(normal.multiply(radius)), normal, point.subtract(center).length() - radius)
+    }
+    if rounded {
+        let alpha = (value.bottom_radius - value.top_radius) / (2.0 * value.half_height)
+        let cosine = Math.sqrt(1.0 - alpha * alpha)
+        let bottom = Math.Vec2(value.bottom_radius * cosine, -value.half_height + value.bottom_radius * alpha)
+        let top = Math.Vec2(value.top_radius * cosine, value.half_height + value.top_radius * alpha)
+        best = axial_profile_arc3d(point, Math.Vec2(0.0, -value.half_height), value.bottom_radius, false, alpha)
+        let upper = axial_profile_arc3d(point, Math.Vec2(0.0, value.half_height), value.top_radius, true, alpha)
+        if upper.signed_distance < best.signed_distance { best = upper }
+        let side = axial_profile_segment3d(point, bottom, top, Math.Vec2(cosine, alpha))
+        if side.signed_distance < best.signed_distance { best = side }
+        if point.y >= -value.half_height - value.bottom_radius && point.y <= value.half_height + value.top_radius {
+            var radial = 0.0
+            if point.y < bottom.y {
+                let y = point.y + value.half_height
+                radial = Math.sqrt(Math.max(0.0, value.bottom_radius * value.bottom_radius - y * y))
+            } else if point.y > top.y {
+                let y = point.y - value.half_height
+                radial = Math.sqrt(Math.max(0.0, value.top_radius * value.top_radius - y * y))
+            } else {
+                radial = bottom.x + (top.x - bottom.x) * (point.y - bottom.y) / (top.y - bottom.y)
+            }
+            inside = point.x <= radial
+        }
+    } else {
+        let bottom = Math.Vec2(value.bottom_radius, -value.half_height)
+        let top = Math.Vec2(value.top_radius, value.half_height)
+        let edge = top.subtract(bottom)
+        best = axial_profile_segment3d(point, Math.Vec2(0.0, bottom.y), bottom, Math.Vec2(0.0, -1.0))
+        let upper = axial_profile_segment3d(point, top, Math.Vec2(0.0, top.y), Math.Vec2(0.0, 1.0))
+        if upper.signed_distance < best.signed_distance { best = upper }
+        let side = axial_profile_segment3d(point, bottom, top, Math.Vec2(edge.y, -edge.x).normalized())
+        if side.signed_distance < best.signed_distance { best = side }
+        let radius = bottom.x + (top.x - bottom.x) * (point.y - bottom.y) / (top.y - bottom.y)
+        inside = point.y >= bottom.y && point.y <= top.y && point.x <= radius
+    }
+    var normal = best.normal
+    let offset = point.subtract(best.point)
+    if offset.length_squared() > 0.000000000001 {
+        normal = offset.normalized()
+        if inside { normal = normal.negated() }
+    }
+    var signed = best.signed_distance
+    if inside { signed = -signed }
+    return AxialProfile3D(best.point, normal, signed)
+}

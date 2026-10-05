@@ -48,6 +48,9 @@ func convex_shape_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D
         }
         else => {}
     }
+    if axial_shape3d(cast.placement.shape()) || axial_shape3d(target.shape()) {
+        return axial_support_cast3d(cast, target)
+    }
     let pose = cast.placement.transform()
     let tolerance = shape_cast_extent3d(cast.placement.shape()) * 0.0000001
     var fraction = 0.0
@@ -84,6 +87,9 @@ func shape_cast_extent3d(shape:Shape3D) float {
         box(value) => { return value.half_size().length() }
         capsule(value) => { return value.radius + value.half_height }
         convex(value) => { return convex_extent3d(value) }
+        cylinder(value) => { return value.radius + value.half_height }
+        tapered_cylinder(value) => { return Math.max(value.top_radius, value.bottom_radius) + value.half_height }
+        tapered_capsule(value) => { return Math.max(value.top_radius, value.bottom_radius) + value.half_height }
         else => { panic("GFX.Physics.ShapeCast3D requires a convex moving volume") }
     }
 }

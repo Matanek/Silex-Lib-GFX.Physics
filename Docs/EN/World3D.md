@@ -429,3 +429,9 @@ creation order.
 The world provides the spatial queries and linear CCD described above.
 [Standalone geometry queries](Geometry3D.md) remain available for individual
 shapes; their bilateral policy stays distinct from unilateral terrain response.
+
+Cylinders and tapered shapes described in [standalone geometry](Geometry3D.md#cylinders-and-tapered-shapes)
+use their geometric mass center and exact axial inertia. Translation CCD accepts
+their round boundaries; an edge impact can retain center velocity and produce
+rotation while cancelling normal velocity at the contact point. The swept
+orientation remains the one at the beginning of the step.

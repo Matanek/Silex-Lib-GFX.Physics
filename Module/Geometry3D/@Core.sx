@@ -71,7 +71,10 @@ public struct ShapeCast3D {
             box(_) => {}
             capsule(_) => {}
             convex(_) => {}
-            else => { panic("GFX.Physics.ShapeCast3D requires a sphere, box, capsule or convex hull") }
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
+            else => { panic("GFX.Physics.ShapeCast3D requires a convex volume primitive or convex hull") }
         }
         if !finite_geometry3d_vector(translation) || translation.length_squared() <= 0.0 ||
             !finite_geometry3d_value(translation.length_squared()) ||
@@ -139,6 +142,7 @@ public struct Geometry3D {
         first:ShapePlacement3D,
         second:ShapePlacement3D
     ) DistanceResult3D {
+        if axial_shape3d(first.shape()) || axial_shape3d(second.shape()) { return axial_pair_distance3d(first, second) }
         match first.shape() {
             compound(first_compound) => {
                 return compound_first_distance(first_compound, first.transform(), second)
@@ -149,6 +153,9 @@ public struct Geometry3D {
             triangle(_) => {}
             mesh(_) => {}
             convex(_) => {}
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         match second.shape() {
             compound(second_compound) => {
@@ -162,6 +169,9 @@ public struct Geometry3D {
             triangle(_) => {}
             mesh(_) => {}
             convex(_) => {}
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         match first.shape() {
             sphere(first_sphere) => {
@@ -194,6 +204,9 @@ public struct Geometry3D {
                             second_mesh, second.transform())
                     }
                     compound(_) => {}
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             box(first_box) => {
@@ -226,6 +239,9 @@ public struct Geometry3D {
                     }
                     compound(_) => {}
                     convex(hull) => { return box_convex_distance3d(first_box, first.transform(), hull, second.transform()) }
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             capsule(first_capsule) => {
@@ -258,6 +274,9 @@ public struct Geometry3D {
                     }
                     compound(_) => {}
                     convex(hull) => { return capsule_convex_distance3d(first_capsule, first.transform(), hull, second.transform()) }
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             triangle(first_triangle) => {
@@ -280,6 +299,9 @@ public struct Geometry3D {
                     triangle(_) => {}
                     mesh(_) => {}
                     convex(hull) => { return reversed_distance(convex_triangle_distance3d(hull, second.transform(), first_triangle, first.transform())) }
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             convex(hull) => {
@@ -313,9 +335,15 @@ public struct Geometry3D {
                     triangle(_) => {}
                     mesh(_) => {}
                     convex(hull) => { return reversed_distance(convex_mesh_distance3d(hull, second.transform(), first_mesh, first.transform())) }
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             compound(_) => {}
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         panic("GFX.Physics.Geometry3D unsupported shape pair")
     }
@@ -339,6 +367,9 @@ public struct Geometry3D {
                     triangle(_) => {}
                     mesh(_) => {}
                     convex(_) => {}
+                    cylinder(_) => {}
+                    tapered_cylinder(_) => {}
+                    tapered_capsule(_) => {}
                 }
             }
             sphere(_) => {}
@@ -347,6 +378,9 @@ public struct Geometry3D {
             triangle(_) => {}
             mesh(_) => {}
             convex(_) => {}
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
     }
@@ -380,6 +414,9 @@ public struct Geometry3D {
             mesh(mesh) => {
                 return ray_mesh_cast(ray, mesh, target.transform())
             }
+            cylinder(_) => { return axial_ray_cast3d(ray, target) }
+            tapered_cylinder(_) => { return axial_ray_cast3d(ray, target) }
+            tapered_capsule(_) => { return axial_ray_cast3d(ray, target) }
         }
     }
 }
@@ -552,6 +589,7 @@ func signed_geometry3d_axis(value:float) float {
 package func contact_distance3d(
     first:ShapePlacement3D, second:ShapePlacement3D
 ) DistanceResult3D {
+    if axial_shape3d(first.shape()) || axial_shape3d(second.shape()) { return axial_contact_distance3d(first, second) }
     match first.shape() {
         sphere(first_sphere) => {
             match second.shape() {
@@ -565,6 +603,9 @@ package func contact_distance3d(
                 compound(_) => {}
                 triangle(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         capsule(first_capsule) => {
@@ -579,6 +620,9 @@ package func contact_distance3d(
                 compound(_) => {}
                 triangle(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         mesh(first_mesh) => {
@@ -601,6 +645,9 @@ package func contact_distance3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return reversed_distance(convex_mesh_distance3d(hull, second.transform(), first_mesh, first.transform(), true, true)) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         box(first_box) => {
@@ -621,6 +668,9 @@ package func contact_distance3d(
                         second_mesh, second.transform(), true, true)
                 }
                 convex(hull) => { return box_convex_distance3d(first_box, first.transform(), hull, second.transform(), true) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         compound(_) => {}
@@ -636,6 +686,9 @@ package func contact_distance3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return reversed_distance(convex_triangle_distance3d(hull, second.transform(), first_triangle, first.transform(), true)) }
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         convex(hull) => {
@@ -647,6 +700,9 @@ package func contact_distance3d(
                 else => {}
             }
         }
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return Geometry3D.distance(first, second)
 }
@@ -680,6 +736,9 @@ package func contact_separation3d(
                 compound(_) => {}
                 triangle(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         mesh(first_mesh) => {
@@ -695,6 +754,9 @@ package func contact_separation3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         box(first_box) => {
@@ -710,12 +772,18 @@ package func contact_separation3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(_) => {}
+                cylinder(_) => {}
+                tapered_cylinder(_) => {}
+                tapered_capsule(_) => {}
             }
         }
         capsule(_) => {}
         compound(_) => {}
         triangle(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     let distance = contact_distance3d(first, second)
     if !front_triangle_contact3d(first, second) {
@@ -746,6 +814,9 @@ package func front_triangle_contact3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return convex_triangle_front3d(hull, second.transform(), triangle, first.transform()) }
+                cylinder(_) => { return shape_triangle_front3d(second.transform(), triangle, first.transform()) }
+                tapered_cylinder(_) => { return shape_triangle_front3d(second.transform(), triangle, first.transform()) }
+                tapered_capsule(_) => { return shape_triangle_front3d(second.transform(), triangle, first.transform()) }
             }
         }
         mesh(mesh) => {
@@ -761,6 +832,9 @@ package func front_triangle_contact3d(
                 mesh(_) => {}
                 convex(hull) => { return shape_mesh_front3d(Transform3D(second.transform().point(hull.center())), mesh,
                     first.transform()) }
+                cylinder(_) => { return shape_mesh_front3d(second.transform(), mesh, first.transform()) }
+                tapered_cylinder(_) => { return shape_mesh_front3d(second.transform(), mesh, first.transform()) }
+                tapered_capsule(_) => { return shape_mesh_front3d(second.transform(), mesh, first.transform()) }
             }
         }
         sphere(_) => {}
@@ -768,6 +842,9 @@ package func front_triangle_contact3d(
         capsule(_) => {}
         compound(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     match second.shape() {
         triangle(triangle) => {
@@ -788,6 +865,9 @@ package func front_triangle_contact3d(
                 triangle(_) => {}
                 mesh(_) => {}
                 convex(hull) => { return convex_triangle_front3d(hull, first.transform(), triangle, second.transform()) }
+                cylinder(_) => { return shape_triangle_front3d(first.transform(), triangle, second.transform()) }
+                tapered_cylinder(_) => { return shape_triangle_front3d(first.transform(), triangle, second.transform()) }
+                tapered_capsule(_) => { return shape_triangle_front3d(first.transform(), triangle, second.transform()) }
             }
         }
         mesh(mesh) => {
@@ -803,6 +883,9 @@ package func front_triangle_contact3d(
                 mesh(_) => {}
                 convex(hull) => { return shape_mesh_front3d(Transform3D(first.transform().point(hull.center())), mesh,
                     second.transform()) }
+                cylinder(_) => { return shape_mesh_front3d(first.transform(), mesh, second.transform()) }
+                tapered_cylinder(_) => { return shape_mesh_front3d(first.transform(), mesh, second.transform()) }
+                tapered_capsule(_) => { return shape_mesh_front3d(first.transform(), mesh, second.transform()) }
             }
         }
         sphere(_) => {}
@@ -810,6 +893,9 @@ package func front_triangle_contact3d(
         capsule(_) => {}
         compound(_) => {}
         convex(_) => {}
+        cylinder(_) => {}
+        tapered_cylinder(_) => {}
+        tapered_capsule(_) => {}
     }
     return true
 }

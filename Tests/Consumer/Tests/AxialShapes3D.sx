@@ -1,0 +1,179 @@
+use GFX.Physics
+use STD.Math
+func shapes() Physics.Shape3D[] {
+    return [Physics.Shape3D.cylinder(Physics.Cylinder3D()),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D()),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D())]
+}
+func near(actual:float, expected:float, tolerance:float = 0.0001) { assert(Math.abs(actual - expected) < tolerance) }
+func query_cases() {
+    let cylinder = Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D()))
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D()))
+    var index = 0
+    for shape in shapes() {
+        let placed = Physics.ShapePlacement3D(shape)
+        let ray = Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0)), placed)
+        assert(ray.hit); print("ray=$(index) fraction=$(ray.fraction)")
+        if index == 0 { near(ray.fraction, 2.5 / 6.0); assert(ray.normal.nearly_equal(Math.Vec3.left(), 0.001)) }
+        if index == 1 { near(ray.fraction, 2.625 / 6.0); assert(ray.normal.nearly_equal(Math.Vec3(-1.0, 0.25, 0.0).normalized(), 0.001)) }
+        let exit = Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(), Math.Vec3(2.0, 0.0, 0.0)), placed)
+        assert(exit.hit && exit.fraction > 0.0 && exit.normal.x > 0.0)
+        assert(!Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(), Math.Vec3(0.01, 0.0, 0.0)), placed).hit)
+        assert(!Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(-3.0, 3.0, 0.0), Math.Vec3(6.0, 0.0, 0.0)), placed).hit)
+        let sphere = Physics.Geometry3D.sphere_cast(Physics.SphereCast3D(Physics.Sphere3D(), Math.Vec3(-3.0, 0.0, 0.0), Math.Vec3(6.0, 0.0, 0.0)), placed)
+        assert(sphere.hit)
+        if index == 0 { near(sphere.fraction, 1.0 / 3.0) }
+        if index == 1 { near(sphere.fraction, (3.0 - 0.375 - 0.5 * Math.sqrt(1.0625)) / 6.0) }
+        let moving = Physics.ShapePlacement3D(shape, Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0)))
+        let cast = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(moving, Math.Vec3(6.0, 0.0, 0.0)), target)
+        print("cast=$(index) fraction=$(cast.fraction)")
+        assert(cast.hit); near(cast.fraction, 1.0 / 3.0, 0.0002)
+        assert(!Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(moving, Math.Vec3(1.99, 0.0, 0.0)), target).hit)
+        assert(!Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(moving, Math.Vec3(-6.0, 0.0, 0.0)), target).hit)
+        let point = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)), Physics.Transform3D(cast.point))
+        near(Physics.Geometry3D.distance(point, target).separation, -0.00001)
+        near(Physics.Geometry3D.distance(point, Physics.ShapePlacement3D(shape, Physics.Transform3D(Math.Vec3(-3.0 + 6.0 * cast.fraction, 0.0, 0.0)))).separation, -0.00001)
+        index++
+    }
+    let rim = Physics.Geometry3D.distance(Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.1)), Physics.Transform3D(Math.Vec3(0.8, 0.9, 0.0))), cylinder)
+    near(rim.separation, 0.4); assert(rim.normal.nearly_equal(Math.Vec3(-0.6, -0.8, 0.0), 0.0001))
+    let tangent = Physics.Geometry3D.sphere_cast(Physics.SphereCast3D(Physics.Sphere3D(0.5), Math.Vec3(-3.0, 0.0, 1.0), Math.Vec3(6.0, 0.0, 0.0)), cylinder)
+    assert(tangent.hit); near(tangent.fraction, 0.5, 0.0002)
+}
+func mass_cases() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var asymmetric = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D()))
+    let properties = asymmetric.mass_properties()
+    // Independent Simpson integration of the solid (100000 circular sections).
+    near(properties.mass, 0.7813075480, 0.000005)
+    near(properties.local_center.y, -0.2710242147, 0.000005)
+    near(properties.local_inertia.x, 0.1582482881, 0.000005)
+    near(properties.local_inertia.y, 0.0697465911, 0.000005)
+    asymmetric.set_shape(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.5, 0.25, 0.5)))
+    near(asymmetric.mass_properties().local_center.y, 0.2710242147, 0.000005)
+    asymmetric.set_shape(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.25, 0.5, 0.0)))
+    near(asymmetric.mass_properties().mass, (4.0 / 3.0) * Math.pi() * 0.125)
+    near(asymmetric.mass_properties().local_center.y, 0.0)
+    let scales:float[] = [0.001, 1.0, 100.0]
+    for scale in scales {
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5 * scale, 0.5 * scale)))
+        let mass = Math.pi() * 0.25 * scale * scale * scale
+        near(body.mass_properties().mass / mass, 1.0)
+        near(body.mass_properties().local_inertia.y / (mass * scale * scale * 0.125), 1.0)
+        near(body.mass_properties().local_inertia.x / (mass * scale * scale * (0.25 / 4.0 + 1.0 / 12.0)), 1.0)
+        body.set_shape(Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.0, 0.5 * scale, 0.5 * scale)))
+        near(body.mass_properties().mass / (mass / 3.0), 1.0)
+        near(body.mass_properties().local_center.y / scale, -0.25)
+        body.set_shape(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.5 * scale, 0.5 * scale, 0.5 * scale)))
+        var capsule = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.5 * scale, 0.5 * scale)))
+        let actual = body.mass_properties(); let expected = capsule.mass_properties()
+        near(actual.mass / expected.mass, 1.0)
+        near(actual.local_inertia.x / expected.local_inertia.x, 1.0)
+        near(actual.local_inertia.y / expected.local_inertia.y, 1.0)
+        body.set_shape(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(scale, 0.25 * scale, 0.1 * scale)))
+        near(body.mass_properties().mass / ((4.0 / 3.0) * Math.pi() * scale * scale * scale), 1.0)
+        near(body.mass_properties().local_center.y / scale, 0.1)
+        body.set_shape(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.25 * scale, scale, 0.1 * scale)))
+        near(body.mass_properties().local_center.y / scale, -0.1)
+    }
+}
+func resting_cases() {
+    var index = 0
+    for shape in shapes() {
+        var terrain_index = 0
+        while terrain_index < 2 {
+            var world = Physics.World3D()
+            var support = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0, 1.0, 10.0)))
+            var pose = Physics.Transform3D(Math.Vec3(0.0, -0.5, 0.0))
+            if terrain_index == 1 {
+                support = Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(3, 3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 2.0, 2.0))
+                pose = Physics.Transform3D(Math.Vec3(-2.0, 0.0, -2.0))
+            }
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = support ..transform = pose)
+            var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape ..transform = Physics.Transform3D(Math.Vec3(0.0, 2.0, 0.0)))
+            var step = 0
+            while step < 240 { world.step(1.0 / 60.0); step++ }
+            var height = 0.5; if index == 2 { height = 1.0 }
+            print("rest=$(index),$(terrain_index) y=$(body.position().y) speed=$(body.linear_velocity().length())")
+            near(body.position().y, height, 0.001); assert(body.linear_velocity().length() < 0.001)
+            assert(body.angular_velocity().length() < 0.001)
+            terrain_index++
+        }
+        index++
+    }
+}
+func continuous_cases() {
+    for shape in shapes() {
+        var mode = 0
+        while mode < 2 {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.1, 4.0, 4.0))))
+            var bullet = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape ..transform = Physics.Transform3D(Math.Vec3(-2.0, 0.0, 0.0)) ..linear_velocity = Math.Vec3(240.0, 0.0, 0.0) ..continuous_collision = mode == 1 ..allow_sleep = false)
+            world.step(1.0 / 60.0)
+            print("ccd mode=$(mode) x=$(bullet.position().x) speed=$(bullet.linear_velocity().x)")
+            if mode == 0 { near(bullet.position().x, 2.0); assert(world.contact_count() == 0) }
+            else { assert(bullet.position().x < -0.54 && bullet.position().x > -0.56); assert(world.contact_count() == 1); assert(bullet.linear_velocity().x < 120.0)
+                var contacts:Physics.Contact3D[] = []; world.write_contacts(contacts)
+                let velocity = bullet.linear_velocity().add(bullet.angular_velocity().cross(contacts[0].point().subtract(bullet.world_center_of_mass())))
+                assert(Math.abs(velocity.x) < 0.02) }
+            mode++
+        }
+    }
+}
+func main() { query_cases(); mass_cases(); resting_cases(); continuous_cases(); stack_cases(); transforms_and_children(); print("Axial shapes: all cases passed") }
+test "axial profiles serve continuous rays, sphere and shape casts including caps, rims, inside exits and tangencies" { query_cases() }
+test "axial exact mass and inertia preserve cylinder, cone, capsule and containing sphere limits across scales" { mass_cases() }
+test "axial shapes settle without torque on box and coplanar height grid seams" { resting_cases() }
+test "axial continuous motion stops at thin walls while discrete motion crosses" { continuous_cases() }
+
+func stack_cases() {
+    var lower_index = 0
+    for lower_shape in shapes() {
+        var upper_index = 0
+        for upper_shape in shapes() {
+            var world = Physics.World3D()
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = lower_shape)
+            var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = upper_shape ..transform = Physics.Transform3D(Math.Vec3(0.0, 3.0, 0.0)))
+            var step = 0
+            while step < 240 { world.step(1.0 / 60.0); step++ }
+            var top = 0.5; if lower_index == 2 { top = 0.75 }
+            var bottom = 0.5; if upper_index == 2 { bottom = 1.0 }
+            print("stack=$(lower_index),$(upper_index) y=$(body.position().y) speed=$(body.linear_velocity().length())")
+            near(body.position().y, top + bottom, 0.002); assert(body.linear_velocity().length() < 0.002)
+            upper_index++
+        }
+        lower_index++
+    }
+}
+func transforms_and_children() {
+    let scales:float[] = [0.001, 1.0, 100.0]
+    for scale in scales {
+        let shape = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5 * scale, 0.5 * scale))
+        let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0).multiply(scale), Math.Quat.angle_axis(0.71, Math.Vec3(1.0, 2.0, 3.0).normalized()))
+        let origin = pose.point(Math.Vec3(-3.0 * scale, 0.0, 0.0)); let translation = pose.vector(Math.Vec3(6.0 * scale, 0.0, 0.0))
+        var compound = Physics.Shape3D.compound(Physics.Compound3D([Physics.CompoundChild3D(71, shape), Physics.CompoundChild3D(9, shape, Physics.Transform3D(Math.Vec3(2.0 * scale, 0.0, 0.0)))]))
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = compound ..transform = pose ..is_sensor = true ..collision_filter = Physics.CollisionFilter3D(category_bits:4))
+        let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(shape, Physics.Transform3D(origin, pose.rotation)), translation)
+        let geometry = Physics.Geometry3D.shape_cast(cast, Physics.ShapePlacement3D(compound, pose))
+        print("pose scale=$(scale) hit=$(geometry.hit) fraction=$(geometry.fraction) child=$(geometry.child_id)")
+        assert(geometry.hit && geometry.child_id == 71); near(geometry.fraction, 1.0 / 3.0, 0.0002)
+        assert(geometry.normal.nearly_equal(pose.vector(Math.Vec3.left()), 0.001))
+        if let hit = world.shape_cast(cast) { assert(hit.body().same_body(body) && hit.child_id() == 71); near(hit.fraction(), geometry.fraction) } else { panic("axial child missing") }
+        assert(world.shape_cast(cast, filter:Physics.QueryFilter3D(include_sensors:false)) == null)
+        assert(world.shape_cast(cast, filter:Physics.QueryFilter3D(mask_bits:2)) == null)
+        assert(world.shape_cast(cast, ignore_body:body) == null)
+        body.set_sensor(false)
+        body.set_shape(Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.0, 0.5 * scale, 0.5 * scale)))
+        near(body.mass_properties().local_center.y / scale, -0.25)
+        let center = body.world_center_of_mass()
+        body.apply_impulse(Math.Vec3.up().multiply(body.mass_properties().mass), center)
+        assert(body.angular_velocity().length() < 0.0001)
+        near(body.linear_velocity().y, 1.0)
+        body.set_linear_velocity(Math.Vec3()); body.set_angular_velocity(Math.Vec3(0.0, 0.0, 1.0))
+        world.step(0.1)
+        assert(body.world_center_of_mass().nearly_equal(center, scale * 0.00001))
+    }
+}
+test "axial cap and rounded contacts settle on all three fixed axial support families" { stack_cases() }
+test "axial queries preserve transformed children, scales, filters, shape mutation and the exact mass center" { transforms_and_children() }

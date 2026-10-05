@@ -3,19 +3,15 @@
 `GFX.Physics` provides optional native Silex 2D and 3D physics simulations.
 Their worlds work without windows or renderers; Application plugins connect
 them to ECS and Scene2D or Scene3D when requested. The 3D world supports
-spheres, boxes, capsules, compounds with primitive or convex children and
-dynamic mass, and fixed triangles or
-triangle meshes against dynamic spheres, capsules and boxes. Boxes retain
-simultaneous support on both pans of a qualified valley without duplicating
-identical reactions at terrain seams. Convex hulls can be fixed, kinematic or
-dynamic against spheres,
-boxes, capsules, other convex hulls and fixed triangles or meshes, with solid mass properties, signed distances, face contacts
-and linear CCD. It also supports
-public sphere, capsule, box and convex hull translation sweeps with filtered
-world queries,
-rigid or spring distance constraints,
-contact events, sleeping, linear CCD for the qualified pairs, and a virtual
-capsule character mover that also walks on fixed convex hulls. Other shape families remain under development.
+spheres, boxes, capsules, cylinders, tapered cylinders, tapered capsules and
+convex hulls as fixed, kinematic or dynamic solids, plus compounds of these
+shapes and fixed triangles or meshes. Round solids retain continuous collision
+boundaries and geometric mass properties. Qualified terrain pairs preserve
+simultaneous valley supports and merge duplicate seam or ridge reactions.
+Public translation sweeps and filtered world queries accompany rigid or spring
+distance constraints, contact events, sleeping and linear CCD. A virtual
+capsule character also walks on fixed convex hulls. See the documentation for
+qualified pairs and limits.
 
 ```text
 silex install GFX.Physics

@@ -1,0 +1,15 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let cylinder = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5, 0.5))
+    let cone = Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.0, 0.5, 0.5))
+    let capsule = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.25, 0.5, 0.5))
+    let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(
+        Physics.ShapePlacement3D(cylinder, Physics.Transform3D(Math.Vec3(-3.0, 0.0, 0.0))),
+        Math.Vec3(6.0, 0.0, 0.0)), Physics.ShapePlacement3D(cone))
+    assert(hit.hit)
+    var world = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = capsule)
+    print(body.mass_properties().local_center.y)
+}

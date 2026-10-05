@@ -169,6 +169,9 @@ package class BodyState3D {
                     panic("GFX.Physics.TriangleMesh3D requires a fixed body")
                 }
             }
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         if settings.body_type == BodyType3D.fixed &&
             (settings.linear_velocity.length_squared() > 0.0 ||
@@ -479,6 +482,9 @@ public class RigidBody3D {
             box(_) => {}
             capsule(_) => {}
             compound(_) => {}
+            cylinder(_) => {}
+            tapered_cylinder(_) => {}
+            tapered_capsule(_) => {}
         }
         var properties = MassProperties3D(0.0, Math.Vec3())
         if state.body_type == BodyType3D.dynamic {
@@ -693,6 +699,9 @@ package func shape_mass_properties3d(shape:Shape3D, density:float) MassPropertie
             }
             return MassProperties3D(total_mass, tensor, center)
         }
+        cylinder(value) => { return axial_solid_mass3d(value.half_height, value.radius, value.radius, false, density) }
+        tapered_cylinder(value) => { return axial_solid_mass3d(value.half_height, value.top_radius, value.bottom_radius, false, density) }
+        tapered_capsule(value) => { return axial_solid_mass3d(value.half_height, value.top_radius, value.bottom_radius, true, density) }
     }
 }
 
@@ -806,4 +815,64 @@ func convex_mass_properties3d(hull:ConvexHull3D, density:float) MassProperties3D
 
 func outer_moment3d(point:Math.Vec3) Math.Mat3 {
     return Math.Mat3(point.multiply(point.x), point.multiply(point.y), point.multiply(point.z))
+}
+
+struct AxialMoments3D {
+    let area:float
+    let first:float
+    let second:float
+    let radial:float
+    init(area:float, first:float, second:float, radial:float) {
+        self.area = area; self.first = first; self.second = second; self.radial = radial
+    }
+    func add(other:AxialMoments3D) AxialMoments3D {
+        return AxialMoments3D(self.area + other.area, self.first + other.first,
+            self.second + other.second, self.radial + other.radial)
+    }
+}
+// Integrate r(t)^2 = a + b*t + c*t^2 on y = start + length*t.
+// All three solids have polynomial circular sections, including spherical caps.
+func axial_section_moments3d(start:float, length:float, a:float, b:float, c:float) AxialMoments3D {
+    let area = a + b / 2.0 + c / 3.0
+    let moment = a / 2.0 + b / 3.0 + c / 4.0
+    let second = a / 3.0 + b / 4.0 + c / 5.0
+    let radial = a * a + a * b + (b * b + 2.0 * a * c) / 3.0 + b * c / 2.0 + c * c / 5.0
+    return AxialMoments3D(length * area, length * (start * area + length * moment),
+        length * (start * start * area + 2.0 * start * length * moment + length * length * second), length * radial)
+}
+func axial_solid_mass3d(half_height:float, top_radius:float, bottom_radius:float,
+    rounded:bool, density:float) MassProperties3D {
+    if rounded && Math.abs(top_radius - bottom_radius) >= 2.0 * half_height {
+        var radius = top_radius; var center = half_height
+        if bottom_radius > radius { radius = bottom_radius; center = -half_height }
+        let mass = density * (4.0 / 3.0) * Math.pi() * radius * radius * radius
+        let inertia = 0.4 * mass * radius * radius
+        return MassProperties3D(mass, diagonal_inertia3d(Math.Vec3(inertia)), Math.Vec3(0.0, center, 0.0))
+    }
+    let scale = half_height + Math.max(top_radius, bottom_radius)
+    let height = half_height / scale; let top = top_radius / scale; let bottom = bottom_radius / scale
+    var moments = AxialMoments3D(0.0, 0.0, 0.0, 0.0)
+    if rounded {
+        let alpha = (bottom - top) / (2.0 * height)
+        let cosine = Math.sqrt(1.0 - alpha * alpha)
+        let bottom_y = -height + bottom * alpha; let top_y = height + top * alpha
+        let lower_start = -height - bottom; let lower_length = bottom_y - lower_start
+        let upper_length = height + top - top_y
+        moments = axial_section_moments3d(lower_start, lower_length, 0.0, 2.0 * bottom * lower_length, -lower_length * lower_length)
+        moments = moments.add(axial_section_moments3d(top_y, upper_length,
+            top * top * (1.0 - alpha * alpha), -2.0 * top * alpha * upper_length, -upper_length * upper_length))
+        let first_radius = bottom * cosine; let delta = (top - bottom) * cosine
+        moments = moments.add(axial_section_moments3d(bottom_y, top_y - bottom_y,
+            first_radius * first_radius, 2.0 * first_radius * delta, delta * delta))
+    } else {
+        let delta = top - bottom
+        moments = axial_section_moments3d(-height, 2.0 * height, bottom * bottom, 2.0 * bottom * delta, delta * delta)
+    }
+    let volume_scale = density * Math.pi() * scale * scale * scale
+    let inertia_scale = volume_scale * scale * scale
+    let mass = volume_scale * moments.area
+    let axial = inertia_scale * moments.radial * 0.5
+    let transverse = inertia_scale * (moments.radial * 0.25 + moments.second - moments.first * moments.first / moments.area)
+    return MassProperties3D(mass, diagonal_inertia3d(Math.Vec3(transverse, axial, transverse)),
+        Math.Vec3(0.0, scale * moments.first / moments.area, 0.0))
 }

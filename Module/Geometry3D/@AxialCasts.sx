@@ -1,0 +1,114 @@
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+func axial_translation_cast3d(origin:Math.Vec3, translation:Math.Vec3, radius:float,
+    target:ShapePlacement3D) CastResult3D {
+    let dimensions = axial_dimensions3d(target.shape())
+    let tolerance = (dimensions.half_height + Math.max(dimensions.top_radius, dimensions.bottom_radius) + radius) * 0.0000001
+    var fraction = 0.0; var iteration = 0
+    while iteration < 128 && fraction <= 1.0 {
+        let point = axial_point3d(origin.add(translation.multiply(fraction)), target)
+        let gap = point.separation - radius
+        if gap <= tolerance { return CastResult3D(point.point, point.normal, fraction) }
+        let closing = -translation.dot(point.normal)
+        if closing <= 0.0 { return CastResult3D() }
+        let next = fraction + gap / closing
+        if next <= fraction { return CastResult3D() }
+        fraction = next; iteration++
+    }
+    return CastResult3D()
+}
+func axial_sphere_cast3d(cast:SphereCast3D, target:ShapePlacement3D) CastResult3D {
+    return axial_translation_cast3d(cast.origin, cast.translation, cast.sphere.radius, target)
+}
+func axial_ray_cast3d(ray:Ray3D, target:ShapePlacement3D) CastResult3D {
+    let start = axial_point3d(ray.origin, target)
+    if start.separation >= 0.0 { return axial_translation_cast3d(ray.origin, ray.translation, 0.0, target) }
+    let endpoint = ray.origin.add(ray.translation)
+    let end = axial_point3d(endpoint, target)
+    if end.separation < 0.0 { return CastResult3D() }
+    let reverse = axial_translation_cast3d(endpoint, ray.translation.negated(), 0.0, target)
+    if !reverse.hit { return reverse }
+    return CastResult3D(reverse.point, reverse.normal, 1.0 - reverse.fraction)
+}
+
+// GJK ray cast retains its simplex as the relative origin advances. Each
+// advancement uses an exact support plane, rather than an approximate distance
+// witness divided by a direction recovered at near-zero separation.
+func axial_support_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D {
+    let pose = cast.placement.transform()
+    let scale = Math.max(support_extent3d(support_volume3d(cast.placement.shape())), support_extent3d(support_volume3d(target.shape())))
+    let first = SupportPlacement3D(support_volume3d(cast.placement.shape()), Math.Vec3(), pose.rotation, 1.0 / scale)
+    let second = SupportPlacement3D(support_volume3d(target.shape()), target.transform().position.subtract(pose.position).divide(scale), target.transform().rotation, 1.0 / scale)
+    let motion = cast.translation.divide(scale)
+    var simplex = SupportSimplex3D()
+    simplex.first = support_axis_vertex3d(first, second, motion.normalized()); simplex.count = 1
+    var closest = simplex.reduce(); var fraction = 0.0; var normal = closest.normalized(); var iteration = 0
+    while iteration < 128 {
+        if closest.length_squared() <= 0.000000000001 {
+            let witness = simplex.witness()
+            return axial_support_cast_result3d(cast, target, witness, scale, normal, fraction)
+        }
+        var moving = SupportPlacement3D(first.volume, motion.multiply(fraction), first.rotation, first.scale)
+        var next = support_axis_vertex3d(moving, second, closest.negated())
+        let gap = closest.dot(next.difference)
+        if gap > 0.0 {
+            let closing = -closest.dot(motion)
+            if closing <= 0.0 { return CastResult3D() }
+            let advanced = fraction + gap / closing
+            if advanced > 1.0 { return CastResult3D() }
+            if advanced > fraction {
+                let displacement = motion.multiply(advanced - fraction)
+                var index = 0
+                while index < simplex.count {
+                    let previous = simplex.vertex(index)
+                    var shifted = SupportVertex3D(previous.first.add(displacement), previous.second)
+                    shifted.weight = previous.weight; simplex.set_vertex(index, shifted); index++
+                }
+                fraction = advanced; normal = closest.normalized()
+                moving = SupportPlacement3D(first.volume, motion.multiply(fraction), first.rotation, first.scale)
+                next = support_axis_vertex3d(moving, second, closest.negated())
+            }
+        }
+        var repeated = false; var index = 0
+        while index < simplex.count {
+            if next.difference.subtract(simplex.vertex(index).difference).length_squared() < 0.00000000000001 { repeated = true }
+            index++
+        }
+        if repeated {
+            closest = simplex.reduce()
+            if closest.length_squared() <= 0.000000000001 {
+                let witness = simplex.witness()
+                return axial_support_cast_result3d(cast, target, witness, scale, normal, fraction)
+            }
+            return CastResult3D()
+        }
+        simplex.set_vertex(simplex.count, next); simplex.count++
+        closest = simplex.reduce(); iteration++
+    }
+    return CastResult3D()
+}
+
+func axial_support_cast_result3d(cast:ShapeCast3D, target:ShapePlacement3D,
+    witness:SupportVertex3D, scale:float, normal:Math.Vec3, fraction:float) CastResult3D {
+    let origin = cast.placement.transform().position
+    let point = origin.add(witness.second.multiply(scale))
+    var outward = normal
+    // The tapered capsule is C1: its contact normal is unique even when the
+    // opposing cap or polygon has a normal cone. Recover it analytically from
+    // the smooth boundary instead of dividing a tiny Minkowski residue.
+    match target.shape() {
+        tapered_capsule(_) => { outward = axial_point3d(point, target).normal }
+        else => {
+            match cast.placement.shape() {
+                tapered_capsule(_) => {
+                    let pose = cast.placement.transform()
+                    let moving = ShapePlacement3D(cast.placement.shape(), Transform3D(pose.position.add(cast.translation.multiply(fraction)), pose.rotation))
+                    outward = axial_point3d(origin.add(witness.first.multiply(scale)), moving).normal.negated()
+                }
+                else => {}
+            }
+        }
+    }
+    return CastResult3D(point, outward, fraction)
+}

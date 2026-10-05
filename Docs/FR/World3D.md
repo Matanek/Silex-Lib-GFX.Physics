@@ -460,3 +460,9 @@ Le monde fournit les requêtes spatiales et le CCD linéaire décrits ci-dessus.
 Les [requêtes géométriques autonomes](Geometry3D.md) restent disponibles
 pour les formes isolées ; leur politique bilatérale reste distincte de la
 réponse unilatérale du terrain.
+
+Les cylindres et formes effilées décrits dans [la géométrie autonome](Geometry3D.md#cylindres-et-formes-effilées)
+emploient leur centre de masse géométrique et un tenseur axial exact. Le CCD
+translationnel accepte leurs surfaces rondes ; un choc sur un bord peut laisser
+une vitesse du centre et produire une rotation, tout en annulant la vitesse
+normale au point de contact. L’orientation balayée reste celle du début du pas.
