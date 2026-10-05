@@ -222,9 +222,57 @@ grands terrains. Elle ne gère ni trous ni données de hauteur mutables.
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
 arêtes. Les capsules utilisent le segment axial et les rayons testent aussi
 leurs hémisphères. Les requêtes n'allouent pas de cache persistant ; le monde
-sélectionne les paires candidates avant ces requêtes fines. Les autres familles
-de formes, les casts de formes et les requêtes sur
-le monde restent à livrer.
+sélectionne les paires candidates avant ces requêtes fines. Les balayages publics
+des autres volumes restent à livrer ; les
+[requêtes du monde](World3D.md#interroger-les-corps-du-monde) sont disponibles.
+
+## Balayer une sphère
+
+Pour arrêter une sonde sphérique avant un obstacle, interrogez son volume :
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let obstacle = Physics.ShapePlacement3D(Physics.Shape3D.box(
+        Physics.Box3D(Math.Vec3(1.0))))
+    let cast = Physics.SphereCast3D(Physics.Sphere3D(0.5),
+        Math.Vec3(-3.0, 0.0, 0.8), Math.Vec3(6.0, 0.0, 0.0))
+    let hit = Physics.Geometry3D.sphere_cast(cast, obstacle)
+    assert(hit.hit)
+    print(hit.fraction) // 0.35 : le volume touche l’arête ; son rayon central manque.
+}
+```
+
+`SphereCast3D(sphere, origin, translation)` décrit une sphère translatée,
+avec origine, extrémité et translation finies, translation non nulle et rayon
+positif fini. `Geometry3D.sphere_cast(cast, target)` retourne le premier impact
+dans `CastResult3D` : `hit`, `fraction` entre 0 et 1, `point` sur la cible,
+`normal` unitaire sortante de la cible vers la sphère et `child_id`.
+Le centre à l’impact vaut `origin + translation × fraction`. Une absence
+retourne `hit = false` ; les autres champs n’ont alors pas de sens physique.
+
+La cible peut être une sphère, boîte, capsule, enveloppe convexe, un triangle,
+maillage ou composé qualifié. Faces, arêtes et sommets sont pris en compte,
+y compris une tangence et l’extrémité du segment. Les triangles sont bilatéraux,
+avec la normale du côté touché. L’index de face du maillage ou l’ID d’enfant du
+composé est retourné ; une forme simple donne `-1`. À fraction strictement
+égale, le premier enfant dans l’ordre de construction est conservé.
+
+Un départ en recouvrement ou tangence donne **fraction zéro**, même si le
+mouvement sort. Le point provient de la requête de distance ; pour un centre
+inclus dans une boîte ou un convexe, la normale suit sa face de sortie la plus
+proche. Les configurations concentriques et les faces également proches ont
+un témoin déterministe, sans garantie de récupération physique complète.
+
+La cible reste immobile pendant la requête. Il n’y a ni balayage de rotation,
+ni déplacement implicite de corps, ni balayage public de boîte/capsule/convexe.
+Les maillages et convexes parcourent leur frontière par requête ; les très
+grands terrains ne sont pas qualifiés par cette API. Les témoins numériques
+couvrent les échelles 0,1, 1 et 10, avec poses rigides et sommets décalés
+compensés ; ils ne constituent pas une borne pour toutes les coordonnées
+float possibles. Pour filtrer les corps d’un monde, voir [World3D](World3D.md#interroger-les-corps-du-monde).
 
 ## Composé immuable
 

@@ -265,10 +265,18 @@ impact est celui de son enfant le plus proche ; `child_id()` donne son ID et
 vaut `-1` pour une primitive. Chaque `WorldRayHit3D` expose aussi `body()`,
 `point()`, `normal()` et `fraction()` entre 0 et 1.
 
+`sphere_cast(cast, ignore_body, filter)` retourne le premier impact du
+volume de `SphereCast3D`, ou `null`. `WorldSphereHit3D` expose `body()`,
+`point()`, `normal()`, `fraction()` et `child_id()` avec le contrat du
+[balayage géométrique](Geometry3D.md#balayer-une-sphère). Les triangles restent
+bilatéraux dans cette requête, indépendamment de la réponse physique du monde.
+En cas d’égalité stricte, le premier emplacement vivant est conservé.
+Cette opération n’avance pas le monde et ne modifie ni pose ni vitesse.
+
 `write_overlaps(query, output, ignore_body, filter)` sélectionne les corps qui
 recouvrent une `ShapePlacement3D`. Chaque `WorldOverlap3D` donne `body()`,
 `query_child_id()` et `body_child_id()` ; les résultats suivent l'ordre des
-emplacements du monde. Les corps désactivés sont exclus des deux requêtes.
+emplacements du monde. Les corps désactivés sont exclus de ces requêtes.
 L'argument facultatif `ignore_body` écarte un corps vivant du même monde,
 par exemple l'émetteur d'un rayon. Un corps étranger ou détruit est refusé.
 

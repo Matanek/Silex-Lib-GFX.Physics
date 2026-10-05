@@ -41,6 +41,25 @@ public struct Ray3D {
     }
 }
 
+public struct SphereCast3D {
+    let sphere:Sphere3D
+    let origin:Math.Vec3
+    let translation:Math.Vec3
+
+    init(sphere:Sphere3D, origin:Math.Vec3, translation:Math.Vec3) {
+        if !finite_geometry3d_vector(origin) || !finite_geometry3d_vector(translation) ||
+            translation.length_squared() <= 0.0 ||
+            !finite_geometry3d_value(translation.length_squared()) ||
+            !finite_geometry3d_vector(origin.add(translation))
+        {
+            panic("GFX.Physics.SphereCast3D requires a finite origin, endpoint and nonzero finite translation")
+        }
+        self.sphere = sphere
+        self.origin = origin
+        self.translation = translation
+    }
+}
+
 public struct DistanceResult3D {
     let first_point:Math.Vec3
     let second_point:Math.Vec3
@@ -307,6 +326,10 @@ public struct Geometry3D {
             convex(_) => {}
         }
         return Geometry3D.distance(first, second).separation <= 0.0
+    }
+
+    static func sphere_cast(cast:SphereCast3D, target:ShapePlacement3D) CastResult3D {
+        return sphere_shape_cast3d(cast, target)
     }
 
     static func ray_cast(ray:Ray3D, target:ShapePlacement3D) CastResult3D {

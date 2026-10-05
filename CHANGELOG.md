@@ -6,6 +6,11 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `SphereCast3D` and `Geometry3D.sphere_cast` sweep a sphere volume against
+  qualified shapes: first face/edge/vertex impact, tangency, initial overlap and
+  identities. `World3D.sphere_cast` adds filters, exclusion and a safe body handle
+  with snapshots. Triangle queries are bilateral and do not mutate the world.
+
 - Compounds accept convex children, alone or mixed with primitives: volume
   center and full inertia, queries, leaf IDs, mesh supports, sensors, shape
   replacement and linear CCD. Bounds compose leaf poses before joining them

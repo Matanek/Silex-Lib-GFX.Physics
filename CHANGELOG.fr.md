@@ -6,6 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `SphereCast3D` et `Geometry3D.sphere_cast` balayent un volume sphérique contre
+  les formes qualifiées : premier impact face/arête/sommet, tangence, recouvrement
+  initial et identités. `World3D.sphere_cast` ajoute filtres, exclusion et handle
+  sûr avec snapshots. Requête bilatérale pour triangles, sans mutation du monde.
+
 - Les composés acceptent des enfants convexes, seuls ou mêlés aux primitives :
   centre et tenseur complet, requêtes, IDs de feuilles, appuis maillage,
   capteurs, remplacement et CCD linéaire. Les bornes composent les poses des

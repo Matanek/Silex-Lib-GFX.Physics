@@ -1,0 +1,12 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let obstacle = Physics.ShapePlacement3D(Physics.Shape3D.box(
+        Physics.Box3D(Math.Vec3(1.0))))
+    let cast = Physics.SphereCast3D(Physics.Sphere3D(0.5),
+        Math.Vec3(-3.0, 0.0, 0.8), Math.Vec3(6.0, 0.0, 0.0))
+    let hit = Physics.Geometry3D.sphere_cast(cast, obstacle)
+    assert(hit.hit)
+    print(hit.fraction)
+}

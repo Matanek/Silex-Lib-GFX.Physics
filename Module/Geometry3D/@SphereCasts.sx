@@ -1,0 +1,159 @@
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Shape3D.Shape3D
+use STD.Math
+
+func nearest_sphere_cast3d(current:CastResult3D, candidate:CastResult3D) CastResult3D {
+    if candidate.hit && (!current.hit || candidate.fraction < current.fraction) { return candidate }
+    return current
+}
+
+// Closest-line roots avoid subtracting large squared discriminant terms.
+func sphere_cast_root3d(offset:Math.Vec3, direction:Math.Vec3, radius:float) float {
+    let squared = direction.length_squared()
+    if squared == 0.0 { return -1.0 }
+    let middle = -offset.dot(direction) / squared
+    let closest = offset.add(direction.multiply(middle))
+    let remaining = radius * radius - closest.length_squared()
+    if remaining < 0.0 { return -1.0 }
+    let fraction = middle - Math.sqrt(remaining / squared)
+    if fraction < 0.0 || fraction > 1.0 { return -1.0 }
+    return fraction
+}
+
+func sphere_cast_vertex3d(cast:SphereCast3D, vertex:Math.Vec3) CastResult3D {
+    let fraction = sphere_cast_root3d(cast.origin.subtract(vertex), cast.translation, cast.sphere.radius)
+    if fraction < 0.0 { return CastResult3D() }
+    let center = cast.origin.add(cast.translation.multiply(fraction))
+    return CastResult3D(vertex, center.subtract(vertex).normalized(), fraction)
+}
+
+func sphere_cast_edge3d(cast:SphereCast3D, first:Math.Vec3, second:Math.Vec3) CastResult3D {
+    let axis = second.subtract(first).normalized()
+    let length = second.subtract(first).length()
+    let offset = cast.origin.subtract(first)
+    let along = offset.dot(axis)
+    let speed = cast.translation.dot(axis)
+    let fraction = sphere_cast_root3d(offset.subtract(axis.multiply(along)),
+        cast.translation.subtract(axis.multiply(speed)), cast.sphere.radius)
+    var result = CastResult3D()
+    if fraction >= 0.0 {
+        let position = along + speed * fraction
+        if position >= 0.0 && position <= length {
+            let point = first.add(axis.multiply(position))
+            let normal = cast.origin.add(cast.translation.multiply(fraction)).subtract(point).normalized()
+            result = CastResult3D(point, normal, fraction)
+        }
+    }
+    result = nearest_sphere_cast3d(result, sphere_cast_vertex3d(cast, first))
+    return nearest_sphere_cast3d(result, sphere_cast_vertex3d(cast, second))
+}
+
+func sphere_cast_triangle3d(cast:SphereCast3D, triangle:Triangle3D) CastResult3D {
+    let face = triangle.normal()
+    let height = cast.origin.subtract(triangle.first).dot(face)
+    let speed = cast.translation.dot(face)
+    var result = CastResult3D()
+    if speed != 0.0 {
+        var side = -1.0
+        while side <= 1.0 {
+            let fraction = (side * cast.sphere.radius - height) / speed
+            if fraction >= 0.0 && fraction <= 1.0 {
+                let normal = face.multiply(side)
+                let point = cast.origin.add(cast.translation.multiply(fraction))
+                    .subtract(normal.multiply(cast.sphere.radius))
+                let closest = closest_triangle_point3d(point, triangle)
+                if point.subtract(closest).length() <= cast.sphere.radius * 0.000001 {
+                    result = nearest_sphere_cast3d(result, CastResult3D(closest, normal, fraction))
+                }
+            }
+            side += 2.0
+        }
+    }
+    result = nearest_sphere_cast3d(result, sphere_cast_edge3d(cast, triangle.first, triangle.second))
+    result = nearest_sphere_cast3d(result, sphere_cast_edge3d(cast, triangle.second, triangle.third))
+    return nearest_sphere_cast3d(result, sphere_cast_edge3d(cast, triangle.third, triangle.first))
+}
+
+func sphere_shape_cast3d(cast:SphereCast3D, target:ShapePlacement3D) CastResult3D {
+    match target.shape() {
+        compound(compound) => {
+            var result = CastResult3D(); var index = 0
+            while index < compound.child_count() {
+                let child = compound.child(index)
+                let hit = sphere_shape_cast3d(cast, ShapePlacement3D(child.shape,
+                    compound_child_transform(target.transform(), child)))
+                if hit.hit { result = nearest_sphere_cast3d(result,
+                    CastResult3D(hit.point, hit.normal, hit.fraction, child.id)) }
+                index++
+            }
+            return result
+        }
+        mesh(mesh) => {
+            var result = CastResult3D(); var index = 0
+            while index < mesh.triangle_count() {
+                let hit = sphere_shape_cast3d(cast, ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), target.transform()))
+                if hit.hit { result = nearest_sphere_cast3d(result,
+                    CastResult3D(hit.point, hit.normal, hit.fraction, index)) }
+                index++
+            }
+            return result
+        }
+        else => {}
+    }
+    let start = Geometry3D.distance(ShapePlacement3D(Shape3D.sphere(cast.sphere), Transform3D(cast.origin)), target)
+    if start.separation <= 0.0 {
+        var normal = start.normal.negated()
+        match target.shape() {
+            box(_) => { if start.separation <= -cast.sphere.radius { normal = start.normal } }
+            convex(_) => { if start.separation <= -cast.sphere.radius { normal = start.normal } }
+            else => {}
+        }
+        return CastResult3D(start.second_point, normal, 0.0)
+    }
+    let pose = target.transform()
+    let local_cast = SphereCast3D(cast.sphere, pose.inverse_point(cast.origin), pose.inverse_vector(cast.translation))
+    var result = CastResult3D()
+    match target.shape() {
+        sphere(sphere) => {
+            let expanded = SphereCast3D(Sphere3D(sphere.radius + cast.sphere.radius), local_cast.origin, local_cast.translation)
+            let hit = sphere_cast_vertex3d(expanded, Math.Vec3())
+            if hit.hit { result = CastResult3D(hit.normal.multiply(sphere.radius), hit.normal, hit.fraction) }
+        }
+        capsule(capsule) => {
+            let expanded = SphereCast3D(Sphere3D(capsule.radius + cast.sphere.radius), local_cast.origin, local_cast.translation)
+            let hit = sphere_cast_edge3d(expanded, Math.Vec3(0.0, -capsule.half_height, 0.0), Math.Vec3(0.0, capsule.half_height, 0.0))
+            if hit.hit { result = CastResult3D(hit.point.add(hit.normal.multiply(capsule.radius)), hit.normal, hit.fraction) }
+        }
+        triangle(triangle) => { result = sphere_cast_triangle3d(local_cast, triangle) }
+        convex(hull) => {
+            var index = 0
+            while index < hull.triangle_count() {
+                result = nearest_sphere_cast3d(result, sphere_cast_triangle3d(local_cast, hull.triangle(index)))
+                index++
+            }
+        }
+        box(box) => {
+            let half = box.half_size(); var axis = 0
+            while axis < 3 {
+                let next = (axis + 1) % 3; let last = (axis + 2) % 3
+                let u = box_unit_axis(next, box_axis_component(half, next))
+                let v = box_unit_axis(last, box_axis_component(half, last))
+                var side = -1.0
+                while side <= 1.0 {
+                    let center = box_unit_axis(axis, side * box_axis_component(half, axis))
+                    let a = center.subtract(u).subtract(v); let b = center.add(u).subtract(v)
+                    let c = center.add(u).add(v); let d = center.subtract(u).add(v)
+                    result = nearest_sphere_cast3d(result, sphere_cast_triangle3d(local_cast, Triangle3D(a, b, c)))
+                    result = nearest_sphere_cast3d(result, sphere_cast_triangle3d(local_cast, Triangle3D(a, c, d)))
+                    side += 2.0
+                }
+                axis++
+            }
+        }
+        else => {}
+    }
+    if !result.hit { return result }
+    return CastResult3D(pose.point(result.point), pose.vector(result.normal), result.fraction, result.child_id)
+}

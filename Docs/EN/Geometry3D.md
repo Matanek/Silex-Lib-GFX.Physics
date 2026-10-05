@@ -208,8 +208,55 @@ large-terrain query performance. Holes and mutable heights are not supported.
 Separated box pairs compare vertices against faces and edges against edges.
 Capsules use their axial segment; ray queries also test their hemispheres.
 The queries retain no cache; the world selects candidate pairs before these
-narrow queries. Other shape families,
-shape casts, and world queries remain to be delivered.
+narrow queries. Sweeps of other volumes remain to be delivered;
+[world queries](World3D.md#query-bodies-in-the-world) are available.
+
+## Sweep a sphere
+
+To stop a spherical probe before an obstacle, query its volume:
+
+```silex
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let obstacle = Physics.ShapePlacement3D(Physics.Shape3D.box(
+        Physics.Box3D(Math.Vec3(1.0))))
+    let cast = Physics.SphereCast3D(Physics.Sphere3D(0.5),
+        Math.Vec3(-3.0, 0.0, 0.8), Math.Vec3(6.0, 0.0, 0.0))
+    let hit = Physics.Geometry3D.sphere_cast(cast, obstacle)
+    assert(hit.hit)
+    print(hit.fraction) // 0.35: the volume touches the edge; its center ray misses.
+}
+```
+
+`SphereCast3D(sphere, origin, translation)` describes a translated sphere,
+with finite origin, endpoint and translation, nonzero translation and finite
+positive radius. `Geometry3D.sphere_cast(cast, target)` returns the first impact
+in `CastResult3D`: `hit`, `fraction` from 0 to 1, `point` on the target,
+unit `normal` pointing out of the target toward the sphere, and `child_id`.
+The center at impact is `origin + translation × fraction`. A miss returns
+`hit = false`; the other fields then have no physical meaning.
+
+The target may be a sphere, box, capsule, convex hull, triangle, mesh or
+qualified compound. Faces, edges and vertices are included, as are tangency
+and the segment endpoint. Triangles are bilateral, with the normal of the
+hit side. The mesh face index or compound child ID is returned; a simple
+shape returns `-1`. An exactly equal fraction retains the first child in
+construction order.
+
+An initial overlap or tangency returns **fraction zero**, even when moving
+outward. The point comes from the distance query; a center inside a box or
+convex hull uses its nearest exit face normal. Concentric configurations and
+equally close faces have a deterministic witness, without a guarantee of
+complete physical recovery.
+
+The target remains stationary throughout the query. There is no rotation
+sweep, implicit body movement, or public box/capsule/convex sweep. Meshes and
+convex hulls traverse their boundary per query; this API does not qualify very
+large terrains. Numerical witnesses cover scales 0.1, 1 and 10 with rigid
+poses and compensated vertex offsets; they do not bound every possible float
+coordinate. To filter bodies in a world, see [World3D](World3D.md#query-bodies-in-the-world).
 
 ## Immutable compound
 

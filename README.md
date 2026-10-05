@@ -11,6 +11,7 @@ identical reactions at terrain seams. Convex hulls can be fixed, kinematic or
 dynamic against spheres,
 boxes, capsules, other convex hulls and fixed triangles or meshes, with solid mass properties, signed distances, face contacts
 and linear CCD. It also supports
+public sphere volume sweeps with filtered world queries,
 rigid or spring distance constraints,
 contact events, sleeping, linear CCD for the qualified pairs, and a virtual
 capsule character mover that also walks on fixed convex hulls. Other shape families remain under development.

@@ -249,10 +249,18 @@ from its nearest child; `child_id()` gives its ID and is `-1` for a primitive.
 Each `WorldRayHit3D` also exposes `body()`, `point()`, `normal()`, and a
 `fraction()` between 0 and 1.
 
+`sphere_cast(cast, ignore_body, filter)` returns the first impact of a
+`SphereCast3D` volume, or `null`. `WorldSphereHit3D` exposes `body()`, `point()`,
+`normal()`, `fraction()` and `child_id()` with the
+[geometric sweep contract](Geometry3D.md#sweep-a-sphere). Triangles remain
+bilateral in this query, independently of the world's physical response.
+An exactly equal fraction retains the first live slot.
+This operation does not advance the world or change positions or velocities.
+
 `write_overlaps(query, output, ignore_body, filter)` selects bodies overlapping a
 `ShapePlacement3D`. Each `WorldOverlap3D` provides `body()`,
 `query_child_id()`, and `body_child_id()`; results follow world slot order.
-Disabled bodies are excluded from both queries. The optional `ignore_body`
+Disabled bodies are excluded from these queries. The optional `ignore_body`
 excludes a live body from the same world, such as the ray's emitter. A foreign
 or destroyed body is rejected.
 

@@ -40,7 +40,9 @@ use GFX.Physics.RigidBody3D.finite_body3d_point
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Geometry3D.SphereCast3D
 use GFX.Physics.Geometry3D.Ray3D
+use GFX.Physics.WorldQuery3D.WorldSphereHit3D
 use GFX.Physics.WorldQuery3D.WorldRayHit3D
 use GFX.Physics.WorldQuery3D.WorldOverlap3D
 use GFX.Physics.CollisionFilter3D.QueryFilter3D
@@ -211,6 +213,43 @@ public class World3D {
             return excluded.body_id().slot
         }
         return -1
+    }
+
+    func sphere_cast(
+        cast:SphereCast3D, ignore_body:RigidBody3D? = null,
+        filter:QueryFilter3D = QueryFilter3D()
+    ) WorldSphereHit3D? {
+        let ignored_slot = self.ignored_query_slot(ignore_body)
+        var nearest:WorldSphereHit3D? = null
+        var slot = 0
+        while slot < self.store.slots.count() {
+            if slot != ignored_slot {
+                if var state = self.store.slots[slot] {
+                    if state.is_enabled && filter.allows(
+                        state.collision_filter, state.is_sensor
+                    ) {
+                        let hit = Geometry3D.sphere_cast(
+                            cast, ShapePlacement3D(state.shape, state.transform)
+                        )
+                        if hit.hit {
+                            if let previous = nearest {
+                                if hit.fraction < previous.fraction() {
+                                    nearest = WorldSphereHit3D(RigidBody3D(
+                                        self.store, BodyId3D(slot, self.store.generations[slot])
+                                    ), hit)
+                                }
+                            } else {
+                                nearest = WorldSphereHit3D(RigidBody3D(
+                                    self.store, BodyId3D(slot, self.store.generations[slot])
+                                ), hit)
+                            }
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+        return nearest
     }
 
     func ray_cast(

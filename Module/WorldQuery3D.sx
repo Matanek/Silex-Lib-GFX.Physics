@@ -24,6 +24,28 @@ public struct WorldRayHit3D {
     func child_id() int { return self.current_child_id }
 }
 
+public struct WorldSphereHit3D {
+    private var current_body:RigidBody3D
+    private let current_point:Math.Vec3
+    private let current_normal:Math.Vec3
+    private let current_fraction:float
+    private let current_child_id:int
+
+    package init(body:RigidBody3D, result:CastResult3D) {
+        self.current_body = body
+        self.current_point = result.point
+        self.current_normal = result.normal
+        self.current_fraction = result.fraction
+        self.current_child_id = result.child_id
+    }
+
+    func body() RigidBody3D { return self.current_body }
+    func point() Math.Vec3 { return self.current_point }
+    func normal() Math.Vec3 { return self.current_normal }
+    func fraction() float { return self.current_fraction }
+    func child_id() int { return self.current_child_id }
+}
+
 public struct WorldOverlap3D {
     private var current_body:RigidBody3D
     private let current_query_child_id:int
