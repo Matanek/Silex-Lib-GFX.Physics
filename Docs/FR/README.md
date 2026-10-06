@@ -12,6 +12,8 @@ Le [contrôleur de personnage 3D](Character3D.md) déplace une capsule avec pent
 
 La [charnière 3D](Hinge3D.md) relie deux corps autour d’un axe avec des butées rigides et un moteur à vitesse cible et couple borné.
 
+La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
+
 ## Corps et monde
 
 ```silex

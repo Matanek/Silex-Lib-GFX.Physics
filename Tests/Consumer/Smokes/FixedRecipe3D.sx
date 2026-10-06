@@ -1,0 +1,30 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var weight = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(2.0,0.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var attachment = world.create_fixed_constraint(support,weight)
+    var step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    assert(attachment.anchor_error().length() < 0.001)
+    assert(attachment.angular_error().length() < 0.001)
+    assert(Math.abs(attachment.reaction_force().y-19.62) < 0.05)
+    assert(Math.abs(attachment.reaction_torque().z-39.24) < 0.1)
+    world.destroy_fixed_constraint(attachment)
+    step = 0
+    while step < 30 { world.step(1.0 / 60.0); step++ }
+    assert(!attachment.is_valid() && weight.position().y < -1.0)
+    let captured = weight.transform()
+    attachment = world.create_fixed_constraint(support,weight)
+    step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    assert(weight.position().nearly_equal(captured.position,0.001))
+    assert(world.fixed_constraint_count() == 1)
+    print("Fixed attachment: support, detach and current-pose reattachment verified")
+}

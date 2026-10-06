@@ -2,7 +2,9 @@
 
 `GFX.Physics` provides optional native Silex 2D and 3D physics simulations.
 Their worlds work without windows or renderers; Application plugins connect
-them to ECS and Scene2D or Scene3D when requested. The 3D world supports
+them to ECS and Scene2D or Scene3D when requested.
+[Fixed attachments](Docs/EN/Fixed3D.md) assemble bodies with a complete relative pose.
+The 3D world supports
 spheres, boxes, capsules, cylinders, tapered cylinders, tapered capsules and
 convex hulls as fixed, kinematic or dynamic solids, plus compounds of these
 shapes and fixed triangles, planes or meshes. Round solids retain continuous collision

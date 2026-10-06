@@ -1,0 +1,35 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func orphan_fixed() Physics.FixedConstraint3D {
+    var world = Physics.World3D()
+    return world.create_fixed_constraint(world.create_rigid_body(),world.create_rigid_body())
+}
+func main() {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    if selected("position-nan") { world.create_fixed_constraint(support,body,Physics.FixedConstraint3DSettings()
+        ..first_local_frame = Physics.Transform3D(Math.Vec3(Math.sqrt(-1.0),0.0,0.0))) }
+    if selected("rotation-zero") { world.create_fixed_constraint(support,body,Physics.FixedConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,0.0))) }
+    if selected("same") { world.create_fixed_constraint(body,body) }
+    if selected("fixed-kinematic") { world.create_fixed_constraint(support,world.create_rigid_body(
+        Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic)) }
+    if selected("foreign") { var other = Physics.World3D(); world.create_fixed_constraint(support,other.create_rigid_body()) }
+    var joint = world.create_fixed_constraint(support,body)
+    if selected("mutation-frame") { joint.set_frames(Physics.Transform3D(),Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,2.0))) }
+    if selected("stale") { world.destroy_fixed_constraint(joint); world.create_fixed_constraint(support,body); joint.anchor_error() }
+    if selected("stale-mutation") { world.destroy_fixed_constraint(joint); joint.set_frames(Physics.Transform3D(),Physics.Transform3D()) }
+    if selected("foreign-destroy") { var other = Physics.World3D(); other.destroy_fixed_constraint(joint) }
+    if selected("orphan") { orphan_fixed().reaction_torque() }
+    panic("invalid fixed operation was accepted")
+}

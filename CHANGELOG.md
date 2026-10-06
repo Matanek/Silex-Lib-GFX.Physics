@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `FixedConstraint3D` preserves a complete relative pose, captures the current assembly or aligns two local frames, measures force/torque and supports mutation, suspension and reattachment. Loaded chains, contacts, sleep and invalidation tested; equilibrium and established motion compared against Jolt on macOS ARM64 Native Debug/Release.
+
 - `HingeMotor3D` drives a hinge at a relative speed with a maximum torque, runtime reversal, motor off and separate effort observation. Joint preparation and contact solving share the effort limit; inertia about the pivot, stops and a pendulum qualified against Jolt in Native Debug/Release.
 
 - `HingeConstraint3D` connects two anchors around an axis with local zero-angle frames, hard stops, force/torque reactions and runtime mutations. It shares `World3D` contacts and sleep islands; pendulums and stops compared with Jolt on macOS ARM64 Native Debug/Release.

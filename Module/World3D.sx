@@ -1,3 +1,8 @@
+use GFX.Physics.FixedConstraint3D.FixedConstraint3D
+use GFX.Physics.FixedConstraint3D.FixedConstraint3DSettings
+use GFX.Physics.FixedConstraint3D.FixedConstraintState3D
+use GFX.Physics.FixedConstraint3D.FixedConstraintStore3D
+use GFX.Physics.FixedConstraint3D.fixed_angular_error3d
 use GFX.Physics.Geometry3D.plane_shape3d
 use GFX.Physics.ContactManifold3D.plane_surface_contact_points
 use GFX.Physics.ContactManifold3D.axial_surface_contact_points
@@ -79,6 +84,7 @@ package struct CharacterShape3D {
 public class World3D {
     private var store:BodyStore3D
     private var distance_constraints:DistanceConstraintStore3D
+    private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
@@ -89,6 +95,7 @@ public class World3D {
 
     drop {
         self.distance_constraints.invalidate_all()
+        self.fixed_constraints.invalidate_all()
         self.point_constraints.invalidate_all()
         self.hinge_constraints.invalidate_all()
         self.store.invalidate_all()
@@ -100,6 +107,7 @@ public class World3D {
         }
         self.store = BodyStore3D()
         self.distance_constraints = DistanceConstraintStore3D(self.store)
+        self.fixed_constraints = FixedConstraintStore3D(self.store)
         self.point_constraints = PointConstraintStore3D(self.store)
         self.hinge_constraints = HingeConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
@@ -122,6 +130,7 @@ public class World3D {
 
     func body_count() int { return self.store.live_count }
     func distance_constraint_count() int { return self.distance_constraints.live_count }
+    func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
     func hinge_constraint_count() int { return self.hinge_constraints.live_count }
     func contact_count() int { return self.contacts.count() }
@@ -160,6 +169,29 @@ public class World3D {
             panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
         }
         self.distance_constraints.destroy(constraint.constraint_id())
+    }
+
+    func create_fixed_constraint(first:@RigidBody3D, second:@RigidBody3D,
+        settings:FixedConstraint3DSettings? = null) FixedConstraint3D
+    {
+        var chosen = FixedConstraint3DSettings()
+        if let explicit = settings { chosen = explicit }
+        else {
+            let first_pose = first.transform()
+            let second_pose = second.transform()
+            chosen.second_local_frame = Transform3D(second_pose.inverse_point(first_pose.position),
+                second_pose.rotation.conjugated().multiply(first_pose.rotation).normalized())
+        }
+        let id = self.fixed_constraints.append(first, second, chosen)
+        return FixedConstraint3D(self.fixed_constraints, id)
+    }
+
+    func destroy_fixed_constraint(constraint:@FixedConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.fixed_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.fixed_constraints.destroy(constraint.constraint_id())
     }
 
     func create_point_constraint(
@@ -210,6 +242,7 @@ public class World3D {
             }
         }
         self.distance_constraints.destroy_for_body(body.body_id())
+        self.fixed_constraints.destroy_for_body(body.body_id())
         self.point_constraints.destroy_for_body(body.body_id())
         self.hinge_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
@@ -491,7 +524,7 @@ public class World3D {
                 }
             }
         }
-        self.reset_constraint_reactions()
+        self.reset_constraint_reactions(delta)
         for slot in self.store.slots {
             if var state = slot {
                 if state.is_enabled && state.body_type == BodyType3D.dynamic && state.awake {
@@ -501,9 +534,10 @@ public class World3D {
                 state.torque = Math.Vec3()
             }
         }
-        // Powered joints must act on the velocity used to move the bodies.
+        self.warm_start_fixed_constraints(delta)
+        // Rigid attachments and powered joints act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_motor() {
+        if self.has_active_hinge_motor() || self.has_active_fixed_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -680,11 +714,20 @@ public class World3D {
         }
     }
 
-    private func reset_constraint_reactions() {
+    private func reset_constraint_reactions(delta:float) {
         for slot in self.distance_constraints.slots {
             if var constraint = slot {
                 constraint.axial_impulse = 0.0
                 constraint.reaction_axis = Math.Vec3()
+                constraint.inverse_delta = 0.0
+            }
+        }
+        for slot in self.fixed_constraints.slots {
+            if var constraint = slot {
+                constraint.warm_linear = constraint.impulse.multiply(delta * constraint.inverse_delta)
+                constraint.warm_angular = constraint.angular_impulse.multiply(delta * constraint.inverse_delta)
+                constraint.impulse = Math.Vec3()
+                constraint.angular_impulse = Math.Vec3()
                 constraint.inverse_delta = 0.0
             }
         }
@@ -697,6 +740,39 @@ public class World3D {
         for slot in self.hinge_constraints.slots {
             if var constraint = slot { constraint.reset() }
         }
+    }
+
+    private func warm_start_fixed_constraints(delta:float) {
+        for slot in self.fixed_constraints.slots {
+            if var constraint = slot {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        let first_radius = first.transform.point(constraint.first_local_anchor).subtract(first.world_center())
+                        let second_radius = second.transform.point(constraint.second_local_anchor).subtract(second.world_center())
+                        apply_contact_impulse3d(first, second, first_radius, second_radius, constraint.warm_linear)
+                        apply_hinge_angular_impulse3d(first, second, constraint.warm_angular)
+                        constraint.impulse = constraint.warm_linear
+                        constraint.angular_impulse = constraint.warm_angular
+                        constraint.inverse_delta = 1.0 / delta
+                    }
+                }
+            }
+        }
+    }
+
+    private func has_active_fixed_constraint() bool {
+        for slot in self.fixed_constraints.slots {
+            if let constraint = slot {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
     }
 
     private func has_active_hinge_motor() bool {
@@ -731,6 +807,25 @@ public class World3D {
                         (first.awake || second.awake)
                     {
                         solve_distance_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
+        constraint_index = 0
+        while constraint_index < self.fixed_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.fixed_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.fixed_constraints.slots[selected] {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_fixed_velocity3d(first, second, constraint, delta)
                     }
                 }
             }
@@ -778,8 +873,32 @@ public class World3D {
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count {
             for slot in self.distance_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.fixed_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
                         var first = self.store.require(constraint.first_id)
@@ -1065,6 +1184,19 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.fixed_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            solve_fixed_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             for slot in self.point_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1185,6 +1317,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.distance_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.fixed_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.is_enabled {
                     islands.connect(constraint.first_id.slot,
@@ -3126,4 +3266,107 @@ func solve_hinge_position3d(first:BodyState3D, second:BodyState3D,
         row++
     }
     solve_point_position3d(first, second, state.point)
+}
+
+struct FixedImpulse3D {
+    let linear:Math.Vec3
+    let angular:Math.Vec3
+    init(linear:Math.Vec3, angular:Math.Vec3) { self.linear = linear; self.angular = angular }
+}
+
+// Mobility matrices can be nonsingular below the general Mat3 epsilon.
+func fixed_inverse3d(matrix:Math.Mat3) Math.Mat3 {
+    let first = matrix.row(0)
+    let second = matrix.row(1)
+    let third = matrix.row(2)
+    let determinant = first.dot(second.cross(third))
+    if determinant == 0.0 { return Math.Mat3.zero() }
+    return Math.Mat3(second.cross(third), third.cross(first), first.cross(second))
+        .multiply(1.0 / determinant)
+}
+
+func fixed_coupling_column3d(first:@BodyState3D, second:@BodyState3D,
+    first_radius:Math.Vec3, second_radius:Math.Vec3, axis:Math.Vec3) Math.Vec3
+{
+    return first.inverse_inertia_times(axis).cross(first_radius)
+        .add(second.inverse_inertia_times(axis).cross(second_radius))
+}
+
+func fixed_impulse3d(first:@BodyState3D, second:@BodyState3D,
+    first_radius:Math.Vec3, second_radius:Math.Vec3,
+    linear_error:Math.Vec3, angular_error:Math.Vec3) FixedImpulse3D
+{
+    let x = Math.Vec3(1.0, 0.0, 0.0)
+    let y = Math.Vec3(0.0, 1.0, 0.0)
+    let z = Math.Vec3(0.0, 0.0, 1.0)
+    let point_inverse = fixed_inverse3d(point_inverse_mass3d(first, second, first_radius, second_radius))
+    let angular_mass = Math.Mat3(
+        first.inverse_inertia_times(x).add(second.inverse_inertia_times(x)),
+        first.inverse_inertia_times(y).add(second.inverse_inertia_times(y)),
+        first.inverse_inertia_times(z).add(second.inverse_inertia_times(z)))
+    let coupling = Math.Mat3(
+        fixed_coupling_column3d(first, second, first_radius, second_radius, x),
+        fixed_coupling_column3d(first, second, first_radius, second_radius, y),
+        fixed_coupling_column3d(first, second, first_radius, second_radius, z))
+    // Eliminate the linear block while preserving its angular coupling.
+    let response = point_inverse.multiply(coupling)
+    let schur = angular_mass.subtract(coupling.transposed().multiply(response))
+    let angular = fixed_inverse3d(schur).multiply(angular_error.subtract(
+        coupling.transposed().multiply(point_inverse.multiply(linear_error)))).negated()
+    let linear = point_inverse.multiply(linear_error.add(coupling.multiply(angular))).negated()
+    return FixedImpulse3D(linear, angular)
+}
+
+func fixed_bounded_error3d(error:Math.Vec3, maximum:float) Math.Vec3 {
+    if error.length_squared() > maximum * maximum { return error.normalized().multiply(maximum) }
+    return error
+}
+
+func solve_fixed_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    state:FixedConstraintState3D, delta:float)
+{
+    let first_point = first.transform.point(state.first_local_anchor)
+    let second_point = second.transform.point(state.second_local_anchor)
+    let first_radius = first_point.subtract(first.world_center())
+    let second_radius = second_point.subtract(second.world_center())
+    let linear_bias = fixed_bounded_error3d(second_point.subtract(first_point).multiply(0.2 / delta), 10.0)
+    let angular_bias = fixed_bounded_error3d(fixed_angular_error3d(first.transform, second.transform, state)
+        .multiply(0.2 / delta), 10.0)
+    let impulse = fixed_impulse3d(first, second, first_radius, second_radius,
+        contact_relative_velocity3d(first, second, first_radius, second_radius).add(linear_bias),
+        second.angular_velocity.subtract(first.angular_velocity).add(angular_bias))
+    apply_contact_impulse3d(first, second, first_radius, second_radius, impulse.linear)
+    apply_hinge_angular_impulse3d(first, second, impulse.angular)
+    state.impulse = state.impulse.add(impulse.linear)
+    state.angular_impulse = state.angular_impulse.add(impulse.angular)
+    state.inverse_delta = 1.0 / delta
+}
+
+func solve_fixed_position3d(first:BodyState3D, second:BodyState3D,
+    state:FixedConstraintState3D)
+{
+    let first_point = first.transform.point(state.first_local_anchor)
+    let second_point = second.transform.point(state.second_local_anchor)
+    let linear_error = fixed_bounded_error3d(second_point.subtract(first_point), 0.2)
+    let angular_error = fixed_bounded_error3d(fixed_angular_error3d(first.transform, second.transform, state), 0.2)
+    if linear_error.length_squared() < 0.0000000001 && angular_error.length_squared() < 0.0000000001 { return }
+    let first_radius = first_point.subtract(first.world_center())
+    let second_radius = second_point.subtract(second.world_center())
+    let impulse = fixed_impulse3d(first, second, first_radius, second_radius,
+        linear_error.multiply(0.8), angular_error.multiply(0.8))
+    shift_fixed_body3d(first, impulse.linear.negated(), impulse.angular.negated(), first_radius)
+    shift_fixed_body3d(second, impulse.linear, impulse.angular, second_radius)
+}
+
+func shift_fixed_body3d(body:BodyState3D, linear:Math.Vec3, angular:Math.Vec3, radius:Math.Vec3) {
+    if body.inverse_mass == 0.0 { return }
+    let center = body.world_center().add(linear.multiply(body.inverse_mass))
+    // Sum both moments before changing orientation or evaluating world inertia again.
+    let vector = body.inverse_inertia_times(radius.cross(linear).add(angular))
+    let angle = vector.length()
+    var rotation = body.transform.rotation
+    if angle > 0.0 {
+        rotation = Math.Quat.angle_axis(angle, vector.divide(angle)).multiply(rotation).normalized()
+    }
+    body.transform = Transform3D(center.subtract(rotation.rotate(body.mass_properties.local_center)), rotation)
 }

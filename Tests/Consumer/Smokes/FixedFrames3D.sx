@@ -1,0 +1,39 @@
+use GFX.Physics
+use STD.Math
+
+func settle(world:Physics.World3D) {
+    var step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+}
+func main() {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(1.0,2.0,0.5),Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0)))
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2,0.4,0.8),local_center:Math.Vec3(0.1,0.2,0.3))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_fixed_constraint(support,body,Physics.FixedConstraint3DSettings()
+        ..first_local_frame = Physics.Transform3D(Math.Vec3(0.0,2.0,0.0),Math.Quat.angle_axis(0.3,Math.Vec3(1.0,0.0,0.0)))
+        ..second_local_frame = Physics.Transform3D(Math.Vec3(0.0,1.0,0.0),Math.Quat.angle_axis(-0.2,Math.Vec3(0.0,0.0,1.0))))
+    settle(world)
+    assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+    joint.set_frames(Physics.Transform3D(Math.Vec3(1.0,2.0,0.0),Math.Quat.angle_axis(0.5,Math.Vec3(0.0,0.0,1.0))),
+        Physics.Transform3D(Math.Vec3(0.2,0.3,0.4),Math.Quat.angle_axis(0.2,Math.Vec3(0.0,1.0,0.0))))
+    assert(joint.reaction_force() == Math.Vec3() && joint.reaction_torque() == Math.Vec3())
+    settle(world)
+    let pose = body.transform()
+    body.set_shape(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5,0.3,0.2))))
+    settle(world)
+    assert(body.position().nearly_equal(pose.position,0.001))
+    assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+    body.set_enabled(false); world.step(1.0 / 60.0)
+    assert(joint.reaction_force() == Math.Vec3() && joint.reaction_torque() == Math.Vec3())
+    body.set_enabled(true); settle(world)
+    joint.set_enabled(false); settle(world)
+    assert(joint.anchor_error().length() > 1.0)
+    joint.set_enabled(true); settle(world)
+    assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+    world.destroy_rigid_body(body)
+    assert(!joint.is_valid() && world.fixed_constraint_count() == 0)
+    print("Fixed frames: rotations, shifted center, mutations, suspension and invalidation verified")
+}

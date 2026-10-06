@@ -255,6 +255,8 @@ The [3D character mover](Character3D.md) moves a capsule with slopes, stairs and
 
 The [3D hinge](Hinge3D.md) connects two bodies around an axis with hard stops and a torque-limited velocity motor.
 
+The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
+
 ## Tile maps
 
 [Tile map collisions](TileMap2D.md)

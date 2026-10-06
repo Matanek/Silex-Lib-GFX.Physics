@@ -157,3 +157,5 @@ public use GFX.Physics.TaperedCapsule3D.TaperedCapsule3D
 public use GFX.Physics.TriangleMesh3D.HeightGridDiagonal3D
 
 public use GFX.Physics.Plane3D.Plane3D
+public use GFX.Physics.FixedConstraint3D.FixedConstraint3D
+public use GFX.Physics.FixedConstraint3D.FixedConstraint3DSettings

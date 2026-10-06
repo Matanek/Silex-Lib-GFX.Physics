@@ -242,6 +242,8 @@ families remain to be delivered. Very fast motion can still cross an obstacle
 when continuous
 collision is disabled, which is the default.
 
+The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
+
 ## Query bodies in the world
 
 `ray_cast(ray, ignore_body, filter)` returns the nearest `Ray3D` hit or `null`.

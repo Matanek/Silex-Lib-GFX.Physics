@@ -260,6 +260,8 @@ et autres articulations restent à livrer. Un choc très rapide peut encore
 traverser un obstacle quand
 le balayage continu est désactivé, ce qui est le réglage par défaut.
 
+La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
+
 ## Interroger les corps du monde
 
 `ray_cast(ray, ignore_body, filter)` retourne le premier impact de `Ray3D`, ou `null`.

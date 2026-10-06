@@ -1,0 +1,225 @@
+use GFX.Physics
+use STD.Math
+
+func fixed_body(world:Physics.World3D, position:Math.Vec3 = Math.Vec3(),
+    rotation:Math.Quat = Math.Quat.identity(), mass:float = 2.0) Physics.RigidBody3D
+{
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position, rotation)
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(mass, Math.Vec3(mass * 0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func fixed_steps(world:Physics.World3D, count:int) {
+    var step = 0
+    while step < count { world.step(1.0 / 60.0); step++ }
+}
+
+test "fixed attachment captures the current relative pose and holds all six degrees" {
+    var world = Physics.World3D()
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    let initial = Physics.Transform3D(Math.Vec3(2.0, 1.0, -0.5),
+        Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0).normalized()))
+    var body = fixed_body(world, initial.position, initial.rotation)
+    var joint = world.create_fixed_constraint(pivot, body)
+    assert(world.fixed_constraint_count() == 1 && joint.is_valid())
+    assert(joint.anchor_error().length() < 0.00001 && joint.angular_error().length() < 0.00001)
+    body.set_linear_velocity(Math.Vec3(1.0, 2.0, 3.0))
+    body.set_angular_velocity(Math.Vec3(2.0, -1.0, 0.5))
+    fixed_steps(world, 180)
+    assert(body.position().nearly_equal(initial.position, 0.0001))
+    assert(body.transform().vector(Math.Vec3(1.0,0.0,0.0)).nearly_equal(initial.vector(Math.Vec3(1.0,0.0,0.0)),0.0001))
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+}
+
+test "fixed attachment carries gravity and its off center moment" {
+    var world = Physics.World3D()
+    var body = fixed_body(world, Math.Vec3(2.0,0.0,0.0))
+    var joint = world.create_fixed_constraint(world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed), body)
+    fixed_steps(world, 120)
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+    assert(Math.abs(joint.reaction_force().y - 19.62) < 0.05)
+    assert(Math.abs(joint.reaction_torque().z - 39.24) < 0.1)
+    let force = joint.reaction_force()
+    world.step(0.0); assert(joint.reaction_force() == force)
+}
+
+test "fixed attachment uses explicit rotated local frames and converges near pi" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = fixed_body(world, Math.Vec3(), Math.Quat.angle_axis(3.13, Math.Vec3(0.0,1.0,0.0)))
+    var settings = Physics.FixedConstraint3DSettings()
+    settings.first_local_frame = Physics.Transform3D(Math.Vec3(1.0,2.0,0.0), Math.Quat.angle_axis(0.4, Math.Vec3(1.0,0.0,0.0)))
+    settings.second_local_frame = Physics.Transform3D(Math.Vec3(0.0,1.0,0.0), Math.Quat.angle_axis(-0.3, Math.Vec3(0.0,0.0,1.0)))
+    var joint = world.create_fixed_constraint(pivot, body, settings)
+    fixed_steps(world, 240)
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+    assert(joint.first_local_frame() == settings.first_local_frame && joint.second_local_frame() == settings.second_local_frame)
+}
+
+test "fixed attachment conserves linear and angular action reaction with unequal inertias" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = fixed_body(world, mass:2.0)
+    var second = fixed_body(world, mass:8.0)
+    var joint = world.create_fixed_constraint(first, second)
+    first.set_linear_velocity(Math.Vec3(1.0,0.0,0.0))
+    first.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    world.step(1.0 / 60.0)
+    assert(Math.abs(first.linear_velocity().x * 2.0 + second.linear_velocity().x * 8.0 - 2.0) < 0.0001)
+    assert(Math.abs(first.angular_velocity().z * 0.2 + second.angular_velocity().z * 0.8 - 0.2) < 0.0001)
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+}
+
+test "fixed frame mutation is atomic resets both reactions and changes target pose" {
+    var world = Physics.World3D()
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = fixed_body(world, Math.Vec3(1.0,0.0,0.0))
+    var joint = world.create_fixed_constraint(pivot, body)
+    fixed_steps(world, 30)
+    assert(joint.reaction_force().y > 19.0)
+    joint.set_frames(Physics.Transform3D(Math.Vec3(0.0,2.0,0.0),Math.Quat.angle_axis(0.8,Math.Vec3(0.0,0.0,1.0))),Physics.Transform3D())
+    assert(joint.reaction_force().length() == 0.0 && joint.reaction_torque().length() == 0.0)
+    fixed_steps(world, 120)
+    assert(body.position().nearly_equal(Math.Vec3(0.0,2.0,0.0),0.0001))
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+}
+
+test "disabled fixed attachment or body suspends its effort and reenabling restores it" {
+    var world = Physics.World3D()
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = fixed_body(world, Math.Vec3(1.0,0.0,0.0))
+    var joint = world.create_fixed_constraint(pivot, body)
+    joint.set_enabled(false)
+    fixed_steps(world, 15)
+    assert(joint.anchor_error().length() > 0.1 && joint.reaction_force().length() == 0.0)
+    joint.set_enabled(true); fixed_steps(world, 90)
+    assert(joint.anchor_error().length() < 0.0001)
+    body.set_enabled(false); world.step(1.0 / 60.0)
+    assert(joint.reaction_force().length() == 0.0 && joint.reaction_torque().length() == 0.0)
+    body.set_enabled(true); fixed_steps(world, 30)
+    assert(joint.reaction_force().y > 19.0 && joint.angular_error().length() < 0.0001)
+}
+
+test "fixed destruction invalidates generations and body destruction removes attachments" {
+    var world = Physics.World3D()
+    var first = fixed_body(world); var second = fixed_body(world)
+    var old = world.create_fixed_constraint(first, second)
+    world.destroy_fixed_constraint(old)
+    var joint = world.create_fixed_constraint(first, second)
+    assert(!old.is_valid() && joint.is_valid())
+    assert(joint.first_body().same_body(first) && joint.second_body().same_body(second))
+    world.destroy_rigid_body(first)
+    assert(!joint.is_valid() && world.fixed_constraint_count() == 0)
+}
+
+func orphan_fixed() Physics.FixedConstraint3D {
+    var world = Physics.World3D()
+    return world.create_fixed_constraint(fixed_body(world),fixed_body(world))
+}
+test "world destruction invalidates a retained fixed handle" {
+    var joint = orphan_fixed(); assert(!joint.is_valid())
+}
+
+test "fixed assembly sleeps and a moving kinematic reference wakes its bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = fixed_body(world, Math.Vec3(1.0,0.0,0.0)); body.set_sleep_enabled(true)
+    var joint = world.create_fixed_constraint(pivot,body)
+    fixed_steps(world, 90); assert(!body.is_awake())
+    joint.set_frames(joint.first_local_frame(),joint.second_local_frame())
+    assert(body.is_awake()); fixed_steps(world, 90); assert(!body.is_awake())
+    pivot.move_kinematic(Physics.Transform3D(Math.Vec3(0.0,1.0,0.0),
+        Math.Quat.angle_axis(0.3,Math.Vec3(0.0,0.0,1.0))),1.0)
+    world.step(1.0 / 60.0); assert(body.is_awake())
+    fixed_steps(world, 119)
+    assert(joint.anchor_error().length() < 0.002 && joint.angular_error().length() < 0.002)
+}
+
+test "fixed chain of unequal bodies holds under load and wakes as one island" {
+    var world = Physics.World3D()
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var first = fixed_body(world,Math.Vec3(1.0,0.0,0.0),mass:2.0)
+    var second = fixed_body(world,Math.Vec3(2.0,0.0,0.0),mass:8.0)
+    first.set_sleep_enabled(true); second.set_sleep_enabled(true)
+    var upper = world.create_fixed_constraint(pivot,first)
+    var lower = world.create_fixed_constraint(first,second)
+    fixed_steps(world, 240)
+    assert(upper.anchor_error().length() < 0.002 && lower.anchor_error().length() < 0.002)
+    assert(upper.angular_error().length() < 0.002 && lower.angular_error().length() < 0.002)
+    assert(!first.is_awake() && !second.is_awake())
+    second.apply_impulse(Math.Vec3(0.5,0.4,0.3)); world.step(1.0 / 60.0)
+    assert(first.is_awake() && second.is_awake())
+    fixed_steps(world, 120)
+    assert(upper.anchor_error().length() < 0.002 && lower.anchor_error().length() < 0.002)
+}
+
+test "welded boxes share real plane contacts without losing their relative pose" {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(-1.0,2.0,0.0)) ..friction = 0.0)
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(1.0,2.0,0.0)) ..friction = 0.0)
+    var joint = world.create_fixed_constraint(first,second)
+    fixed_steps(world, 180)
+    assert(world.contact_count() >= 2 && first.position().y > 0.48 && second.position().y > 0.48)
+    assert(joint.anchor_error().length() < 0.003 && joint.angular_error().length() < 0.003)
+}
+
+test "fixed local frames remain relative to body origin after center and shape mutation" {
+    var world = Physics.World3D()
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var rotation = Math.Quat.angle_axis(0.7,Math.Vec3(1.0,1.0,0.0).normalized())
+    var body = fixed_body(world,Math.Vec3(1.0,1.0,0.0),rotation)
+    var joint = world.create_fixed_constraint(pivot,body)
+    body.set_mass_properties(Physics.MassProperties3D(2.0,Math.Vec3(0.2,0.4,0.8),local_center:Math.Vec3(0.3,-0.2,0.1)))
+    fixed_steps(world, 120)
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+    body.set_shape(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5,0.3,0.2))))
+    fixed_steps(world, 120)
+    assert(body.position().nearly_equal(Math.Vec3(1.0,1.0,0.0),0.0001))
+    assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+}
+
+test "fixed reactions adapt to delta changes and independently copied frame settings" {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = fixed_body(world,Math.Vec3(2.0,0.0,0.0),mass:200.0)
+    var settings = Physics.FixedConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(Math.Vec3(-2.0,0.0,0.0))
+    var joint = world.create_fixed_constraint(support,body,settings)
+    settings.second_local_frame = Physics.Transform3D()
+    assert(joint.second_local_frame().position == Math.Vec3(-2.0,0.0,0.0))
+    fixed_steps(world,60)
+    var step = 0
+    while step < 60 {
+        var delta = 1.0 / 120.0
+        if step % 2 == 1 { delta = 1.0 / 30.0 }
+        world.step(delta)
+        assert(joint.anchor_error().length() < 0.0001 && joint.angular_error().length() < 0.0001)
+        assert(Math.abs(joint.reaction_force().y-1962.0) < 0.05)
+        assert(Math.abs(joint.reaction_torque().z-3924.0) < 0.1)
+        step++
+    }
+}
+
+test "a fixed payload and powered hinge share an island and the motor torque bound" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var rotor = fixed_body(world)
+    var payload = fixed_body(world,Math.Vec3(1.0,0.0,0.0),mass:8.0)
+    var motor = world.create_hinge_constraint(support,rotor,Physics.HingeConstraint3DSettings()
+        ..motor = Physics.HingeMotor3D(1.0,2.0))
+    var attachment = world.create_fixed_constraint(rotor,payload)
+    var step = 0
+    while step < 360 {
+        world.step(1.0 / 60.0)
+        assert(Math.abs(motor.motor_torque()) <= 2.0001)
+        assert(attachment.anchor_error().length() < 0.003 && attachment.angular_error().length() < 0.003)
+        step++
+    }
+    assert(Math.abs(motor.angular_speed()-1.0) < 0.002)
+    assert(motor.anchor_error().length() < 0.003 && motor.axis_error() < 0.002)
+}
