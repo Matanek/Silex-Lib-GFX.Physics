@@ -237,10 +237,11 @@ invalidate the handle; `point_constraint_count()` counts live joints. Point
 joints share steps, contacts, and sleep islands with rigid distance joints.
 
 The [3D hinge](Hinge3D.md) holds anchors and a rotation axis together with
-hard stops. The distance spring is available; motors and other 3D joint
-families remain to be delivered. Very fast motion can still cross an obstacle
-when continuous
-collision is disabled, which is the default.
+hard stops and a velocity motor. The
+[hinge position motor](HingePosition3D.md) approaches a signed angle with
+stiffness, damping and bounded torque. The distance spring is available;
+other joint families remain to be delivered. Very fast motion can still
+cross an obstacle when continuous collision is disabled, which is the default.
 
 The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
 

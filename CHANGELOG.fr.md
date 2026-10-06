@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `HingeMotor3D.position` pilote un angle signé par raideur/amortissement explicites et couple borné, avec mutation de cible, modes vitesse/position et butées actuelles. Le resserrement d’une butée unilatérale corrige la pose sans créer de vitesse de récupération.
+
 - `FixedConstraint3D` maintient une pose relative complète, capture l’assemblage courant ou aligne deux repères locaux, mesure force/couple et accepte mutation, suspension et réattache. Chaînes chargées, contacts, sommeil et invalidation testés ; équilibres et mouvements établis comparés à Jolt sur macOS ARM64 Native Debug/Release.
 
 - `HingeMotor3D` motorise une charnière à vitesse relative et couple maximal, avec inversion, arrêt et mesure séparée du couple. L’effort partagé avant déplacement et avec les contacts conserve sa borne ; inertie au pivot, butées et pendule qualifiés face à Jolt en Native Debug/Release.

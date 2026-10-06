@@ -1,0 +1,35 @@
+use GFX.Physics
+use STD.Math
+
+func steps(world:Physics.World3D) { var step = 0; while step < 480 { world.step(1.0/120.0); step++ } }
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.4,Math.Vec3(1.0,0.0,0.0))
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(Math.Vec3(),rotation)
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation.rotate(Math.Vec3(0.0,-1.0,0.0)),rotation)
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.2,0.4,0.1),Math.Vec3(0.2,0.1,0.0))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,body,Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+        ..motor = Physics.HingeMotor3D.position(0.6,20.0,10.0,5.0))
+    let snapshot = hinge.motor()!
+    steps(world)
+    assert(Math.abs(hinge.angle()-0.6) < 0.01 && hinge.anchor_error().length() < 0.003 && hinge.axis_error() < 0.002)
+    body.set_enabled(false); let position = body.position(); steps(world)
+    assert(body.position().nearly_equal(position,0.00001) && hinge.motor_torque()==0.0)
+    body.set_enabled(true)
+    body.set_mass_properties(Physics.MassProperties3D(2.0,Math.Vec3(0.4,0.8,0.2),Math.Vec3(0.1)))
+    hinge.set_motor(Physics.HingeMotor3D.position(-0.4,20.0,10.0,5.0))
+    assert(snapshot.target_angle == 0.6 && hinge.motor_torque()==0.0)
+    hinge.set_limits(-0.2,0.2); steps(world)
+    assert(Math.abs(hinge.angle()+0.2) < 0.01 && hinge.anchor_error().length() < 0.003)
+    hinge.set_frames(Math.Vec3(0.0,0.0,1.0),Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,0.0,1.0),Math.Vec3(0.0,1.0,0.0))
+    steps(world); assert(Math.abs(hinge.angle()+0.2) < 0.01 && hinge.axis_error() < 0.002)
+    var retained = hinge
+    world.destroy_rigid_body(body); assert(!hinge.is_valid() && !retained.is_valid())
+    assert(world.hinge_constraint_count()==0)
+}

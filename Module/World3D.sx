@@ -211,14 +211,14 @@ public class World3D {
     }
 
     func create_hinge_constraint(
-        first:RigidBody3D, second:RigidBody3D,
+        first:@RigidBody3D, second:@RigidBody3D,
         settings:HingeConstraint3DSettings = HingeConstraint3DSettings()
     ) HingeConstraint3D {
         let id = self.hinge_constraints.append(first, second, settings)
         return HingeConstraint3D(self.hinge_constraints, id)
     }
 
-    func destroy_hinge_constraint(constraint:HingeConstraint3D) {
+    func destroy_hinge_constraint(constraint:@HingeConstraint3D) {
         self.store.require_mutable()
         if !constraint.belongs_to(self.hinge_constraints) {
             panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
@@ -738,7 +738,20 @@ public class World3D {
             }
         }
         for slot in self.hinge_constraints.slots {
-            if var constraint = slot { constraint.reset() }
+            if var constraint = slot {
+                constraint.reset()
+                if let motor = constraint.motor {
+                    if let target = motor.target_angle {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        let bounded_target = Math.clamp(target, constraint.minimum_angle, constraint.maximum_angle)
+                        var error = hinge_angle3d(first.transform, second.transform, constraint) - bounded_target
+                        if error > Math.pi() { error -= 2.0 * Math.pi() }
+                        if error < -Math.pi() { error += 2.0 * Math.pi() }
+                        constraint.motor_error = error
+                    }
+                }
+            }
         }
     }
 
@@ -953,7 +966,7 @@ public class World3D {
                         var second = self.store.require(constraint.point.second_id)
                         if first.is_enabled && second.is_enabled {
                             if let motor = constraint.motor {
-                                if motor.maximum_torque > 0.0 && motor.speed != 0.0 {
+                                if motor.maximum_torque > 0.0 && (motor.speed != 0.0 || motor.target_angle != null) {
                                     first.wake()
                                     second.wake()
                                 }
@@ -3165,8 +3178,14 @@ func solve_hinge_motor_velocity3d(first:&BodyState3D, second:&BodyState3D,
         let speed = second.angular_velocity.subtract(first.angular_velocity).dot(axis)
         let maximum_impulse = motor.maximum_torque * delta
         let previous = state.motor_impulse
-        state.motor_impulse = Math.clamp(previous + (motor.speed - speed) / inverse_mass,
-            -maximum_impulse, maximum_impulse)
+        var softness = 0.0
+        var bias = -motor.speed
+        if motor.target_angle != null {
+            softness = 1.0 / (delta * (motor.damping + delta * motor.stiffness))
+            bias = delta * motor.stiffness * softness * state.motor_error
+        }
+        state.motor_impulse = Math.clamp(previous - (speed + bias + softness * previous) /
+            (inverse_mass + softness), -maximum_impulse, maximum_impulse)
         let change = state.motor_impulse - previous
         let angular_impulse = axis.multiply(change)
         let anchor_impulse = point_response.multiply(-change)
@@ -3211,8 +3230,8 @@ func solve_hinge_velocity3d(first:&BodyState3D, second:&BodyState3D,
         var previous = state.lower_impulse
         if row == 1 { error_angle = angle - state.maximum_angle; previous = state.upper_impulse }
         var factor = 1.0
-        if (row == 0 && error_angle < 0.0) || (row == 1 && error_angle > 0.0) ||
-            state.minimum_angle == state.maximum_angle { factor = 0.2 }
+        if (row == 0 && error_angle < 0.0) || (row == 1 && error_angle > 0.0) { factor = 0.0 }
+        if state.minimum_angle == state.maximum_angle { factor = 0.2 }
         let bias = Math.clamp(error_angle * factor / delta, -10.0, 10.0)
         var accumulated = previous - (speed + bias) / mass
         if state.minimum_angle != state.maximum_angle {

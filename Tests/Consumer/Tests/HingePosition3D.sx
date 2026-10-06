@@ -1,0 +1,199 @@
+use GFX.Physics
+use STD.Math
+
+func servo_pivot(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func servo_body(world:Physics.World3D, inertia:float = 0.1) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(inertia))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func servo_steps(world:Physics.World3D, count:int) {
+    var step = 0; while step < count { world.step(1.0/60.0); step++ }
+}
+
+test "position motor follows each implicit spring step and keeps its first torque" {
+    var rate = 60
+    while rate <= 120 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var hinge = world.create_hinge_constraint(servo_pivot(world),servo_body(world),
+            Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.75,10.0,1.6,0.8))
+        var angle = 0.0; var speed = 0.0; let delta = 1.0/rate as float
+        var step = 0
+        while step < rate*2 {
+            let previous = speed
+            speed = (0.1*speed + delta*1.6*(0.75-angle))/(0.1+delta*0.8+delta*delta*1.6)
+            angle += delta*speed
+            world.step(delta)
+            assert(Math.abs(hinge.angle()-angle) < 0.00002)
+            assert(Math.abs(hinge.angular_speed()-speed) < 0.00002)
+            assert(Math.abs(hinge.motor_torque() - 0.1*(speed-previous)/delta) < 0.00002)
+            step++
+        }
+        assert(Math.abs(hinge.angle()-0.75) < 0.004)
+        assert(hinge.motor()!.target_angle == 0.75 && hinge.motor()!.stiffness == 1.6)
+        rate += 60
+    }
+}
+
+test "position motor saturates one shared torque budget" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var hinge = world.create_hinge_constraint(servo_pivot(world),servo_body(world),
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(1.0,0.01,100.0,1.0))
+    var step = 1
+    while step <= 60 {
+        world.step(1.0/60.0)
+        assert(Math.abs(hinge.motor_torque()-0.01) < 0.000001)
+        assert(Math.abs(hinge.angular_speed()-step as float/600.0) < 0.00001)
+        step++
+    }
+}
+
+test "position target mutations switch modes and reset reactions" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var hinge = world.create_hinge_constraint(servo_pivot(world),servo_body(world),
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.5,1.0,1.6,0.8))
+    servo_steps(world,180); assert(Math.abs(hinge.angle()-0.5) < 0.001)
+    hinge.set_motor(Physics.HingeMotor3D.position(-0.5,1.0,1.6,0.8))
+    assert(hinge.motor_torque()==0.0 && hinge.reaction_torque().length()==0.0)
+    servo_steps(world,180); assert(Math.abs(hinge.angle()+0.5) < 0.001)
+    hinge.set_motor(Physics.HingeMotor3D(0.5,1.0)); assert(hinge.motor()!.target_angle == null)
+    servo_steps(world,30); assert(Math.abs(hinge.angular_speed()-0.5) < 0.00001)
+    hinge.set_motor(null); servo_steps(world,30)
+    assert(Math.abs(hinge.angular_speed()-0.5) < 0.00001 && hinge.motor_torque()==0.0)
+}
+
+test "position target follows current hard limits without changing requested angle" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var hinge = world.create_hinge_constraint(servo_pivot(world),servo_body(world),
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.3
+            ..motor = Physics.HingeMotor3D.position(0.8,1.0,1.6,0.8))
+    servo_steps(world,180); assert(Math.abs(hinge.angle()-0.3) < 0.001)
+    assert(hinge.motor()!.target_angle == 0.8)
+    hinge.set_limits(-0.2,0.1)
+    servo_steps(world,15)
+    assert(hinge.angle() > 0.08 && Math.abs(hinge.angular_speed()) < 0.05)
+    servo_steps(world,165)
+    assert(Math.abs(hinge.angle()-0.1) < 0.001 && Math.abs(hinge.motor_torque()) < 0.001)
+}
+
+
+test "position motor takes the short path across pi" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = servo_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(),Math.Quat.angle_axis(-3.0,Math.Vec3(0.0,0.0,1.0))))
+    var hinge = world.create_hinge_constraint(servo_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(3.0,10.0,1.6,0.8))
+    world.step(1.0/60.0); assert(hinge.angular_speed() < 0.0)
+    servo_steps(world,359); assert(Math.abs(hinge.angle()-3.0) < 0.001)
+}
+
+test "position motor on unequal free bodies conserves angular momentum" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = servo_body(world,0.1); var second = servo_body(world,0.4)
+    var hinge = world.create_hinge_constraint(first,second,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.75,10.0,1.6,0.8))
+    var step = 0
+    while step < 240 {
+        world.step(1.0/60.0)
+        assert(Math.abs(0.1*first.angular_velocity().z+0.4*second.angular_velocity().z) < 0.00001)
+        assert(Math.abs(hinge.motor_torque()) <= 10.00001)
+        step++
+    }
+    assert(Math.abs(hinge.angle()-0.75) < 0.001)
+}
+
+test "position motor respects the effective inertia of an offset anchor" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = servo_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var hinge = world.create_hinge_constraint(servo_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+            ..motor = Physics.HingeMotor3D.position(0.75,10.0,1.6,0.8))
+    let delta = 1.0/60.0
+    let speed = delta*1.6*0.75/(1.1+delta*0.8+delta*delta*1.6)
+    world.step(delta)
+    assert(Math.abs(hinge.angular_speed()-speed) < 0.0001)
+    assert(Math.abs(hinge.motor_torque()-1.1*speed/delta) < 0.001)
+    servo_steps(world,719)
+    assert(Math.abs(hinge.angle()-0.75) < 0.03 && hinge.anchor_error().length() < 0.003)
+}
+
+test "loaded position motor balances its spring against gravity" {
+    var world = Physics.World3D()
+    var body = servo_body(world); body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var hinge = world.create_hinge_constraint(servo_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+            ..motor = Physics.HingeMotor3D.position(0.7,20.0,40.0,10.0))
+    servo_steps(world,360)
+    let load = 9.81*Math.sin(hinge.angle())
+    assert(Math.abs(40.0*(0.7-hinge.angle())-load) < 0.02)
+    assert(Math.abs(hinge.motor_torque()-load) < 0.02 && hinge.anchor_error().length() < 0.003)
+}
+
+test "position motor works with rotated frames and anisotropic inertia" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.4,Math.Vec3(1.0,0.0,0.0))
+    var pivot = servo_pivot(world); pivot.set_transform(Physics.Transform3D(Math.Vec3(),rotation))
+    var body = servo_body(world); body.set_transform(Physics.Transform3D(Math.Vec3(),rotation))
+    body.set_mass_properties(Physics.MassProperties3D(1.0,Math.Vec3(0.4,0.2,0.1)))
+    var hinge = world.create_hinge_constraint(pivot,body,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.75,10.0,1.6,0.8))
+    servo_steps(world,240)
+    assert(Math.abs(hinge.angle()-0.75) < 0.001 && hinge.axis_error() < 0.001)
+    assert(hinge.anchor_error().length() < 0.001)
+}
+
+test "position motor shares real floor contacts" {
+    var world = Physics.World3D()
+    var pivot = servo_pivot(world); pivot.set_transform(Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,0.5,0.0))
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5)) ..allow_sleep = false)
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+    var hinge = world.create_hinge_constraint(pivot,body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,0.5,0.0)
+            ..first_local_axis = Math.Vec3(0.0,1.0,0.0) ..second_local_axis = Math.Vec3(0.0,1.0,0.0)
+            ..motor = Physics.HingeMotor3D.position(0.75,10.0,40.0,4.0))
+    servo_steps(world,240)
+    assert(world.contact_count() > 0 && Math.abs(body.position().y-0.5) < 0.001)
+    assert(Math.abs(hinge.angle()-0.75) < 0.01 && hinge.axis_error() < 0.001)
+}
+
+test "position mutations wake sleeping bodies and disabling frees the axis" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(servo_pivot(world),body,Physics.HingeConstraint3DSettings())
+    servo_steps(world,120); assert(!body.is_awake())
+    hinge.set_motor(Physics.HingeMotor3D.position(0.5,10.0,1.6,0.8)); assert(body.is_awake())
+    servo_steps(world,240); assert(Math.abs(hinge.angle()-0.5) < 0.001)
+    hinge.set_enabled(false); body.set_angular_velocity(Math.Vec3(0.0,0.0,0.5))
+    servo_steps(world,30); assert(Math.abs(hinge.angular_speed()-0.5) < 0.00001 && hinge.motor_torque()==0.0)
+    hinge.set_enabled(true); servo_steps(world,240); assert(Math.abs(hinge.angle()-0.5) < 0.001)
+    hinge.set_motor(Physics.HingeMotor3D.position(1.0,0.0,10.0,1.0))
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,0.5)); servo_steps(world,30)
+    assert(Math.abs(hinge.angular_speed()-0.5) < 0.00001 && hinge.motor_torque()==0.0)
+    world.destroy_hinge_constraint(hinge); assert(!hinge.is_valid())
+}
+
+
+test "position motor carries a fixed payload in the shared solver" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = servo_body(world); var payload = servo_body(world)
+    payload.set_transform(Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)))
+    var attachment = world.create_fixed_constraint(body,payload)
+    var hinge = world.create_hinge_constraint(servo_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.6,10.0,10.0,5.0))
+    var step = 0
+    while step < 360 {
+        world.step(1.0/60.0)
+        assert(Math.abs(hinge.motor_torque()) <= 10.00001)
+        assert(hinge.anchor_error().length() < 0.005 && attachment.anchor_error().length() < 0.005)
+        step++
+    }
+    assert(Math.abs(hinge.angle()-0.6) < 0.003 && attachment.angular_error().length() < 0.003)
+}

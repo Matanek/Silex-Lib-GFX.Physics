@@ -148,5 +148,6 @@ contrôle. `first_body()` et `second_body()` retrouvent les corps liés, et
 La qualification couvre des pendules, des butées mutées, une chaîne à masses
 asymétriques et des contacts terrain sur macOS ARM64 Native Debug/Release.
 Le moteur à vitesse cible est qualifié par accélération analytique, inertie au
-pivot, inversion, arrêt, butées, chaîne et contacts. Les moteurs de position,
+pivot, inversion, arrêt, butées, chaîne et contacts. Le
+[pilotage en position](HingePosition3D.md) est disponible. Les bornes asymétriques,
 la friction angulaire et les butées souples restent à implémenter.

@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `HingeMotor3D.position` controls a signed angle with explicit stiffness/damping and bounded torque, target mutation, velocity/position modes and current hard stops. Narrowing a unilateral stop corrects the pose without creating recovery velocity.
+
 - `FixedConstraint3D` preserves a complete relative pose, captures the current assembly or aligns two local frames, measures force/torque and supports mutation, suspension and reattachment. Loaded chains, contacts, sleep and invalidation tested; equilibrium and established motion compared against Jolt on macOS ARM64 Native Debug/Release.
 
 - `HingeMotor3D` drives a hinge at a relative speed with a maximum torque, runtime reversal, motor off and separate effort observation. Joint preparation and contact solving share the effort limit; inertia about the pivot, stops and a pendulum qualified against Jolt in Native Debug/Release.

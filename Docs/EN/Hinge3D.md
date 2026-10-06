@@ -145,5 +145,6 @@ and `hinge_constraint_count()` counts only live hinges.
 Qualification covers pendulums, mutated stops, an unequal-mass chain and
 terrain contacts on macOS ARM64 Native Debug/Release. The velocity motor is
 qualified by analytical acceleration, inertia about the pivot, reversal,
-motor off, stops, a chain and contacts. Position motors, angular friction
-and soft stops remain to be implemented.
+motor off, stops, a chain and contacts.
+[Position control](HingePosition3D.md) is available. Asymmetric bounds, angular
+friction and soft stops remain to be implemented.

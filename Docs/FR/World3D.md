@@ -255,10 +255,12 @@ vivantes. L'articulation participe aux mêmes pas, contacts et îlots de sommeil
 que la distance rigide.
 
 La [charnière 3D](Hinge3D.md) maintient les ancrages et un axe de rotation,
-avec des butées rigides. Le ressort de distance est disponible ; les moteurs
-et autres articulations restent à livrer. Un choc très rapide peut encore
-traverser un obstacle quand
-le balayage continu est désactivé, ce qui est le réglage par défaut.
+avec des butées rigides et un moteur de vitesse. Le
+[servo de charnière](HingePosition3D.md) approche un angle signé avec raideur,
+amortissement et couple borné. Le ressort de distance est disponible ; les
+autres familles d’articulations restent à livrer. Un choc très rapide peut
+encore traverser un obstacle quand le balayage continu est désactivé, ce qui
+est le réglage par défaut.
 
 La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
 
