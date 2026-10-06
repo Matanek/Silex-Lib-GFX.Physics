@@ -1,0 +1,292 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.PointConstraint3D.PointConstraintState3D
+use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public struct HingeConstraint3DSettings {
+    var first_local_anchor:Math.Vec3 = Math.Vec3()
+    var second_local_anchor:Math.Vec3 = Math.Vec3()
+    var first_local_axis:Math.Vec3 = Math.Vec3(0.0, 0.0, 1.0)
+    var second_local_axis:Math.Vec3 = Math.Vec3(0.0, 0.0, 1.0)
+    var first_local_normal:Math.Vec3 = Math.Vec3(1.0, 0.0, 0.0)
+    var second_local_normal:Math.Vec3 = Math.Vec3(1.0, 0.0, 0.0)
+    var minimum_angle:float = -Math.pi()
+    var maximum_angle:float = Math.pi()
+    var is_enabled:bool = true
+    init() {}
+}
+
+package class HingeConstraintState3D {
+    var point:PointConstraintState3D
+    var first_local_axis:Math.Vec3
+    var second_local_axis:Math.Vec3
+    var first_local_normal:Math.Vec3
+    var second_local_normal:Math.Vec3
+    var minimum_angle:float
+    var maximum_angle:float
+    var angular_impulse:Math.Vec3 = Math.Vec3()
+    var lower_impulse:float = 0.0
+    var upper_impulse:float = 0.0
+
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:HingeConstraint3DSettings) {
+        validate_hinge_frame3d(settings.first_local_axis, settings.first_local_normal)
+        validate_hinge_frame3d(settings.second_local_axis, settings.second_local_normal)
+        validate_hinge_limits3d(settings.minimum_angle, settings.maximum_angle)
+        var anchors = PointConstraint3DSettings()
+        anchors.first_local_anchor = settings.first_local_anchor
+        anchors.second_local_anchor = settings.second_local_anchor
+        anchors.is_enabled = settings.is_enabled
+        self.point = PointConstraintState3D(first_id, second_id, anchors)
+        self.first_local_axis = settings.first_local_axis.normalized()
+        self.second_local_axis = settings.second_local_axis.normalized()
+        self.first_local_normal = hinge_normal3d(self.first_local_axis, settings.first_local_normal)
+        self.second_local_normal = hinge_normal3d(self.second_local_axis, settings.second_local_normal)
+        self.minimum_angle = settings.minimum_angle
+        self.maximum_angle = settings.maximum_angle
+    }
+
+    func reset() {
+        self.point.impulse = Math.Vec3()
+        self.point.inverse_delta = 0.0
+        self.angular_impulse = Math.Vec3()
+        self.lower_impulse = 0.0
+        self.upper_impulse = 0.0
+    }
+}
+
+package struct HingeConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class HingeConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:HingeConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:RigidBody3D, second:RigidBody3D,
+        settings:HingeConstraint3DSettings) HingeConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.HingeConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.HingeConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.HingeConstraint3D requires a dynamic body")
+        }
+        var state = HingeConstraintState3D(first.body_id(), second.body_id(), settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return HingeConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:HingeConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:HingeConstraintId3D) HingeConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.HingeConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:HingeConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.point.first_id).wake()
+        self.bodies.require(state.point.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_hinge_body_id3d(state.point.first_id, body_id) ||
+                    same_hinge_body_id3d(state.point.second_id, body_id)
+                {
+                    var other_id = state.point.first_id
+                    if same_hinge_body_id3d(state.point.first_id, body_id) {
+                        other_id = state.point.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class HingeConstraint3D {
+    private var store:HingeConstraintStore3D
+    private let id:HingeConstraintId3D
+
+    package init(store:HingeConstraintStore3D, id:HingeConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:HingeConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() HingeConstraintId3D { return self.id }
+    func first_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.first_id)
+    }
+    func second_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.second_id)
+    }
+    func is_enabled() bool { return self.store.require(self.id).point.is_enabled }
+    func first_local_anchor() Math.Vec3 { return self.store.require(self.id).point.first_local_anchor }
+    func second_local_anchor() Math.Vec3 { return self.store.require(self.id).point.second_local_anchor }
+    func first_local_axis() Math.Vec3 { return self.store.require(self.id).first_local_axis }
+    func second_local_axis() Math.Vec3 { return self.store.require(self.id).second_local_axis }
+    func first_local_normal() Math.Vec3 { return self.store.require(self.id).first_local_normal }
+    func second_local_normal() Math.Vec3 { return self.store.require(self.id).second_local_normal }
+    func minimum_angle() float { return self.store.require(self.id).minimum_angle }
+    func maximum_angle() float { return self.store.require(self.id).maximum_angle }
+    func angle() float {
+        var state = self.store.require(self.id)
+        return hinge_angle3d(self.store.bodies.require(state.point.first_id).transform,
+            self.store.bodies.require(state.point.second_id).transform, state)
+    }
+    func axis_error() float {
+        var state = self.store.require(self.id)
+        let first = self.store.bodies.require(state.point.first_id).transform.vector(state.first_local_axis)
+        let second = self.store.bodies.require(state.point.second_id).transform.vector(state.second_local_axis)
+        return Math.atan2(first.cross(second).length(), first.dot(second))
+    }
+    func anchor_error() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return self.store.bodies.require(state.second_id).transform.point(state.second_local_anchor).subtract(
+            self.store.bodies.require(state.first_id).transform.point(state.first_local_anchor))
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return state.impulse.multiply(state.inverse_delta)
+    }
+    func reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.angular_impulse.multiply(state.point.inverse_delta)
+    }
+    private func invalidate_reaction(state:HingeConstraintState3D) {
+        state.reset()
+        self.store.bodies.require(state.point.first_id).wake()
+        self.store.bodies.require(state.point.second_id).wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.is_enabled = enabled
+        self.invalidate_reaction(state)
+    }
+    func set_anchors(first:Math.Vec3, second:Math.Vec3) {
+        if !finite_body3d_point(first) || !finite_body3d_point(second) {
+            panic("GFX.Physics.HingeConstraint3D requires finite local anchors")
+        }
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.first_local_anchor = first
+        state.point.second_local_anchor = second
+        self.invalidate_reaction(state)
+    }
+    func set_frames(first_axis:Math.Vec3, first_normal:Math.Vec3,
+        second_axis:Math.Vec3, second_normal:Math.Vec3)
+    {
+        validate_hinge_frame3d(first_axis, first_normal)
+        validate_hinge_frame3d(second_axis, second_normal)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.first_local_axis = first_axis.normalized()
+        state.second_local_axis = second_axis.normalized()
+        state.first_local_normal = hinge_normal3d(state.first_local_axis, first_normal)
+        state.second_local_normal = hinge_normal3d(state.second_local_axis, second_normal)
+        self.invalidate_reaction(state)
+    }
+    func set_limits(minimum:float, maximum:float) {
+        validate_hinge_limits3d(minimum, maximum)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.minimum_angle = minimum
+        state.maximum_angle = maximum
+        self.invalidate_reaction(state)
+    }
+}
+
+package func validate_hinge_frame3d(axis:Math.Vec3, normal:Math.Vec3) {
+    if !finite_body3d_point(axis) || !finite_body3d_point(normal) ||
+        !finite_body3d_value(axis.length_squared()) || !finite_body3d_value(normal.length_squared()) ||
+        axis.length_squared() <= 0.0000000001 || normal.length_squared() <= 0.0000000001
+    {
+        panic("GFX.Physics.HingeConstraint3D requires finite nonzero axes and normals")
+    }
+    if axis.normalized().cross(normal.normalized()).length_squared() <= 0.0000000001 {
+        panic("GFX.Physics.HingeConstraint3D requires a normal independent of its axis")
+    }
+}
+
+package func validate_hinge_limits3d(minimum:float, maximum:float) {
+    if !finite_body3d_value(minimum) || !finite_body3d_value(maximum) ||
+        minimum < -Math.pi() || maximum > Math.pi() || minimum > maximum
+    {
+        panic("GFX.Physics.HingeConstraint3D requires ordered finite angles within [-pi, pi]")
+    }
+}
+
+package func hinge_normal3d(axis:Math.Vec3, normal:Math.Vec3) Math.Vec3 {
+    return normal.subtract(axis.multiply(normal.dot(axis))).normalized()
+}
+
+package func hinge_angle3d(first:Transform3D, second:Transform3D,
+    state:HingeConstraintState3D) float
+{
+    let axis = first.vector(state.first_local_axis)
+    let first_normal = first.vector(state.first_local_normal)
+    let normal = second.vector(state.second_local_normal)
+    return Math.atan2(axis.dot(first_normal.cross(normal)), first_normal.dot(normal))
+}
+
+package func same_hinge_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}

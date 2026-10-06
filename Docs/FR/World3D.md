@@ -254,8 +254,10 @@ invalident le handle ; `point_constraint_count()` compte les articulations
 vivantes. L'articulation participe aux mêmes pas, contacts et îlots de sommeil
 que la distance rigide.
 
-Ces deux familles sont rigides. Ressorts, moteurs et autres articulations
-restent à livrer. Un choc très rapide peut encore traverser un obstacle quand
+La [charnière 3D](Hinge3D.md) maintient les ancrages et un axe de rotation,
+avec des butées rigides. Le ressort de distance est disponible ; les moteurs
+et autres articulations restent à livrer. Un choc très rapide peut encore
+traverser un obstacle quand
 le balayage continu est désactivé, ce qui est le réglage par défaut.
 
 ## Interroger les corps du monde
@@ -358,7 +360,8 @@ Une commande de vitesse, force, couple, impulsion, masse, pose ou matériau
 réveille le corps concerné ; une modification de support peut réveiller les
 autres corps du monde. Une collision nouvelle et le retrait d'un support
 réveillent les corps concernés. Lorsqu'un corps d'un îlot est réveillé, le
-réveil se propage par contact ou contrainte de distance ou de point au pas suivant. `step(0)` ne modifie ni le
+réveil se propage par contact ou contrainte de distance, de point ou de
+charnière au pas suivant. `step(0)` ne modifie ni le
 sommeil ni les derniers contacts. Les contacts entre corps endormis restent
 observables, avec une impulsion appliquée nulle pendant le pas inactif.
 

@@ -19,6 +19,8 @@ public use GFX.Physics.DistanceConstraint3D.DistanceConstraint3D
 public use GFX.Physics.DistanceConstraint3D.DistanceConstraint3DSettings
 public use GFX.Physics.PointConstraint3D.PointConstraint3D
 public use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
+public use GFX.Physics.HingeConstraint3D.HingeConstraint3D
+public use GFX.Physics.HingeConstraint3D.HingeConstraint3DSettings
 public use GFX.Physics.WorldQuery3D.WorldCastHit3D
 public use GFX.Physics.WorldQuery3D.WorldSphereHit3D
 public use GFX.Physics.WorldQuery3D.WorldRayHit3D

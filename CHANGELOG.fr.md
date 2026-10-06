@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `HingeConstraint3D` relie deux ancrages autour d’un axe avec angle zéro local, butées rigides, réactions de force/couple et mutations. Elle partage les contacts et îlots de sommeil de `World3D` ; pendules et butées comparés à Jolt sur macOS ARM64 Native Debug/Release.
+
 - La limite rotationnelle du CCD linéaire est qualifiée contre Jolt : rotation
   seule ou translation parallèle, contact manqué en un pas et trouvé avec
   sous-pas sur les cas testés ; aucune garantie rotationnelle exacte.

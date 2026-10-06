@@ -10,6 +10,8 @@ silex install GFX.Physics
 
 Le [contrôleur de personnage 3D](Character3D.md) déplace une capsule avec pentes, marches et glissement.
 
+La [charnière 3D](Hinge3D.md) relie deux corps autour d’un axe avec des butées rigides.
+
 ## Corps et monde
 
 ```silex

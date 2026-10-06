@@ -1,0 +1,213 @@
+use GFX.Physics
+use STD.Math
+
+func advance_hinge3d(world:Physics.World3D, steps:int) {
+    var i = 0
+    while i < steps { world.step(1.0 / 60.0); i++ }
+}
+func hinge_pivot(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func hinge_weight(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+
+test "hinge leaves only its signed rotation axis free" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    var joint = world.create_hinge_constraint(fixed, body)
+    body.set_angular_velocity(Math.Vec3(3.0, -2.0, 1.0))
+    advance_hinge3d(world, 30)
+    assert(Math.abs(joint.angle() - 0.5) < 0.005)
+    assert(joint.axis_error() < 0.0001)
+    assert(Math.abs(body.angular_velocity().x) < 0.0001)
+    assert(Math.abs(body.angular_velocity().y) < 0.0001)
+    assert(Math.abs(body.angular_velocity().z - 1.0) < 0.0001)
+    assert(joint.anchor_error().length() < 0.0001)
+    assert(world.point_constraint_count() == 0 && world.hinge_constraint_count() == 1)
+}
+
+test "hinge supports a pendulum and reports its weight reaction" {
+    var world = Physics.World3D()
+    var fixed = hinge_pivot(world)
+    var body = hinge_weight(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_hinge_constraint(fixed, body, Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0))
+    advance_hinge3d(world, 120)
+    assert(joint.anchor_error().length() < 0.002)
+    assert(joint.axis_error() < 0.0001)
+    assert(Math.abs(joint.reaction_force().y - body.mass_properties().mass * 9.81) < 0.5)
+    let reaction = joint.reaction_force()
+    world.step(0.0)
+    assert(joint.reaction_force().nearly_equal(reaction, 0.00001))
+}
+
+test "hinge arrests upper and lower limits without friction inside" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    var joint = world.create_hinge_constraint(fixed, body, Physics.HingeConstraint3DSettings()
+        ..minimum_angle = -0.3 ..maximum_angle = 0.4)
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,2.0))
+    advance_hinge3d(world, 60)
+    assert(Math.abs(joint.angle() - 0.4) < 0.002)
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,-2.0))
+    advance_hinge3d(world, 60)
+    assert(Math.abs(joint.angle() + 0.3) < 0.002)
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    advance_hinge3d(world, 10)
+    assert(Math.abs(body.angular_velocity().z - 1.0) < 0.0001)
+}
+
+test "hinge recovers displaced axes including antiparallel axes" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(Math.pi(),Math.Vec3(1.0,0.0,0.0))))
+    var joint = world.create_hinge_constraint(fixed, body)
+    advance_hinge3d(world, 60)
+    assert(joint.axis_error() < 0.0001)
+}
+
+test "hinge normal frames define angle zero for rotated bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    let rotation = Math.Quat.angle_axis(0.7,Math.Vec3(0.0,0.0,1.0))
+    body.set_transform(Physics.Transform3D(rotation:rotation))
+    var joint = world.create_hinge_constraint(fixed, body, Physics.HingeConstraint3DSettings()
+        ..first_local_axis = Math.Vec3(0.0,0.0,2.0)
+        ..second_local_normal = rotation.conjugated().rotate(Math.Vec3(1.0,0.0,0.0)))
+    assert(Math.abs(joint.angle()) < 0.0001)
+    assert(joint.first_local_axis().nearly_equal(Math.Vec3(0.0,0.0,1.0),0.0001))
+    joint.set_frames(Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,0.0),
+        Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,0.0))
+    assert(Math.abs(joint.angle() - 0.7) < 0.0001)
+}
+
+test "hinge parameter mutation wakes bodies and clears both reactions" {
+    var world = Physics.World3D()
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_hinge_constraint(fixed, body, Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0))
+    advance_hinge3d(world, 30)
+    joint.set_enabled(false)
+    assert(joint.reaction_force().length() == 0.0 && joint.reaction_torque().length() == 0.0)
+    advance_hinge3d(world, 10)
+    assert(joint.anchor_error().length() > 0.1)
+    joint.set_anchors(Math.Vec3(),Math.Vec3(0.0,1.0,0.0))
+    joint.set_limits(-0.1,0.1); joint.set_enabled(true)
+    advance_hinge3d(world, 60)
+    assert(joint.anchor_error().length() < 0.002)
+    joint.set_limits(0.25,0.25)
+    advance_hinge3d(world, 60)
+    assert(Math.abs(joint.angle() - 0.25) < 0.002)
+    assert(joint.reaction_torque().length() > 0.1)
+}
+
+test "hinge unequal inertias conserve angular momentum on the free axis" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var light = hinge_weight(world); var heavy = hinge_weight(world)
+    light.set_angular_velocity(Math.Vec3(3.0,0.0,1.0))
+    heavy.set_mass_properties(Physics.MassProperties3D(4.0,Math.Vec3(1.6)))
+    light.set_mass_properties(Physics.MassProperties3D(1.0,Math.Vec3(0.4)))
+    var joint = world.create_hinge_constraint(light, heavy)
+    advance_hinge3d(world, 30)
+    assert(joint.axis_error() < 0.001)
+    let momentum = light.angular_velocity().multiply(0.4).add(heavy.angular_velocity().multiply(1.6))
+    assert(momentum.nearly_equal(Math.Vec3(1.2,0.0,0.4),0.002))
+}
+
+test "hinge destruction invalidates generations and body destruction removes it" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    var old = world.create_hinge_constraint(fixed, body)
+    world.destroy_hinge_constraint(old)
+    var current = world.create_hinge_constraint(fixed, body)
+    assert(!old.is_valid() && current.is_valid())
+    assert(current.first_body().same_body(fixed) && current.second_body().same_body(body))
+    world.destroy_rigid_body(body)
+    assert(!current.is_valid() && world.hinge_constraint_count() == 0)
+}
+
+func orphan_hinge3d() Physics.HingeConstraint3D {
+    var world = Physics.World3D()
+    return world.create_hinge_constraint(hinge_pivot(world),hinge_weight(world))
+}
+test "world destruction invalidates a retained hinge" {
+    var joint = orphan_hinge3d(); assert(!joint.is_valid())
+}
+
+test "hinge sleeps at rest and wakes on configuration or moving pivot" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_hinge_constraint(pivot, body)
+    advance_hinge3d(world, 60); assert(!body.is_awake())
+    joint.set_limits(-0.1,0.1); assert(body.is_awake())
+    advance_hinge3d(world, 60); assert(!body.is_awake())
+    pivot.move_kinematic(Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)),1.0)
+    world.step(1.0 / 60.0)
+    assert(body.is_awake() && joint.anchor_error().length() < 0.005)
+}
+
+test "hinge chain shares corrections and wake propagation" {
+    var world = Physics.World3D()
+    var fixed = hinge_pivot(world)
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.4))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-3.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(4.0,Math.Vec3(1.6))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var upper = world.create_hinge_constraint(fixed,first,Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0))
+    var lower = world.create_hinge_constraint(first,second,Physics.HingeConstraint3DSettings()
+        ..first_local_anchor = Math.Vec3(0.0,-1.0,0.0) ..second_local_anchor = Math.Vec3(0.0,1.0,0.0))
+    advance_hinge3d(world, 180)
+    assert(upper.anchor_error().length() < 0.008 && lower.anchor_error().length() < 0.008)
+    assert(!first.is_awake() && !second.is_awake())
+    second.apply_impulse(Math.Vec3(0.3,0.0,0.5))
+    world.step(1.0 / 60.0)
+    assert(first.is_awake() && second.is_awake())
+    advance_hinge3d(world, 59)
+    assert(upper.anchor_error().length() < 0.008 && lower.anchor_error().length() < 0.008)
+    assert(upper.axis_error() < 0.002 && lower.axis_error() < 0.002)
+    assert(Math.abs(first.position().z) < 0.002 && Math.abs(second.position().z) < 0.002)
+}
+
+test "hinge and terrain contact act on the same body" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D(offset:-1.5)))
+    var fixed = hinge_pivot(world)
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)) ..allow_sleep = false)
+    var joint = world.create_hinge_constraint(fixed,body,Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0))
+    body.apply_impulse(Math.Vec3(0.3,0.0,0.4))
+    var contacts = 0
+    var step = 0
+    while step < 240 { world.step(1.0 / 60.0); contacts += world.contact_count(); step++ }
+    assert(contacts > 0)
+    assert(body.position().y >= -1.005)
+    assert(joint.anchor_error().length() < 0.005 && joint.axis_error() < 0.001)
+}
+
+test "disabling a body suspends its hinge until reactivation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var fixed = hinge_pivot(world); var body = hinge_weight(world)
+    var joint = world.create_hinge_constraint(fixed,body)
+    body.set_enabled(false)
+    body.set_transform(Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)))
+    advance_hinge3d(world, 10)
+    assert(joint.anchor_error().length() > 0.9)
+    body.set_enabled(true)
+    advance_hinge3d(world, 30)
+    assert(joint.anchor_error().length() < 0.002)
+}

@@ -23,6 +23,11 @@ use GFX.Physics.PointConstraint3D.PointConstraint3D
 use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
 use GFX.Physics.PointConstraint3D.PointConstraintState3D
 use GFX.Physics.PointConstraint3D.PointConstraintStore3D
+use GFX.Physics.HingeConstraint3D.HingeConstraint3D
+use GFX.Physics.HingeConstraint3D.HingeConstraint3DSettings
+use GFX.Physics.HingeConstraint3D.HingeConstraintState3D
+use GFX.Physics.HingeConstraint3D.HingeConstraintStore3D
+use GFX.Physics.HingeConstraint3D.hinge_angle3d
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.sphere_centers_distance3d
@@ -75,6 +80,7 @@ public class World3D {
     private var store:BodyStore3D
     private var distance_constraints:DistanceConstraintStore3D
     private var point_constraints:PointConstraintStore3D
+    private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
     private var contacts:Contact3D[]
     private var contact_begins:Contact3D[]
@@ -84,6 +90,7 @@ public class World3D {
     drop {
         self.distance_constraints.invalidate_all()
         self.point_constraints.invalidate_all()
+        self.hinge_constraints.invalidate_all()
         self.store.invalidate_all()
     }
 
@@ -94,6 +101,7 @@ public class World3D {
         self.store = BodyStore3D()
         self.distance_constraints = DistanceConstraintStore3D(self.store)
         self.point_constraints = PointConstraintStore3D(self.store)
+        self.hinge_constraints = HingeConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
         self.contact_begins = []
@@ -115,6 +123,7 @@ public class World3D {
     func body_count() int { return self.store.live_count }
     func distance_constraint_count() int { return self.distance_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
+    func hinge_constraint_count() int { return self.hinge_constraints.live_count }
     func contact_count() int { return self.contacts.count() }
 
     func write_contacts(output:&Contact3D[]) {
@@ -169,6 +178,22 @@ public class World3D {
         self.point_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_hinge_constraint(
+        first:RigidBody3D, second:RigidBody3D,
+        settings:HingeConstraint3DSettings = HingeConstraint3DSettings()
+    ) HingeConstraint3D {
+        let id = self.hinge_constraints.append(first, second, settings)
+        return HingeConstraint3D(self.hinge_constraints, id)
+    }
+
+    func destroy_hinge_constraint(constraint:HingeConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.hinge_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.hinge_constraints.destroy(constraint.constraint_id())
+    }
+
     func destroy_rigid_body(body:RigidBody3D) {
         self.store.require_mutable()
         if !body.belongs_to(self.store) {
@@ -186,6 +211,7 @@ public class World3D {
         }
         self.distance_constraints.destroy_for_body(body.body_id())
         self.point_constraints.destroy_for_body(body.body_id())
+        self.hinge_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -645,7 +671,7 @@ public class World3D {
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -675,6 +701,30 @@ public class World3D {
                     if constraint.is_enabled {
                         var first = self.store.require(constraint.first_id)
                         var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.hinge_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
                         if first.is_enabled && second.is_enabled {
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
@@ -825,6 +875,9 @@ public class World3D {
                 constraint.inverse_delta = 0.0
             }
         }
+        for slot in self.hinge_constraints.slots {
+            if var constraint = slot { constraint.reset() }
+        }
         // A multi-point face must settle its normal support before friction
         // reacts to transient angular slip from individual point updates.
         var normal_iteration = 0
@@ -913,6 +966,25 @@ public class World3D {
                 }
                 constraint_index++
             }
+            constraint_index = 0
+            while constraint_index < self.hinge_constraints.slots.count() {
+                var selected = constraint_index
+                if iteration % 2 == 1 {
+                    selected = self.hinge_constraints.slots.count() - 1 - constraint_index
+                }
+                if var constraint = self.hinge_constraints.slots[selected] {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            solve_hinge_velocity3d(first, second, constraint, delta)
+                        }
+                    }
+                }
+                constraint_index++
+            }
             iteration++
         }
         for var pair in pairs {
@@ -961,6 +1033,19 @@ public class World3D {
                             (first.awake || second.awake)
                         {
                             solve_point_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
+            for slot in self.hinge_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            solve_hinge_position3d(first, second, constraint)
                         }
                     }
                 }
@@ -1071,6 +1156,14 @@ public class World3D {
                 if constraint.is_enabled {
                     islands.connect(constraint.first_id.slot,
                         constraint.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.hinge_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.point.is_enabled {
+                    islands.connect(constraint.point.first_id.slot,
+                        constraint.point.second_id.slot, self.store)
                 }
             }
         }
@@ -2849,4 +2942,118 @@ func include_plane_pairs3d(store:@BodyStore3D, plane_slots:int[], pairs:BroadPai
     }
     Sort.sort<BroadPair3D>(&result[0:result.count()], broad_pair_before3d)
     return result
+}
+func hinge_axis_error3d(first:@BodyState3D, second:@BodyState3D,
+    state:HingeConstraintState3D) Math.Vec3
+{
+    let axis = first.transform.vector(state.first_local_axis)
+    let other = second.transform.vector(state.second_local_axis)
+    let cross = axis.cross(other)
+    let length = cross.length()
+    if length > 0.000001 {
+        return cross.multiply(Math.atan2(length, axis.dot(other)) / length)
+    }
+    if axis.dot(other) < 0.0 {
+        return first.transform.vector(state.first_local_normal).multiply(Math.pi())
+    }
+    return Math.Vec3()
+}
+
+func hinge_angular_mass3d(first:@BodyState3D, second:@BodyState3D, axis:Math.Vec3) float {
+    return axis.dot(first.inverse_inertia_times(axis).add(second.inverse_inertia_times(axis)))
+}
+
+func apply_hinge_angular_impulse3d(first:&BodyState3D, second:&BodyState3D, impulse:Math.Vec3) {
+    first.angular_velocity = first.angular_velocity.subtract(first.inverse_inertia_times(impulse))
+    second.angular_velocity = second.angular_velocity.add(second.inverse_inertia_times(impulse))
+}
+
+func solve_hinge_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    state:HingeConstraintState3D, delta:float)
+{
+    solve_point_velocity3d(first, second, state.point, delta)
+    let axis = first.transform.vector(state.first_local_axis)
+    let normal = first.transform.vector(state.first_local_normal)
+    let tangent = axis.cross(normal)
+    let error = hinge_axis_error3d(first, second, state)
+    var row = 0
+    while row < 2 {
+        var direction = normal
+        if row == 1 { direction = tangent }
+        let mass = hinge_angular_mass3d(first, second, direction)
+        if mass > 0.000000001 {
+            let speed = second.angular_velocity.subtract(first.angular_velocity).dot(direction)
+            let bias = Math.clamp(error.dot(direction) * 0.2 / delta, -10.0, 10.0)
+            let impulse = direction.multiply(-(speed + bias) / mass)
+            apply_hinge_angular_impulse3d(first, second, impulse)
+            state.angular_impulse = state.angular_impulse.add(impulse)
+        }
+        row++
+    }
+    if state.minimum_angle == -Math.pi() && state.maximum_angle == Math.pi() { return }
+    let angle = hinge_angle3d(first.transform, second.transform, state)
+    let mass = hinge_angular_mass3d(first, second, axis)
+    if mass <= 0.000000001 { return }
+    row = 0
+    while row < 2 {
+        let speed = second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+        var error_angle = angle - state.minimum_angle
+        var previous = state.lower_impulse
+        if row == 1 { error_angle = angle - state.maximum_angle; previous = state.upper_impulse }
+        var factor = 1.0
+        if (row == 0 && error_angle < 0.0) || (row == 1 && error_angle > 0.0) ||
+            state.minimum_angle == state.maximum_angle { factor = 0.2 }
+        let bias = Math.clamp(error_angle * factor / delta, -10.0, 10.0)
+        var accumulated = previous - (speed + bias) / mass
+        if state.minimum_angle != state.maximum_angle {
+            if row == 0 { accumulated = Math.max(0.0, accumulated) }
+            else { accumulated = Math.min(0.0, accumulated) }
+        }
+        if row == 0 { state.lower_impulse = accumulated }
+        else { state.upper_impulse = accumulated }
+        let impulse = axis.multiply(accumulated - previous)
+        apply_hinge_angular_impulse3d(first, second, impulse)
+        state.angular_impulse = state.angular_impulse.add(impulse)
+        if state.minimum_angle == state.maximum_angle { return }
+        row++
+    }
+}
+
+func shift_hinge_rotation3d(body:BodyState3D, impulse:Math.Vec3) {
+    if body.inverse_mass == 0.0 { return }
+    let center = body.world_center()
+    let vector = body.inverse_inertia_times(impulse)
+    let angle = vector.length()
+    if angle <= 0.0 { return }
+    let rotation = Math.Quat.angle_axis(angle, vector.divide(angle))
+        .multiply(body.transform.rotation).normalized()
+    body.transform = Transform3D(center.subtract(rotation.rotate(body.mass_properties.local_center)), rotation)
+}
+
+func solve_hinge_position3d(first:BodyState3D, second:BodyState3D,
+    state:HingeConstraintState3D)
+{
+    var row = 0
+    while row < 3 {
+        let axis = first.transform.vector(state.first_local_axis)
+        let normal = first.transform.vector(state.first_local_normal)
+        var direction = normal
+        var error = hinge_axis_error3d(first, second, state).dot(normal)
+        if row == 1 {
+            direction = axis.cross(normal)
+            error = hinge_axis_error3d(first, second, state).dot(direction)
+        } else if row == 2 {
+            direction = axis
+            let angle = hinge_angle3d(first.transform, second.transform, state)
+            error = angle - Math.clamp(angle, state.minimum_angle, state.maximum_angle)
+        }
+        let mass = hinge_angular_mass3d(first, second, direction)
+        if mass > 0.000000001 && Math.abs(error) > 0.000001 {
+            let impulse = direction.multiply(-Math.clamp(error, -0.2, 0.2) * 0.8 / mass)
+            shift_hinge_rotation3d(first, impulse.negated())
+            shift_hinge_rotation3d(second, impulse)
+        }
+        row++
+    }
+    solve_point_position3d(first, second, state.point)
 }

@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `HingeConstraint3D` connects two anchors around an axis with local zero-angle frames, hard stops, force/torque reactions and runtime mutations. It shares `World3D` contacts and sleep islands; pendulums and stops compared with Jolt on macOS ARM64 Native Debug/Release.
+
 - The rotational limit of linear CCD is qualified against Jolt: pure rotation
   or parallel translation misses contact in one step and finds it with
   subdivisions in the tested cases; no exact rotational guarantee.

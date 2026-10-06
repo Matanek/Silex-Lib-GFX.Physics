@@ -236,8 +236,10 @@ observations. `destroy_point_constraint()` and destruction of a linked body
 invalidate the handle; `point_constraint_count()` counts live joints. Point
 joints share steps, contacts, and sleep islands with rigid distance joints.
 
-Both families are rigid. Springs, motors, and other 3D joint families remain
-to be delivered. Very fast motion can still cross an obstacle when continuous
+The [3D hinge](Hinge3D.md) holds anchors and a rotation axis together with
+hard stops. The distance spring is available; motors and other 3D joint
+families remain to be delivered. Very fast motion can still cross an obstacle
+when continuous
 collision is disabled, which is the default.
 
 ## Query bodies in the world
@@ -334,7 +336,8 @@ poses stop drifting.
 A velocity, force, torque, impulse, mass, pose, or material command wakes the
 affected body; changing a support can wake other bodies in the world. A new
 collision and support removal also wake affected bodies. Waking one member
-propagates through contacts, distance constraints, or point constraints on the next step. `step(0)` changes neither sleep
+propagates through contacts, distance, point or hinge constraints on the next
+step. `step(0)` changes neither sleep
 nor the latest contacts. Contacts between sleeping bodies remain observable,
 with zero impulse applied during the inactive step.
 

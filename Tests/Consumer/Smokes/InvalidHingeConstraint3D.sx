@@ -1,0 +1,34 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var world = Physics.World3D()
+    var fixed = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    var settings = Physics.HingeConstraint3DSettings()
+    if selected("anchor") { settings.first_local_anchor = Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("axis-zero") { settings.first_local_axis = Math.Vec3() }
+    if selected("axis-nan") { settings.second_local_axis = Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("collinear") { settings.second_local_normal = settings.second_local_axis }
+    if selected("limits-order") { settings.minimum_angle = 0.5; settings.maximum_angle = -0.5 }
+    if selected("limits-range") { settings.maximum_angle = 4.0 }
+    if selected("limits-nan") { settings.minimum_angle = Math.sqrt(-1.0) }
+    if selected("same") { world.create_hinge_constraint(body,body) }
+    if selected("fixed-fixed") { world.create_hinge_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)) }
+    if selected("foreign") { var other = Physics.World3D(); world.create_hinge_constraint(fixed,other.create_rigid_body()) }
+    var joint = world.create_hinge_constraint(fixed,body,settings)
+    if selected("mutation-anchors") { joint.set_anchors(Math.Vec3(),Math.Vec3(Math.sqrt(-1.0),0.0,0.0)) }
+    if selected("mutation-frames") { joint.set_frames(Math.Vec3(),Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,0.0)) }
+    if selected("mutation-limits") { joint.set_limits(-4.0,0.5) }
+    if selected("stale") { world.destroy_hinge_constraint(joint); world.create_hinge_constraint(fixed,body); joint.angle() }
+    if selected("foreign-destroy") { var other = Physics.World3D(); other.destroy_hinge_constraint(joint) }
+    panic("invalid hinge operation was accepted")
+}
