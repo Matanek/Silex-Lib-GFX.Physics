@@ -146,5 +146,6 @@ Qualification covers pendulums, mutated stops, an unequal-mass chain and
 terrain contacts on macOS ARM64 Native Debug/Release. The velocity motor is
 qualified by analytical acceleration, inertia about the pivot, reversal,
 motor off, stops, a chain and contacts.
-[Position control](HingePosition3D.md) is available. Asymmetric bounds, angular
-friction and soft stops remain to be implemented.
+[Position control](HingePosition3D.md) and
+[axis friction](HingeFriction3D.md) are available. Asymmetric bounds and soft
+stops remain to be implemented.

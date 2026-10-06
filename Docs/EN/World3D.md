@@ -245,6 +245,8 @@ cross an obstacle when continuous collision is disabled, which is the default.
 
 The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
 
+The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
+
 ## Query bodies in the world
 
 `ray_cast(ray, ignore_body, filter)` returns the nearest `Ray3D` hit or `null`.

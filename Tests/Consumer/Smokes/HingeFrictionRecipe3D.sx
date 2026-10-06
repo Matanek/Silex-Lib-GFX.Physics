@@ -1,0 +1,24 @@
+use GFX.Physics
+use STD.Math
+
+func steps(world:Physics.World3D, count:int) { var i = 0; while i < count { world.step(1.0/60.0); i++ } }
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var wheel = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,wheel,
+        Physics.HingeConstraint3DSettings() ..maximum_friction_torque = 0.1)
+    wheel.set_angular_velocity(Math.Vec3(0.0,0.0,1.0)); steps(world,90)
+    assert(Math.abs(hinge.angular_speed())<0.00001)
+    hinge.set_maximum_friction_torque(0.0)
+    wheel.set_angular_velocity(Math.Vec3(0.0,0.0,-1.0)); steps(world,30)
+    assert(Math.abs(hinge.angular_speed()+1.0)<0.00001 && hinge.friction_torque()==0.0)
+    hinge.set_maximum_friction_torque(0.2)
+    hinge.set_motor(Physics.HingeMotor3D(0.5,1.0)); steps(world,60)
+    assert(Math.abs(hinge.angular_speed()-0.5)<0.00001 && hinge.friction_torque()==0.0)
+    hinge.set_motor(null); steps(world,60)
+    assert(Math.abs(hinge.angular_speed())<0.00001 && hinge.motor_torque()==0.0)
+}

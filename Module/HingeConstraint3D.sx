@@ -56,6 +56,7 @@ public struct HingeConstraint3DSettings {
     var minimum_angle:float = -Math.pi()
     var maximum_angle:float = Math.pi()
     var motor:HingeMotor3D? = null
+    var maximum_friction_torque:float = 0.0
     var is_enabled:bool = true
     init() {}
 }
@@ -74,11 +75,14 @@ package class HingeConstraintState3D {
     var motor:HingeMotor3D?
     var motor_impulse:float = 0.0
     var motor_error:float = 0.0
+    var maximum_friction_torque:float
+    var friction_impulse:float = 0.0
 
     init(first_id:BodyId3D, second_id:BodyId3D, settings:HingeConstraint3DSettings) {
         validate_hinge_frame3d(settings.first_local_axis, settings.first_local_normal)
         validate_hinge_frame3d(settings.second_local_axis, settings.second_local_normal)
         validate_hinge_limits3d(settings.minimum_angle, settings.maximum_angle)
+        validate_hinge_friction3d(settings.maximum_friction_torque)
         var anchors = PointConstraint3DSettings()
         anchors.first_local_anchor = settings.first_local_anchor
         anchors.second_local_anchor = settings.second_local_anchor
@@ -91,6 +95,7 @@ package class HingeConstraintState3D {
         self.minimum_angle = settings.minimum_angle
         self.maximum_angle = settings.maximum_angle
         self.motor = settings.motor
+        self.maximum_friction_torque = settings.maximum_friction_torque
     }
 
     func reset() {
@@ -101,6 +106,7 @@ package class HingeConstraintState3D {
         self.upper_impulse = 0.0
         self.motor_impulse = 0.0
         self.motor_error = 0.0
+        self.friction_impulse = 0.0
     }
 }
 
@@ -232,6 +238,7 @@ public class HingeConstraint3D {
     func minimum_angle() float { return self.store.require(self.id).minimum_angle }
     func maximum_angle() float { return self.store.require(self.id).maximum_angle }
     func motor() HingeMotor3D? { return self.store.require(self.id).motor }
+    func maximum_friction_torque() float { return self.store.require(self.id).maximum_friction_torque }
     func angular_speed() float {
         var state = self.store.require(self.id)
         var first = self.store.bodies.require(state.point.first_id)
@@ -242,6 +249,10 @@ public class HingeConstraint3D {
     func motor_torque() float {
         var state = self.store.require(self.id)
         return state.motor_impulse * state.point.inverse_delta
+    }
+    func friction_torque() float {
+        var state = self.store.require(self.id)
+        return state.friction_impulse * state.point.inverse_delta
     }
     func angle() float {
         var state = self.store.require(self.id)
@@ -314,6 +325,19 @@ public class HingeConstraint3D {
         var state = self.store.require(self.id)
         state.motor = motor
         self.invalidate_reaction(state)
+    }
+    func set_maximum_friction_torque(torque:float) {
+        validate_hinge_friction3d(torque)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.maximum_friction_torque = torque
+        self.invalidate_reaction(state)
+    }
+}
+
+package func validate_hinge_friction3d(torque:float) {
+    if !finite_body3d_value(torque) || torque < 0.0 {
+        panic("GFX.Physics.HingeConstraint3D requires nonnegative finite maximum friction torque")
     }
 }
 

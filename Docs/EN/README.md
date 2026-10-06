@@ -259,6 +259,8 @@ The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’
 
 The [hinge position motor](HingePosition3D.md) targets an angle with stiffness, damping and bounded torque.
 
+The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
+
 ## Tile maps
 
 [Tile map collisions](TileMap2D.md)

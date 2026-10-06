@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `maximum_friction_torque` passively brakes an unpowered hinge, with mutable capacity, separate signed effort and load holding. Step budget, motor precedence, contacts, sleep and invalidation qualified; trajectories compared against Jolt in Native Debug/Release.
+
 - `HingeMotor3D.position` controls a signed angle with explicit stiffness/damping and bounded torque, target mutation, velocity/position modes and current hard stops. Narrowing a unilateral stop corrects the pose without creating recovery velocity.
 
 - `FixedConstraint3D` preserves a complete relative pose, captures the current assembly or aligns two local frames, measures force/torque and supports mutation, suspension and reattachment. Loaded chains, contacts, sleep and invalidation tested; equilibrium and established motion compared against Jolt on macOS ARM64 Native Debug/Release.

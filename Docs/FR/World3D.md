@@ -264,6 +264,8 @@ est le réglage par défaut.
 
 La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
 
+Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
+
 ## Interroger les corps du monde
 
 `ray_cast(ray, ignore_body, filter)` retourne le premier impact de `Ray3D`, ou `null`.

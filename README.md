@@ -11,7 +11,8 @@ shapes and fixed triangles, planes or meshes. Round solids retain continuous col
 boundaries and geometric mass properties. Qualified terrain pairs preserve
 simultaneous valley supports and merge duplicate seam or ridge reactions.
 Public translation sweeps and filtered world queries accompany rigid or spring
-distance constraints, point joints and hinges with hard stops and torque-limited velocity and position motors, contact events,
+distance constraints, point joints and hinges with hard stops, torque-limited
+velocity/position motors and passive axis friction, contact events,
 sleeping and linear CCD. A virtual
 capsule character also walks on fixed convex hulls. See the documentation for
 qualified pairs and limits.

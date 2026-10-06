@@ -16,6 +16,8 @@ La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de
 
 Le [servo de charnière](HingePosition3D.md) vise un angle avec raideur, amortissement et couple borné.
 
+Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
+
 ## Corps et monde
 
 ```silex

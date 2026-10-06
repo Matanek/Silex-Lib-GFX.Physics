@@ -86,5 +86,5 @@ existante est corrigée en pose. Resserrement de limites et servo partagent
 le monde réel, ses contacts et sa sûreté ; la récupération de pose ne fournit
 pas un nouvel élan au corps.
 
-Les bornes asymétriques, la friction d’axe et les butées souples restent à
-compléter. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).
+Le [frein d’axe](HingeFriction3D.md) agit quand le moteur est absent. Les
+bornes asymétriques et les butées souples restent à compléter. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).

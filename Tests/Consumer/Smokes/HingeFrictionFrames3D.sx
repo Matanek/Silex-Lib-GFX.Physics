@@ -1,0 +1,27 @@
+use GFX.Physics
+use STD.Math
+
+func steps(world:Physics.World3D) { var i = 0; while i < 240 { world.step(1.0/120.0); i++ } }
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.4,Math.Vec3(1.0,0.0,0.0))
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(rotation:rotation) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation:rotation)
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.4,0.2,0.1),Math.Vec3(0.2,0.1,0.0))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,body,Physics.HingeConstraint3DSettings() ..maximum_friction_torque = 0.1)
+    body.set_angular_velocity(rotation.rotate(Math.Vec3(0.0,0.0,0.5))); steps(world)
+    assert(Math.abs(hinge.angular_speed())<0.001 && hinge.anchor_error().length()<0.003 && hinge.axis_error()<0.001)
+    body.set_mass_properties(Physics.MassProperties3D(2.0,Math.Vec3(0.8,0.4,0.2),Math.Vec3(0.1)))
+    hinge.set_frames(Math.Vec3(0.0,0.0,1.0),Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,0.0,1.0),Math.Vec3(0.0,1.0,0.0))
+    body.set_angular_velocity(rotation.rotate(Math.Vec3(0.0,0.0,-0.5))); steps(world)
+    assert(Math.abs(hinge.angular_speed())<0.001 && hinge.maximum_friction_torque()==0.1)
+    body.set_enabled(false); let pose = body.transform(); steps(world)
+    assert(body.transform().position==pose.position && body.transform().rotation==pose.rotation && hinge.friction_torque()==0.0)
+    body.set_enabled(true); body.set_angular_velocity(rotation.rotate(Math.Vec3(0.0,0.0,0.5)))
+    hinge.set_maximum_friction_torque(0.2); steps(world)
+    assert(Math.abs(hinge.angular_speed())<0.001)
+    var retained = hinge; world.destroy_rigid_body(body); assert(!retained.is_valid())
+}
