@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `HingeMotor3D` motorise une charnière à vitesse relative et couple maximal, avec inversion, arrêt et mesure séparée du couple. L’effort partagé avant déplacement et avec les contacts conserve sa borne ; inertie au pivot, butées et pendule qualifiés face à Jolt en Native Debug/Release.
+
 - `HingeConstraint3D` relie deux ancrages autour d’un axe avec angle zéro local, butées rigides, réactions de force/couple et mutations. Elle partage les contacts et îlots de sommeil de `World3D` ; pendules et butées comparés à Jolt sur macOS ARM64 Native Debug/Release.
 
 - La limite rotationnelle du CCD linéaire est qualifiée contre Jolt : rotation

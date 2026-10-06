@@ -1,0 +1,58 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let first_rotation = Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0))
+    let second_rotation = Math.Quat.angle_axis(-0.4,Math.Vec3(1.0,0.0,0.0))
+    let axis = first_rotation.rotate(Math.Vec3(0.0,0.0,1.0))
+    let normal = first_rotation.rotate(Math.Vec3(1.0,0.0,0.0))
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(rotation:first_rotation)
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation:second_rotation)
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.3,0.5,0.7),Math.Vec3(0.2,-0.1,0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(first,second,Physics.HingeConstraint3DSettings()
+        ..second_local_axis = second_rotation.conjugated().rotate(axis)
+        ..second_local_normal = second_rotation.conjugated().rotate(normal)
+        ..minimum_angle = -0.3 ..maximum_angle = 0.3 ..motor = Physics.HingeMotor3D(1.0,2.0))
+    var step = 0
+    while step < 180 {
+        world.step(1.0 / 60.0)
+        assert(Math.abs(hinge.motor_torque()) <= 2.00001)
+        step++
+    }
+    assert(hinge.anchor_error().length() < 0.002 && hinge.axis_error() < 0.001)
+    assert(Math.abs(hinge.angle()-0.3) < 0.002 && Math.abs(hinge.angular_speed()) < 0.002)
+    hinge.set_motor(Physics.HingeMotor3D(-1.0,2.0))
+    step = 0
+    while step < 180 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angle()+0.3) < 0.002 && Math.abs(hinge.angular_speed()) < 0.002)
+    hinge.set_motor(null)
+    assert(hinge.motor() == null && hinge.motor_torque() == 0.0)
+    hinge.set_limits(-Math.pi(),Math.pi())
+    let velocity = axis.multiply(0.5)
+    second.set_angular_velocity(velocity)
+    second.set_linear_velocity(velocity.cross(second.transform().point(second.mass_properties().local_center).subtract(first.position())))
+    step = 0
+    while step < 30 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()-0.5) < 0.01)
+    var analytical_world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = analytical_world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var weight = analytical_world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var motor = analytical_world.create_hinge_constraint(pivot,weight,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+        ..motor = Physics.HingeMotor3D(10.0,0.11))
+    step = 0
+    while step < 60 { analytical_world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(motor.angular_speed()-0.1) < 0.0005)
+    assert(Math.abs(motor.angle()-61.0/1200.0) < 0.0005)
+    assert(Math.abs(motor.motor_torque()-0.11) < 0.00001)
+    print("hinge motor frames: rotated axes, offset center, inertia about pivot, torque bound, both stops, reversal and motor off verified")
+}

@@ -14,6 +14,9 @@ func main() {
     var fixed = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
     var body = world.create_rigid_body()
     var settings = Physics.HingeConstraint3DSettings()
+    if selected("motor-speed-nan") { settings.motor = Physics.HingeMotor3D(Math.sqrt(-1.0),1.0) }
+    if selected("motor-torque-nan") { settings.motor = Physics.HingeMotor3D(1.0,Math.sqrt(-1.0)) }
+    if selected("motor-torque-negative") { settings.motor = Physics.HingeMotor3D(1.0,-1.0) }
     if selected("anchor") { settings.first_local_anchor = Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
     if selected("axis-zero") { settings.first_local_axis = Math.Vec3() }
     if selected("axis-nan") { settings.second_local_axis = Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
@@ -30,5 +33,6 @@ func main() {
     if selected("mutation-limits") { joint.set_limits(-4.0,0.5) }
     if selected("stale") { world.destroy_hinge_constraint(joint); world.create_hinge_constraint(fixed,body); joint.angle() }
     if selected("foreign-destroy") { var other = Physics.World3D(); other.destroy_hinge_constraint(joint) }
+    if selected("motor-stale") { world.destroy_hinge_constraint(joint); joint.set_motor(Physics.HingeMotor3D(1.0,1.0)) }
     panic("invalid hinge operation was accepted")
 }

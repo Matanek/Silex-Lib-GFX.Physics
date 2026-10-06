@@ -65,12 +65,71 @@ la charnière vivante. `set_enabled(false)` suspend ses réactions sans détruir
 son handle ; `set_enabled(true)` la réactive. Toute mutation réveille les
 corps liés et efface les réactions mémorisées.
 
+## Viser une vitesse avec un couple maximal
+
+`HingeMotor3D(speed, maximum_torque)` décrit une vitesse relative en rad/s et
+un plafond symétrique de couple. `settings.motor` le configure à la création ;
+`set_motor(...)` le remplace à l’exécution. Cet exemple atteint la cible,
+inverse le mouvement, puis arrête le moteur :
+
+```sx
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var wheel = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,wheel,Physics.HingeConstraint3DSettings()
+        ..motor = Physics.HingeMotor3D(speed:1.0,maximum_torque:0.2))
+    var step = 0
+    while step < 60 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()-1.0) < 0.0001)
+    hinge.set_motor(Physics.HingeMotor3D(speed:-1.0,maximum_torque:0.2))
+    step = 0
+    while step < 90 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()+1.0) < 0.0001)
+    hinge.set_motor(null)
+    assert(hinge.motor() == null && hinge.motor_torque() == 0.0)
+    print("Hinge motor: target, reversal and off verified")
+}
+```
+
+`speed` suit le signe de `angle()` ; `angular_speed()` mesure la vitesse du
+second corps par rapport au premier, projetée sur le premier axe mondial.
+Les deux paramètres sont finis et `maximum_torque` doit être positif ou nul.
+Un couple nul ne fournit aucun effort. Une cible nulle freine la rotation,
+alors que `set_motor(null)` laisse l’axe libre et conserve sa vitesse actuelle.
+`motor()` retourne la configuration optionnelle courante. Une copie de cette
+valeur est indépendante des mutations ultérieures de la charnière.
+
+`motor_torque()` mesure le couple signé du moteur pendant le dernier pas
+positif, en N·m avec kilogrammes, mètres et secondes. Il reste borné par le
+plafond, indépendamment du nombre d’itérations ou de la durée du pas.
+Les réactions d’ancrage et de butée peuvent dépasser ce plafond : il limite
+l’effort du moteur. Une butée peut donc arrêter le corps malgré la cible ;
+le moteur continue à pousser et sa réaction de butée peut annuler son couple.
+La cible demande un effort disponible, sans garantir qu’elle sera atteinte
+sous une charge trop forte.
+
+Une mutation efface les observations et réveille les corps liés. Un moteur
+actif à vitesse non nulle et couple disponible garde ses corps éveillés ;
+une cible nulle peut les laisser dormir une fois arrêtés. Désactiver la
+charnière ou un corps suspend le moteur. `step(0)` conserve son observation.
+Les articulations d’un monde contenant un moteur actif sont préparées après
+les forces et avant le déplacement, puis résolues avec les contacts ;
+le plafond d’effort est partagé entre ces phases.
+
 ## Lire les réactions et gérer la durée de vie
 
 `reaction_force()` donne la force mondiale appliquée au second corps au point
 d'attache pendant le dernier pas positif. `reaction_torque()` donne le couple
-mondial angulaire appliqué au second corps pour aligner les axes et respecter
-les butées. Il n'inclut pas le moment de la force d'ancrage autour du centre de
+mondial angulaire appliqué au second corps par le moteur, l’alignement des axes
+et les butées. Il n'inclut pas le moment de la force d'ancrage autour du centre de
 masse. Les unités sont masse × distance / seconde² et masse × distance² /
 seconde² ; avec kilogrammes, mètres et secondes, ce sont des newtons et N·m.
 `step(0)` conserve les observations ; une charnière inactive donne une réaction
@@ -88,4 +147,6 @@ contrôle. `first_body()` et `second_body()` retrouvent les corps liés, et
 
 La qualification couvre des pendules, des butées mutées, une chaîne à masses
 asymétriques et des contacts terrain sur macOS ARM64 Native Debug/Release.
-Les moteurs, la friction angulaire et les butées souples restent à implémenter.
+Le moteur à vitesse cible est qualifié par accélération analytique, inertie au
+pivot, inversion, arrêt, butées, chaîne et contacts. Les moteurs de position,
+la friction angulaire et les butées souples restent à implémenter.

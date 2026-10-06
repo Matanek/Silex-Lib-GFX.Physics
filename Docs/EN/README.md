@@ -253,7 +253,7 @@ by default; performance measurements can opt into immediate presentation with
 
 The [3D character mover](Character3D.md) moves a capsule with slopes, stairs and sliding.
 
-The [3D hinge](Hinge3D.md) connects two bodies around an axis with hard stops.
+The [3D hinge](Hinge3D.md) connects two bodies around an axis with hard stops and a torque-limited velocity motor.
 
 ## Tile maps
 

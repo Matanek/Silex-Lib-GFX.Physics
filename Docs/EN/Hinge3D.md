@@ -64,11 +64,68 @@ live hinge. `set_enabled(false)` suspends its reactions without destroying
 its handle; `set_enabled(true)` reactivates it. Every mutation wakes the
 linked bodies and clears stored reactions.
 
+## Request a speed with a maximum torque
+
+`HingeMotor3D(speed, maximum_torque)` describes a relative speed in rad/s and
+a symmetric torque limit. Set `settings.motor` during creation or replace it
+with `set_motor(...)` at runtime. This example reaches its target, reverses,
+then turns the motor off:
+
+```sx
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var wheel = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,wheel,Physics.HingeConstraint3DSettings()
+        ..motor = Physics.HingeMotor3D(speed:1.0,maximum_torque:0.2))
+    var step = 0
+    while step < 60 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()-1.0) < 0.0001)
+    hinge.set_motor(Physics.HingeMotor3D(speed:-1.0,maximum_torque:0.2))
+    step = 0
+    while step < 90 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()+1.0) < 0.0001)
+    hinge.set_motor(null)
+    assert(hinge.motor() == null && hinge.motor_torque() == 0.0)
+    print("Hinge motor: target, reversal and off verified")
+}
+```
+
+`speed` follows the sign of `angle()`. `angular_speed()` measures the second
+body’s speed relative to the first, projected onto the first world axis.
+Both parameters must be finite; `maximum_torque` must be nonnegative.
+Zero torque supplies no effort. A zero target brakes rotation, while
+`set_motor(null)` leaves the axis free and preserves its current speed.
+`motor()` returns the current optional configuration. A copy of that value
+is independent of later mutations to the hinge.
+
+`motor_torque()` measures the signed motor torque during the last positive
+step, in N·m with kilograms, meters and seconds. It stays within its limit
+regardless of iteration count or step duration. Anchor and stop reactions can
+exceed that limit: it bounds the motor’s effort. A stop can therefore arrest
+the body despite the target; the motor keeps pushing and the stop reaction
+can cancel its torque. The target requests available effort and is not a
+guarantee that the speed will be reached under excessive load.
+
+Mutations clear observations and wake the linked bodies. An active motor
+with nonzero speed and available torque keeps its bodies awake; a zero target
+can let them sleep once stopped. Disabling the hinge or either body suspends
+the motor. `step(0)` preserves its observation. Joints in a world containing
+an active powered motor are prepared after forces and before movement, then
+solved with contacts; the effort limit is shared between those phases.
+
 ## Read reactions and manage lifetime
 
 `reaction_force()` gives the world force applied to the second body at its
 anchor during the last positive step. `reaction_torque()` gives the world
-angular torque applied to the second body to align the axes and enforce the
+angular torque applied to the second body by the motor, axis alignment and
 stops. It excludes the moment of the anchor force around the center of mass.
 Units are mass × distance / second² and mass × distance² / second²; with
 kilograms, meters and seconds these are newtons and N·m. `step(0)` preserves
@@ -86,5 +143,7 @@ Destroying a linked body or the world also invalidates them; check with
 and `hinge_constraint_count()` counts only live hinges.
 
 Qualification covers pendulums, mutated stops, an unequal-mass chain and
-terrain contacts on macOS ARM64 Native Debug/Release. Motors, angular
-friction and soft stops remain to be implemented.
+terrain contacts on macOS ARM64 Native Debug/Release. The velocity motor is
+qualified by analytical acceleration, inertia about the pivot, reversal,
+motor off, stops, a chain and contacts. Position motors, angular friction
+and soft stops remain to be implemented.

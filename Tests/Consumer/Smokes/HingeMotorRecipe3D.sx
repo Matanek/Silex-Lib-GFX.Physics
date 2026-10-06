@@ -1,0 +1,24 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var wheel = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(pivot,wheel,Physics.HingeConstraint3DSettings()
+        ..motor = Physics.HingeMotor3D(speed:1.0,maximum_torque:0.2))
+    var step = 0
+    while step < 60 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()-1.0) < 0.0001)
+    hinge.set_motor(Physics.HingeMotor3D(speed:-1.0,maximum_torque:0.2))
+    step = 0
+    while step < 90 { world.step(1.0 / 60.0); step++ }
+    assert(Math.abs(hinge.angular_speed()+1.0) < 0.0001)
+    hinge.set_motor(null)
+    assert(hinge.motor() == null && hinge.motor_torque() == 0.0)
+    print("Hinge motor: target, reversal and off verified")
+}
