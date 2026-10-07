@@ -164,3 +164,6 @@ public use GFX.Physics.SliderConstraint3D.SliderConstraint3D
 public use GFX.Physics.SliderConstraint3D.SliderMotor3D
 public use GFX.Physics.SliderConstraint3D.SliderLimitSpring3D
 public use GFX.Physics.SliderConstraint3D.SliderConstraint3DSettings
+
+public use GFX.Physics.ConeConstraint3D.ConeConstraint3D
+public use GFX.Physics.ConeConstraint3D.ConeConstraint3DSettings

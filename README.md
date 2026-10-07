@@ -44,3 +44,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Soft slider stops](Docs/EN/SliderSoftLimits3D.md): load compression, physical stiffness/damping and runtime mutation.
 
 [Combined slider position and velocity](Docs/EN/SliderCombined3D.md).
+
+[3D cone joint](Docs/EN/Cone3D.md) · [Articulation cône](Docs/FR/Cone3D.md).

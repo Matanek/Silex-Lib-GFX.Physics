@@ -1,3 +1,8 @@
+use GFX.Physics.ConeConstraint3D.ConeConstraint3D
+use GFX.Physics.ConeConstraint3D.ConeConstraint3DSettings
+use GFX.Physics.ConeConstraint3D.ConeConstraintState3D
+use GFX.Physics.ConeConstraint3D.ConeConstraintStore3D
+use GFX.Physics.ConeConstraint3D.cone_perpendicular3d
 use GFX.Physics.SliderConstraint3D.SliderConstraint3D
 use GFX.Physics.SliderConstraint3D.SliderConstraint3DSettings
 use GFX.Physics.SliderConstraint3D.SliderLimitSpring3D
@@ -96,6 +101,7 @@ public class World3D {
     private var slider_constraints:SliderConstraintStore3D
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
+    private var cone_constraints:ConeConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
     private var contacts:Contact3D[]
@@ -109,6 +115,7 @@ public class World3D {
         self.fixed_constraints.invalidate_all()
         self.point_constraints.invalidate_all()
         self.hinge_constraints.invalidate_all()
+        self.cone_constraints.invalidate_all()
         self.store.invalidate_all()
     }
 
@@ -122,6 +129,7 @@ public class World3D {
         self.fixed_constraints = FixedConstraintStore3D(self.store)
         self.point_constraints = PointConstraintStore3D(self.store)
         self.hinge_constraints = HingeConstraintStore3D(self.store)
+        self.cone_constraints = ConeConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
         self.contact_begins = []
@@ -145,6 +153,7 @@ public class World3D {
     func slider_constraint_count() int { return self.slider_constraints.live_count }
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
+    func cone_constraint_count() int { return self.cone_constraints.live_count }
     func hinge_constraint_count() int { return self.hinge_constraints.live_count }
     func contact_count() int { return self.contacts.count() }
 
@@ -238,6 +247,22 @@ public class World3D {
         self.point_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_cone_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:ConeConstraint3DSettings = ConeConstraint3DSettings()
+    ) ConeConstraint3D {
+        let id = self.cone_constraints.append(first, second, settings)
+        return ConeConstraint3D(self.cone_constraints, id)
+    }
+
+    func destroy_cone_constraint(constraint:@ConeConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.cone_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.cone_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_hinge_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:HingeConstraint3DSettings = HingeConstraint3DSettings()
@@ -274,6 +299,7 @@ public class World3D {
         self.fixed_constraints.destroy_for_body(body.body_id())
         self.point_constraints.destroy_for_body(body.body_id())
         self.hinge_constraints.destroy_for_body(body.body_id())
+        self.cone_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -566,7 +592,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -798,6 +824,9 @@ public class World3D {
                 constraint.inverse_delta = 0.0
             }
         }
+        for slot in self.cone_constraints.slots {
+            if var constraint = slot { constraint.reset() }
+        }
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
                 constraint.reset()
@@ -872,6 +901,19 @@ public class World3D {
                 if constraint.is_enabled {
                     var first = self.store.require(constraint.first_id)
                     var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
+    }
+
+    private func has_active_cone_constraint() bool {
+        for slot in self.cone_constraints.slots {
+            if let constraint = slot {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
                     if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
                 }
             }
@@ -994,11 +1036,30 @@ public class World3D {
             }
             constraint_index++
         }
+        constraint_index = 0
+        while constraint_index < self.cone_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.cone_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.cone_constraints.slots[selected] {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_cone_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
     }
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1119,6 +1180,30 @@ public class World3D {
                                     second.wake()
                                 }
                             }
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.cone_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled {
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
                                     first.angular_velocity.length_squared() > 0.0)
@@ -1397,6 +1482,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.cone_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass cone witness
+                            // without changing the other families' position budget.
+                            solve_cone_position3d(first, second, constraint)
+                            solve_cone_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             var pair_index = pairs.count()
             while pair_index > 0 {
                 pair_index--
@@ -1523,6 +1624,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.hinge_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.point.is_enabled {
+                    islands.connect(constraint.point.first_id.slot,
+                        constraint.point.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.cone_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.point.is_enabled {
                     islands.connect(constraint.point.first_id.slot,
@@ -3803,4 +3912,54 @@ func solve_slider_position3d(first:BodyState3D, second:BodyState3D,
     }
     shift_fixed_body3d(first, impulse.linear.negated(), impulse.angular.negated(), first_radius)
     shift_fixed_body3d(second, impulse.linear, impulse.angular, second_radius)
+}
+
+// Cone swing is unilateral; twist and in-cone swing remain free.
+func cone_rotation_axis3d(first:@BodyState3D, second:@BodyState3D,
+    state:ConeConstraintState3D) Math.Vec3
+{
+    let a = first.transform.vector(state.first_local_axis)
+    let b = second.transform.vector(state.second_local_axis)
+    let cross = b.cross(a)
+    if cross.length_squared() > 0.0000000001 {
+        state.rotation_axis = cross.normalized()
+    } else {
+        // Keep the fallback perpendicular to the current first axis.
+        let tangent = state.rotation_axis.subtract(a.multiply(state.rotation_axis.dot(a)))
+        if tangent.length_squared() > 0.0000000001 { state.rotation_axis = tangent.normalized() }
+        else { state.rotation_axis = cone_perpendicular3d(a) }
+    }
+    return state.rotation_axis
+}
+func solve_cone_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    state:ConeConstraintState3D, delta:float)
+{
+    solve_point_velocity3d(first, second, state.point, delta)
+    let a = first.transform.vector(state.first_local_axis)
+    let b = second.transform.vector(state.second_local_axis)
+    if a.dot(b) >= Math.cos(state.half_angle) { return }
+    let axis = cone_rotation_axis3d(first, second, state)
+    let mass = hinge_angular_mass3d(first, second, axis)
+    if mass <= 0.000000001 { return }
+    let speed = second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+    let accumulated = Math.max(0.0, state.limit_impulse - speed / mass)
+    let impulse = axis.multiply(accumulated - state.limit_impulse)
+    state.limit_impulse = accumulated
+    apply_hinge_angular_impulse3d(first, second, impulse)
+    state.angular_impulse = state.angular_impulse.add(impulse)
+}
+func solve_cone_position3d(first:BodyState3D, second:BodyState3D,
+    state:ConeConstraintState3D)
+{
+    solve_point_position3d(first, second, state.point)
+    let a = first.transform.vector(state.first_local_axis)
+    let b = second.transform.vector(state.second_local_axis)
+    let error = a.dot(b) - Math.cos(state.half_angle)
+    if error >= 0.0 { return }
+    let axis = cone_rotation_axis3d(first, second, state)
+    let mass = hinge_angular_mass3d(first, second, axis)
+    if mass <= 0.000000001 { return }
+    let impulse = axis.multiply(-0.2 * error / mass)
+    shift_hinge_rotation3d(first, impulse.negated())
+    shift_hinge_rotation3d(second, impulse)
 }

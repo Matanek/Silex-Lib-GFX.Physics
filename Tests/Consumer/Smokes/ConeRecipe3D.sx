@@ -1,0 +1,19 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_cone_constraint(support,body,
+        Physics.ConeConstraint3DSettings() ..half_angle = 0.4)
+    body.set_angular_velocity(Math.Vec3(2.0,0.0,0.0))
+    var i = 0;while i<120 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(joint.angle()-0.4)<0.002 && joint.anchor_error().length()<0.001)
+    joint.set_half_angle(0.2)
+    i = 0;while i<120 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(joint.angle()-0.2)<0.002)
+    world.destroy_cone_constraint(joint);assert(!joint.is_valid())
+    print("cone recipe: ok")
+}

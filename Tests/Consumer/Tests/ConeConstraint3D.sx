@@ -1,0 +1,118 @@
+use GFX.Physics
+use STD.Math
+func cone_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3()) }
+func cone_fixed(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func cone_body(world:Physics.World3D,mass:float = 2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..mass_properties = Physics.MassProperties3D(mass,Math.Vec3(mass*0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func cone_steps(world:Physics.World3D,count:int,rate:float = 60.0) { var i = 0;while i<count { world.step(1.0/rate);i++ } }
+
+test "cone permits free swing inside the bound and free twist" {
+    let axes:Math.Vec3[] = [Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,0.0,1.0)]
+    for axis in axes {
+        var world = cone_world();var body = cone_body(world)
+        var joint = world.create_cone_constraint(cone_fixed(world),body,Physics.ConeConstraint3DSettings() ..half_angle = 0.6)
+        body.set_angular_velocity(axis.multiply(0.5));cone_steps(world,30)
+        assert(body.angular_velocity().nearly_equal(axis.multiply(0.5),0.00001))
+        assert(joint.reaction_torque().length()<0.00001 && joint.anchor_error().length()<0.00001)
+        if axis.x==1.0 { assert(Math.abs(joint.angle()-0.25)<0.00001) } else { assert(joint.angle()<0.00001) }
+        assert(world.cone_constraint_count()==1 && world.point_constraint_count()==0)
+    }
+}
+test "cone stops swing in either direction at sixty and one hundred twenty hertz" {
+    for rate in [60,120] {
+        let signs:float[] = [-1.0,1.0]
+        for sign in signs {
+            var world = cone_world();var body = cone_body(world)
+            var joint = world.create_cone_constraint(cone_fixed(world),body,Physics.ConeConstraint3DSettings() ..half_angle = 0.4)
+            body.set_angular_velocity(Math.Vec3(sign*2.0,0.0,0.0));cone_steps(world,rate*2,rate as float)
+            assert(Math.abs(joint.angle()-0.4)<0.002 && body.angular_velocity().length()<0.00001)
+            body.set_angular_velocity(Math.Vec3(-sign*0.3,0.0,0.0));cone_steps(world,rate/2,rate as float)
+            assert(Math.abs(joint.angle()-0.25)<0.003 && Math.abs(body.angular_velocity().x+sign*0.3)<0.00001)
+        }
+    }
+}
+test "cone recovers antiparallel and displaced axes without locking twist" {
+    let angles:float[] = [1.1,Math.pi()]
+    for angle in angles {
+        var world = cone_world();var body = cone_body(world)
+        body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(angle,Math.Vec3(1.0,0.0,0.0))))
+        var joint = world.create_cone_constraint(cone_fixed(world),body,Physics.ConeConstraint3DSettings() ..half_angle = 0.3)
+        cone_steps(world,240);assert(joint.angle()<=0.301)
+        let twist_axis = body.transform().vector(Math.Vec3(0.0,0.0,1.0))
+        body.set_angular_velocity(twist_axis.multiply(0.8));cone_steps(world,60)
+        assert(Math.abs(body.angular_velocity().length()-0.8)<0.0001 && joint.angle()<=0.301)
+    }
+}
+test "cone full angle leaves orientation free and zero angle aligns axes" {
+    var world = cone_world();var body = cone_body(world)
+    var joint = world.create_cone_constraint(cone_fixed(world),body,Physics.ConeConstraint3DSettings() ..half_angle = Math.pi())
+    body.set_angular_velocity(Math.Vec3(2.0,0.0,0.0));cone_steps(world,120)
+    assert(Math.abs(body.angular_velocity().x-2.0)<0.00001 && joint.reaction_torque().length()==0.0)
+    joint.set_half_angle(0.0);cone_steps(world,600);assert(joint.angle()<0.004)
+}
+test "cone parameter mutations clear reactions and wake sleeping bodies" {
+    var world = Physics.World3D();var fixed = cone_fixed(world);var body = cone_body(world)
+    var joint = world.create_cone_constraint(fixed,body)
+    cone_steps(world,20);assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+    world.step(0.0);assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+    body.set_sleep_enabled(true);cone_steps(world,120);assert(!body.is_awake())
+    joint.set_half_angle(0.2)
+    assert(body.is_awake() && joint.reaction_force().length()==0.0 && joint.reaction_torque().length()==0.0)
+    joint.set_axes(Math.Vec3(0.0,2.0,0.0),Math.Vec3(0.0,4.0,0.0))
+    assert(joint.first_local_axis().nearly_equal(Math.Vec3(0.0,1.0,0.0),0.00001))
+    joint.set_anchors(Math.Vec3(0.0,1.0,0.0),Math.Vec3());cone_steps(world,60);assert(joint.anchor_error().length()<0.002)
+    joint.set_enabled(false);cone_steps(world,10);assert(joint.anchor_error().length()>0.1 && joint.reaction_force().length()==0.0)
+    joint.set_enabled(true);cone_steps(world,120);assert(joint.anchor_error().length()<0.002)
+}
+test "cone unequal inertias conserve angular momentum when arresting swing" {
+    var world = cone_world();var light = cone_body(world);var heavy = cone_body(world,8.0)
+    var joint = world.create_cone_constraint(light,heavy,Physics.ConeConstraint3DSettings() ..half_angle = 0.3)
+    heavy.set_angular_velocity(Math.Vec3(2.0,0.0,0.0));cone_steps(world,120)
+    assert(Math.abs(joint.angle()-0.3)<0.003)
+    assert(light.angular_velocity().multiply(0.2).add(heavy.angular_velocity().multiply(0.8)).nearly_equal(Math.Vec3(1.6,0.0,0.0),0.0001))
+    assert(light.position().multiply(2.0).add(heavy.position().multiply(8.0)).length()<0.00001)
+}
+test "cone offset pendulum supports weight without angular reaction at rest" {
+    var world = Physics.World3D();var body = cone_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_cone_constraint(cone_fixed(world),body,Physics.ConeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,1.0,0.0) ..half_angle = 0.4)
+    cone_steps(world,120)
+    assert(joint.anchor_error().length()<0.002 && Math.abs(joint.reaction_force().y-19.62)<0.05 && joint.reaction_torque().length()<0.00001)
+}
+test "cone body suspension clears reaction and reactivation restores support" {
+    var world = Physics.World3D();var body = cone_body(world)
+    var joint = world.create_cone_constraint(cone_fixed(world),body)
+    cone_steps(world,10);body.set_enabled(false);cone_steps(world,10)
+    assert(joint.reaction_force().length()==0.0 && joint.reaction_torque().length()==0.0)
+    body.set_enabled(true);cone_steps(world,10);assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+}
+test "cone deletion preserves generations and body removal invalidates the joint" {
+    var world = cone_world();var fixed = cone_fixed(world);var body = cone_body(world)
+    var old = world.create_cone_constraint(fixed,body);world.destroy_cone_constraint(old)
+    var current = world.create_cone_constraint(fixed,body)
+    assert(!old.is_valid() && current.is_valid() && current.first_body().same_body(fixed) && current.second_body().same_body(body))
+    world.destroy_rigid_body(body);assert(!current.is_valid() && world.cone_constraint_count()==0)
+}
+func orphan_cone() Physics.ConeConstraint3D { var world = cone_world();return world.create_cone_constraint(cone_fixed(world),cone_body(world)) }
+test "world deletion invalidates retained cone handles" { var joint = orphan_cone();assert(!joint.is_valid()) }
+
+test "cone and floor contacts share the physical step" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,1.0,10.0))))
+    var fixed = cone_fixed(world);fixed.set_transform(Physics.Transform3D(Math.Vec3(0.0,4.0,0.0)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,1.15,0.0)))
+    var joint = world.create_cone_constraint(fixed,body,Physics.ConeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,3.0,0.0) ..half_angle = 0.4)
+    cone_steps(world,120)
+    assert(world.contact_count()>=1 && body.position().y>0.99 && body.position().y<1.01)
+    assert(joint.anchor_error().length()<0.01 && joint.angle()<0.001)
+}

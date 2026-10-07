@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Articulation cône 3D : inclinaison bornée, twist libre, ancrages locaux, réactions et mutations sûres ; consommateurs et oracle Jolt sans rendu.
+
 - La glissière suit ensemble une position et une vitesse avec `SliderMotor3D.position_and_velocity`, capacité symétrique ou bornes signées et ressort physique ; poursuite, mutations, contacts et oracle Jolt qualifiés.
 
 - Butées souples de glissière : raideur/amortissement physiques, lecture/mutation, effort signé et coexistence avec moteurs/contacts.

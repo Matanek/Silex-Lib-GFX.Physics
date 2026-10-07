@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D cone joint: bounded inclination, free twist, local anchors, reactions and safe runtime mutations; headless consumers and Jolt witness.
+
 - Sliders follow a position and velocity together with `SliderMotor3D.position_and_velocity`, symmetric or signed force bounds and a physical spring; tracking, mutations, contacts and Jolt witnesses qualified.
 
 - Soft slider stops: physical stiffness/damping, observation/mutation, signed effort and coexistence with motors/contacts.
