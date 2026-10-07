@@ -34,6 +34,12 @@ for name in ('stale-friction-read', 'stale-friction-force', 'stale-friction-set'
     CASES[name] = 'no longer refers to a live constraint'
 
 
+for name in ('bounds-speed-nan', 'bounds-speed-infinity', 'bounds-minimum-nan', 'bounds-minimum-infinity', 'bounds-maximum-nan', 'bounds-maximum-infinity', 'bounds-ordered'):
+    CASES[name] = 'requires finite speed and ordered finite force bounds'
+for name in ('bounds-servo-position-nan', 'bounds-servo-position-infinity', 'bounds-servo-minimum-nan', 'bounds-servo-minimum-infinity', 'bounds-servo-maximum-nan', 'bounds-servo-maximum-infinity', 'bounds-servo-stiffness-nan', 'bounds-servo-stiffness-infinity', 'bounds-servo-stiffness-zero', 'bounds-servo-stiffness-negative', 'bounds-servo-damping-nan', 'bounds-servo-damping-infinity', 'bounds-servo-damping-negative', 'bounds-servo-ordered'):
+    CASES[name] = 'requires finite position, ordered finite force bounds, positive finite stiffness and nonnegative finite damping'
+
+
 def main():
     root = Path.cwd()
     assert (root / 'Packages').is_dir() and (root / 'Silex-Examples').is_dir(), 'run from the workspace or Spec group root'

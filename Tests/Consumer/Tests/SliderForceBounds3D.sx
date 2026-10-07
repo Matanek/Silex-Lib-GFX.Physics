@@ -1,0 +1,190 @@
+use GFX.Physics
+use STD.Math
+
+func force_bounds_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3()) }
+func force_bounds_rail(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func force_bounds_body(world:Physics.World3D, mass:float = 2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(mass, Math.Vec3(mass * 0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func force_bounds_alignment(joint:Physics.SliderConstraint3D) {
+    assert(joint.anchor_error().length()<0.001 && joint.angular_error().length()<0.001)
+}
+func force_bounds_steps(world:Physics.World3D, count:int) {
+    var step = 0;while step<count { world.step(1.0/120.0);step++ }
+}
+
+test "slider symmetric forms remain compatible and signed commands are readable values" {
+    let velocity = Physics.SliderMotor3D(speed:1.0,maximum_force:2.0)
+    assert(velocity.minimum_force == -2.0 && velocity.maximum_force == 2.0 && velocity.target_position == null)
+    let position = Physics.SliderMotor3D.position(position:0.5,maximum_force:10.0,stiffness:8.0,damping:8.0)
+    assert(position.minimum_force == -10.0 && position.maximum_force == 10.0)
+    let signed = Physics.SliderMotor3D(speed:-1.0,minimum_force:-2.0,maximum_force:0.0)
+    assert(signed.minimum_force == -2.0 && signed.maximum_force == 0.0)
+    let servo = Physics.SliderMotor3D.position(position:-0.5,minimum_force:-2.0,maximum_force:4.0,stiffness:8.0,damping:8.0)
+    assert(servo.target_position == -0.5 && servo.minimum_force == -2.0 && servo.maximum_force == 4.0)
+}
+
+test "slider signed force shares one budget and advances the axial recurrence at 60 and 120 Hz" {
+    let signs:float[] = [-1.0,1.0]
+    for sign in signs {
+        for rate in [60,120] {
+            var world = force_bounds_world()
+            var joint = world.create_slider_constraint(force_bounds_rail(world),force_bounds_body(world),
+                Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(sign*10.0,-0.5,2.0))
+            var force = 2.0;if sign<0.0 { force = -0.5 }
+            let dt = 1.0/rate as float;var speed = 0.0;var position = 0.0;var step = 0
+            while step<rate {
+                speed += force*dt/2.0;position += speed*dt;world.step(dt)
+                assert(Math.abs(joint.speed()-speed)<0.00001 && Math.abs(joint.position()-position)<0.00001)
+                assert(Math.abs(joint.motor_force()-force)<0.0001 && joint.friction_force()==0.0)
+                assert(Math.abs(joint.reaction_force().x-force)<0.0001);force_bounds_alignment(joint);step++
+            }
+        }
+    }
+}
+
+test "slider one-sided force does not forbid pre-existing travel in either direction" {
+    var world = force_bounds_world();var body = force_bounds_body(world)
+    var joint = world.create_slider_constraint(force_bounds_rail(world),body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 10.0 ..motor = Physics.SliderMotor3D(-1.0,0.0,2.0))
+    force_bounds_steps(world,60);assert(joint.speed()==0.0 && joint.motor_force()==0.0)
+    joint.set_motor(Physics.SliderMotor3D(0.0,0.0,2.0));body.set_linear_velocity(Math.Vec3(0.5,0.0,0.0))
+    force_bounds_steps(world,120);assert(Math.abs(joint.speed()-0.5)<0.00001 && joint.motor_force()==0.0 && joint.friction_force()==0.0)
+    body.set_linear_velocity(Math.Vec3(-0.5,0.0,0.0));force_bounds_steps(world,120);assert(Math.abs(joint.speed())<0.00001)
+    joint.set_motor(Physics.SliderMotor3D(-1.0,-2.0,0.0));world.step(1.0/120.0)
+    assert(Math.abs(joint.speed()+1.0/120.0)<0.00001 && Math.abs(joint.motor_force()+2.0)<0.00001)
+}
+
+test "slider equal or same-sign bounds apply real force even at a zero speed target" {
+    let signs:float[] = [-1.0,1.0]
+    for sign in signs {
+        for rate in [60,120] {
+            var world = force_bounds_world()
+            var joint = world.create_slider_constraint(force_bounds_rail(world),force_bounds_body(world),
+                Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.0,sign*0.5,sign*0.5))
+            let dt = 1.0/rate as float;var step = 0
+            while step<rate {
+                world.step(dt);let n = (step+1) as float
+                assert(Math.abs(joint.speed()-sign*0.25*n*dt)<0.00001)
+                assert(Math.abs(joint.position()-sign*0.25*n*(n+1.0)*dt*dt/2.0)<0.00001)
+                assert(Math.abs(joint.motor_force()-sign*0.5)<0.00001 && Math.abs(joint.reaction_force().x-sign*0.5)<0.00001)
+                step++
+            }
+            var low = 0.3;var high = 0.8;if sign<0.0 { low = -0.8;high = -0.3 }
+            joint.set_motor(Physics.SliderMotor3D(0.0,low,high));let speed = joint.speed();world.step(dt)
+            assert(Math.abs(joint.speed()-speed-sign*0.15*dt)<0.00001 && Math.abs(joint.motor_force()-sign*0.3)<0.00001)
+        }
+    }
+}
+
+test "slider signed exchange conserves momentum for unequal free masses" {
+    var world = force_bounds_world();var first = force_bounds_body(world,2.0);var second = force_bounds_body(world,8.0)
+    var joint = world.create_slider_constraint(first,second,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(10.0,-0.2,0.8))
+    force_bounds_steps(world,120);assert(Math.abs(joint.speed()-0.5)<0.00001)
+    joint.set_motor(Physics.SliderMotor3D(-10.0,-0.2,0.8));force_bounds_steps(world,120)
+    assert(Math.abs(joint.speed()-0.375)<0.00002)
+    assert(first.linear_velocity().multiply(2.0).add(second.linear_velocity().multiply(8.0)).length()<0.00001)
+    force_bounds_alignment(joint)
+}
+
+test "slider forced signed effort preserves coupled offset three dimensional mass frames" {
+    var world = force_bounds_world();let rotation = Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())
+    let origin = Math.Vec3(0.7,1.2,-0.6);let anchor = Math.Vec3(0.1,0.4,0.2);let center = Math.Vec3(-0.2,0.1,0.4)
+    var rail = force_bounds_rail(world);rail.set_transform(Physics.Transform3D(origin,rotation))
+    var body = force_bounds_body(world,3.0)
+    body.set_transform(Physics.Transform3D(origin.subtract(rotation.rotate(anchor)),rotation))
+    body.set_mass_properties(Physics.MassProperties3D(3.0,Math.Vec3(0.3,0.6,0.9),center))
+    var joint = world.create_slider_constraint(rail,body,Physics.SliderConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(anchor) ..motor = Physics.SliderMotor3D(0.0,-0.6,-0.3))
+    let axis = rotation.rotate(Math.Vec3(1.0,0.0,0.0));let force = axis.multiply(-0.3)
+    let radius = rotation.rotate(anchor.subtract(center));var step = 0
+    while step<60 {
+        world.step(1.0/120.0)
+        assert(Math.abs(joint.speed()+0.1*(step+1) as float/120.0)<0.00001)
+        assert(joint.reaction_force().subtract(force).length()<0.001 && joint.reaction_torque().add(radius.cross(force)).length()<0.001)
+        assert(body.angular_velocity().length()<0.00001);force_bounds_alignment(joint);step++
+    }
+}
+
+test "slider position spring obeys the signed clamped recurrence at 60 and 120 Hz" {
+    for rate in [60,120] {
+        var world = force_bounds_world()
+        var joint = world.create_slider_constraint(force_bounds_rail(world),force_bounds_body(world),
+            Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D.position(0.75,-2.0,8.0,8.0,8.0))
+        let dt = 1.0/rate as float;var speed = 0.0;var position = 0.0;var target = 0.75;var step = 0
+        while step<rate*4 {
+            if step==rate*2 { target = -0.4;joint.set_motor(Physics.SliderMotor3D.position(target,-2.0,8.0,8.0,8.0)) }
+            let desired = (2.0*speed+dt*8.0*(target-position))/(2.0+dt*8.0+dt*dt*8.0)
+            let force = Math.clamp(2.0*(desired-speed)/dt,-2.0,8.0)
+            speed += force*dt/2.0;position += speed*dt;world.step(dt)
+            assert(Math.abs(joint.speed()-speed)<0.00001 && Math.abs(joint.position()-position)<0.00001)
+            assert(Math.abs(joint.motor_force()-force)<0.001 && joint.friction_force()==0.0)
+            force_bounds_alignment(joint);step++
+        }
+    }
+}
+
+test "slider one-sided servo cannot pull while a signed negative capacity can" {
+    var world = force_bounds_world()
+    var joint = world.create_slider_constraint(force_bounds_rail(world),force_bounds_body(world),
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D.position(-0.5,0.0,4.0,8.0,8.0))
+    force_bounds_steps(world,240);assert(joint.position()==0.0 && joint.motor_force()==0.0)
+    joint.set_motor(Physics.SliderMotor3D.position(-0.5,-4.0,0.0,8.0,8.0));force_bounds_steps(world,240)
+    assert(joint.position()< -0.1 && joint.motor_force()<=0.0)
+}
+
+test "slider signed mutation clears reactions retains snapshots and restores passive friction" {
+    var world = force_bounds_world();var body = force_bounds_body(world)
+    var joint = world.create_slider_constraint(force_bounds_rail(world),body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0 ..motor = Physics.SliderMotor3D(1.0,-0.5,2.0))
+    world.step(1.0/120.0);let old = joint.motor()!
+    joint.set_motor(Physics.SliderMotor3D(-1.0,-4.0,0.1))
+    assert(old.minimum_force == -0.5 && joint.motor()!.minimum_force == -4.0 && body.is_awake())
+    assert(joint.motor_force()==0.0 && joint.reaction_force().length()==0.0)
+    world.step(1.0/120.0);let force = joint.motor_force();world.step(0.0);assert(joint.motor_force()==force)
+    body.set_mass_properties(Physics.MassProperties3D(4.0,Math.Vec3(0.4)))
+    let speed = joint.speed();world.step(1.0/120.0);assert(Math.abs(joint.speed()-speed+1.0/120.0)<0.00001)
+    joint.set_motor(Physics.SliderMotor3D(-1.0,0.0,0.0));body.set_linear_velocity(Math.Vec3(0.5,0.0,0.0))
+    force_bounds_steps(world,60);assert(Math.abs(joint.speed()-0.5)<0.00001 && joint.friction_force()==0.0)
+    joint.set_motor(null);force_bounds_steps(world,240);assert(Math.abs(joint.speed())<0.00001 && joint.maximum_friction_force()==2.0)
+}
+
+test "slider signed zero-target effort stays awake even with a negative upper bound" {
+    var world = force_bounds_world();var body = force_bounds_body(world);body.set_sleep_enabled(true)
+    var joint = world.create_slider_constraint(force_bounds_rail(world),body)
+    force_bounds_steps(world,240);assert(!body.is_awake())
+    joint.set_motor(Physics.SliderMotor3D(0.0,-0.000001,-0.000001));force_bounds_steps(world,240)
+    assert(body.is_awake() && joint.speed()<0.0 && joint.motor_force()<0.0)
+    joint.set_motor(Physics.SliderMotor3D(1.0,0.0,0.0));force_bounds_steps(world,240)
+    assert(!body.is_awake() && joint.motor_force()==0.0)
+}
+
+test "slider signed force suspends with the joint or body and rejects destroyed participants" {
+    var world = force_bounds_world();var body = force_bounds_body(world)
+    var joint = world.create_slider_constraint(force_bounds_rail(world),body,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(-1.0,-2.0,0.0))
+    world.step(1.0/120.0);assert(joint.motor_force()<0.0)
+    joint.set_enabled(false);let speed = joint.speed();force_bounds_steps(world,60)
+    assert(joint.motor_force()==0.0 && Math.abs(joint.speed()-speed)<0.00001)
+    joint.set_enabled(true);body.set_enabled(false);world.step(1.0/120.0);assert(joint.motor_force()==0.0)
+    body.set_enabled(true);world.step(1.0/120.0);assert(joint.motor_force()<0.0)
+    world.destroy_rigid_body(body);assert(!joint.is_valid())
+}
+
+test "slider signed motor respects both rigid stops while measuring its own effort" {
+    var world = force_bounds_world()
+    var joint = world.create_slider_constraint(force_bounds_rail(world),force_bounds_body(world),
+        Physics.SliderConstraint3DSettings() ..minimum_position = -0.25 ..maximum_position = 0.25
+        ..motor = Physics.SliderMotor3D(1.0,-0.5,2.0))
+    force_bounds_steps(world,360);assert(Math.abs(joint.position()-0.25)<0.00001 && Math.abs(joint.speed())<0.00001)
+    assert(Math.abs(joint.motor_force()-2.0)<0.00001 && joint.reaction_force().length()<0.00001)
+    joint.set_motor(Physics.SliderMotor3D(-1.0,-0.5,0.0));force_bounds_steps(world,360)
+    assert(Math.abs(joint.position()+0.25)<0.00001 && Math.abs(joint.motor_force()+0.5)<0.00001)
+    joint.set_limits(0.0,0.0);force_bounds_steps(world,120);assert(Math.abs(joint.position())<0.00001)
+}

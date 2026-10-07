@@ -67,5 +67,26 @@ func main() {
     if selected("stale-friction-force") { world.destroy_slider_constraint(joint);joint.friction_force() }
     if selected("stale-friction-set") { world.destroy_slider_constraint(joint);joint.set_maximum_friction_force(1.0) }
     if selected("orphan-friction") { orphan_slider().friction_force() }
+    if selected("bounds-speed-nan") { Physics.SliderMotor3D(Math.sqrt(-1.0), -1.0, 1.0) }
+    if selected("bounds-speed-infinity") { Physics.SliderMotor3D(1.0 / 0.0, -1.0, 1.0) }
+    if selected("bounds-minimum-nan") { Physics.SliderMotor3D(0.0, Math.sqrt(-1.0), 1.0) }
+    if selected("bounds-minimum-infinity") { Physics.SliderMotor3D(0.0, -1.0 / 0.0, 1.0) }
+    if selected("bounds-maximum-nan") { Physics.SliderMotor3D(0.0, -1.0, Math.sqrt(-1.0)) }
+    if selected("bounds-maximum-infinity") { Physics.SliderMotor3D(0.0, -1.0, 1.0 / 0.0) }
+    if selected("bounds-ordered") { Physics.SliderMotor3D(0.0, 2.0, -1.0) }
+    if selected("bounds-servo-position-nan") { Physics.SliderMotor3D.position(Math.sqrt(-1.0), -1.0, 1.0, 8.0, 8.0) }
+    if selected("bounds-servo-position-infinity") { Physics.SliderMotor3D.position(1.0 / 0.0, -1.0, 1.0, 8.0, 8.0) }
+    if selected("bounds-servo-minimum-nan") { Physics.SliderMotor3D.position(0.5, Math.sqrt(-1.0), 1.0, 8.0, 8.0) }
+    if selected("bounds-servo-minimum-infinity") { Physics.SliderMotor3D.position(0.5, -1.0 / 0.0, 1.0, 8.0, 8.0) }
+    if selected("bounds-servo-maximum-nan") { Physics.SliderMotor3D.position(0.5, -1.0, Math.sqrt(-1.0), 8.0, 8.0) }
+    if selected("bounds-servo-maximum-infinity") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0 / 0.0, 8.0, 8.0) }
+    if selected("bounds-servo-stiffness-nan") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, Math.sqrt(-1.0), 8.0) }
+    if selected("bounds-servo-stiffness-infinity") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 1.0 / 0.0, 8.0) }
+    if selected("bounds-servo-stiffness-zero") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 0.0, 8.0) }
+    if selected("bounds-servo-stiffness-negative") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, -1.0, 8.0) }
+    if selected("bounds-servo-damping-nan") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 8.0, Math.sqrt(-1.0)) }
+    if selected("bounds-servo-damping-infinity") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 8.0, 1.0 / 0.0) }
+    if selected("bounds-servo-damping-negative") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 8.0, -1.0) }
+    if selected("bounds-servo-ordered") { Physics.SliderMotor3D.position(0.5, 2.0, -1.0, 8.0, 8.0) }
     panic("invalid slider operation was accepted")
 }

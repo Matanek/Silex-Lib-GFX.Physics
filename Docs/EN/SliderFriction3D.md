@@ -63,3 +63,5 @@ to be qualified.
 `SliderFrictionScene.sx` shows a gold carriage on an inclined rail. F enables
 or removes the brake; T launches alternately uphill and downhill. R restarts,
 Space pauses/resumes and Escape quits.
+
+[Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.

@@ -38,3 +38,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Slider position servo](Docs/EN/SliderPosition3D.md): target travel, physical spring/damping, bounded force and runtime mutations.
 
 [Slider axial friction](Docs/EN/SliderFriction3D.md): passive braking, mutable capacity, signed effort and motor precedence.
+
+[Signed slider force bounds](Docs/EN/SliderForceBounds3D.md): different effort in each direction, velocity and position modes, including one-sided motors.

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le moteur de glissière accepte des bornes de force signées en vitesse et position, avec formes symétriques compatibles, effort imposé, mutation/réveil, contact réel et oracle Jolt Debug/Release qualifiés.
+
 - `maximum_friction_force` freine passivement la glissière avec capacité mutable en N, effort signé séparé et priorité des moteurs ; charge, arrêt, contacts, sommeil et oracle Jolt Debug/Release qualifiés.
 
 - Le servo `SliderMotor3D.position` pilote une course cible par ressort amorti physique, force symétrique bornée et cible projetée sur les limites ; mutations, contacts et oracle Jolt Debug/Release qualifiés.

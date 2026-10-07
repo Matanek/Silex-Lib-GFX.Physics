@@ -1028,7 +1028,10 @@ public class World3D {
                         var second = self.store.require(constraint.second_id)
                         if first.is_enabled && second.is_enabled {
                             if let motor = constraint.motor {
-                                if motor.maximum_force > 0.0 && (motor.speed != 0.0 || motor.target_position != null) {
+                                if (motor.minimum_force != 0.0 || motor.maximum_force != 0.0) &&
+                                    (motor.speed != 0.0 || motor.target_position != null ||
+                                     motor.minimum_force > 0.0 || motor.maximum_force < 0.0)
+                                {
                                     first.wake()
                                     second.wake()
                                 }
@@ -3686,15 +3689,17 @@ func solve_slider_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
     first_radius:Math.Vec3, second_radius:Math.Vec3, state:SliderConstraintState3D,
     axis:Math.Vec3, delta:float)
 {
+    var minimum_force = -state.maximum_friction_force
     var maximum_force = state.maximum_friction_force
     var previous = state.friction_impulse
     var target_speed = 0.0
     if let motor = state.motor {
+        minimum_force = motor.minimum_force
         maximum_force = motor.maximum_force
         previous = state.motor_impulse
         target_speed = motor.speed
     }
-    if maximum_force <= 0.0 { return }
+    if minimum_force == 0.0 && maximum_force == 0.0 { return }
     let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis) - target_speed
     var response = FixedImpulse3D(Math.Vec3(), Math.Vec3())
     var response_axial = 0.0
@@ -3709,14 +3714,18 @@ func solve_slider_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
         let softness = 1.0 / (delta * (motor.damping + delta * motor.stiffness))
         let bias = delta * motor.stiffness * softness * state.motor_error
         requested = -(speed + bias + softness * previous) / (inverse_mass + softness)
+    } else if minimum_force > 0.0 || maximum_force < 0.0 {
+        // A forced effort needs an attachment response even at the exact target speed.
+        response = fixed_impulse3d(first, second, first_radius, second_radius, axis, Math.Vec3())
+        response_axial = response.linear.dot(axis)
+        requested = response_axial * speed
     } else {
         response = fixed_impulse3d(first, second, first_radius, second_radius,
             axis.multiply(speed), Math.Vec3())
         response_axial = response.linear.dot(axis)
         requested = response_axial
     }
-    let capacity = maximum_force * delta
-    let accumulated = Math.clamp(previous + requested, -capacity, capacity)
+    let accumulated = Math.clamp(previous + requested, minimum_force * delta, maximum_force * delta)
     let change = accumulated - previous
     if state.motor != null { state.motor_impulse = accumulated }
     else { state.friction_impulse = accumulated }

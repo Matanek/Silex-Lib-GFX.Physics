@@ -7,6 +7,7 @@ use STD.Math
 
 public struct SliderMotor3D {
     let speed:float
+    let minimum_force:float
     let maximum_force:float
     let target_position:float?
     let stiffness:float
@@ -17,6 +18,21 @@ public struct SliderMotor3D {
             panic("GFX.Physics.SliderMotor3D requires finite speed and nonnegative finite maximum force")
         }
         self.speed = speed
+        self.minimum_force = -maximum_force
+        self.maximum_force = maximum_force
+        self.target_position = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    init(speed:float, minimum_force:float, maximum_force:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(minimum_force) ||
+            !finite_body3d_value(maximum_force) || minimum_force > maximum_force
+        {
+            panic("GFX.Physics.SliderMotor3D requires finite speed and ordered finite force bounds")
+        }
+        self.speed = speed
+        self.minimum_force = minimum_force
         self.maximum_force = maximum_force
         self.target_position = null
         self.stiffness = 0.0
@@ -27,6 +43,28 @@ public struct SliderMotor3D {
         return SliderMotor3D(position, maximum_force, stiffness, damping)
     }
 
+    static func position(position:float, minimum_force:float, maximum_force:float,
+        stiffness:float, damping:float) SliderMotor3D
+    {
+        return SliderMotor3D(position, minimum_force, maximum_force, stiffness, damping)
+    }
+
+    private init(position:float, minimum_force:float, maximum_force:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(position) || !finite_body3d_value(minimum_force) ||
+            !finite_body3d_value(maximum_force) || minimum_force > maximum_force ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SliderMotor3D.position requires finite position, ordered finite force bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.minimum_force = minimum_force
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
     private init(position:float, maximum_force:float, stiffness:float, damping:float) {
         if !finite_body3d_value(position) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 ||
             !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
@@ -35,6 +73,7 @@ public struct SliderMotor3D {
             panic("GFX.Physics.SliderMotor3D.position requires finite position, nonnegative finite maximum force, positive finite stiffness and nonnegative finite damping")
         }
         self.speed = 0.0
+        self.minimum_force = -maximum_force
         self.maximum_force = maximum_force
         self.target_position = position
         self.stiffness = stiffness

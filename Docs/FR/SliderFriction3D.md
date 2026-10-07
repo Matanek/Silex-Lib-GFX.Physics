@@ -65,3 +65,5 @@ reste à établir ; les autres extensions de glissière restent à qualifier.
 `SliderFrictionScene.sx` montre un chariot doré sur un rail incliné. F active
 ou retire le frein ; T relance alternativement vers le haut et vers le bas.
 R redémarre, Espace met en pause/reprend et Échap ferme.
+
+Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.

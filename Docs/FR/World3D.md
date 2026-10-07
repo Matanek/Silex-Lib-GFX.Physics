@@ -273,6 +273,8 @@ Le [moteur de glissière](SliderMotor3D.md) pilote une vitesse relative avec for
 
 Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.
 
+Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
+
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
 
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.

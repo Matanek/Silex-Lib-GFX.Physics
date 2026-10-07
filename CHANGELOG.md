@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Slider motors accept signed force bounds in velocity and position modes, retaining symmetric forms, imposed effort, mutation/wake, real contact and Debug/Release Jolt qualification.
+
 - `maximum_friction_force` passively brakes a slider with mutable capacity in N, separate signed effort and motor precedence; load, stopping, contacts, sleep and Debug/Release Jolt oracle qualified.
 
 - The `SliderMotor3D.position` servo drives target travel with a physical damped spring, bounded symmetric force and targets projected onto limits; mutations, contacts and Jolt Debug/Release oracle qualified.

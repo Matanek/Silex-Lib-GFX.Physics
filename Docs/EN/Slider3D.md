@@ -77,3 +77,5 @@ loaded stop reactions, offset frames and rotating rails; parity for impact
 transients and general spatial chains has not been established.
 `SliderScene.sx` shows an inclined rail, gravity and a launch impulse with T;
 R resets, Space pauses/resumes and Escape closes the window.
+
+[Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.

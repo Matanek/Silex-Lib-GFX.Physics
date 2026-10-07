@@ -39,8 +39,8 @@ d'itérations. Le moteur accélère progressivement vers sa cible : une charge
 supérieure à sa capacité peut empêcher la vitesse demandée, voire faire
 reculer le chariot. Une capacité nulle n'entraîne ni ne freine l'axe.
 
-`SliderConstraint3DSettings.motor` est facultatif. `null` laisse la course
-libre ; une vitesse cible nulle freine puis maintient le chariot avec la
+`SliderConstraint3DSettings.motor` est facultatif. `null` rétablit la friction configurée, ou laisse la course libre si elle est
+nulle ; une vitesse cible nulle freine puis maintient le chariot avec la
 même capacité. `joint.motor()` rend une valeur facultative décrivant la
 commande courante. `set_motor(motor)` remplace cette commande ; `set_motor(null)`
 désactive le pilotage tout en conservant les retenues et butées de la glissière.
@@ -66,8 +66,7 @@ Le consommateur et l'oracle Jolt qualifient accélération, inversion, freinage,
 deux masses libres, ancrage excentré et charge supérieure à la capacité.
 Le rail tournant est comparé en régime établi à vitesse relative constante.
 La parité des transitions d'effort pendant une rotation du rail, des impacts
-et des chaînes spatiales générales reste à établir. Bornes de force signées,
-butées souples restent à qualifier.
+et des chaînes spatiales générales reste à établir. Les butées souples restent à qualifier.
 
 `SliderMotorScene.sx` commence en montée à −1 m/s sur un rail incliné.
 T alterne montée, freinage puis descente ; F choisit 30 ou 6 N, cette dernière
@@ -77,3 +76,5 @@ R réinitialise, Espace met en pause/reprend et Échap ferme.
 [Le servo de position](SliderPosition3D.md) ajoute une course cible par ressort amorti.
 
 Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.
+
+Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.

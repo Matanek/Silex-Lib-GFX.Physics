@@ -80,3 +80,5 @@ excentrés et les rails tournants ; la parité des transitoires d’impact et de
 chaînes spatiales générales n’est pas établie. La scène `SliderScene.sx`
 montre le rail incliné, la gravité et une impulsion de relance avec T ; R
 réinitialise, Espace met en pause/reprend et Échap ferme.
+
+Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.

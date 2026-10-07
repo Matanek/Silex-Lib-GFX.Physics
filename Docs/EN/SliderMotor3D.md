@@ -38,7 +38,8 @@ iteration count. The motor accelerates gradually toward its target: a load
 above capacity can prevent the requested speed or move the carriage backward.
 Zero capacity neither drives nor brakes the free axis.
 
-`SliderConstraint3DSettings.motor` is optional. `null` leaves travel free;
+`SliderConstraint3DSettings.motor` is optional. `null` restores configured friction,
+or leaves travel free when friction is zero;
 a zero target speed brakes and holds the carriage with the same capacity.
 `joint.motor()` returns an optional value describing the current command.
 `set_motor(motor)` replaces it; `set_motor(null)` disables the drive while
@@ -64,8 +65,7 @@ The consumer and Jolt oracle qualify acceleration, reversal, braking,
 two free unequal masses, an offset anchor and loads above capacity.
 The rotating rail is compared at steady constant relative speed. Parity
 of force transitions while the rail rotates, impacts and general spatial
-chains remains open. Signed force bounds
-and soft stops remain to be qualified.
+chains remains open. Soft stops remain to be qualified.
 
 `SliderMotorScene.sx` starts uphill at −1 m/s on an inclined rail. T cycles
 uphill, braking and downhill; F selects 30 or 6 N, with 6 N insufficient to
@@ -75,3 +75,5 @@ Escape closes the window.
 [The position servo](SliderPosition3D.md) adds target travel through a damped spring.
 
 The [slider friction brake](SliderFriction3D.md) slows travel without a motor using mutable maximum force.
+
+[Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.

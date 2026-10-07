@@ -263,6 +263,8 @@ The [slider motor](SliderMotor3D.md) drives a relative speed with bounded force,
 
 The [slider friction brake](SliderFriction3D.md) slows travel without a motor using mutable maximum force.
 
+[Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.
+
 The [slider position servo](SliderPosition3D.md) targets travel with a physical damped spring and bounded force.
 
 The [hinge position motor](HingePosition3D.md) targets an angle with stiffness, damping and bounded torque.
