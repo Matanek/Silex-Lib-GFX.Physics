@@ -173,3 +173,11 @@ public use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
 public use GFX.Physics.SwingTwistConstraint3D.SwingLimits3D
 public use GFX.Physics.SwingTwistConstraint3D.TwistMotor3D
 public use GFX.Physics.SwingTwistConstraint3D.SwingMotor3D
+
+public use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3D
+public use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3DSettings
+public use GFX.Physics.SixDOFConstraint3D.LinearAxis3DSettings
+public use GFX.Physics.SixDOFConstraint3D.LinearLimit3D
+public use GFX.Physics.SixDOFConstraint3D.LinearMotor3D
+public use GFX.Physics.SixDOFConstraint3D.AngularMotor3D
+public use GFX.Physics.SixDOFConstraint3D.LinearLimitSpring3D

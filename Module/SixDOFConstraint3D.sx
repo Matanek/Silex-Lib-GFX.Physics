@@ -1,0 +1,678 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.PointConstraint3D.PointConstraintState3D
+use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+use GFX.Physics.SwingTwistConstraint3D.SwingLimits3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintState3D
+use GFX.Physics.SwingTwistConstraint3D.swing_twist_orientation3d
+use GFX.Physics.SwingTwistConstraint3D.decompose_swing_twist3d
+use GFX.Physics.SwingTwistConstraint3D.swing_angles3d
+use GFX.Physics.SwingTwistConstraint3D.swing_radii3d
+use GFX.Physics.SwingTwistConstraint3D.validate_swing_limits3d
+use GFX.Physics.SwingTwistConstraint3D.validate_twist_limits3d
+public struct LinearMotor3D {
+    let speed:float
+    let minimum_force:float
+    let maximum_force:float
+    let target_position:float?
+    let stiffness:float
+    let damping:float
+
+    init(speed:float, maximum_force:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 {
+            panic("GFX.Physics.LinearMotor3D requires finite speed and nonnegative finite maximum force")
+        }
+        self.speed = speed
+        self.minimum_force = -maximum_force
+        self.maximum_force = maximum_force
+        self.target_position = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    init(speed:float, minimum_force:float, maximum_force:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(minimum_force) ||
+            !finite_body3d_value(maximum_force) || minimum_force > maximum_force
+        {
+            panic("GFX.Physics.LinearMotor3D requires finite speed and ordered finite force bounds")
+        }
+        self.speed = speed
+        self.minimum_force = minimum_force
+        self.maximum_force = maximum_force
+        self.target_position = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    static func position(position:float, maximum_force:float, stiffness:float, damping:float) LinearMotor3D {
+        return LinearMotor3D(position, maximum_force, stiffness, damping)
+    }
+
+    static func position(position:float, minimum_force:float, maximum_force:float,
+        stiffness:float, damping:float) LinearMotor3D
+    {
+        return LinearMotor3D(position, minimum_force, maximum_force, stiffness, damping)
+    }
+
+    static func position_and_velocity(position:float, speed:float, maximum_force:float,
+        stiffness:float, damping:float) LinearMotor3D
+    {
+        return LinearMotor3D(position, speed, -maximum_force, maximum_force, stiffness, damping)
+    }
+
+    static func position_and_velocity(position:float, speed:float, minimum_force:float,
+        maximum_force:float, stiffness:float, damping:float) LinearMotor3D
+    {
+        return LinearMotor3D(position, speed, minimum_force, maximum_force, stiffness, damping)
+    }
+
+    private init(position:float, speed:float, minimum_force:float, maximum_force:float,
+        stiffness:float, damping:float)
+    {
+        if !finite_body3d_value(position) || !finite_body3d_value(speed) ||
+            !finite_body3d_value(minimum_force) || !finite_body3d_value(maximum_force) ||
+            minimum_force > maximum_force || !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.LinearMotor3D.position_and_velocity requires finite position and speed, ordered finite force bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_force = minimum_force
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
+    private init(position:float, minimum_force:float, maximum_force:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(position) || !finite_body3d_value(minimum_force) ||
+            !finite_body3d_value(maximum_force) || minimum_force > maximum_force ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.LinearMotor3D.position requires finite position, ordered finite force bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.minimum_force = minimum_force
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
+    private init(position:float, maximum_force:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(position) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.LinearMotor3D.position requires finite position, nonnegative finite maximum force, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.minimum_force = -maximum_force
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
+public struct LinearLimitSpring3D {
+    let stiffness:float
+    let damping:float
+
+    init(stiffness:float, damping:float) {
+        if !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.LinearLimitSpring3D requires positive finite stiffness and nonnegative finite damping")
+        }
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
+public struct AngularMotor3D {
+    let speed:float
+    let minimum_torque:float
+    let maximum_torque:float
+    let target_angle:float?
+    let stiffness:float
+    let damping:float
+
+    init(speed:float, maximum_torque:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(maximum_torque) || maximum_torque < 0.0 {
+            panic("GFX.Physics.AngularMotor3D requires finite speed and nonnegative finite maximum torque")
+        }
+        self.speed = speed
+        self.minimum_torque = -maximum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    init(speed:float, minimum_torque:float, maximum_torque:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(minimum_torque) ||
+            !finite_body3d_value(maximum_torque) || minimum_torque > maximum_torque
+        {
+            panic("GFX.Physics.AngularMotor3D requires finite speed and ordered finite torque bounds")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    static func position(angle:float, maximum_torque:float, stiffness:float, damping:float) AngularMotor3D {
+        return AngularMotor3D(angle, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position(angle:float, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float) AngularMotor3D
+    {
+        return AngularMotor3D(angle, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angle:float, speed:float, maximum_torque:float,
+        stiffness:float, damping:float) AngularMotor3D
+    {
+        return AngularMotor3D(angle, speed, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angle:float, speed:float, minimum_torque:float,
+        maximum_torque:float, stiffness:float, damping:float) AngularMotor3D
+    {
+        return AngularMotor3D(angle, speed, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    private init(angle:float, speed:float, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float)
+    {
+        if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
+            !finite_body3d_value(speed) ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.AngularMotor3D.position_and_velocity requires an angle within [-pi, pi], finite speed, ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = angle
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
+    private init(angle:float, minimum_torque:float, maximum_torque:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.AngularMotor3D.position requires an angle within [-pi, pi], ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = angle
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
+public enum LinearLimit3D {
+    free
+    locked
+    bounded(float, float)
+}
+public struct LinearAxis3DSettings {
+    var limit:LinearLimit3D = LinearLimit3D.free
+    var motor:LinearMotor3D? = null
+    var limit_spring:LinearLimitSpring3D? = null
+    var maximum_friction_force:float = 0.0
+    init() {}
+}
+public struct SixDOFConstraint3DSettings {
+    var first_local_frame:Transform3D = Transform3D()
+    var second_local_frame:Transform3D = Transform3D()
+    var translation_x:LinearAxis3DSettings = LinearAxis3DSettings()
+    var translation_y:LinearAxis3DSettings = LinearAxis3DSettings()
+    var translation_z:LinearAxis3DSettings = LinearAxis3DSettings()
+    var minimum_twist:float = -Math.pi()
+    var maximum_twist:float = Math.pi()
+    var swing_limits:SwingLimits3D = SwingLimits3D.cone(Math.Vec2(Math.pi()))
+    var rotation_x_motor:AngularMotor3D? = null
+    var rotation_y_motor:AngularMotor3D? = null
+    var rotation_z_motor:AngularMotor3D? = null
+    var maximum_rotation_friction_torque:Math.Vec3 = Math.Vec3()
+    var is_enabled:bool = true
+    init() {}
+}
+package class SixDOFConstraintState3D {
+    var point:PointConstraintState3D
+    var rotation:SwingTwistConstraintState3D
+    var translation_x:LinearAxis3DSettings
+    var translation_y:LinearAxis3DSettings
+    var translation_z:LinearAxis3DSettings
+    var rotation_x_motor:AngularMotor3D?
+    var rotation_y_motor:AngularMotor3D?
+    var rotation_z_motor:AngularMotor3D?
+    var maximum_rotation_friction_torque:Math.Vec3
+    var linear_limit_impulses:float[] = [0.0,0.0,0.0]
+    var linear_drive_impulses:float[] = [0.0,0.0,0.0]
+    var linear_friction_impulses:float[] = [0.0,0.0,0.0]
+    var angular_drive_impulses:float[] = [0.0,0.0,0.0]
+    var angular_friction_impulses:float[] = [0.0,0.0,0.0]
+    var linear_limit_errors:float[] = [0.0,0.0,0.0]
+    var linear_limit_sides:int[] = [0,0,0]
+    var linear_drive_errors:float[] = [0.0,0.0,0.0]
+    var angular_drive_error:Math.Vec3 = Math.Vec3()
+    var angular_drive_frame:Math.Quat = Math.Quat.identity()
+    init(first_id:BodyId3D,second_id:BodyId3D,settings:SixDOFConstraint3DSettings) {
+        validate_linear_axis3d(settings.translation_x)
+        validate_linear_axis3d(settings.translation_y)
+        validate_linear_axis3d(settings.translation_z)
+        validate_six_angular_friction3d(settings.maximum_rotation_friction_torque)
+        var angular=SwingTwistConstraint3DSettings()
+        angular.first_local_frame=settings.first_local_frame
+        angular.second_local_frame=settings.second_local_frame
+        angular.minimum_twist=settings.minimum_twist
+        angular.maximum_twist=settings.maximum_twist
+        angular.swing_limits=settings.swing_limits
+        angular.is_enabled=settings.is_enabled
+        self.rotation=SwingTwistConstraintState3D(first_id,second_id,angular)
+        self.point=self.rotation.point
+        self.translation_x=settings.translation_x
+        self.translation_y=settings.translation_y
+        self.translation_z=settings.translation_z
+        self.rotation_x_motor=settings.rotation_x_motor
+        self.rotation_y_motor=settings.rotation_y_motor
+        self.rotation_z_motor=settings.rotation_z_motor
+        self.maximum_rotation_friction_torque=settings.maximum_rotation_friction_torque
+    }
+    func reset() {
+        self.rotation.reset()
+        self.angular_drive_error=Math.Vec3()
+        var i=0
+        while i<3 {
+            self.linear_limit_impulses[i]=0.0
+            self.linear_drive_impulses[i]=0.0
+            self.linear_friction_impulses[i]=0.0
+            self.angular_drive_impulses[i]=0.0
+            self.angular_friction_impulses[i]=0.0
+            self.linear_limit_errors[i]=0.0
+            self.linear_limit_sides[i]=0
+            self.linear_drive_errors[i]=0.0
+            i++
+        }
+    }
+}
+package struct SixDOFConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class SixDOFConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:SixDOFConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:SixDOFConstraint3DSettings) SixDOFConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.SixDOFConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.SixDOFConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.SixDOFConstraint3D requires a dynamic body")
+        }
+        var state = SixDOFConstraintState3D(first.body_id(), second.body_id(), settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return SixDOFConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:SixDOFConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:SixDOFConstraintId3D) SixDOFConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.SixDOFConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:SixDOFConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.point.first_id).wake()
+        self.bodies.require(state.point.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_six_dof_body_id3d(state.point.first_id, body_id) ||
+                    same_six_dof_body_id3d(state.point.second_id, body_id)
+                {
+                    var other_id = state.point.first_id
+                    if same_six_dof_body_id3d(state.point.first_id, body_id) {
+                        other_id = state.point.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class SixDOFConstraint3D {
+    private var store:SixDOFConstraintStore3D
+    private let id:SixDOFConstraintId3D
+
+    package init(store:SixDOFConstraintStore3D, id:SixDOFConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:SixDOFConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() SixDOFConstraintId3D { return self.id }
+    func first_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.first_id)
+    }
+    func second_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.second_id)
+    }
+    func is_enabled() bool { return self.store.require(self.id).point.is_enabled }
+    func first_local_anchor() Math.Vec3 { return self.store.require(self.id).point.first_local_anchor }
+    func second_local_anchor() Math.Vec3 { return self.store.require(self.id).point.second_local_anchor }
+    func first_local_frame() Transform3D {
+        var s=self.store.require(self.id)
+        return Transform3D(s.point.first_local_anchor,s.rotation.first_frame)
+    }
+    func second_local_frame() Transform3D {
+        var s=self.store.require(self.id)
+        return Transform3D(s.point.second_local_anchor,s.rotation.second_frame)
+    }
+    func translation_x() LinearAxis3DSettings { return self.store.require(self.id).translation_x }
+    func translation_y() LinearAxis3DSettings { return self.store.require(self.id).translation_y }
+    func translation_z() LinearAxis3DSettings { return self.store.require(self.id).translation_z }
+    func swing_limits() SwingLimits3D { return self.store.require(self.id).rotation.swing_limits }
+    func minimum_twist() float { return self.store.require(self.id).rotation.minimum_twist }
+    func maximum_twist() float { return self.store.require(self.id).rotation.maximum_twist }
+    func rotation_x_motor() AngularMotor3D? { return self.store.require(self.id).rotation_x_motor }
+    func rotation_y_motor() AngularMotor3D? { return self.store.require(self.id).rotation_y_motor }
+    func rotation_z_motor() AngularMotor3D? { return self.store.require(self.id).rotation_z_motor }
+    func maximum_rotation_friction_torque() Math.Vec3 { return self.store.require(self.id).maximum_rotation_friction_torque }
+    func translation() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_translation3d(self.store.bodies.require(s.point.first_id).transform,
+            self.store.bodies.require(s.point.second_id).transform,s)
+    }
+    func translation_speed() Math.Vec3 {
+        var s=self.store.require(self.id)
+        var first=self.store.bodies.require(s.point.first_id)
+        var second=self.store.bodies.require(s.point.second_id)
+        let point=second.transform.point(s.point.second_local_anchor)
+        let velocity=second.linear_velocity.add(second.angular_velocity.cross(point.subtract(second.world_center())))
+            .subtract(first.linear_velocity.add(first.angular_velocity.cross(point.subtract(first.world_center()))))
+        return first.transform.rotation.multiply(s.rotation.first_frame).conjugated().rotate(velocity)
+    }
+    func orientation() Math.Quat {
+        var s=self.store.require(self.id)
+        return swing_twist_orientation3d(self.store.bodies.require(s.point.first_id).transform,
+            self.store.bodies.require(s.point.second_id).transform,s.rotation)
+    }
+    func twist_angle() float { return decompose_swing_twist3d(self.orientation()).twist_angle }
+    func swing_angles() Math.Vec2 { return swing_angles3d(decompose_swing_twist3d(self.orientation()).swing) }
+    func angular_speed() Math.Vec3 {
+        var s=self.store.require(self.id)
+        var first=self.store.bodies.require(s.point.first_id)
+        var second=self.store.bodies.require(s.point.second_id)
+        return second.transform.rotation.multiply(s.rotation.second_frame).conjugated()
+            .rotate(second.angular_velocity.subtract(first.angular_velocity))
+    }
+    func motor_force() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_impulse_vector3d(s.linear_drive_impulses).multiply(s.point.inverse_delta)
+    }
+    func friction_force() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_impulse_vector3d(s.linear_friction_impulses).multiply(s.point.inverse_delta)
+    }
+    func limit_force() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_impulse_vector3d(s.linear_limit_impulses).multiply(s.point.inverse_delta)
+    }
+    func motor_torque() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_impulse_vector3d(s.angular_drive_impulses).multiply(s.point.inverse_delta)
+    }
+    func friction_torque() Math.Vec3 {
+        var s=self.store.require(self.id)
+        return six_impulse_vector3d(s.angular_friction_impulses).multiply(s.point.inverse_delta)
+    }
+    func anchor_error() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return self.store.bodies.require(state.second_id).transform.point(state.second_local_anchor).subtract(
+            self.store.bodies.require(state.first_id).transform.point(state.first_local_anchor))
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return state.impulse.multiply(state.inverse_delta)
+    }
+    func reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.rotation.angular_impulse.multiply(state.point.inverse_delta)
+    }
+    private func invalidate_reaction(state:SixDOFConstraintState3D) {
+        state.reset()
+        self.store.bodies.require(state.point.first_id).wake()
+        self.store.bodies.require(state.point.second_id).wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.is_enabled = enabled
+        self.invalidate_reaction(state)
+    }
+    func set_anchors(first:Math.Vec3, second:Math.Vec3) {
+        if !finite_body3d_point(first) || !finite_body3d_point(second) {
+            panic("GFX.Physics.SixDOFConstraint3D requires finite local anchors")
+        }
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.first_local_anchor = first
+        state.point.second_local_anchor = second
+        self.invalidate_reaction(state)
+    }
+    func set_frames(first:Transform3D,second:Transform3D) {
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.point.first_local_anchor=first.position
+        s.point.second_local_anchor=second.position
+        s.rotation.first_frame=first.rotation
+        s.rotation.second_frame=second.rotation
+        self.invalidate_reaction(s)
+    }
+    func set_swing_limits(limits:SwingLimits3D) {
+        validate_swing_limits3d(limits)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.rotation.swing_limits=limits
+        s.rotation.swing_radii=swing_radii3d(limits)
+        self.invalidate_reaction(s)
+    }
+    func set_twist_limits(minimum:float,maximum:float) {
+        validate_twist_limits3d(minimum,maximum)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.rotation.minimum_twist=minimum
+        s.rotation.maximum_twist=maximum
+        self.invalidate_reaction(s)
+    }
+    func set_translation_x(settings:LinearAxis3DSettings) {
+        validate_linear_axis3d(settings)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.translation_x=settings
+        self.invalidate_reaction(s)
+    }
+    func set_rotation_x_motor(motor:AngularMotor3D?) {
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.rotation_x_motor=motor
+        self.invalidate_reaction(s)
+    }
+    func set_translation_y(settings:LinearAxis3DSettings) {
+        validate_linear_axis3d(settings)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.translation_y=settings
+        self.invalidate_reaction(s)
+    }
+    func set_rotation_y_motor(motor:AngularMotor3D?) {
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.rotation_y_motor=motor
+        self.invalidate_reaction(s)
+    }
+    func set_translation_z(settings:LinearAxis3DSettings) {
+        validate_linear_axis3d(settings)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.translation_z=settings
+        self.invalidate_reaction(s)
+    }
+    func set_rotation_z_motor(motor:AngularMotor3D?) {
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.rotation_z_motor=motor
+        self.invalidate_reaction(s)
+    }
+    func set_maximum_rotation_friction_torque(torque:Math.Vec3) {
+        validate_six_angular_friction3d(torque)
+        self.store.bodies.require_mutable()
+        var s=self.store.require(self.id)
+        s.maximum_rotation_friction_torque=torque
+        self.invalidate_reaction(s)
+    }
+}
+package func same_six_dof_body_id3d(first:BodyId3D,second:BodyId3D) bool {
+    return first.slot==second.slot && first.generation==second.generation
+}
+package func six_impulse_vector3d(values:float[]) Math.Vec3 {
+    return Math.Vec3(values[0],values[1],values[2])
+}
+package func validate_six_angular_friction3d(torque:Math.Vec3) {
+    if !finite_body3d_point(torque) || torque.x<0.0 || torque.y<0.0 || torque.z<0.0 {
+        panic("GFX.Physics.SixDOFConstraint3D requires nonnegative finite friction torques")
+    }
+}
+package func validate_linear_axis3d(settings:LinearAxis3DSettings) {
+    if !finite_body3d_value(settings.maximum_friction_force) || settings.maximum_friction_force<0.0 {
+        panic("GFX.Physics.LinearAxis3DSettings requires nonnegative finite friction force")
+    }
+    match settings.limit {
+        free => {
+            if settings.limit_spring!=null { panic("GFX.Physics.LinearAxis3DSettings requires a locked or bounded limit for a spring") }
+        }
+        locked => {}
+        bounded(minimum,maximum) => {
+            if !finite_body3d_value(minimum) || !finite_body3d_value(maximum) || minimum>=maximum {
+                panic("GFX.Physics.LinearLimit3D.bounded requires ordered distinct finite positions")
+            }
+        }
+    }
+}
+package func six_translation3d(first:Transform3D,second:Transform3D,state:SixDOFConstraintState3D) Math.Vec3 {
+    return first.rotation.multiply(state.rotation.first_frame).conjugated().rotate(
+        second.point(state.point.second_local_anchor).subtract(first.point(state.point.first_local_anchor)))
+}
+package func six_linear_axis3d(state:SixDOFConstraintState3D,row:int) LinearAxis3DSettings {
+    if row==0 { return state.translation_x }
+    if row==1 { return state.translation_y }
+    return state.translation_z
+}
+package func six_angular_motor3d(state:SixDOFConstraintState3D,row:int) AngularMotor3D? {
+    if row==0 { return state.rotation_x_motor }
+    if row==1 { return state.rotation_y_motor }
+    return state.rotation_z_motor
+}
+package func six_linear_target3d(position:float,limit:LinearLimit3D) float {
+    match limit {
+        free => { return position }
+        locked => { return 0.0 }
+        bounded(minimum,maximum) => { return Math.clamp(position,minimum,maximum) }
+    }
+}
+package struct SixLinearLimitState3D {
+    let error:float
+    let side:int
+    init(error:float,side:int) { self.error=error;self.side=side }
+}
+package func six_linear_limit_state3d(position:float,limit:LinearLimit3D) SixLinearLimitState3D {
+    match limit {
+        free => { return SixLinearLimitState3D(0.0,0) }
+        locked => { return SixLinearLimitState3D(position,2) }
+        bounded(minimum,maximum) => {
+            if position<=minimum { return SixLinearLimitState3D(position-minimum,1) }
+            if position>=maximum { return SixLinearLimitState3D(position-maximum,-1) }
+            return SixLinearLimitState3D(0.0,0)
+        }
+    }
+}

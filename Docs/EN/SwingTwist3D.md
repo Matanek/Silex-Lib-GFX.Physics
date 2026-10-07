@@ -41,8 +41,9 @@ the decomposition then chooses zero twist.
 space, with radii `sin(half_angles.x/2)` and `sin(half_angles.y/2)`. Half-angles
 lie in [0, π]: zero locks a direction and π releases it.
 `pyramid(minimum, maximum)` bounds both swing angles by a rectangle. Finite
-bounds lie in [−π, π], contain the neutral zero orientation and may be
-asymmetric. Rotate the local frames to move that neutral orientation.
+ordered bounds lie in [−π, π], may be asymmetric and may exclude zero.
+Equal bounds lock the corresponding angle. Local frames define the reference
+orientation.
 Twist limits are finite and ordered in [−π, π]; equal limits lock twist.
 All rotations are free by default.
 

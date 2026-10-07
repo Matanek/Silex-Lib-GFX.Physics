@@ -18,7 +18,7 @@ func main() {
     if selected("cone-range") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(4.0,0.4)) }
     if selected("cone-nan") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(Math.sqrt(-1.0),0.4)) }
     if selected("pyramid-order") { settings.swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2),Math.Vec2(-0.2)) }
-    if selected("pyramid-neutral") { settings.swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2),Math.Vec2(0.4)) }
+    if selected("pyramid-nan") { settings.swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(Math.sqrt(-1.0)),Math.Vec2(0.4)) }
     if selected("twist-order") { settings.minimum_twist=0.2;settings.maximum_twist=-0.2 }
     if selected("twist-range") { settings.minimum_twist=-4.0 }
     if selected("friction") { settings.maximum_friction_torque=-1.0 }

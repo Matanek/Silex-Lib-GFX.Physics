@@ -11,7 +11,7 @@ CASES = {
     'cone-range': 'cone requires finite half-angles within [0, pi]',
     'cone-nan': 'cone requires finite half-angles within [0, pi]',
     'pyramid-order': 'pyramid requires ordered finite angles',
-    'pyramid-neutral': 'pyramid requires ordered finite angles',
+    'pyramid-nan': 'pyramid requires ordered finite angles',
     'twist-order': 'requires ordered finite twist limits',
     'twist-range': 'requires ordered finite twist limits',
     'friction': 'requires nonnegative finite friction torque',

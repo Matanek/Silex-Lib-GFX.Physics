@@ -1,0 +1,45 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var world=Physics.World3D()
+    var fixed=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)
+    var body=world.create_rigid_body();var settings=Physics.SixDOFConstraint3DSettings()
+    if selected("frame") { settings.first_local_frame=Physics.Transform3D(Math.Vec3(Math.sqrt(-1.0),0.0,0.0)) }
+    if selected("rotation") { settings.second_local_frame=Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,0.0)) }
+    if selected("linear-order") { settings.translation_x.limit=Physics.LinearLimit3D.bounded(0.3,0.2) }
+    if selected("linear-equal") { settings.translation_y.limit=Physics.LinearLimit3D.bounded(0.2,0.2) }
+    if selected("linear-nan") { settings.translation_z.limit=Physics.LinearLimit3D.bounded(Math.sqrt(-1.0),0.2) }
+    if selected("linear-friction") { settings.translation_x.maximum_friction_force=-1.0 }
+    if selected("free-spring") { settings.translation_y.limit_spring=Physics.LinearLimitSpring3D(1.0,1.0) }
+    if selected("spring") { settings.translation_z.limit_spring=Physics.LinearLimitSpring3D(0.0,1.0) }
+    if selected("linear-speed") { settings.translation_x.motor=Physics.LinearMotor3D(Math.sqrt(-1.0),1.0) }
+    if selected("linear-budget") { settings.translation_y.motor=Physics.LinearMotor3D(1.0,2.0,-1.0) }
+    if selected("linear-servo") { settings.translation_z.motor=Physics.LinearMotor3D.position(0.2,1.0,0.0,1.0) }
+    if selected("angular-speed") { settings.rotation_x_motor=Physics.AngularMotor3D(Math.sqrt(-1.0),1.0) }
+    if selected("angular-budget") { settings.rotation_y_motor=Physics.AngularMotor3D(1.0,-1.0) }
+    if selected("angular-servo") { settings.rotation_z_motor=Physics.AngularMotor3D.position(0.2,1.0,1.0,-1.0) }
+    if selected("angular-target") { settings.rotation_z_motor=Physics.AngularMotor3D.position(4.0,1.0,1.0,1.0) }
+    if selected("angular-friction") { settings.maximum_rotation_friction_torque=Math.Vec3(0.0,-1.0,0.0) }
+    if selected("swing") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(-0.1,0.2)) }
+    if selected("twist") { settings.minimum_twist=0.3;settings.maximum_twist=0.2 }
+    if selected("same") { world.create_six_dof_constraint(body,body) }
+    if selected("fixed-fixed") { world.create_six_dof_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)) }
+    if selected("foreign") { var other=Physics.World3D();world.create_six_dof_constraint(fixed,other.create_rigid_body()) }
+    var joint=world.create_six_dof_constraint(fixed,body,settings)
+    if selected("mutation-anchors") { joint.set_anchors(Math.Vec3(),Math.Vec3(Math.sqrt(-1.0),0.0,0.0)) }
+    if selected("mutation-linear") { joint.set_translation_x(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(0.3,0.2)) }
+    if selected("mutation-angular-friction") { joint.set_maximum_rotation_friction_torque(Math.Vec3(-1.0,0.0,0.0)) }
+    if selected("mutation-twist") { joint.set_twist_limits(0.3,0.2) }
+    if selected("stale") { world.destroy_six_dof_constraint(joint);world.create_six_dof_constraint(fixed,body);joint.translation() }
+    if selected("stale-mutation") { world.destroy_six_dof_constraint(joint);joint.set_rotation_z_motor(null) }
+    if selected("foreign-destroy") { var other=Physics.World3D();other.destroy_six_dof_constraint(joint) }
+    panic("invalid six DOF operation was accepted")
+}

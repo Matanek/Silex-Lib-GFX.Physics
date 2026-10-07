@@ -43,9 +43,9 @@ le témoin de décomposition choisit alors un twist nul.
 quaternion Y/Z, de rayons `sin(half_angles.x/2)` et `sin(half_angles.y/2)`.
 Les demi-angles appartiennent à [0, π] ; zéro verrouille une direction,
 π la libère. `pyramid(minimum, maximum)` borne les deux angles swing par
-un rectangle. Les bornes finies appartiennent à [−π, π] et contiennent
-l’orientation neutre zéro ; elles peuvent être asymétriques. Pour déplacer
-cette orientation neutre, tourner les repères locaux. Les limites de twist
+un rectangle. Les bornes finies et ordonnées appartiennent à [−π, π] ; elles peuvent
+être asymétriques et exclure zéro. Deux bornes égales verrouillent l’angle
+correspondant. Les repères locaux définissent l’orientation de référence. Les limites de twist
 sont finies et ordonnées dans [−π, π], égales pour verrouiller la torsion.
 Par défaut toutes les rotations sont libres.
 

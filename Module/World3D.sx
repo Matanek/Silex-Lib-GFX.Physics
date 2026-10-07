@@ -1,3 +1,14 @@
+use GFX.Physics.SwingTwistConstraint3D.swing_angles3d
+use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3D
+use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3DSettings
+use GFX.Physics.SixDOFConstraint3D.SixDOFConstraintState3D
+use GFX.Physics.SixDOFConstraint3D.SixDOFConstraintStore3D
+use GFX.Physics.SixDOFConstraint3D.LinearAxis3DSettings
+use GFX.Physics.SixDOFConstraint3D.six_translation3d
+use GFX.Physics.SixDOFConstraint3D.six_linear_axis3d
+use GFX.Physics.SixDOFConstraint3D.six_angular_motor3d
+use GFX.Physics.SixDOFConstraint3D.six_linear_target3d
+use GFX.Physics.SixDOFConstraint3D.six_linear_limit_state3d
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3D
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintState3D
@@ -110,6 +121,7 @@ public class World3D {
     private var slider_constraints:SliderConstraintStore3D
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
+    private var six_dof_constraints:SixDOFConstraintStore3D
     private var swing_twist_constraints:SwingTwistConstraintStore3D
     private var cone_constraints:ConeConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
@@ -127,6 +139,7 @@ public class World3D {
         self.hinge_constraints.invalidate_all()
         self.cone_constraints.invalidate_all()
         self.swing_twist_constraints.invalidate_all()
+        self.six_dof_constraints.invalidate_all()
         self.store.invalidate_all()
     }
 
@@ -142,6 +155,7 @@ public class World3D {
         self.hinge_constraints = HingeConstraintStore3D(self.store)
         self.cone_constraints = ConeConstraintStore3D(self.store)
         self.swing_twist_constraints = SwingTwistConstraintStore3D(self.store)
+        self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
         self.contact_begins = []
@@ -165,6 +179,7 @@ public class World3D {
     func slider_constraint_count() int { return self.slider_constraints.live_count }
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
+    func six_dof_constraint_count() int { return self.six_dof_constraints.live_count }
     func swing_twist_constraint_count() int { return self.swing_twist_constraints.live_count }
     func cone_constraint_count() int { return self.cone_constraints.live_count }
     func hinge_constraint_count() int { return self.hinge_constraints.live_count }
@@ -260,6 +275,22 @@ public class World3D {
         self.point_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_six_dof_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:SixDOFConstraint3DSettings = SixDOFConstraint3DSettings()
+    ) SixDOFConstraint3D {
+        let id = self.six_dof_constraints.append(first, second, settings)
+        return SixDOFConstraint3D(self.six_dof_constraints, id)
+    }
+
+    func destroy_six_dof_constraint(constraint:@SixDOFConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.six_dof_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.six_dof_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_swing_twist_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:SwingTwistConstraint3DSettings = SwingTwistConstraint3DSettings()
@@ -330,6 +361,7 @@ public class World3D {
         self.hinge_constraints.destroy_for_body(body.body_id())
         self.cone_constraints.destroy_for_body(body.body_id())
         self.swing_twist_constraints.destroy_for_body(body.body_id())
+        self.six_dof_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -622,7 +654,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -864,6 +896,13 @@ public class World3D {
                     self.store.require(constraint.point.second_id),constraint)
             }
         }
+        for slot in self.six_dof_constraints.slots {
+            if var constraint = slot {
+                constraint.reset()
+                prepare_six_drive3d(self.store.require(constraint.point.first_id),
+                    self.store.require(constraint.point.second_id),constraint)
+            }
+        }
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
                 constraint.reset()
@@ -960,6 +999,19 @@ public class World3D {
 
     private func has_active_swing_twist_constraint() bool {
         for slot in self.swing_twist_constraints.slots {
+            if let constraint = slot {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
+    }
+
+    private func has_active_six_dof_constraint() bool {
+        for slot in self.six_dof_constraints.slots {
             if let constraint = slot {
                 if constraint.point.is_enabled {
                     var first = self.store.require(constraint.point.first_id)
@@ -1124,11 +1176,30 @@ public class World3D {
             }
             constraint_index++
         }
+        constraint_index = 0
+        while constraint_index < self.six_dof_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.six_dof_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.six_dof_constraints.slots[selected] {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_six_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
     }
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1307,6 +1378,31 @@ public class World3D {
                                     (motor.speed.length_squared()!=0.0 || motor.target_angles!=null || motor.minimum_torque>0.0 || motor.maximum_torque<0.0)
                                 { first.wake();second.wake() }
                             }
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.six_dof_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if six_has_drive3d(constraint) { first.wake();second.wake() }
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
                                     first.angular_velocity.length_squared() > 0.0)
@@ -1617,6 +1713,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.six_dof_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass six DOF witness
+                            // without changing the other families' position budget.
+                            solve_six_position3d(first, second, constraint)
+                            solve_six_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             var pair_index = pairs.count()
             while pair_index > 0 {
                 pair_index--
@@ -1759,6 +1871,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.swing_twist_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.point.is_enabled {
+                    islands.connect(constraint.point.first_id.slot,
+                        constraint.point.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.six_dof_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.point.is_enabled {
                     islands.connect(constraint.point.first_id.slot,
@@ -4164,8 +4284,8 @@ func swing_locked3d(limits:SwingLimits3D,row:int) bool {
         cone(half_angles) => { if row==1 { return half_angles.x==0.0 }
 return half_angles.y==0.0 }
         pyramid(minimum,maximum) => {
-            if row==1 { return minimum.x==0.0 && maximum.x==0.0 }
-            return minimum.y==0.0 && maximum.y==0.0
+            if row==1 { return minimum.x==maximum.x }
+            return minimum.y==maximum.y
         }
     }
 }
@@ -4187,6 +4307,9 @@ func solve_swing_twist_velocity3d(first:&BodyState3D,second:&BodyState3D,
 {
     solve_point_velocity3d(first,second,state.point,delta)
     var row=0;while row<3 { solve_swing_drive_row3d(first,second,state,row,delta);row++ }
+    solve_swing_twist_limits_velocity3d(first,second,state)
+}
+func solve_swing_twist_limits_velocity3d(first:&BodyState3D,second:&BodyState3D,state:SwingTwistConstraintState3D) {
     let frame=first.transform.rotation.multiply(state.first_frame)
     let rotation=decompose_swing_twist3d(swing_twist_orientation3d(first.transform,second.transform,state))
     let swing_frame=frame.multiply(rotation.swing)
@@ -4213,6 +4336,10 @@ func solve_swing_twist_velocity3d(first:&BodyState3D,second:&BodyState3D,
     }
 }
 func solve_swing_twist_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
+    solve_swing_twist_rotation_position3d(first,second,state)
+    solve_point_position3d(first,second,state.point)
+}
+func solve_swing_twist_rotation_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
     let q=swing_twist_orientation3d(first.transform,second.transform,state)
     let rotation=decompose_swing_twist3d(q)
     let swing=clamp_swing3d(rotation.swing,state.swing_limits,state.swing_radii)
@@ -4227,5 +4354,197 @@ func solve_swing_twist_position3d(first:BodyState3D,second:BodyState3D,state:Swi
         let impulse=fixed_inverse3d(mass).multiply(error).multiply(-0.2)
         shift_hinge_rotation3d(first,impulse.negated());shift_hinge_rotation3d(second,impulse)
     }
-    solve_point_position3d(first,second,state.point)
+}
+
+func prepare_six_drive3d(first:@BodyState3D,second:@BodyState3D,state:SixDOFConstraintState3D) {
+    let position=six_translation3d(first.transform,second.transform,state)
+    var row=0
+    while row<3 {
+        let settings=six_linear_axis3d(state,row)
+        let limit=six_linear_limit_state3d(swing_component3d(position,row),settings.limit)
+        state.linear_limit_errors[row]=limit.error
+        state.linear_limit_sides[row]=limit.side
+        if let motor=settings.motor {
+            if let target=motor.target_position {
+                state.linear_drive_errors[row]=swing_component3d(position,row)-six_linear_target3d(target,settings.limit)
+            }
+        }
+        row++
+    }
+    state.angular_drive_frame=second.transform.rotation.multiply(state.rotation.second_frame)
+    if (state.rotation_x_motor==null || state.rotation_x_motor!.target_angle==null) &&
+        (state.rotation_y_motor==null || state.rotation_y_motor!.target_angle==null) &&
+        (state.rotation_z_motor==null || state.rotation_z_motor!.target_angle==null) { return }
+    let q=swing_twist_orientation3d(first.transform,second.transform,state.rotation)
+    let rotation=decompose_swing_twist3d(q)
+    var twist=rotation.twist_angle
+    var angles=swing_angles3d(rotation.swing)
+    var swing=rotation.swing
+    var has_swing_target=false
+    if let motor=state.rotation_x_motor {
+        if let target=motor.target_angle { twist=Math.clamp(target,state.rotation.minimum_twist,state.rotation.maximum_twist) }
+    }
+    if let motor=state.rotation_y_motor {
+        if let target=motor.target_angle { angles=Math.Vec2(target,angles.y);has_swing_target=true }
+    }
+    if let motor=state.rotation_z_motor {
+        if let target=motor.target_angle { angles=Math.Vec2(angles.x,target);has_swing_target=true }
+    }
+    if has_swing_target {
+        swing=clamp_swing3d(swing_from_angles3d(angles),state.rotation.swing_limits,state.rotation.swing_radii)
+    }
+    var target=swing.multiply(Math.Quat.angle_axis(twist,swing_axis3d(0)))
+    if q.dot(target)<0.0 { target=target.multiply(-1.0) }
+    let error=q.conjugated().multiply(target)
+    state.angular_drive_error=Math.Vec3(error.x,error.y,error.z).multiply(-2.0)
+}
+func solve_six_linear_drive3d(first:&BodyState3D,second:&BodyState3D,state:SixDOFConstraintState3D,
+    settings:LinearAxis3DSettings,row:int,axis:Math.Vec3,a:Math.Vec3,b:Math.Vec3,inverse_mass:float,delta:float)
+{
+    var minimum=-settings.maximum_friction_force
+    var maximum=settings.maximum_friction_force
+    var speed=0.0
+    var softness=0.0
+    var bias=0.0
+    var previous=state.linear_friction_impulses[row]
+    if let motor=settings.motor {
+        minimum=motor.minimum_force
+        maximum=motor.maximum_force
+        speed=motor.speed
+        previous=state.linear_drive_impulses[row]
+        if motor.target_position!=null {
+            softness=1.0/(delta*(motor.damping+delta*motor.stiffness))
+            bias=delta*motor.stiffness*softness*state.linear_drive_errors[row]
+        }
+    }
+    if minimum==0.0 && maximum==0.0 { return }
+    let velocity=slider_velocity3d(first,second,a,b).dot(axis)
+    let accumulated=Math.clamp(previous-(velocity-speed+bias+softness*previous)/(inverse_mass+softness),minimum*delta,maximum*delta)
+    if settings.motor!=null { state.linear_drive_impulses[row]=accumulated }
+    else { state.linear_friction_impulses[row]=accumulated }
+    let impulse=axis.multiply(accumulated-previous)
+    apply_contact_impulse3d(first,second,a,b,impulse)
+    state.point.impulse=state.point.impulse.add(impulse)
+}
+func solve_six_linear_limit3d(first:&BodyState3D,second:&BodyState3D,state:SixDOFConstraintState3D,
+    settings:LinearAxis3DSettings,row:int,axis:Math.Vec3,a:Math.Vec3,b:Math.Vec3,inverse_mass:float,
+    position:float,delta:float)
+{
+    var side=state.linear_limit_sides[row]
+    var error=state.linear_limit_errors[row]
+    var softness=0.0
+    var bias=0.0
+    if let spring=settings.limit_spring {
+        if side==0 { return }
+        softness=1.0/(delta*(spring.damping+delta*spring.stiffness))
+        bias=delta*spring.stiffness*softness*error
+    } else {
+        let limit=six_linear_limit_state3d(position,settings.limit)
+        side=limit.side
+        if side==0 { return }
+    }
+    let previous=state.linear_limit_impulses[row]
+    let speed=slider_velocity3d(first,second,a,b).dot(axis)
+    var accumulated=previous-(speed+bias+softness*previous)/(inverse_mass+softness)
+    if side==1 { accumulated=Math.max(0.0,accumulated) }
+    if side== -1 { accumulated=Math.min(0.0,accumulated) }
+    state.linear_limit_impulses[row]=accumulated
+    let impulse=axis.multiply(accumulated-previous)
+    apply_contact_impulse3d(first,second,a,b,impulse)
+    state.point.impulse=state.point.impulse.add(impulse)
+}
+func solve_six_angular_drive3d(first:&BodyState3D,second:&BodyState3D,
+    state:SixDOFConstraintState3D,row:int,delta:float)
+{
+    let motor=six_angular_motor3d(state,row)
+    var minimum=-swing_component3d(state.maximum_rotation_friction_torque,row)
+    var maximum=-minimum
+    var previous=state.angular_friction_impulses[row]
+    var speed=0.0
+    var softness=0.0
+    var bias=0.0
+    if let drive=motor {
+        minimum=drive.minimum_torque
+        maximum=drive.maximum_torque
+        previous=state.angular_drive_impulses[row]
+        speed=drive.speed
+        if drive.target_angle!=null {
+            softness=1.0/(delta*(drive.damping+delta*drive.stiffness))
+            bias=delta*drive.stiffness*softness*swing_component3d(state.angular_drive_error,row)
+        }
+    }
+    if minimum==0.0 && maximum==0.0 { return }
+    let axis=state.angular_drive_frame.rotate(swing_axis3d(row))
+    let mass=hinge_angular_mass3d(first,second,axis)
+    if mass<=0.000000001 { return }
+    let velocity=second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+    let accumulated=Math.clamp(previous-(velocity-speed+bias+softness*previous)/(mass+softness),minimum*delta,maximum*delta)
+    if motor!=null { state.angular_drive_impulses[row]=accumulated }
+    else { state.angular_friction_impulses[row]=accumulated }
+    let impulse=axis.multiply(accumulated-previous)
+    apply_hinge_angular_impulse3d(first,second,impulse)
+    state.rotation.angular_impulse=state.rotation.angular_impulse.add(impulse)
+}
+func solve_six_velocity3d(first:&BodyState3D,second:&BodyState3D,state:SixDOFConstraintState3D,delta:float) {
+    state.point.inverse_delta=1.0/delta
+    let point=second.transform.point(state.point.second_local_anchor)
+    let a=point.subtract(first.world_center())
+    let b=point.subtract(second.world_center())
+    let frame=first.transform.rotation.multiply(state.rotation.first_frame)
+    let inverse_mass=point_inverse_mass3d(first,second,a,b)
+    let position=six_translation3d(first.transform,second.transform,state)
+    var row=0
+    while row<3 {
+        let settings=six_linear_axis3d(state,row)
+        let axis=frame.rotate(swing_axis3d(row))
+        let mass=axis.dot(inverse_mass.multiply(axis))
+        if mass>0.000000001 {
+            solve_six_linear_drive3d(first,second,state,settings,row,axis,a,b,mass,delta)
+            solve_six_linear_limit3d(first,second,state,settings,row,axis,a,b,mass,swing_component3d(position,row),delta)
+        }
+        row++
+    }
+    row=0
+    while row<3 { solve_six_angular_drive3d(first,second,state,row,delta);row++ }
+    solve_swing_twist_limits_velocity3d(first,second,state.rotation)
+}
+func solve_six_position3d(first:BodyState3D,second:BodyState3D,state:SixDOFConstraintState3D) {
+    var row=0
+    while row<3 {
+        let settings=six_linear_axis3d(state,row)
+        if settings.limit_spring==null {
+            let frame=first.transform.rotation.multiply(state.rotation.first_frame)
+            let point=second.transform.point(state.point.second_local_anchor)
+            let offset=point.subtract(first.transform.point(state.point.first_local_anchor))
+            let axis=frame.rotate(swing_axis3d(row))
+            let limit=six_linear_limit_state3d(offset.dot(axis),settings.limit)
+            if limit.error!=0.0 {
+                let a=point.subtract(first.world_center())
+                let b=point.subtract(second.world_center())
+                let mass=axis.dot(point_inverse_mass3d(first,second,a,b).multiply(axis))
+                if mass>0.000000001 {
+                    let impulse=axis.multiply(-0.2*Math.clamp(limit.error,-0.2,0.2)/mass)
+                    shift_fixed_body3d(first,impulse.negated(),Math.Vec3(),a)
+                    shift_fixed_body3d(second,impulse,Math.Vec3(),b)
+                }
+            }
+        }
+        row++
+    }
+    solve_swing_twist_rotation_position3d(first,second,state.rotation)
+}
+func six_has_drive3d(state:SixDOFConstraintState3D) bool {
+    var row=0
+    while row<3 {
+        if let motor=six_linear_axis3d(state,row).motor {
+            if (motor.minimum_force!=0.0 || motor.maximum_force!=0.0) &&
+                (motor.speed!=0.0 || motor.target_position!=null || motor.minimum_force>0.0 || motor.maximum_force<0.0) { return true }
+        }
+        if let motor=six_angular_motor3d(state,row) {
+            if (motor.minimum_torque!=0.0 || motor.maximum_torque!=0.0) &&
+                (motor.speed!=0.0 || motor.target_angle!=null || motor.minimum_torque>0.0 || motor.maximum_torque<0.0) { return true }
+        }
+        row++
+    }
+    return false
 }

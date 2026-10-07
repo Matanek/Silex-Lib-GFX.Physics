@@ -1,0 +1,292 @@
+use GFX.Physics
+use STD.Math
+func six_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func six_fixed(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func six_body(world:Physics.World3D,mass:float=2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(mass*0.1)))
+}
+func six_steps(world:Physics.World3D,count:int,rate:float=60.0) { var i=0;while i<count { world.step(1.0/rate);i++ } }
+func six_axis(row:int) Math.Vec3 {
+    if row==0 { return Math.Vec3(1.0,0.0,0.0) }
+    if row==1 { return Math.Vec3(0.0,1.0,0.0) }
+    return Math.Vec3(0.0,0.0,1.0)
+}
+func set_six_axis(joint:Physics.SixDOFConstraint3D,row:int,settings:Physics.LinearAxis3DSettings) {
+    if row==0 { joint.set_translation_x(settings) }
+    else if row==1 { joint.set_translation_y(settings) }
+    else { joint.set_translation_z(settings) }
+}
+func set_six_motor(joint:Physics.SixDOFConstraint3D,row:int,motor:Physics.AngularMotor3D?) {
+    if row==0 { joint.set_rotation_x_motor(motor) }
+    else if row==1 { joint.set_rotation_y_motor(motor) }
+    else { joint.set_rotation_z_motor(motor) }
+}
+test "six DOF free attachment preserves linear and angular motion" {
+    for row in [0,1,2] {
+        var world=six_world();var body=six_body(world)
+        var joint=world.create_six_dof_constraint(six_fixed(world),body)
+        body.set_linear_velocity(six_axis(row).multiply(0.5))
+        body.set_angular_velocity(six_axis(row).multiply(0.5))
+        six_steps(world,30)
+        assert(joint.translation().nearly_equal(six_axis(row).multiply(0.25),0.00001))
+        assert(body.angular_velocity().nearly_equal(six_axis(row).multiply(0.5),0.00001))
+        assert(joint.reaction_force().length()<0.00001 && joint.reaction_torque().length()<0.00001)
+        assert(world.six_dof_constraint_count()==1 && world.swing_twist_constraint_count()==0)
+    }
+}
+test "six DOF one locked translation preserves other five degrees" {
+    for row in [0,1,2] {
+        var world=six_world();var body=six_body(world)
+        var joint=world.create_six_dof_constraint(six_fixed(world),body)
+        set_six_axis(joint,row,Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.locked)
+        body.set_linear_velocity(Math.Vec3(1.0))
+        body.set_angular_velocity(six_axis(row).multiply(0.5))
+        six_steps(world,30)
+        let expected=Math.Vec3(1.0).subtract(six_axis(row))
+        assert(body.linear_velocity().nearly_equal(expected,0.0001))
+        assert(body.angular_velocity().nearly_equal(six_axis(row).multiply(0.5),0.0001))
+        assert(Math.abs(joint.translation().dot(six_axis(row)))<0.001)
+    }
+}
+test "six DOF bounded translations stop in both directions and tighten on mutation" {
+    let signs:float[]=[-1.0,1.0]
+    for row in [0,1,2] {
+        for sign in signs {
+            var world=six_world();var body=six_body(world)
+            var joint=world.create_six_dof_constraint(six_fixed(world),body)
+            set_six_axis(joint,row,Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(-0.4,0.5))
+            body.set_linear_velocity(six_axis(row).multiply(sign*1.7))
+            six_steps(world,90)
+            var expected=0.5;if sign<0.0 { expected=-0.4 }
+            assert(Math.abs(joint.translation().dot(six_axis(row))-expected)<0.003)
+            assert(body.linear_velocity().length()<0.0001)
+            set_six_axis(joint,row,Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(-0.2,0.2))
+            assert(joint.reaction_force().length()==0.0)
+            six_steps(world,90)
+            assert(Math.abs(joint.translation().dot(six_axis(row))-sign*0.2)<0.003)
+        }
+    }
+}
+test "six DOF three linear servos follow independent implicit recurrences" {
+    for row in [0,1,2] {
+        for rate in [60,120] {
+            var world=six_world();var body=six_body(world)
+            var joint=world.create_six_dof_constraint(six_fixed(world),body)
+            set_six_axis(joint,row,Physics.LinearAxis3DSettings()
+                ..motor=Physics.LinearMotor3D.position_and_velocity(0.6,0.1,100.0,20.0,8.0))
+            let dt=1.0/rate as float;var position=0.0;var velocity=0.0;var i=0
+            while i<rate*3 {
+                velocity=(2.0*velocity-dt*20.0*(position-0.6)+dt*(8.0+dt*20.0)*0.1)/(2.0+dt*8.0+dt*dt*20.0)
+                position+=dt*velocity
+                world.step(dt)
+                assert(Math.abs(joint.translation().dot(six_axis(row))-position)<0.0001)
+                assert(Math.abs(body.linear_velocity().dot(six_axis(row))-velocity)<0.0001)
+                i++
+            }
+        }
+    }
+}
+test "six DOF independent angular servos follow nonlinear mechanics" {
+    for row in [0,1,2] {
+        for rate in [60,120] {
+            var world=six_world();var body=six_body(world)
+            var joint=world.create_six_dof_constraint(six_fixed(world),body)
+            set_six_motor(joint,row,Physics.AngularMotor3D.position_and_velocity(0.6,0.1,10.0,2.0,0.8))
+            let dt=1.0/rate as float;var angle=0.0;var velocity=0.0;var i=0
+            while i<rate*3 {
+                velocity=(0.2*velocity-dt*2.0*2.0*Math.sin((angle-0.6)*0.5)+dt*(0.8+dt*2.0)*0.1)/(0.2+dt*0.8+dt*dt*2.0)
+                angle+=dt*velocity
+                world.step(dt)
+                var actual=joint.twist_angle()
+                if row==1 { actual=joint.swing_angles().x }
+                if row==2 { actual=joint.swing_angles().y }
+                assert(Math.abs(actual-angle)<0.0001)
+                assert(Math.abs(joint.angular_speed().dot(six_axis(row))-velocity)<0.0001)
+                i++
+            }
+        }
+    }
+}
+test "six DOF bounded signed efforts and passive friction remain independent" {
+    var world=six_world();var body=six_body(world)
+    var joint=world.create_six_dof_constraint(six_fixed(world),body,Physics.SixDOFConstraint3DSettings()
+        ..maximum_rotation_friction_torque=Math.Vec3(0.2))
+    set_six_axis(joint,0,Physics.LinearAxis3DSettings() ..motor=Physics.LinearMotor3D(3.0,-0.1,0.4))
+    set_six_axis(joint,1,Physics.LinearAxis3DSettings() ..maximum_friction_force=2.0)
+    body.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));body.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    var i=0;while i<90 {
+        world.step(1.0/60.0)
+        assert(joint.motor_force().x>=-0.1001 && joint.motor_force().x<=0.4001)
+        assert(Math.abs(joint.friction_force().y)<=2.0001 && Math.abs(joint.friction_torque().z)<=0.2001)
+        i++
+    }
+    assert(Math.abs(body.linear_velocity().y)<0.0001 && Math.abs(body.angular_velocity().z)<0.0001)
+    joint.set_rotation_z_motor(Physics.AngularMotor3D(-3.0,-0.15,0.25))
+    six_steps(world,30)
+    assert(joint.motor_torque().z>=-0.1501 && joint.motor_torque().z<=0.2501)
+}
+test "six DOF soft translation stop holds a physical load and reacts to spring mutation" {
+    var world=Physics.World3D();var body=six_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-0.8,0.0)))
+    var joint=world.create_six_dof_constraint(six_fixed(world),body)
+    var settings=Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(-0.4,0.4)
+        ..limit_spring=Physics.LinearLimitSpring3D(200.0,14.0)
+    joint.set_translation_y(settings);six_steps(world,600)
+    assert(Math.abs(joint.translation().y-(-0.4-19.62/200.0))<0.001)
+    assert(Math.abs(joint.limit_force().y-19.62)<0.01 && Math.abs(joint.reaction_force().y-19.62)<0.01)
+    settings.limit_spring=Physics.LinearLimitSpring3D(400.0,20.0)
+    joint.set_translation_y(settings);six_steps(world,600)
+    assert(Math.abs(joint.translation().y-(-0.4-19.62/400.0))<0.001)
+}
+test "six DOF angular locks leave translations free and swing bounds remain local" {
+    var world=six_world();var body=six_body(world)
+    var joint=world.create_six_dof_constraint(six_fixed(world),body,Physics.SixDOFConstraint3DSettings()
+        ..minimum_twist=0.0 ..maximum_twist=0.0 ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2()))
+    body.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));body.set_angular_velocity(Math.Vec3(1.0))
+    six_steps(world,30)
+    assert(Math.abs(joint.translation().x-0.5)<0.0001 && body.angular_velocity().length()<0.001)
+    joint.set_twist_limits(-0.2,0.4)
+    joint.set_swing_limits(Physics.SwingLimits3D.pyramid(Math.Vec2(-0.2,-0.3),Math.Vec2(0.3,0.4)))
+    body.set_angular_velocity(Math.Vec3(0.0,-1.7,0.0));six_steps(world,90)
+    assert(Math.abs(joint.swing_angles().x+0.2)<0.003)
+}
+test "six DOF all three locked translations retain an offset weight" {
+    var world=Physics.World3D();var body=six_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    let locked=Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.locked
+    var joint=world.create_six_dof_constraint(six_fixed(world),body,Physics.SixDOFConstraint3DSettings()
+        ..translation_x=locked ..translation_y=locked ..translation_z=locked
+        ..second_local_frame=Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)))
+    six_steps(world,120)
+    assert(joint.translation().length()<0.001 && Math.abs(joint.reaction_force().y-19.62)<0.01)
+    assert(joint.reaction_torque().length()<0.0001)
+}
+test "six DOF unequal free masses preserve linear momentum at a locked coordinate" {
+    var world=six_world();var first=six_body(world);var second=six_body(world,8.0)
+    var joint=world.create_six_dof_constraint(first,second,Physics.SixDOFConstraint3DSettings()
+        ..translation_x=(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.locked))
+    second.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));six_steps(world,30)
+    assert(Math.abs(first.linear_velocity().x*2.0+second.linear_velocity().x*8.0-8.0)<0.0001)
+    assert(Math.abs(joint.translation().x)<0.001)
+}
+test "six DOF frames rotate translation axes and invalidate observations" {
+    var world=six_world();var body=six_body(world)
+    let rotation=Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0))
+    var joint=world.create_six_dof_constraint(six_fixed(world),body,Physics.SixDOFConstraint3DSettings()
+        ..first_local_frame=Physics.Transform3D(rotation:rotation)
+        ..translation_x=(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(-0.4,0.5)))
+    body.set_linear_velocity(rotation.rotate(Math.Vec3(1.7,0.0,0.0)));six_steps(world,90)
+    assert(Math.abs(joint.translation().x-0.5)<0.003 && Math.abs(joint.translation().z)<0.001)
+    joint.set_frames(Physics.Transform3D(),Physics.Transform3D())
+    assert(joint.motor_force().length()==0.0 && joint.reaction_force().length()==0.0)
+}
+test "six DOF suspension generations and retained handles remain safe" {
+    var world=Physics.World3D();var first=six_fixed(world);var body=six_body(world)
+    var settings=Physics.SixDOFConstraint3DSettings()
+        ..translation_y=(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.locked)
+    var old=world.create_six_dof_constraint(first,body,settings)
+    world.destroy_six_dof_constraint(old)
+    var joint=world.create_six_dof_constraint(first,body,settings)
+    assert(!old.is_valid() && joint.is_valid())
+    six_steps(world,10);assert(Math.abs(joint.reaction_force().y-19.62)<0.01)
+    body.set_enabled(false);six_steps(world,5);assert(joint.reaction_force().length()==0.0)
+    body.set_enabled(true);six_steps(world,5);assert(Math.abs(joint.reaction_force().y-19.62)<0.01)
+    body.set_sleep_enabled(true);six_steps(world,120);assert(!body.is_awake())
+    joint.set_translation_y(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.locked)
+    assert(body.is_awake())
+    world.destroy_rigid_body(body);assert(!joint.is_valid() && world.six_dof_constraint_count()==0)
+}
+func orphan_six_dof() Physics.SixDOFConstraint3D {
+    var world=six_world();return world.create_six_dof_constraint(six_fixed(world),six_body(world))
+}
+test "six DOF world destruction invalidates retained handles" {
+    var joint=orphan_six_dof();assert(!joint.is_valid())
+}
+test "six DOF pyramid admits nonneutral ranges and fixed nonzero swing" {
+    var world=six_world();var body=six_body(world)
+    body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(0.3,Math.Vec3(0.0,1.0,0.0))))
+    var joint=world.create_six_dof_constraint(six_fixed(world),body,Physics.SixDOFConstraint3DSettings()
+        ..swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2,-Math.pi()),Math.Vec2(0.4,Math.pi())))
+    body.set_angular_velocity(Math.Vec3(0.0,-2.0,0.0));six_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x-0.2)<0.003)
+    joint.set_swing_limits(Physics.SwingLimits3D.pyramid(Math.Vec2(0.25,-Math.pi()),Math.Vec2(0.25,Math.pi())))
+    six_steps(world,120)
+    body.set_angular_velocity(Math.Vec3(0.0,0.5,0.1));six_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x-0.25)<0.003 && joint.swing_angles().y>0.05)
+}
+
+test "six DOF simultaneous linear drives remain in first frame while second spins" {
+    let targets:float[]=[0.6,0.4,-0.3]
+    let stiffness:float[]=[20.0,30.0,50.0]
+    let damping:float[]=[8.0,9.0,12.0]
+    var positions:float[]=[0.0,0.0,0.0]
+    var velocities:float[]=[0.0,0.0,0.0]
+    var world=six_world();var body=six_body(world)
+    var joint=world.create_six_dof_constraint(six_fixed(world),body)
+    var row=0
+    while row<3 {
+        set_six_axis(joint,row,Physics.LinearAxis3DSettings()
+            ..motor=Physics.LinearMotor3D.position(targets[row],100.0,stiffness[row],damping[row]))
+        row++
+    }
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    let dt=1.0/60.0;var i=0
+    while i<180 {
+        row=0
+        while row<3 {
+            velocities[row]=(2.0*velocities[row]-dt*stiffness[row]*(positions[row]-targets[row]))/
+                (2.0+dt*damping[row]+dt*dt*stiffness[row])
+            positions[row]+=dt*velocities[row]
+            row++
+        }
+        world.step(dt)
+        row=0
+        while row<3 {
+            assert(Math.abs(joint.translation().dot(six_axis(row))-positions[row])<0.0001)
+            row++
+        }
+        assert(Math.abs(body.angular_velocity().z-1.0)<0.0001)
+        i++
+    }
+}
+test "six DOF zero motor capacity overrides friction and null restores it" {
+    var world=six_world();var body=six_body(world)
+    var joint=world.create_six_dof_constraint(six_fixed(world),body)
+    var settings=Physics.LinearAxis3DSettings() ..maximum_friction_force=2.0
+        ..motor=Physics.LinearMotor3D(0.0,0.0)
+    joint.set_translation_x(settings)
+    body.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));six_steps(world,90)
+    assert(Math.abs(body.linear_velocity().x-1.0)<0.0001 && joint.friction_force().length()==0.0)
+    settings.motor=null;joint.set_translation_x(settings)
+    six_steps(world,90)
+    assert(body.linear_velocity().length()<0.0001)
+}
+test "six DOF floor contacts coexist with an inactive translation bound" {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,1.0,10.0))))
+    var body=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,1.15,0.0)))
+    var joint=world.create_six_dof_constraint(six_fixed(world),body)
+    joint.set_translation_y(Physics.LinearAxis3DSettings() ..limit=Physics.LinearLimit3D.bounded(0.8,2.0))
+    six_steps(world,120)
+    assert(world.contact_count()>=1 && body.position().y>0.99 && body.position().y<1.01)
+    assert(joint.limit_force().length()<0.001)
+}
+test "swing twist shares nonneutral pyramid limits and nonzero angular locks" {
+    var world=six_world();var body=six_body(world)
+    body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(0.3,Math.Vec3(0.0,1.0,0.0))))
+    var joint=world.create_swing_twist_constraint(six_fixed(world),body,Physics.SwingTwistConstraint3DSettings()
+        ..swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2,-Math.pi()),Math.Vec2(0.4,Math.pi())))
+    body.set_angular_velocity(Math.Vec3(0.0,-2.0,0.0));six_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x-0.2)<0.003)
+    joint.set_swing_limits(Physics.SwingLimits3D.pyramid(Math.Vec2(0.25,-Math.pi()),Math.Vec2(0.25,Math.pi())))
+    six_steps(world,120)
+    body.set_angular_velocity(Math.Vec3(0.0,0.5,0.1));six_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x-0.25)<0.003 && joint.swing_angles().y>0.05)
+}

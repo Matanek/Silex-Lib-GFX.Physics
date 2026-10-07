@@ -167,3 +167,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Articulation cône 3D](Cone3D.md).
 
 [Inclinaison et torsion 3D](SwingTwist3D.md).
+
+[Attache à six degrés de liberté](SixDOF3D.md).
