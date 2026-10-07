@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Poulie 3D : longueur pondérée à limites, câble détendu ou rigide, rapport de palan, ancrages et réactions physiques, mutations sûres et témoins Jolt.
+
 - Crémaillère/pignon 3D : rapport signé en rad/m, phase suivie, couple et force physiques, mutations sûres et témoins Jolt.
 
 - Engrenage 3D : rapport signé, suivi des tours, couples physiques et mutations sûres ; divergence du Jolt épinglé sur les rapports non unitaires conservée explicitement.

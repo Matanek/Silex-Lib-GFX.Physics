@@ -1,3 +1,9 @@
+use GFX.Physics.PulleyConstraint3D.PulleyConstraint3D
+use GFX.Physics.PulleyConstraint3D.PulleyConstraint3DSettings
+use GFX.Physics.PulleyConstraint3D.PulleyConstraintState3D
+use GFX.Physics.PulleyConstraint3D.PulleyConstraintStore3D
+use GFX.Physics.PulleyConstraint3D.pulley_row3d
+use GFX.Physics.PulleyConstraint3D.pulley_speed3d
 use GFX.Physics.RackAndPinionConstraint3D.RackAndPinionConstraint3D
 use GFX.Physics.RackAndPinionConstraint3D.RackAndPinionConstraint3DSettings
 use GFX.Physics.RackAndPinionConstraint3D.RackAndPinionConstraintState3D
@@ -136,6 +142,7 @@ public class World3D {
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
     private var rack_and_pinion_constraints:RackAndPinionConstraintStore3D
+    private var pulley_constraints:PulleyConstraintStore3D
     private var gear_constraints:GearConstraintStore3D
     private var six_dof_constraints:SixDOFConstraintStore3D
     private var swing_twist_constraints:SwingTwistConstraintStore3D
@@ -156,6 +163,7 @@ public class World3D {
         self.cone_constraints.invalidate_all()
         self.swing_twist_constraints.invalidate_all()
         self.rack_and_pinion_constraints.invalidate_all()
+        self.pulley_constraints.invalidate_all()
         self.gear_constraints.invalidate_all()
         self.six_dof_constraints.invalidate_all()
         self.store.invalidate_all()
@@ -174,6 +182,7 @@ public class World3D {
         self.cone_constraints = ConeConstraintStore3D(self.store)
         self.swing_twist_constraints = SwingTwistConstraintStore3D(self.store)
         self.rack_and_pinion_constraints = RackAndPinionConstraintStore3D(self.store)
+        self.pulley_constraints = PulleyConstraintStore3D(self.store)
         self.gear_constraints = GearConstraintStore3D(self.store)
         self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
@@ -200,6 +209,8 @@ public class World3D {
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
     func rack_and_pinion_constraint_count() int { return self.rack_and_pinion_constraints.live_count }
+
+    func pulley_constraint_count() int { return self.pulley_constraints.live_count }
 
     func gear_constraint_count() int { return self.gear_constraints.live_count }
 
@@ -347,6 +358,22 @@ public class World3D {
         self.rack_and_pinion_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_pulley_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:PulleyConstraint3DSettings
+    ) PulleyConstraint3D {
+        let id = self.pulley_constraints.append(first, second, settings)
+        return PulleyConstraint3D(self.pulley_constraints, id)
+    }
+
+    func destroy_pulley_constraint(constraint:@PulleyConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.pulley_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.pulley_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_gear_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:GearConstraint3DSettings = GearConstraint3DSettings()
@@ -418,6 +445,7 @@ public class World3D {
         self.cone_constraints.destroy_for_body(body.body_id())
         self.swing_twist_constraints.destroy_for_body(body.body_id())
         self.rack_and_pinion_constraints.destroy_for_body(body.body_id())
+        self.pulley_constraints.destroy_for_body(body.body_id())
         self.gear_constraints.destroy_for_body(body.body_id())
         self.six_dof_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
@@ -712,7 +740,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -951,6 +979,13 @@ public class World3D {
             if var constraint = slot { constraint.reset() }
         }
         self.observe_gear_phases(0.0)
+        for slot in self.pulley_constraints.slots {
+            if var constraint = slot {
+                constraint.reset()
+                prepare_pulley3d(self.store.require(constraint.first_id),
+                    self.store.require(constraint.second_id), constraint)
+            }
+        }
         for slot in self.gear_constraints.slots {
             if var constraint = slot { constraint.reset() }
         }
@@ -1081,6 +1116,19 @@ public class World3D {
                     self.store.require(constraint.second_id), constraint, delta)
             }
         }
+    }
+
+    private func has_active_pulley_constraint() bool {
+        for slot in self.pulley_constraints.slots {
+            if let constraint = slot {
+                if constraint.is_enabled && constraint.limit_side!=0 {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
     }
 
     private func has_active_gear_constraint() bool {
@@ -1270,6 +1318,25 @@ public class World3D {
             constraint_index++
         }
         constraint_index = 0
+        while constraint_index < self.pulley_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.pulley_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.pulley_constraints.slots[selected] {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_pulley_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
+        constraint_index = 0
         while constraint_index < self.gear_constraints.slots.count() {
             var selected = constraint_index
             if reverse {
@@ -1349,7 +1416,7 @@ public class World3D {
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.pulley_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1489,6 +1556,30 @@ public class World3D {
                 }
             }
             for slot in self.rack_and_pinion_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.pulley_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
                         var first = self.store.require(constraint.first_id)
@@ -1895,6 +1986,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.pulley_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass pulley witness
+                            // without changing the other families' position budget.
+                            solve_pulley_position3d(first, second, constraint)
+                            solve_pulley_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             for slot in self.gear_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -2093,6 +2200,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.rack_and_pinion_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.pulley_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.is_enabled {
                     islands.connect(constraint.first_id.slot,
@@ -4866,4 +4981,55 @@ func solve_rack_position3d(first:BodyState3D, second:BodyState3D,
     shift_hinge_rotation3d(first,a.multiply(lambda))
     let position=second.transform.position.add(b.multiply(-state.ratio*lambda*second.inverse_mass))
     second.transform=Transform3D(position,second.transform.rotation)
+}
+
+func prepare_pulley3d(first:@BodyState3D, second:@BodyState3D,
+    state:PulleyConstraintState3D)
+{
+    let row=pulley_row3d(first,second,state)
+    state.row=row
+    state.first_normal=row.first_axis
+    state.second_normal=row.second_axis.divide(state.ratio)
+    if state.minimum_length==state.maximum_length { state.limit_side=2 }
+    else if row.length<=state.minimum_length { state.limit_side=1 }
+    else if row.length>=state.maximum_length { state.limit_side=-1 }
+}
+func solve_pulley_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    state:PulleyConstraintState3D, delta:float)
+{
+    if state.limit_side==0 { return }
+    if let row=state.row {
+        if row.inverse_mass<=0.000000001 { return }
+        let previous=state.impulse
+        var accumulated=previous-pulley_speed3d(first,second,row)/row.inverse_mass
+        if state.limit_side==1 { accumulated=Math.max(0.0,accumulated) }
+        if state.limit_side==-1 { accumulated=Math.min(0.0,accumulated) }
+        let lambda=accumulated-previous
+        state.impulse=accumulated
+        let first_impulse=row.first_axis.multiply(lambda)
+        let second_impulse=row.second_axis.multiply(lambda)
+        first.linear_velocity=first.linear_velocity.add(first_impulse.multiply(first.inverse_mass))
+        second.linear_velocity=second.linear_velocity.add(second_impulse.multiply(second.inverse_mass))
+        first.angular_velocity=first.angular_velocity.add(row.first_angular_response.multiply(lambda))
+        second.angular_velocity=second.angular_velocity.add(row.second_angular_response.multiply(lambda))
+        state.first_impulse=state.first_impulse.add(first_impulse)
+        state.second_impulse=state.second_impulse.add(second_impulse)
+        state.first_angular_impulse=state.first_angular_impulse.add(row.first_radius.cross(first_impulse))
+        state.second_angular_impulse=state.second_angular_impulse.add(row.second_radius.cross(second_impulse))
+        state.inverse_delta=1.0/delta
+    }
+}
+func solve_pulley_position3d(first:BodyState3D, second:BodyState3D,
+    state:PulleyConstraintState3D)
+{
+    let row=pulley_row3d(first,second,state)
+    var error=0.0
+    if row.length<state.minimum_length { error=row.length-state.minimum_length }
+    if row.length>state.maximum_length { error=row.length-state.maximum_length }
+    if error==0.0 || row.inverse_mass<=0.000000001 { return }
+    let lambda=-Math.clamp(0.2*error,-0.2,0.2)/row.inverse_mass
+    shift_distance_body3d(first,row.first_axis.multiply(lambda),row.first_radius)
+    shift_distance_body3d(second,row.second_axis.multiply(lambda),row.second_radius)
+    state.first_normal=row.first_axis
+    state.second_normal=row.second_axis.divide(state.ratio)
 }

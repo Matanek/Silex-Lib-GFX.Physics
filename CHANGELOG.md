@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D pulley: bounded weighted length, slack or rigid cable, tackle ratios, physical anchor reactions, safe mutations and Jolt witnesses.
+
 - 3D rack and pinion: signed rad/m ratio, tracked phase, physical torque/force, safe mutations and Jolt witnesses.
 
 - 3D gear: signed ratio, turn tracking, physical torques and safe mutations; pinned Jolt nonunit-ratio defect preserved explicitly.

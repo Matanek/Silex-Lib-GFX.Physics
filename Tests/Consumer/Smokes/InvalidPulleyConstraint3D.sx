@@ -1,0 +1,44 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var world=Physics.World3D();var body=world.create_rigid_body()
+    var fixed=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)
+    var settings=Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,1.0,0.0),Math.Vec3(1.0,1.0,0.0))
+    let nan=Math.sqrt(-1.0)
+    if selected("world-anchor") { settings.first_world_anchor=Math.Vec3(nan,0.0,0.0) }
+    if selected("local-anchor") { settings.second_local_anchor=Math.Vec3(nan,0.0,0.0) }
+    if selected("geometry-overflow") { settings.first_world_anchor=Math.Vec3(1.0e30,0.0,0.0);settings.maximum_length=10.0 }
+    if selected("ratio-zero") { settings.ratio=0.0 }
+    if selected("ratio-negative") { settings.ratio=-1.0 }
+    if selected("ratio-nan") { settings.ratio=nan }
+    if selected("ratio-overflow") { settings.ratio=1.0e30 }
+    if selected("ratio-underflow") { settings.ratio=1.0e-30 }
+    if selected("minimum-negative") { settings.minimum_length=-1.0 }
+    if selected("minimum-nan") { settings.minimum_length=nan }
+    if selected("maximum-negative") { settings.maximum_length=-1.0 }
+    if selected("maximum-nan") { settings.maximum_length=nan }
+    if selected("limits-inverted") { settings.minimum_length=2.0;settings.maximum_length=1.0 }
+    if selected("automatic-inverted") { settings.minimum_length=10.0 }
+    if selected("same") { world.create_pulley_constraint(body,body,settings) }
+    if selected("fixed-fixed") { world.create_pulley_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed),settings) }
+    if selected("foreign") { var other=Physics.World3D();world.create_pulley_constraint(body,other.create_rigid_body(),settings) }
+    var joint=world.create_pulley_constraint(fixed,body,settings)
+    if selected("mutation-local") { joint.set_local_anchors(Math.Vec3(nan,0.0,0.0),Math.Vec3()) }
+    if selected("mutation-world") { joint.set_world_anchors(Math.Vec3(),Math.Vec3(nan,0.0,0.0)) }
+    if selected("mutation-local-geometry") { joint.set_local_anchors(Math.Vec3(1.0e30,0.0,0.0),Math.Vec3()) }
+    if selected("mutation-world-geometry") { joint.set_world_anchors(Math.Vec3(1.0e30,0.0,0.0),Math.Vec3()) }
+    if selected("mutation-ratio") { joint.set_ratio(-1.0) }
+    if selected("mutation-limits") { joint.set_limits(2.0,1.0) }
+    if selected("stale") { world.destroy_pulley_constraint(joint);world.create_pulley_constraint(fixed,body,settings);joint.length() }
+    if selected("stale-mutation") { world.destroy_pulley_constraint(joint);joint.set_ratio(2.0) }
+    if selected("foreign-destroy") { var other=Physics.World3D();other.destroy_pulley_constraint(joint) }
+    panic("invalid pulley operation was accepted")
+}

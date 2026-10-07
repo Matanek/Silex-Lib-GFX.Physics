@@ -173,3 +173,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Engrenage 3D](Gear3D.md) : rapport signé, phase suivie et couples sur les deux corps.
 
 [Crémaillère 3D](RackAndPinion3D.md) : rapport rotation/course signé, phase, couple et force.
+
+[Poulie 3D](Pulley3D.md) : points fixes, longueur pondérée, mou et réactions aux ancrages.

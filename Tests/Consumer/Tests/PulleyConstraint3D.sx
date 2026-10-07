@@ -1,0 +1,148 @@
+use GFX.Physics
+use STD.Math
+func pulley_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func pulley_body(world:Physics.World3D,x:float,mass:float=2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(x,0.0,0.0))
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(0.2)) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func pulley_settings(ratio:float=1.0) Physics.PulleyConstraint3DSettings {
+    return Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,100.0,0.0),Math.Vec3(1.0,100.0,0.0)) ..ratio=ratio
+}
+func pulley_steps(world:Physics.World3D,count:int,rate:float=60.0) { var i=0;while i<count { world.step(1.0/rate);i++ } }
+test "pulley projects taut cable speed by each mass and positive ratio" {
+    let ratios:float[]=[0.5,1.0,2.0,4.0];let masses:float[]=[2.0,8.0]
+    for ratio in ratios { for mass in masses {
+        var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0,mass)
+        var joint=world.create_pulley_constraint(a,b,pulley_settings(ratio))
+        b.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0));world.step(1.0/60.0)
+        let lambda=-ratio/(0.5+ratio*ratio/mass)
+        assert(Math.abs(a.linear_velocity().y+lambda/2.0)<0.00001)
+        assert(Math.abs(b.linear_velocity().y+1.0+ratio*lambda/mass)<0.00001)
+        assert(Math.abs(joint.first_reaction_force().y+60.0*lambda)<0.0001)
+        assert(Math.abs(joint.reaction_force().y+60.0*ratio*lambda)<0.0001)
+        assert(Math.abs(joint.speed())<0.00001 && Math.abs(joint.length()-joint.maximum_length())<0.0001)
+        assert(Math.abs(joint.first_reaction_force().dot(a.linear_velocity())+joint.reaction_force().dot(b.linear_velocity()))<0.0001)
+        assert(2.0*a.linear_velocity().length_squared()+mass*b.linear_velocity().length_squared()<=mass+0.00001)
+        assert(world.pulley_constraint_count()==1 && world.distance_constraint_count()==0)
+    } }
+}
+test "pulley slack permits free motion and upper tension never pushes" {
+    var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,pulley_settings() ..maximum_length=220.0)
+    b.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0));pulley_steps(world,60)
+    assert(Math.abs(b.position().y+1.0)<0.00001 && joint.reaction_force().length()==0.0)
+    joint.set_limits(0.0,joint.length());b.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));world.step(1.0/60.0)
+    assert(b.linear_velocity().y==1.0 && joint.reaction_force().length()==0.0 && joint.length()<joint.maximum_length())
+}
+test "pulley lower limit resists shortening and permits lengthening" {
+    var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,pulley_settings() ..minimum_length=200.0 ..maximum_length=220.0)
+    b.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));world.step(1.0/60.0)
+    assert(Math.abs(joint.length()-200.0)<0.0001 && joint.first_reaction_force().y<0.0 && joint.reaction_force().y<0.0)
+    a.set_linear_velocity(Math.Vec3());b.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0));world.step(1.0/60.0)
+    assert(joint.reaction_force().length()==0.0 && b.linear_velocity().y==-1.0)
+}
+test "pulley supports balanced gravity for block and tackle ratios" {
+    let ratios:float[]=[0.5,1.0,2.0]
+    for ratio in ratios {
+        var world=Physics.World3D();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0,2.0*ratio)
+        var joint=world.create_pulley_constraint(a,b,pulley_settings(ratio));pulley_steps(world,120)
+        assert(a.position().y==0.0 && Math.abs(b.position().y)<0.0001)
+        assert(Math.abs(joint.first_reaction_force().y-19.62)<0.001)
+        assert(Math.abs(joint.reaction_force().y-ratio*19.62)<0.001 && Math.abs(joint.speed())<0.0001)
+    }
+}
+test "pulley unbalanced masses follow the independent Atwood acceleration" {
+    for rate in [60,120] {
+        var world=Physics.World3D();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0,8.0)
+        var joint=world.create_pulley_constraint(a,b,pulley_settings() ..minimum_length=200.0)
+        pulley_steps(world,rate,rate as float)
+        let expected=5.886*(1.0+1.0/(rate as float))/2.0
+        assert(Math.abs(a.position().y-expected)<0.0001 && Math.abs(b.position().y+expected)<0.0001)
+        assert(Math.abs(a.linear_velocity().y-5.886)<0.0001 && Math.abs(joint.length()-200.0)<0.0001)
+    }
+}
+test "pulley local anchors carry the correct angular impulse and moment" {
+    let ratios:float[]=[1.0,2.0]
+    for ratio in ratios {
+        var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+        var settings=Physics.PulleyConstraint3DSettings(Math.Vec3(-0.5,100.0,0.0),Math.Vec3(1.5,100.0,0.0))
+            ..first_local_anchor=Math.Vec3(0.5,0.0,0.0) ..second_local_anchor=Math.Vec3(0.5,0.0,0.0) ..ratio=ratio
+        var joint=world.create_pulley_constraint(a,b,settings)
+        b.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0));world.step(1.0/60.0)
+        let lambda=-ratio/(1.75*(1.0+ratio*ratio))
+        assert(Math.abs(a.linear_velocity().y+lambda/2.0)<0.00001 && Math.abs(b.linear_velocity().y+1.0+ratio*lambda/2.0)<0.00001)
+        assert(Math.abs(a.angular_velocity().z+2.5*lambda)<0.00001 && Math.abs(b.angular_velocity().z+2.5*ratio*lambda)<0.00001)
+        assert(Math.abs(joint.first_reaction_torque().z+30.0*lambda)<0.0001 && Math.abs(joint.reaction_torque().z+30.0*ratio*lambda)<0.0001)
+    }
+}
+test "pulley length mutation recovers a shorter cable without kinetic energy" {
+    var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,pulley_settings());joint.set_limits(0.0,180.0);pulley_steps(world,120)
+    assert(Math.abs(joint.length()-180.0)<0.0001 && Math.abs(a.position().y-10.0)<0.0001 && Math.abs(b.position().y-10.0)<0.0001)
+    assert(a.linear_velocity().length()==0.0 && b.linear_velocity().length()==0.0)
+    joint.set_limits(180.0,180.0);assert(joint.minimum_length()==180.0 && joint.maximum_length()==180.0)
+}
+test "pulley anchor and ratio mutations retain configured length limits" {
+    var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,pulley_settings())
+    b.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0));world.step(1.0/60.0)
+    let force=joint.reaction_force();world.step(0.0);assert(joint.reaction_force().nearly_equal(force,0.00001))
+    joint.set_ratio(2.0);assert(joint.ratio()==2.0 && joint.maximum_length()==200.0 && joint.reaction_force().length()==0.0)
+    joint.set_world_anchors(Math.Vec3(-1.0,10.0,0.0),Math.Vec3(1.0,10.0,0.0))
+    joint.set_local_anchors(Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    assert(joint.first_world_anchor().y==10.0 && joint.second_world_anchor().y==10.0)
+    assert(joint.first_local_anchor().y==1.0 && joint.second_local_anchor().y==1.0 && joint.maximum_length()==200.0)
+}
+test "pulley disabling a constraint or body suspends its reactions" {
+    var world=Physics.World3D();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,pulley_settings());world.step(1.0/60.0)
+    joint.set_enabled(false);pulley_steps(world,30);assert(joint.length()>200.1 && joint.reaction_force().length()==0.0)
+    joint.set_enabled(true);pulley_steps(world,120);assert(Math.abs(joint.length()-200.0)<0.001)
+    b.set_enabled(false);world.step(1.0/60.0);assert(joint.first_reaction_force().length()==0.0 && joint.reaction_torque().length()==0.0)
+    b.set_enabled(true);pulley_steps(world,60);assert(Math.abs(joint.length()-200.0)<0.001)
+}
+test "pulley fixed endpoint supports the other body" {
+    var world=Physics.World3D();var a=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..transform=Physics.Transform3D(Math.Vec3(-1.0,0.0,0.0))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var b=pulley_body(world,1.0);var joint=world.create_pulley_constraint(a,b,pulley_settings(2.0));pulley_steps(world,60)
+    assert(b.position().y==0.0 && Math.abs(joint.reaction_force().y-19.62)<0.001)
+    assert(Math.abs(joint.first_reaction_force().y-9.81)<0.001)
+}
+test "pulley retains a finite direction when one segment has zero length" {
+    var world=Physics.World3D();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    var joint=world.create_pulley_constraint(a,b,Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,0.0,0.0),Math.Vec3(1.0,1.0,0.0)))
+    pulley_steps(world,120);assert(Math.abs(joint.length()-1.0)<0.001 && joint.first_length()<0.001 && Math.abs(joint.second_length()-1.0)<0.001)
+    assert(Math.abs(joint.first_reaction_force().y-19.62)<0.001)
+}
+test "pulley sleep mutations generations and body deletion remain safe" {
+    var world=pulley_world();var a=pulley_body(world,-1.0);var b=pulley_body(world,1.0)
+    a.set_sleep_enabled(true);b.set_sleep_enabled(true);var joint=world.create_pulley_constraint(a,b,pulley_settings())
+    pulley_steps(world,120);assert(!a.is_awake() && !b.is_awake());joint.set_limits(0.0,200.0);assert(a.is_awake() && b.is_awake())
+    world.destroy_pulley_constraint(joint);var newer=world.create_pulley_constraint(a,b,pulley_settings())
+    assert(!joint.is_valid() && newer.is_valid() && newer.first_body().is_valid() && newer.second_body().is_valid())
+    world.destroy_rigid_body(a);assert(!newer.is_valid() && world.pulley_constraint_count()==0)
+}
+test "pulley world destruction invalidates retained handles" {
+    var joint:Physics.PulleyConstraint3D?=null
+    { var world=pulley_world();joint=world.create_pulley_constraint(pulley_body(world,-1.0),pulley_body(world,1.0),pulley_settings()) }
+    assert(!joint!.is_valid())
+}
+test "pulley transmits a real floor contact between unequal suspended masses" {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(8.0,0.5,8.0))) ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.25,0.0)))
+    var first=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25)) ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..transform=Physics.Transform3D(Math.Vec3(-1.0,0.25,0.0)))
+    var second=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25)) ..mass_properties=Physics.MassProperties3D(8.0,Math.Vec3(0.2))
+        ..transform=Physics.Transform3D(Math.Vec3(1.0,1.25,0.0)))
+    var joint=world.create_pulley_constraint(first,second,Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,2.25,0.0),Math.Vec3(1.0,2.25,0.0)))
+    pulley_steps(world,240)
+    assert(Math.abs(second.position().y-0.25)<0.002 && Math.abs(first.position().y-1.25)<0.003)
+    assert(Math.abs(joint.length()-3.0)<0.001 && Math.abs(joint.speed())<0.002)
+    assert(joint.first_reaction_force().y>=0.0 && joint.reaction_force().y>=0.0)
+}

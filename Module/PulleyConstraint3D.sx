@@ -1,0 +1,365 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public struct PulleyConstraint3DSettings {
+    var first_world_anchor:Math.Vec3
+    var second_world_anchor:Math.Vec3
+    var first_local_anchor:Math.Vec3 = Math.Vec3()
+    var second_local_anchor:Math.Vec3 = Math.Vec3()
+    var ratio:float = 1.0
+    var minimum_length:float = 0.0
+    var maximum_length:float? = null
+    var is_enabled:bool = true
+    init(first_world_anchor:Math.Vec3, second_world_anchor:Math.Vec3) {
+        self.first_world_anchor = first_world_anchor
+        self.second_world_anchor = second_world_anchor
+    }
+}
+
+package struct PulleyRow3D {
+    let first_axis:Math.Vec3
+    let second_axis:Math.Vec3
+    let first_radius:Math.Vec3
+    let second_radius:Math.Vec3
+    let first_angular_response:Math.Vec3
+    let second_angular_response:Math.Vec3
+    let inverse_mass:float
+    let length:float
+    init(first_axis:Math.Vec3, second_axis:Math.Vec3,
+        first_radius:Math.Vec3, second_radius:Math.Vec3,
+        first_angular_response:Math.Vec3, second_angular_response:Math.Vec3,
+        inverse_mass:float, length:float)
+    {
+        self.first_axis = first_axis
+        self.second_axis = second_axis
+        self.first_radius = first_radius
+        self.second_radius = second_radius
+        self.first_angular_response = first_angular_response
+        self.second_angular_response = second_angular_response
+        self.inverse_mass = inverse_mass
+        self.length = length
+    }
+}
+
+package class PulleyConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    var first_world_anchor:Math.Vec3
+    var second_world_anchor:Math.Vec3
+    var first_local_anchor:Math.Vec3
+    var second_local_anchor:Math.Vec3
+    var ratio:float
+    var minimum_length:float
+    var maximum_length:float
+    var is_enabled:bool
+    var first_normal:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0)
+    var second_normal:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0)
+    var row:PulleyRow3D? = null
+    var limit_side:int = 0
+    var impulse:float = 0.0
+    var first_impulse:Math.Vec3 = Math.Vec3()
+    var second_impulse:Math.Vec3 = Math.Vec3()
+    var first_angular_impulse:Math.Vec3 = Math.Vec3()
+    var second_angular_impulse:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:PulleyConstraint3DSettings,
+        first:Transform3D, second:Transform3D)
+    {
+        validate_pulley_anchors3d(settings.first_world_anchor, settings.second_world_anchor)
+        validate_pulley_anchors3d(settings.first_local_anchor, settings.second_local_anchor)
+        validate_pulley_ratio3d(settings.ratio)
+        let length = first.point(settings.first_local_anchor).distance(settings.first_world_anchor) +
+            settings.ratio*second.point(settings.second_local_anchor).distance(settings.second_world_anchor)
+        var maximum = length
+        if let requested = settings.maximum_length { maximum = requested }
+        validate_pulley_limits3d(settings.minimum_length, maximum)
+        if !finite_body3d_value(length) { panic("GFX.Physics.PulleyConstraint3D requires finite cable geometry") }
+        self.first_id = first_id
+        self.second_id = second_id
+        self.first_world_anchor = settings.first_world_anchor
+        self.second_world_anchor = settings.second_world_anchor
+        self.first_local_anchor = settings.first_local_anchor
+        self.second_local_anchor = settings.second_local_anchor
+        self.ratio = settings.ratio
+        self.minimum_length = settings.minimum_length
+        self.maximum_length = maximum
+        self.is_enabled = settings.is_enabled
+    }
+    func reset() {
+        self.row = null
+        self.limit_side = 0
+        self.impulse = 0.0
+        self.first_impulse = Math.Vec3()
+        self.second_impulse = Math.Vec3()
+        self.first_angular_impulse = Math.Vec3()
+        self.second_angular_impulse = Math.Vec3()
+        self.inverse_delta = 0.0
+    }
+}
+
+package struct PulleyConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class PulleyConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:PulleyConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:PulleyConstraint3DSettings) PulleyConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.PulleyConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.PulleyConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.PulleyConstraint3D requires a dynamic body")
+        }
+        var state = PulleyConstraintState3D(first.body_id(), second.body_id(), settings,
+            first_state.transform, second_state.transform)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return PulleyConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:PulleyConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:PulleyConstraintId3D) PulleyConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.PulleyConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:PulleyConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_pulley_body_id3d(state.first_id, body_id) ||
+                    same_pulley_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_pulley_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class PulleyConstraint3D {
+    private var store:PulleyConstraintStore3D
+    private let id:PulleyConstraintId3D
+    package init(store:PulleyConstraintStore3D, id:PulleyConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:PulleyConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() PulleyConstraintId3D { return self.id }
+    func first_body() RigidBody3D { return RigidBody3D(self.store.bodies,self.store.require(self.id).first_id) }
+    func second_body() RigidBody3D { return RigidBody3D(self.store.bodies,self.store.require(self.id).second_id) }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func first_world_anchor() Math.Vec3 { return self.store.require(self.id).first_world_anchor }
+    func second_world_anchor() Math.Vec3 { return self.store.require(self.id).second_world_anchor }
+    func first_local_anchor() Math.Vec3 { return self.store.require(self.id).first_local_anchor }
+    func second_local_anchor() Math.Vec3 { return self.store.require(self.id).second_local_anchor }
+    func ratio() float { return self.store.require(self.id).ratio }
+    func minimum_length() float { return self.store.require(self.id).minimum_length }
+    func maximum_length() float { return self.store.require(self.id).maximum_length }
+    func first_length() float {
+        var state = self.store.require(self.id)
+        return self.store.bodies.require(state.first_id).transform.point(state.first_local_anchor).distance(state.first_world_anchor)
+    }
+    func second_length() float {
+        var state = self.store.require(self.id)
+        return self.store.bodies.require(state.second_id).transform.point(state.second_local_anchor).distance(state.second_world_anchor)
+    }
+    func length() float { return self.first_length()+self.ratio()*self.second_length() }
+    func speed() float {
+        var state = self.store.require(self.id)
+        var first = self.store.bodies.require(state.first_id)
+        var second = self.store.bodies.require(state.second_id)
+        let row = pulley_row3d(first,second,state)
+        return pulley_speed3d(first,second,row)
+    }
+    func first_reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.first_impulse.multiply(state.inverse_delta)
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.second_impulse.multiply(state.inverse_delta)
+    }
+    func first_reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.first_angular_impulse.multiply(state.inverse_delta)
+    }
+    func reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.second_angular_impulse.multiply(state.inverse_delta)
+    }
+    private func invalidate(state:PulleyConstraintState3D) {
+        state.reset()
+        state.first_normal = Math.Vec3(0.0,-1.0,0.0)
+        state.second_normal = Math.Vec3(0.0,-1.0,0.0)
+        self.store.bodies.require(state.first_id).wake()
+        self.store.bodies.require(state.second_id).wake()
+    }
+    private func require_geometry(state:PulleyConstraintState3D,
+        first_local:Math.Vec3, second_local:Math.Vec3,
+        first_world:Math.Vec3, second_world:Math.Vec3, ratio:float)
+    {
+        let first = self.store.bodies.require(state.first_id).transform.point(first_local)
+        let second = self.store.bodies.require(state.second_id).transform.point(second_local)
+        if !finite_body3d_value(first.distance(first_world)+ratio*second.distance(second_world)) {
+            panic("GFX.Physics.PulleyConstraint3D requires finite cable geometry")
+        }
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.is_enabled = enabled
+        self.invalidate(state)
+    }
+    func set_local_anchors(first:Math.Vec3, second:Math.Vec3) {
+        validate_pulley_anchors3d(first,second)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        self.require_geometry(state,first,second,state.first_world_anchor,state.second_world_anchor,state.ratio)
+        state.first_local_anchor = first
+        state.second_local_anchor = second
+        self.invalidate(state)
+    }
+    func set_world_anchors(first:Math.Vec3, second:Math.Vec3) {
+        validate_pulley_anchors3d(first,second)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        self.require_geometry(state,state.first_local_anchor,state.second_local_anchor,first,second,state.ratio)
+        state.first_world_anchor = first
+        state.second_world_anchor = second
+        self.invalidate(state)
+    }
+    func set_ratio(ratio:float) {
+        validate_pulley_ratio3d(ratio)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        self.require_geometry(state,state.first_local_anchor,state.second_local_anchor,state.first_world_anchor,state.second_world_anchor,ratio)
+        state.ratio = ratio
+        self.invalidate(state)
+    }
+    func set_limits(minimum:float, maximum:float) {
+        validate_pulley_limits3d(minimum,maximum)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.minimum_length = minimum
+        state.maximum_length = maximum
+        self.invalidate(state)
+    }
+}
+
+package func validate_pulley_anchors3d(first:Math.Vec3, second:Math.Vec3) {
+    if !finite_body3d_point(first) || !finite_body3d_point(second) {
+        panic("GFX.Physics.PulleyConstraint3D requires finite anchors")
+    }
+}
+package func validate_pulley_ratio3d(ratio:float) {
+    if !finite_body3d_value(ratio) || ratio<=0.0 || !finite_body3d_value(ratio*ratio) || ratio*ratio==0.0 {
+        panic("GFX.Physics.PulleyConstraint3D requires a finite positive representable ratio")
+    }
+}
+package func validate_pulley_limits3d(minimum:float, maximum:float) {
+    if !finite_body3d_value(minimum) || !finite_body3d_value(maximum) || minimum<0.0 || minimum>maximum {
+        panic("GFX.Physics.PulleyConstraint3D requires finite ordered nonnegative lengths")
+    }
+}
+package func same_pulley_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot==second.slot && first.generation==second.generation
+}
+package func pulley_row3d(first:@BodyState3D, second:@BodyState3D,
+    state:PulleyConstraintState3D) PulleyRow3D
+{
+    let first_point = first.transform.point(state.first_local_anchor)
+    let second_point = second.transform.point(state.second_local_anchor)
+    let first_vector = first_point.subtract(state.first_world_anchor)
+    let second_vector = second_point.subtract(state.second_world_anchor)
+    let first_length = first_vector.length()
+    let second_length = second_vector.length()
+    var a = state.first_normal
+    var b = state.second_normal
+    if first_length>0.00000001 { a = first_vector.divide(first_length) }
+    if second_length>0.00000001 { b = second_vector.divide(second_length) }
+    b = b.multiply(state.ratio)
+    let first_radius = first_point.subtract(first.world_center())
+    let second_radius = second_point.subtract(second.world_center())
+    let first_angular = first_radius.cross(a)
+    let second_angular = second_radius.cross(b)
+    let first_response = first.inverse_inertia_times(first_angular)
+    let second_response = second.inverse_inertia_times(second_angular)
+    let mass = first.inverse_mass+state.ratio*state.ratio*second.inverse_mass +
+        first_angular.dot(first_response)+second_angular.dot(second_response)
+    return PulleyRow3D(a,b,first_radius,second_radius,first_response,second_response,
+        mass,first_length+state.ratio*second_length)
+}
+package func pulley_speed3d(first:@BodyState3D, second:@BodyState3D,row:PulleyRow3D) float {
+    return first.linear_velocity.add(first.angular_velocity.cross(row.first_radius)).dot(row.first_axis)+
+        second.linear_velocity.add(second.angular_velocity.cross(row.second_radius)).dot(row.second_axis)
+}

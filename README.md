@@ -54,3 +54,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [3D gear](Docs/EN/Gear3D.md): signed rotational transmission and tracked phase.
 
 [3D rack and pinion](Docs/EN/RackAndPinion3D.md): signed rotation/travel transmission.
+
+[3D pulley](Docs/EN/Pulley3D.md): weighted cable lengths and anchor reactions.

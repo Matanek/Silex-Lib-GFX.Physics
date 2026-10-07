@@ -1,0 +1,24 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world=Physics.World3D()
+    var first=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(-1.0,0.0,0.0))
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var second=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(1.0,0.0,0.0))
+        ..mass_properties=Physics.MassProperties3D(4.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var joint=world.create_pulley_constraint(first,second,
+        Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,2.0,0.0),Math.Vec3(1.0,2.0,0.0)) ..ratio=2.0)
+    var i=0;while i<120 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(joint.length()-6.0)<0.001 && Math.abs(joint.speed())<0.001)
+    assert(Math.abs(joint.first_reaction_force().y-19.62)<0.001)
+    assert(Math.abs(joint.reaction_force().y-39.24)<0.001)
+    joint.set_limits(0.0,8.0);world.step(1.0/60.0)
+    assert(joint.reaction_force().length()==0.0)
+    joint.set_ratio(1.0);assert(joint.maximum_length()==8.0)
+    world.destroy_pulley_constraint(joint);assert(!joint.is_valid())
+    print("pulley recipe: ok")
+}
