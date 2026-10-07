@@ -1,0 +1,322 @@
+use STD.Math
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Path3D.Path3D
+use GFX.Physics.Path3D.path_rotation_vector3d
+use GFX.Physics.SixDOFConstraint3D.LinearMotor3D
+
+public enum PathOrientation3D {
+    free
+    around_tangent
+    around_normal
+    around_binormal
+    follow_path
+    relative_to_body
+}
+public struct PathConstraint3DSettings {
+    var path:Path3D
+    var first_local_path_frame:Transform3D = Transform3D()
+    var second_local_anchor:Math.Vec3 = Math.Vec3()
+    var orientation:PathOrientation3D = PathOrientation3D.free
+    var motor:LinearMotor3D? = null
+    var maximum_friction_force:float = 0.0
+    var is_enabled:bool = true
+    init(path:Path3D) { self.path=path }
+}
+package struct PathRow3D {
+    let first_linear:Math.Vec3
+    let second_linear:Math.Vec3
+    let first_angular:Math.Vec3
+    let second_angular:Math.Vec3
+    let first_response:Math.Vec3
+    let second_response:Math.Vec3
+    let couple:Math.Vec3
+    let mass:float
+    init(first:@BodyState3D,second:@BodyState3D,l1:Math.Vec3,l2:Math.Vec3,a1:Math.Vec3,a2:Math.Vec3,couple:Math.Vec3) {
+        self.first_linear=l1;self.second_linear=l2;self.first_angular=a1;self.second_angular=a2
+        self.first_response=first.inverse_inertia_times(a1);self.second_response=second.inverse_inertia_times(a2)
+        self.mass=first.inverse_mass*l1.length_squared()+second.inverse_mass*l2.length_squared()+
+            a1.dot(self.first_response)+a2.dot(self.second_response)
+        self.couple=couple
+    }
+    func speed(first:@BodyState3D,second:@BodyState3D) float {
+        return self.first_linear.dot(first.linear_velocity)+self.second_linear.dot(second.linear_velocity)+
+            self.first_angular.dot(first.angular_velocity)+self.second_angular.dot(second.angular_velocity)
+    }
+}
+package struct PathGeometry3D {
+    let position:float
+    let frame:Transform3D
+    let error:Math.Vec3
+    let first_radius:Math.Vec3
+    let second_radius:Math.Vec3
+    let connection:Math.Vec3
+    init(position:float,frame:Transform3D,error:Math.Vec3,r1:Math.Vec3,r2:Math.Vec3,connection:Math.Vec3) {
+        self.position=position;self.frame=frame;self.error=error;self.first_radius=r1;self.second_radius=r2;self.connection=connection
+    }
+    func axis(index:int) Math.Vec3 {
+        if index==0 { return self.frame.vector(Math.Vec3(1.0,0.0,0.0)) }
+        if index==1 { return self.frame.vector(Math.Vec3(0.0,1.0,0.0)) }
+        return self.frame.vector(Math.Vec3(0.0,0.0,1.0))
+    }
+}
+package class PathConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    var path:Path3D
+    var first_local_path_frame:Transform3D
+    var second_local_anchor:Math.Vec3
+    var orientation:PathOrientation3D
+    var motor:LinearMotor3D?
+    var maximum_friction_force:float
+    var is_enabled:bool
+    var orientation_offset:Math.Quat = Math.Quat.identity()
+    var relative_rotation:Math.Quat = Math.Quat.identity()
+    var position:float = 0.0
+    var rows:PathRow3D[] = []
+    var angular_axes:Math.Vec3[] = []
+    var limit_side:int = 0
+    var motor_error:float = 0.0
+    var motor_impulse:float = 0.0
+    var friction_impulse:float = 0.0
+    var limit_impulse:float = 0.0
+    var impulse:Math.Vec3 = Math.Vec3()
+    var angular_impulse:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+    init(first_id:BodyId3D,second_id:BodyId3D,settings:PathConstraint3DSettings,first:Transform3D,second:Transform3D) {
+        validate_path_settings3d(settings.second_local_anchor,settings.maximum_friction_force)
+        self.first_id=first_id;self.second_id=second_id;self.path=settings.path
+        self.first_local_path_frame=settings.first_local_path_frame;self.second_local_anchor=settings.second_local_anchor
+        self.orientation=settings.orientation;self.motor=settings.motor;self.maximum_friction_force=settings.maximum_friction_force;self.is_enabled=settings.is_enabled
+        self.capture(first,second)
+    }
+    func capture(first:Transform3D,second:Transform3D) {
+        let point=self.first_local_path_frame.inverse_point(first.inverse_point(second.point(self.second_local_anchor)))
+        self.position=self.path.closest_position(point,self.position)
+        let frame=self.path.frame(self.position)
+        let rotation=first.rotation.multiply(self.first_local_path_frame.rotation).multiply(frame.rotation)
+        self.orientation_offset=rotation.conjugated().multiply(second.rotation).normalized()
+        self.relative_rotation=first.rotation.conjugated().multiply(second.rotation).normalized()
+        self.reset()
+    }
+    func reset() {
+        self.rows=[];self.angular_axes=[];self.limit_side=0;self.motor_error=0.0
+        self.motor_impulse=0.0;self.friction_impulse=0.0;self.limit_impulse=0.0
+        self.impulse=Math.Vec3();self.angular_impulse=Math.Vec3();self.inverse_delta=0.0
+    }
+}
+package struct PathConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class PathConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:PathConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:PathConstraint3DSettings) PathConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.PathConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.PathConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.PathConstraint3D requires a dynamic body")
+        }
+        var state = PathConstraintState3D(first.body_id(), second.body_id(), settings,
+            first_state.transform, second_state.transform)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return PathConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:PathConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:PathConstraintId3D) PathConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.PathConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:PathConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_path_body_id3d(state.first_id, body_id) ||
+                    same_path_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_path_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+
+public class PathConstraint3D {
+    private var store:PathConstraintStore3D
+    private let id:PathConstraintId3D
+    package init(store:PathConstraintStore3D,id:PathConstraintId3D) { self.store=store;self.id=id }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:PathConstraintStore3D) bool { return self.store==store }
+    package func constraint_id() PathConstraintId3D { return self.id }
+    func first_body() RigidBody3D { return RigidBody3D(self.store.bodies,self.store.require(self.id).first_id) }
+    func second_body() RigidBody3D { return RigidBody3D(self.store.bodies,self.store.require(self.id).second_id) }
+    func path() Path3D { return self.store.require(self.id).path }
+    func first_local_path_frame() Transform3D { return self.store.require(self.id).first_local_path_frame }
+    func second_local_anchor() Math.Vec3 { return self.store.require(self.id).second_local_anchor }
+    func orientation() PathOrientation3D { return self.store.require(self.id).orientation }
+    func motor() LinearMotor3D? { return self.store.require(self.id).motor }
+    func maximum_friction_force() float { return self.store.require(self.id).maximum_friction_force }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    private func geometry() PathGeometry3D {
+        var state=self.store.require(self.id)
+        return path_geometry3d(self.store.bodies.require(state.first_id),self.store.bodies.require(state.second_id),state)
+    }
+    func position() float { return self.geometry().position }
+    func anchor_error() Math.Vec3 { return self.geometry().error }
+    func speed() float {
+        var state=self.store.require(self.id);var first=self.store.bodies.require(state.first_id);var second=self.store.bodies.require(state.second_id)
+        let g=path_geometry3d(first,second,state)
+        return path_linear_row3d(first,second,g,g.axis(0)).speed(first,second)
+    }
+    func reaction_force() Math.Vec3 { var state=self.store.require(self.id);return state.impulse.multiply(state.inverse_delta) }
+    func reaction_torque() Math.Vec3 { var state=self.store.require(self.id);return state.angular_impulse.multiply(state.inverse_delta) }
+    func motor_force() float { var state=self.store.require(self.id);return state.motor_impulse*state.inverse_delta }
+    func friction_force() float { var state=self.store.require(self.id);return state.friction_impulse*state.inverse_delta }
+    private func invalidate(state:PathConstraintState3D,recapture:bool=false) {
+        var first=self.store.bodies.require(state.first_id);var second=self.store.bodies.require(state.second_id)
+        if recapture { state.capture(first.transform,second.transform) } else { state.reset() }
+        first.wake();second.wake()
+    }
+    func set_enabled(enabled:bool) { self.store.bodies.require_mutable();var state=self.store.require(self.id);state.is_enabled=enabled;self.invalidate(state) }
+    func set_path(path:Path3D) { self.store.bodies.require_mutable();var state=self.store.require(self.id);state.path=path;self.invalidate(state,true) }
+    func set_frames(first_local_path_frame:Transform3D,second_local_anchor:Math.Vec3) {
+        validate_path_settings3d(second_local_anchor,0.0);self.store.bodies.require_mutable();var state=self.store.require(self.id)
+        state.first_local_path_frame=first_local_path_frame;state.second_local_anchor=second_local_anchor;self.invalidate(state,true)
+    }
+    func set_orientation(orientation:PathOrientation3D) { self.store.bodies.require_mutable();var state=self.store.require(self.id);state.orientation=orientation;self.invalidate(state,true) }
+    func set_motor(motor:LinearMotor3D?) { self.store.bodies.require_mutable();var state=self.store.require(self.id);state.motor=motor;self.invalidate(state) }
+    func set_maximum_friction_force(force:float) {
+        validate_path_settings3d(Math.Vec3(),force);self.store.bodies.require_mutable();var state=self.store.require(self.id)
+        state.maximum_friction_force=force;self.invalidate(state)
+    }
+}
+package func same_path_body_id3d(first:BodyId3D,second:BodyId3D) bool { return first.slot==second.slot && first.generation==second.generation }
+package func validate_path_settings3d(anchor:Math.Vec3,friction:float) {
+    if !finite_body3d_point(anchor) || !finite_body3d_value(friction) || friction<0.0 { panic("GFX.Physics.PathConstraint3D requires a finite anchor and nonnegative finite friction force") }
+}
+package func path_geometry3d(first:@BodyState3D,second:@BodyState3D,state:PathConstraintState3D) PathGeometry3D {
+    let second_point=second.transform.point(state.second_local_anchor)
+    let point=state.first_local_path_frame.inverse_point(first.transform.inverse_point(second_point))
+    let position=state.path.closest_position(point,state.position)
+    let local_value=state.path.frame(position)
+    let rotation=first.transform.rotation.multiply(state.first_local_path_frame.rotation)
+    let world_point=first.transform.point(state.first_local_path_frame.point(local_value.position))
+    let frame=Transform3D(world_point,rotation.multiply(local_value.rotation).normalized())
+    var connection=Math.Vec3()
+    if state.orientation!=PathOrientation3D.free && state.orientation!=PathOrientation3D.relative_to_body {
+        connection=rotation.rotate(state.path.angular_connection(position))
+    }
+    return PathGeometry3D(position,frame,second_point.subtract(world_point),second_point.subtract(first.world_center()),
+        second_point.subtract(second.world_center()),connection)
+}
+package func path_linear_row3d(first:@BodyState3D,second:@BodyState3D,g:PathGeometry3D,axis:Math.Vec3) PathRow3D {
+    let l1=axis.multiply(-1.0)
+    return PathRow3D(first,second,l1,axis,g.first_radius.cross(l1),g.second_radius.cross(axis),Math.Vec3())
+}
+package func path_angular_row3d(first:@BodyState3D,second:@BodyState3D,g:PathGeometry3D,axis:Math.Vec3) PathRow3D {
+    let l1=g.axis(0).multiply(axis.dot(g.connection));let l2=l1.multiply(-1.0)
+    return PathRow3D(first,second,l1,l2,g.first_radius.cross(l1).subtract(axis),g.second_radius.cross(l2).add(axis),axis)
+}
+package func path_orientation_axes3d(state:PathConstraintState3D,g:PathGeometry3D) Math.Vec3[] {
+    if state.orientation==PathOrientation3D.free { return [] }
+    var axes:Math.Vec3[]=[];var index=0
+    while index<3 {
+        if !((index==0 && state.orientation==PathOrientation3D.around_tangent) ||
+            (index==1 && state.orientation==PathOrientation3D.around_normal) ||
+            (index==2 && state.orientation==PathOrientation3D.around_binormal)) { axes.append(g.axis(index)) }
+        index++
+    }
+    return axes
+}
+package func path_orientation_error3d(first:@BodyState3D,second:@BodyState3D,state:PathConstraintState3D,g:PathGeometry3D) Math.Vec3 {
+    if state.orientation==PathOrientation3D.relative_to_body {
+        return path_rotation_vector3d(second.transform.rotation.multiply(first.transform.rotation.multiply(state.relative_rotation).conjugated()))
+    }
+    if state.orientation==PathOrientation3D.follow_path {
+        return path_rotation_vector3d(second.transform.rotation.multiply(g.frame.rotation.multiply(state.orientation_offset).conjugated()))
+    }
+    var index=0
+    if state.orientation==PathOrientation3D.around_normal { index=1 }
+    if state.orientation==PathOrientation3D.around_binormal { index=2 }
+    let target=g.axis(index)
+    var local_value=Math.Vec3(1.0,0.0,0.0)
+    if index==1 { local_value=Math.Vec3(0.0,1.0,0.0) }
+    if index==2 { local_value=Math.Vec3(0.0,0.0,1.0) }
+    let current=second.transform.rotation.rotate(state.orientation_offset.conjugated().rotate(local_value))
+    let cross=target.cross(current);let length=cross.length();let cosine=Math.clamp(target.dot(current),-1.0,1.0)
+    if length>0.0000001 { return cross.multiply(Math.atan2(length,cosine)/length) }
+    if cosine<0.0 { return g.axis((index+1)%3).multiply(Math.pi()) }
+    return Math.Vec3()
+}

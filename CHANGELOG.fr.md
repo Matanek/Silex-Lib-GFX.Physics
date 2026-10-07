@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Guidage sur chemin 3D : Hermite ouvert/bouclé, distances et moteurs en mètres, friction, extrémités, transport physique d’orientation, mutations et témoins explicites des écarts Jolt.
+
 - Poulie 3D : longueur pondérée à limites, câble détendu ou rigide, rapport de palan, ancrages et réactions physiques, mutations sûres et témoins Jolt.
 
 - Crémaillère/pignon 3D : rapport signé en rad/m, phase suivie, couple et force physiques, mutations sûres et témoins Jolt.

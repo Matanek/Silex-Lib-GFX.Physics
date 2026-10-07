@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D path guidance: open/closed Hermite geometry, metric drives, friction, endpoints, physical orientation transport, safe mutations and explicit pinned Jolt gap witnesses.
+
 - 3D pulley: bounded weighted length, slack or rigid cable, tackle ratios, physical anchor reactions, safe mutations and Jolt witnesses.
 
 - 3D rack and pinion: signed rad/m ratio, tracked phase, physical torque/force, safe mutations and Jolt witnesses.

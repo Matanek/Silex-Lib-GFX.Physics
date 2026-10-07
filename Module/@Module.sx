@@ -190,3 +190,10 @@ public use GFX.Physics.RackAndPinionConstraint3D.RackAndPinionConstraint3DSettin
 
 public use GFX.Physics.PulleyConstraint3D.PulleyConstraint3D
 public use GFX.Physics.PulleyConstraint3D.PulleyConstraint3DSettings
+
+public use GFX.Physics.Path3D.Path3D
+public use GFX.Physics.Path3D.PathKnot3D
+
+public use GFX.Physics.PathConstraint3D.PathConstraint3D
+public use GFX.Physics.PathConstraint3D.PathConstraint3DSettings
+public use GFX.Physics.PathConstraint3D.PathOrientation3D

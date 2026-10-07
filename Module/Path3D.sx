@@ -1,0 +1,266 @@
+use STD.Math
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+
+public struct PathKnot3D {
+    let position:Math.Vec3
+    let tangent:Math.Vec3
+    let normal:Math.Vec3
+    init(position:Math.Vec3, tangent:Math.Vec3, normal:Math.Vec3) {
+        if !finite_body3d_point(position) || !finite_body3d_point(tangent) || !finite_body3d_point(normal) ||
+            !finite_body3d_value(tangent.length_squared()) || tangent.length_squared()<=0.0000000001 {
+            panic("GFX.Physics.PathKnot3D requires finite geometry and a nonzero tangent")
+        }
+        let axis=tangent.normalized()
+        let perpendicular=normal.subtract(axis.multiply(normal.dot(axis)))
+        if !finite_body3d_value(perpendicular.length_squared()) || perpendicular.length_squared()<=0.0000000001 {
+            panic("GFX.Physics.PathKnot3D requires a normal independent of its tangent")
+        }
+        self.position=position;self.tangent=tangent;self.normal=perpendicular.normalized()
+    }
+}
+
+package struct PathSegment3D {
+    let a:Math.Vec3
+    let b:Math.Vec3
+    let c:Math.Vec3
+    let d:Math.Vec3
+    let normal:Math.Vec3
+    let normal_delta:Math.Vec3
+    let arcs:float[]
+    let offset:float
+    init(first:PathKnot3D,second:PathKnot3D,offset:float) {
+        let a=first.position.multiply(2.0).add(first.tangent).subtract(second.position.multiply(2.0)).add(second.tangent)
+        let b=first.position.multiply(-3.0).subtract(first.tangent.multiply(2.0)).add(second.position.multiply(3.0)).subtract(second.tangent)
+        let c=first.tangent
+        let normal_delta=second.normal.subtract(first.normal)
+        let derivative:Math.Vec3[]=[c,b.multiply(2.0),a.multiply(3.0)]
+        let cross:Math.Vec3[]=[first.normal.cross(c),first.normal.cross(b.multiply(2.0)).add(normal_delta.cross(c)),
+            first.normal.cross(a.multiply(3.0)).add(normal_delta.cross(b.multiply(2.0))),normal_delta.cross(a.multiply(3.0))]
+        path_require_regular3d(derivative)
+        path_require_regular3d(cross)
+        var arcs:float[]=[0.0]
+        var index=0;var length=0.0
+        while index<64 {
+            length+=path_integral3d(a,b,c,(index as float)/64.0,((index+1) as float)/64.0)
+            arcs.append(length);index++
+        }
+        if !finite_body3d_value(length+offset) || length<=0.00001 {
+            panic("GFX.Physics.Path3D requires finite nondegenerate segments")
+        }
+        self.a=a;self.b=b;self.c=c;self.d=first.position
+        self.normal=first.normal;self.normal_delta=normal_delta
+        self.arcs=arcs;self.offset=offset
+    }
+    func point(t:float) Math.Vec3 { return self.a.multiply(t).add(self.b).multiply(t).add(self.c).multiply(t).add(self.d) }
+    func derivative(t:float) Math.Vec3 { return self.a.multiply(3.0*t).add(self.b.multiply(2.0)).multiply(t).add(self.c) }
+    func distance(t:float) float {
+        let bin=Math.min(63.0,Math.floor(t*64.0)) as int
+        return self.offset+self.arcs[bin]+path_integral3d(self.a,self.b,self.c,(bin as float)/64.0,t)
+    }
+    func parameter(distance:float) float {
+        let target=Math.clamp(distance-self.offset,0.0,self.arcs[64])
+        var low=0;var high=64
+        while high-low>1 { let mid=(low+high)/2;if self.arcs[mid]<=target { low=mid } else { high=mid } }
+        var lo=(low as float)/64.0;var hi=(high as float)/64.0
+        var t=lo+(hi-lo)*(target-self.arcs[low])/(self.arcs[high]-self.arcs[low])
+        var pass=0
+        while pass<12 {
+            let error=self.distance(t)-self.offset-target
+            if Math.abs(error)<=0.0000001 { return t }
+            if error>0.0 { hi=t } else { lo=t }
+            let next=t-error/self.derivative(t).length()
+            if next>lo && next<hi { t=next } else { t=(lo+hi)*0.5 }
+            pass++
+        }
+        return t
+    }
+    func connection(t:float) Math.Vec3 {
+        let derivative=self.derivative(t);let speed=derivative.length();let tangent=derivative.divide(speed)
+        let second=self.a.multiply(6.0*t).add(self.b.multiply(2.0))
+        let tangent_derivative=second.subtract(tangent.multiply(second.dot(tangent))).divide(speed)
+        let normal=self.normal.add(self.normal_delta.multiply(t))
+        let cross=tangent.cross(normal);let binormal=cross.normalized()
+        let cross_derivative=tangent_derivative.cross(normal).add(tangent.cross(self.normal_delta))
+        let binormal_derivative=cross_derivative.subtract(binormal.multiply(cross_derivative.dot(binormal))).divide(cross.length())
+        let perpendicular=binormal.cross(tangent)
+        let normal_derivative=binormal_derivative.cross(tangent).add(binormal.cross(tangent_derivative))
+        return tangent.cross(tangent_derivative).add(perpendicular.cross(normal_derivative)).add(binormal.cross(binormal_derivative)).multiply(0.5/speed)
+    }
+    func frame(t:float) Transform3D {
+        let tangent=self.derivative(t).normalized()
+        let normal=self.normal.add(self.normal_delta.multiply(t))
+        let binormal=tangent.cross(normal).normalized()
+        return Transform3D(self.point(t),path_basis_rotation3d(tangent,binormal.cross(tangent),binormal))
+    }
+}
+
+public class Path3D {
+    private let knots:PathKnot3D[]
+    private let segments:PathSegment3D[]
+    private let closed:bool
+    private let total_length:float
+    init(knots:PathKnot3D[],closed:bool=false) {
+        if knots.count()<2 || (closed && knots.count()<3) { panic("GFX.Physics.Path3D requires two open or three closed knots") }
+        var segments:PathSegment3D[]=[];var length=0.0;var index=0
+        var count=knots.count()-1;if closed { count++ }
+        while index<count {
+            let segment=PathSegment3D(knots[index],knots[(index+1)%knots.count()],length)
+            segments.append(segment);length+=segment.arcs[64];index++
+        }
+        self.knots=knots;self.segments=segments;self.closed=closed;self.total_length=length
+    }
+    static func line(start:Math.Vec3,end:Math.Vec3,normal:Math.Vec3) Path3D {
+        let tangent=end.subtract(start)
+        let knots:PathKnot3D[]=[PathKnot3D(start,tangent,normal),PathKnot3D(end,tangent,normal)]
+        return Path3D(knots)
+    }
+    func length() float { return self.total_length }
+    func is_closed() bool { return self.closed }
+    func knot_count() int { return self.knots.count() }
+    func knot(index:int) PathKnot3D { return self.knots[index] }
+    package func canonical_position(distance:float) float {
+        if self.closed {
+            if !finite_body3d_value(distance/self.total_length) { panic("GFX.Physics.Path3D requires a representable distance relative to its length") }
+            var result=Math.remainder(distance,self.total_length)
+            if result<0.0 { result+=self.total_length }
+            return result
+        }
+        return Math.clamp(distance,0.0,self.total_length)
+    }
+    func frame(distance:float) Transform3D {
+        if !finite_body3d_value(distance) { panic("GFX.Physics.Path3D.frame requires a finite distance") }
+        let s=self.canonical_position(distance)
+        for segment in self.segments { if s<=segment.offset+segment.arcs[64] { return segment.frame(segment.parameter(s)) } }
+        return self.segments[self.segments.count()-1].frame(1.0)
+    }
+    func closest_position(point:Math.Vec3,hint:float=0.0) float {
+        if !finite_body3d_point(point) || !finite_body3d_value(hint) { panic("GFX.Physics.Path3D.closest_position requires a finite point and hint") }
+        var best=0.0;var best_squared=1.0/0.0
+        for segment in self.segments {
+            let q=segment.d.subtract(point)
+            let coefficients:float[]=[q.dot(segment.c),2.0*q.dot(segment.b)+segment.c.dot(segment.c),
+                3.0*q.dot(segment.a)+3.0*segment.c.dot(segment.b),4.0*segment.c.dot(segment.a)+2.0*segment.b.dot(segment.b),
+                5.0*segment.b.dot(segment.a),3.0*segment.a.dot(segment.a)]
+            var candidates=path_roots3d(coefficients);candidates.append(0.0);candidates.append(1.0)
+            for t in candidates {
+                let squared=segment.point(t).subtract(point).length_squared()
+                if !finite_body3d_value(squared) { panic("GFX.Physics.Path3D requires finite projection distances") }
+                let distance=self.canonical_position(segment.distance(t))
+                if squared<best_squared-0.00000001 || (Math.abs(squared-best_squared)<=0.00000001 &&
+                    Math.abs(self.position_error(distance,hint))<Math.abs(self.position_error(best,hint))) {
+                    best_squared=squared;best=distance
+                }
+            }
+        }
+        return best
+    }
+    package func position_error(position:float,target:float) float {
+        var difference=position-self.canonical_position(target)
+        if self.closed { difference-=Math.floor(difference/self.total_length+0.5)*self.total_length }
+        return difference
+    }
+    // Arc tables are immutable. The frame connection is analytic and is evaluated only for a changing constrained orientation.
+    package func angular_connection(distance:float) Math.Vec3 {
+        let s=self.canonical_position(distance)
+        for segment in self.segments { if s<=segment.offset+segment.arcs[64] { return segment.connection(segment.parameter(s)) } }
+        return self.segments[self.segments.count()-1].connection(1.0)
+    }
+}
+
+package func path_rotation_vector3d(rotation:Math.Quat) Math.Vec3 {
+    var vector=Math.Vec3(rotation.x,rotation.y,rotation.z);var w=rotation.w
+    if w<0.0 { vector=vector.multiply(-1.0);w=-w }
+    let length=vector.length()
+    if length<0.0000001 { return vector.multiply(2.0) }
+    return vector.multiply(2.0*Math.atan2(length,w)/length)
+}
+package func path_basis_rotation3d(x:Math.Vec3,y:Math.Vec3,z:Math.Vec3) Math.Quat {
+    let trace=x.x+y.y+z.z
+    if trace>0.0 {
+        let s=2.0*Math.sqrt(1.0+trace)
+        return Math.Quat((y.z-z.y)/s,(z.x-x.z)/s,(x.y-y.x)/s,s*0.25).normalized()
+    }
+    if x.x>y.y && x.x>z.z {
+        let s=2.0*Math.sqrt(1.0+x.x-y.y-z.z)
+        return Math.Quat(s*0.25,(y.x+x.y)/s,(z.x+x.z)/s,(y.z-z.y)/s).normalized()
+    }
+    if y.y>z.z {
+        let s=2.0*Math.sqrt(1.0+y.y-x.x-z.z)
+        return Math.Quat((y.x+x.y)/s,s*0.25,(z.y+y.z)/s,(z.x-x.z)/s).normalized()
+    }
+    let s=2.0*Math.sqrt(1.0+z.z-x.x-y.y)
+    return Math.Quat((z.x+x.z)/s,(z.y+y.z)/s,s*0.25,(x.y-y.x)/s).normalized()
+}
+func path_integral3d(a:Math.Vec3,b:Math.Vec3,c:Math.Vec3,lo:float,hi:float) float {
+    let middle=(lo+hi)*0.5;let half=(hi-lo)*0.5
+    let points:float[]=[0.0,-0.5384693101,0.5384693101,-0.9061798459,0.9061798459]
+    let weights:float[]=[0.5688888889,0.4786286705,0.4786286705,0.2369268851,0.2369268851]
+    var sum=0.0;var index=0
+    while index<5 { let t=middle+half*points[index];sum+=weights[index]*a.multiply(3.0*t).add(b.multiply(2.0)).multiply(t).add(c).length();index++ }
+    return half*sum
+}
+func path_polynomial3d(coefficients:float[],t:float) float {
+    var value=0.0;var index=coefficients.count()
+    while index>0 { index--;value=value*t+coefficients[index] }
+    return value
+}
+func path_roots3d(input:float[]) float[] {
+    var coefficients:float[]=[];var scale=0.0
+    for coefficient in input {
+        if !finite_body3d_value(coefficient) { panic("GFX.Physics.Path3D requires finite projection coefficients") }
+        scale=Math.max(scale,Math.abs(coefficient))
+    }
+    if scale==0.0 { return [] }
+    for coefficient in input { coefficients.append(coefficient/scale) }
+    while coefficients.count()>1 && Math.abs(coefficients[coefficients.count()-1])<0.0000000001 { coefficients.take_last() }
+    let degree=coefficients.count()-1
+    if degree==0 { return [] }
+    if degree==1 { let root=-coefficients[0]/coefficients[1];if root>=0.0 && root<=1.0 { return [root] }return [] }
+    var derivative:float[]=[];var index=1
+    while index<=degree { derivative.append((index as float)*coefficients[index]);index++ }
+    var cuts:float[]=[0.0]
+    for root in path_roots3d(derivative) { if root>0.0 && root<1.0 { cuts.append(root) } }
+    cuts.append(1.0)
+    var roots:float[]=[];index=0
+    while index<cuts.count() {
+        let cut=cuts[index]
+        if Math.abs(path_polynomial3d(coefficients,cut))<0.00000003 { roots.append(cut) }
+        if index+1<cuts.count() {
+            var lo=cut;var hi=cuts[index+1];var value=path_polynomial3d(coefficients,lo)
+            if value*path_polynomial3d(coefficients,hi)<0.0 {
+                var pass=0;while pass<32 { let mid=(lo+hi)*0.5;let f=path_polynomial3d(coefficients,mid)
+                    if value*f<=0.0 { hi=mid } else { lo=mid;value=f }pass++ }
+                roots.append((lo+hi)*0.5)
+            }
+        }
+        index++
+    }
+    // Recursive critical points are ordered, but a root at the upper critical point may duplicate the interval root.
+    var sorted_index=1
+    while sorted_index<roots.count() {
+        let value=roots[sorted_index];var place=sorted_index
+        while place>0 && roots[place-1]>value { roots[place]=roots[place-1];place-- }
+        roots[place]=value;sorted_index++
+    }
+    var unique:float[]=[]
+    for root in roots { if unique.count()==0 || Math.abs(root-unique[unique.count()-1])>0.000001 { unique.append(root) } }
+    return unique
+}
+func path_require_regular3d(coefficients:Math.Vec3[]) {
+    var x:float[]=[];var y:float[]=[];var z:float[]=[];var sx=0.0;var sy=0.0;var sz=0.0
+    for vector in coefficients {
+        if !finite_body3d_point(vector) { panic("GFX.Physics.Path3D requires finite segment coefficients") }
+        x.append(vector.x);y.append(vector.y);z.append(vector.z)
+        sx=Math.max(sx,Math.abs(vector.x));sy=Math.max(sy,Math.abs(vector.y));sz=Math.max(sz,Math.abs(vector.z))
+    }
+    var chosen=x;if sy>sx && sy>=sz { chosen=y } else if sz>sx { chosen=z }
+    var candidates=path_roots3d(chosen);candidates.append(0.0);candidates.append(1.0)
+    for t in candidates {
+        let value=Math.Vec3(path_polynomial3d(x,t),path_polynomial3d(y,t),path_polynomial3d(z,t))
+        if !finite_body3d_value(value.length_squared()) || value.length_squared()<=0.0000000001 {
+            panic("GFX.Physics.Path3D requires a regular tangent and continuous independent normal on every segment")
+        }
+    }
+}

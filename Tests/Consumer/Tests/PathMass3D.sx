@@ -1,0 +1,50 @@
+use GFX.Physics
+use STD.Math
+
+test "path speed drive respects force units for different carriage masses" {
+    let masses:float[]=[1.0,2.0,8.0]
+    for mass in masses {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var carrier=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        var carriage=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..transform=Physics.Transform3D(Math.Vec3(2.0,0.0,0.0)) ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(0.2))
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        var route=Physics.Path3D.line(Math.Vec3(),Math.Vec3(10.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+        var joint=world.create_path_constraint(carrier,carriage,Physics.PathConstraint3DSettings(route) ..motor=Physics.LinearMotor3D(1.0,12.0))
+        world.step(1.0/60.0)
+        assert(Math.abs(joint.motor_force()-12.0)<0.0001 && Math.abs(joint.speed()-12.0/(60.0*mass))<0.00001)
+    }
+}
+
+test "path asymmetric dynamic masses and anchor inertia conserve momentum and power" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var first=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var second=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0)) ..mass_properties=Physics.MassProperties3D(8.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var route=Physics.Path3D.line(Math.Vec3(-5.0,0.0,0.0),Math.Vec3(5.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    let anchor=Math.Vec3(0.0,0.5,0.0)
+    var joint=world.create_path_constraint(first,second,Physics.PathConstraint3DSettings(route) ..second_local_anchor=anchor)
+    second.set_linear_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+    let lambda=-1.0/(0.5+0.125+0.25/0.2)
+    assert(Math.abs(first.linear_velocity().z+lambda/2.0)<0.00001)
+    assert(Math.abs(second.linear_velocity().z-1.0-lambda/8.0)<0.00001 && Math.abs(second.angular_velocity().x-2.5*lambda)<0.00001)
+    let momentum=first.linear_velocity().multiply(2.0).add(second.linear_velocity().multiply(8.0))
+    assert(momentum.nearly_equal(Math.Vec3(0.0,0.0,8.0),0.00001))
+    let relative=second.linear_velocity().subtract(first.linear_velocity()).add(second.angular_velocity().cross(anchor))
+    assert(Math.abs(joint.reaction_force().dot(relative))<0.0001 && joint.reaction_torque().length()==0.0)
+    let energy=first.linear_velocity().length_squared()+4.0*second.linear_velocity().length_squared()+0.1*second.angular_velocity().length_squared()
+    assert(energy<4.0)
+}
+
+test "path global projection finds both minima instead of the middle stationary maximum" {
+    let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),Math.Vec3(4.0,8.0,0.0),Math.Vec3(0.0,0.0,1.0)),
+        Physics.PathKnot3D(Math.Vec3(4.0,0.0,0.0),Math.Vec3(4.0,-8.0,0.0),Math.Vec3(0.0,0.0,1.0))]
+    var path=Physics.Path3D(knots);let query=Math.Vec3(2.0,0.5,0.0)
+    let left=path.frame(path.closest_position(query,0.0)).position
+    let right=path.frame(path.closest_position(query,path.length())).position
+    assert(left.nearly_equal(Math.Vec3(1.0,1.5,0.0),0.00002) && right.nearly_equal(Math.Vec3(3.0,1.5,0.0),0.00002))
+    assert(Math.abs(left.distance(query)-Math.sqrt(2.0))<0.00002 && Math.abs(right.distance(query)-Math.sqrt(2.0))<0.00002)
+}

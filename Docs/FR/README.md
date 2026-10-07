@@ -175,3 +175,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Crémaillère 3D](RackAndPinion3D.md) : rapport rotation/course signé, phase, couple et force.
 
 [Poulie 3D](Pulley3D.md) : points fixes, longueur pondérée, mou et réactions aux ancrages.
+
+Le [guidage sur chemin 3D](Path3D.md) suit une courbe Hermite en mètres avec moteurs, friction et transport d’orientation.

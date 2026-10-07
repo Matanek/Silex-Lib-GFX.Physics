@@ -295,3 +295,5 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 [3D rack and pinion](RackAndPinion3D.md): signed rotation/travel ratio, phase, torque and force.
 
 [3D pulley](Pulley3D.md): fixed points, weighted length, slack and anchor reactions.
+
+[3D path guidance](Path3D.md) follows a Hermite curve in meters with motors, friction and orientation transport.

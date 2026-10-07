@@ -1,0 +1,23 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var carrier=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var carriage=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var route=Physics.Path3D.line(Math.Vec3(),Math.Vec3(10.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    var guide=world.create_path_constraint(carrier,carriage,Physics.PathConstraint3DSettings(route)
+        ..orientation=Physics.PathOrientation3D.follow_path
+        ..motor=Physics.LinearMotor3D.position(3.0,20.0,40.0,12.0))
+    var step=0;while step<300 { world.step(1.0/60.0);step++ }
+    assert(Math.abs(guide.position()-3.0)<0.001 && guide.anchor_error().length()<0.001)
+    guide.set_motor(Physics.LinearMotor3D(1.0,12.0));world.step(1.0/60.0)
+    assert(guide.speed()>0.0 && guide.motor_force()<=12.001)
+    guide.set_motor(null);guide.set_maximum_friction_force(6.0)
+    step=0;while step<60 { world.step(1.0/60.0);step++ }
+    assert(Math.abs(guide.speed())<0.001)
+    world.destroy_path_constraint(guide);assert(!guide.is_valid())
+    print("path recipe: ok")
+}

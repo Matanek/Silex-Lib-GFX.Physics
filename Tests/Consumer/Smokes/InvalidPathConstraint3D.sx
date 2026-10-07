@@ -1,0 +1,51 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    let nan=Math.sqrt(-1.0);let x=Math.Vec3(1.0,0.0,0.0);let y=Math.Vec3(0.0,1.0,0.0)
+    if selected("knot-position") { Physics.PathKnot3D(Math.Vec3(nan,0.0,0.0),x,y) }
+    if selected("knot-tangent") { Physics.PathKnot3D(Math.Vec3(),Math.Vec3(),y) }
+    if selected("knot-normal") { Physics.PathKnot3D(Math.Vec3(),x,x) }
+    let first=Physics.PathKnot3D(Math.Vec3(),x,y);let second=Physics.PathKnot3D(x,x,y)
+    let empty:Physics.PathKnot3D[]=[];let one:Physics.PathKnot3D[]=[first];let two:Physics.PathKnot3D[]=[first,second]
+    if selected("empty") { Physics.Path3D(empty) }
+    if selected("one") { Physics.Path3D(one) }
+    if selected("closed-two") { Physics.Path3D(two,true) }
+    if selected("cusp") { let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),x.multiply(-1.0),y),Physics.PathKnot3D(x,x.multiply(-1.0),y)];Physics.Path3D(knots) }
+    if selected("normal-collapse") { let knots:Physics.PathKnot3D[]=[first,Physics.PathKnot3D(x,x,y.multiply(-1.0))];Physics.Path3D(knots) }
+    if selected("overflow") { Physics.Path3D.line(Math.Vec3(),Math.Vec3(1.0e30,0.0,0.0),y) }
+    var path=Physics.Path3D(two)
+    if selected("frame") { path.frame(nan) }
+    if selected("query") { path.closest_position(Math.Vec3(nan,0.0,0.0)) }
+    if selected("hint") { path.closest_position(Math.Vec3(),nan) }
+    if selected("projection-overflow") { path.closest_position(Math.Vec3(1.0e30,0.0,0.0)) }
+    if selected("closed-distance") {
+        let z=Math.Vec3(0.0,0.0,1.0)
+        let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(0.001,0.0,0.0),Math.Vec3(0.0,0.001,0.0),z),
+            Physics.PathKnot3D(Math.Vec3(0.0,0.001,0.0),Math.Vec3(-0.001,0.0,0.0),z),
+            Physics.PathKnot3D(Math.Vec3(-0.001,0.0,0.0),Math.Vec3(0.0,-0.001,0.0),z)]
+        var loop=Physics.Path3D(knots,true);loop.frame(1.0e38)
+    }
+    var world=Physics.World3D();var body=world.create_rigid_body();var fixed=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)
+    var settings=Physics.PathConstraint3DSettings(path)
+    if selected("anchor") { settings.second_local_anchor=Math.Vec3(nan,0.0,0.0) }
+    if selected("friction-negative") { settings.maximum_friction_force=-1.0 }
+    if selected("friction-nan") { settings.maximum_friction_force=nan }
+    if selected("same") { world.create_path_constraint(body,body,settings) }
+    if selected("fixed-fixed") { world.create_path_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed),settings) }
+    if selected("foreign") { var other=Physics.World3D();world.create_path_constraint(body,other.create_rigid_body(),settings) }
+    var joint=world.create_path_constraint(fixed,body,settings)
+    if selected("mutation-anchor") { joint.set_frames(Physics.Transform3D(),Math.Vec3(nan,0.0,0.0)) }
+    if selected("mutation-friction") { joint.set_maximum_friction_force(-1.0) }
+    if selected("stale") { world.destroy_path_constraint(joint);world.create_path_constraint(fixed,body,settings);joint.position() }
+    if selected("stale-mutation") { world.destroy_path_constraint(joint);joint.set_enabled(true) }
+    if selected("foreign-destroy") { var other=Physics.World3D();other.destroy_path_constraint(joint) }
+    panic("invalid path operation was accepted")
+}

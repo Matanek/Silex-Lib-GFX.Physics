@@ -1,0 +1,162 @@
+use GFX.Physics
+use STD.Math
+func path_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func path_carrier(world:Physics.World3D) Physics.RigidBody3D { return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)) }
+func path_body(world:Physics.World3D,position:Math.Vec3=Math.Vec3()) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false ..transform=Physics.Transform3D(position)
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func path_steps(world:Physics.World3D,count:int) { var i=0;while i<count { world.step(1.0/60.0);i++ } }
+func path_line(length:float=10.0) Physics.Path3D { return Physics.Path3D.line(Math.Vec3(),Math.Vec3(length,0.0,0.0),Math.Vec3(0.0,1.0,0.0)) }
+test "path guides two normal directions and leaves tangent and rotation free" {
+    var world=path_world();var a=path_carrier(world);var b=path_body(world,Math.Vec3(2.0,0.0,0.0))
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()))
+    b.set_linear_velocity(Math.Vec3(1.0,2.0,3.0));b.set_angular_velocity(Math.Vec3(0.5,0.0,0.0));path_steps(world,60)
+    assert(Math.abs(joint.position()-3.0)<0.0001 && joint.anchor_error().length()<0.0001 && Math.abs(joint.speed()-1.0)<0.0001)
+    assert(b.angular_velocity().x==0.5 && world.path_constraint_count()==1)
+}
+test "path bounded speed motor moves along physical meters" {
+    var world=path_world();var a=path_carrier(world);var b=path_body(world,Math.Vec3(2.0,0.0,0.0))
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()) ..motor=Physics.LinearMotor3D(1.0,12.0))
+    world.step(1.0/60.0);assert(Math.abs(joint.motor_force()-12.0)<0.0001 && Math.abs(joint.speed()-0.1)<0.0001)
+    path_steps(world,60);assert(Math.abs(joint.speed()-1.0)<0.0001)
+}
+func path_circle() Physics.Path3D {
+    let h=1.6568542495;let normal=Math.Vec3(0.0,0.0,1.0)
+    let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,h,0.0),normal),
+        Physics.PathKnot3D(Math.Vec3(0.0,1.0,0.0),Math.Vec3(-h,0.0,0.0),normal),
+        Physics.PathKnot3D(Math.Vec3(-1.0,0.0,0.0),Math.Vec3(0.0,-h,0.0),normal),
+        Physics.PathKnot3D(Math.Vec3(0.0,-1.0,0.0),Math.Vec3(h,0.0,0.0),normal)]
+    return Physics.Path3D(knots,true)
+}
+test "path motor positions are independent of line length" {
+    let lengths:float[]=[2.0,10.0,100.0]
+    for length in lengths {
+        var world=path_world();var b=path_body(world);var joint=world.create_path_constraint(path_carrier(world),b,
+            Physics.PathConstraint3DSettings(path_line(length)) ..motor=Physics.LinearMotor3D.position(1.0,100.0,40.0,12.0))
+        path_steps(world,300);assert(Math.abs(joint.position()-1.0)<0.0001 && Math.abs(joint.speed())<0.0001)
+        joint.set_motor(Physics.LinearMotor3D.position_and_velocity(1.5,0.3,100.0,40.0,12.0));path_steps(world,180)
+        let equilibrium=1.5+0.3*(12.0+40.0/60.0)/40.0
+        assert(Math.abs(joint.position()-equilibrium)<0.001)
+    }
+}
+test "path endpoints stop outward motion and release inward motion" {
+    let positions:float[]=[0.0,1.0]
+    for initial in positions {
+        var world=path_world();var b=path_body(world,Math.Vec3(initial,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,Physics.PathConstraint3DSettings(path_line(1.0)))
+        let outward=2.0*initial-1.0;b.set_linear_velocity(Math.Vec3(outward,0.0,0.0));path_steps(world,10)
+        assert(Math.abs(b.position().x-initial)<0.0001 && Math.abs(joint.speed())<0.00001)
+        b.set_linear_velocity(Math.Vec3(-outward,0.0,0.0));world.step(1.0/60.0)
+        assert(Math.abs(joint.speed()+outward)<0.00001)
+    }
+}
+test "path friction dissipates energy and motor signed bounds stay physical" {
+    var world=path_world();var b=path_body(world,Math.Vec3(2.0,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,
+        Physics.PathConstraint3DSettings(path_line()) ..maximum_friction_force=6.0)
+    b.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    assert(Math.abs(joint.speed()-0.95)<0.00001 && Math.abs(joint.friction_force()+6.0)<0.0001 && joint.friction_force()*joint.speed()<0.0)
+    path_steps(world,30);assert(Math.abs(joint.speed())<0.00001)
+    joint.set_motor(Physics.LinearMotor3D(2.0,0.0,3.0));world.step(1.0/60.0)
+    assert(Math.abs(joint.motor_force()-3.0)<0.0001 && joint.friction_force()==0.0)
+    joint.set_motor(Physics.LinearMotor3D(-2.0,0.0,3.0));world.step(1.0/60.0)
+    assert(joint.motor_force()==0.0 && joint.speed()>0.0)
+}
+test "path orientation axes allow exactly their selected spin" {
+    let modes:Physics.PathOrientation3D[]=[Physics.PathOrientation3D.around_tangent,Physics.PathOrientation3D.around_normal,
+        Physics.PathOrientation3D.around_binormal,Physics.PathOrientation3D.follow_path,Physics.PathOrientation3D.relative_to_body]
+    var mode_index=0
+    for mode in modes {
+        var world=path_world();var b=path_body(world,Math.Vec3(2.0,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,
+            Physics.PathConstraint3DSettings(path_line()) ..orientation=mode)
+        b.set_angular_velocity(Math.Vec3(1.0,2.0,3.0));path_steps(world,60)
+        var expected=Math.Vec3();if mode_index==0 { expected=Math.Vec3(1.0,0.0,0.0) }
+        if mode_index==1 { expected=Math.Vec3(0.0,2.0,0.0) }if mode_index==2 { expected=Math.Vec3(0.0,0.0,3.0) }
+        assert(b.angular_velocity().nearly_equal(expected,0.00001));mode_index++
+    }
+}
+test "path curved follow transports angular speed and adds physical effective inertia" {
+    var path=path_circle();var world=path_world();var b=path_body(world,Math.Vec3(1.0,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,
+        Physics.PathConstraint3DSettings(path) ..orientation=Physics.PathOrientation3D.follow_path)
+    b.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));world.step(1.0/60.0)
+    let h=1.6568542495;let curvature=(6.0-2.0*h)/(h*h);let speed=2.0/(2.0+0.2*curvature*curvature)
+    assert(Math.abs(b.linear_velocity().y-speed)<0.0002 && Math.abs(b.angular_velocity().z-curvature*speed)<0.0003)
+    assert(b.linear_velocity().length_squared()+0.1*b.angular_velocity().length_squared()<1.0)
+    assert(Math.abs(joint.reaction_force().dot(b.linear_velocity())+joint.reaction_torque().dot(b.angular_velocity()))<0.001)
+    path_steps(world,180);assert(joint.anchor_error().length()<0.002 && b.angular_velocity().length()>0.1)
+}
+test "path closed seam uses shortest physical position error" {
+    var path=path_circle();var world=path_world();var b=path_body(world,path.frame(path.length()-0.1).position)
+    var joint=world.create_path_constraint(path_carrier(world),b,Physics.PathConstraint3DSettings(path)
+        ..motor=Physics.LinearMotor3D.position(0.1,20.0,40.0,12.0))
+    world.step(1.0/60.0);assert(joint.motor_force()>0.0)
+    path_steps(world,240);assert(Math.abs(joint.position()-0.1)<0.001 && joint.anchor_error().length()<0.001)
+}
+test "path moving carrier and offset anchor preserve the world frame" {
+    var world=path_world();let rotation=Math.Quat.angle_axis(0.7,Math.Vec3(0.0,0.0,1.0))
+    var a=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..transform=Physics.Transform3D(Math.Vec3(3.0,4.0,0.0),rotation) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    let first_frame=Physics.Transform3D(Math.Vec3(1.0,0.0,0.0));let anchor=Math.Vec3(0.0,0.5,0.0)
+    var b=path_body(world,a.transform().point(first_frame.point(Math.Vec3(2.0,0.0,0.0))).subtract(anchor))
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()) ..first_local_path_frame=first_frame ..second_local_anchor=anchor)
+    a.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));path_steps(world,60)
+    assert(joint.anchor_error().length()<0.002 && joint.second_local_anchor().y==0.5 && joint.first_local_path_frame().position.x==1.0)
+}
+test "path geometric recovery changes poses without injecting velocity energy" {
+    var world=path_world();var b=path_body(world,Math.Vec3(2.0,2.0,3.0));var joint=world.create_path_constraint(path_carrier(world),b,Physics.PathConstraint3DSettings(path_line()))
+    path_steps(world,120);assert(joint.anchor_error().length()<0.0001 && b.linear_velocity().length()==0.0 && b.angular_velocity().length()==0.0)
+    joint.set_orientation(Physics.PathOrientation3D.follow_path);b.set_transform(Physics.Transform3D(b.position(),Math.Quat.angle_axis(2.0,Math.Vec3(0.0,1.0,0.0))));path_steps(world,120)
+    assert(Math.abs(b.rotation().w-1.0)<0.0001 && b.angular_velocity().length()==0.0)
+}
+test "path mutations clear observations and preserve handle lifecycle" {
+    var world=path_world();var a=path_carrier(world);var b=path_body(world)
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()) ..motor=Physics.LinearMotor3D(1.0,10.0))
+    world.step(1.0/60.0);let force=joint.reaction_force();world.step(0.0);assert(joint.reaction_force().nearly_equal(force,0.00001))
+    joint.set_path(path_line(20.0));assert(joint.reaction_force().length()==0.0 && joint.path().length()>19.99)
+    joint.set_frames(Physics.Transform3D(),Math.Vec3());joint.set_orientation(Physics.PathOrientation3D.relative_to_body)
+    joint.set_maximum_friction_force(2.0);assert(joint.maximum_friction_force()==2.0 && joint.orientation()==Physics.PathOrientation3D.relative_to_body)
+    joint.set_motor(null);b.set_sleep_enabled(true);path_steps(world,180);assert(!b.is_awake())
+    joint.set_motor(Physics.LinearMotor3D(1.0,10.0));assert(b.is_awake())
+    world.destroy_path_constraint(joint);var newer=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()))
+    assert(!joint.is_valid() && newer.is_valid());world.destroy_rigid_body(b);assert(!newer.is_valid() && world.path_constraint_count()==0)
+}
+test "path constraint and body suspension release then recover the guide" {
+    var world=path_world();var b=path_body(world,Math.Vec3(2.0,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,Physics.PathConstraint3DSettings(path_line()))
+    joint.set_enabled(false);b.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));path_steps(world,30)
+    assert(joint.anchor_error().length()>0.4 && joint.reaction_force().length()==0.0)
+    joint.set_enabled(true);path_steps(world,120);assert(joint.anchor_error().length()<0.0001)
+    b.set_enabled(false);world.step(1.0/60.0);assert(joint.reaction_force().length()==0.0)
+    b.set_enabled(true);world.step(1.0/60.0);assert(joint.is_valid())
+}
+test "path world destruction invalidates retained constraint handles" {
+    var joint:Physics.PathConstraint3D?=null
+    { var world=path_world();joint=world.create_path_constraint(path_carrier(world),path_body(world),Physics.PathConstraint3DSettings(path_line())) }
+    assert(!joint!.is_valid())
+}
+test "path dynamic carrier offset row conserves momentum and anchor work" {
+    var world=path_world();var a=path_body(world);var b=path_body(world,Math.Vec3(0.0,-0.5,0.0))
+    var path=Physics.Path3D.line(Math.Vec3(-5.0,0.0,0.0),Math.Vec3(5.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path) ..second_local_anchor=Math.Vec3(0.0,0.5,0.0))
+    b.set_linear_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+    assert(Math.abs(a.linear_velocity().z-2.0/9.0)<0.00001 && Math.abs(b.linear_velocity().z-7.0/9.0)<0.00001)
+    assert(Math.abs(b.angular_velocity().x+10.0/9.0)<0.00001 && joint.reaction_torque().length()==0.0)
+    assert(a.linear_velocity().add(b.linear_velocity()).nearly_equal(Math.Vec3(0.0,0.0,1.0),0.00001))
+}
+test "path spatial normal transport produces angular speed about the tangent" {
+    let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0)),
+        Physics.PathKnot3D(Math.Vec3(2.0,0.0,0.0),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,0.0,1.0))]
+    var world=path_world();var b=path_body(world,Math.Vec3(1.0,0.0,0.0));var joint=world.create_path_constraint(path_carrier(world),b,
+        Physics.PathConstraint3DSettings(Physics.Path3D(knots)) ..orientation=Physics.PathOrientation3D.follow_path)
+    b.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    assert(Math.abs(b.linear_velocity().x-10.0/11.0)<0.00001 && Math.abs(b.angular_velocity().x-10.0/11.0)<0.00001)
+    assert(Math.abs(joint.reaction_force().dot(b.linear_velocity())+joint.reaction_torque().dot(b.angular_velocity()))<0.001)
+}
+test "path motor transmits a real obstacle contact" {
+    var world=path_world();var a=path_carrier(world)
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5,2.0,2.0))) ..transform=Physics.Transform3D(Math.Vec3(2.0,0.0,0.0)))
+    var b=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)))
+    var joint=world.create_path_constraint(a,b,Physics.PathConstraint3DSettings(path_line()) ..motor=Physics.LinearMotor3D(1.0,10.0))
+    path_steps(world,240);assert(Math.abs(b.position().x-1.5)<0.003 && joint.anchor_error().length()<0.001)
+    assert(Math.abs(joint.motor_force()-10.0)<0.001 && Math.abs(joint.speed())<0.001)
+}

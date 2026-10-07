@@ -1,0 +1,44 @@
+use GFX.Physics
+use STD.Math
+test "path line uses meters and an orthonormal frame" {
+    var path=Physics.Path3D.line(Math.Vec3(),Math.Vec3(10.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    assert(Math.abs(path.length()-10.0)<0.00001)
+    assert(path.frame(3.0).position.nearly_equal(Math.Vec3(3.0,0.0,0.0),0.00001))
+    assert(path.frame(3.0).rotation.rotate(Math.Vec3(1.0,0.0,0.0)).nearly_equal(Math.Vec3(1.0,0.0,0.0),0.00001))
+    assert(Math.abs(path.closest_position(Math.Vec3(7.0,2.0,3.0))-7.0)<0.00001)
+    assert(path.closest_position(Math.Vec3(-2.0,0.0,0.0))==0.0)
+    assert(Math.abs(path.frame(20.0).position.x-10.0)<0.00001)
+}
+test "path curved Hermite projection is globally closest and arc parameterized" {
+    let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),Math.Vec3(4.0,8.0,0.0),Math.Vec3(0.0,0.0,1.0)),
+        Physics.PathKnot3D(Math.Vec3(4.0,0.0,0.0),Math.Vec3(4.0,-8.0,0.0),Math.Vec3(0.0,0.0,1.0))]
+    var path=Physics.Path3D(knots)
+    assert(path.length()>5.0 && path.length()<6.0)
+    assert(path.frame(path.length()*0.5).position.nearly_equal(Math.Vec3(2.0,2.0,0.0),0.00002))
+    let query=Math.Vec3(2.0,1.0,0.0);let s=path.closest_position(query)
+    let distance=path.frame(s).position.distance(query)
+    var i=0;while i<=1000 { assert(path.frame(path.length()*(i as float)/1000.0).position.distance(query)>=distance-0.00002);i++ }
+}
+test "path immutable knot storage survives edits to the author array" {
+    var knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0)),
+        Physics.PathKnot3D(Math.Vec3(2.0,0.0,0.0),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))]
+    var path=Physics.Path3D(knots)
+    knots[0]=Physics.PathKnot3D(Math.Vec3(5.0,0.0,0.0),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0))
+    assert(path.knot(0).position.x==0.0 && Math.abs(path.length()-2.0)<0.00001 && !path.is_closed() && path.knot_count()==2)
+}
+test "path normal interpolation stays orthogonal through a spatial twist" {
+    let knots:Physics.PathKnot3D[]=[Physics.PathKnot3D(Math.Vec3(),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0)),
+        Physics.PathKnot3D(Math.Vec3(2.0,0.0,0.0),Math.Vec3(2.0,0.0,0.0),Math.Vec3(0.0,0.0,1.0))]
+    var path=Physics.Path3D(knots);let frame=path.frame(1.0)
+    assert(frame.vector(Math.Vec3(0.0,1.0,0.0)).nearly_equal(Math.Vec3(0.0,1.0,1.0).normalized(),0.00001))
+    assert(frame.vector(Math.Vec3(1.0,0.0,0.0)).dot(frame.vector(Math.Vec3(0.0,1.0,0.0)))==0.0)
+}
+test "path basis handles half turns and arbitrary spatial lines" {
+    let ends:Math.Vec3[]=[Math.Vec3(-3.0,0.0,0.0),Math.Vec3(0.0,0.0,-3.0),Math.Vec3(1.0,2.0,3.0)]
+    for end in ends {
+        var path=Physics.Path3D.line(Math.Vec3(),end,Math.Vec3(0.0,1.0,0.0));let frame=path.frame(path.length()*0.5)
+        assert(frame.position.nearly_equal(end.multiply(0.5),0.00001))
+        assert(frame.vector(Math.Vec3(1.0,0.0,0.0)).nearly_equal(end.normalized(),0.00001))
+        assert(Math.abs(frame.rotation.length_squared()-1.0)<0.00001)
+    }
+}

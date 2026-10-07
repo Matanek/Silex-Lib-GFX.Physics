@@ -1,3 +1,14 @@
+use GFX.Physics.PathConstraint3D.PathOrientation3D
+use GFX.Physics.PathConstraint3D.PathConstraint3D
+use GFX.Physics.PathConstraint3D.PathConstraint3DSettings
+use GFX.Physics.PathConstraint3D.PathConstraintState3D
+use GFX.Physics.PathConstraint3D.PathConstraintStore3D
+use GFX.Physics.PathConstraint3D.PathRow3D
+use GFX.Physics.PathConstraint3D.path_geometry3d
+use GFX.Physics.PathConstraint3D.path_linear_row3d
+use GFX.Physics.PathConstraint3D.path_angular_row3d
+use GFX.Physics.PathConstraint3D.path_orientation_axes3d
+use GFX.Physics.PathConstraint3D.path_orientation_error3d
 use GFX.Physics.PulleyConstraint3D.PulleyConstraint3D
 use GFX.Physics.PulleyConstraint3D.PulleyConstraint3DSettings
 use GFX.Physics.PulleyConstraint3D.PulleyConstraintState3D
@@ -142,6 +153,7 @@ public class World3D {
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
     private var rack_and_pinion_constraints:RackAndPinionConstraintStore3D
+    private var path_constraints:PathConstraintStore3D
     private var pulley_constraints:PulleyConstraintStore3D
     private var gear_constraints:GearConstraintStore3D
     private var six_dof_constraints:SixDOFConstraintStore3D
@@ -163,6 +175,7 @@ public class World3D {
         self.cone_constraints.invalidate_all()
         self.swing_twist_constraints.invalidate_all()
         self.rack_and_pinion_constraints.invalidate_all()
+        self.path_constraints.invalidate_all()
         self.pulley_constraints.invalidate_all()
         self.gear_constraints.invalidate_all()
         self.six_dof_constraints.invalidate_all()
@@ -182,6 +195,7 @@ public class World3D {
         self.cone_constraints = ConeConstraintStore3D(self.store)
         self.swing_twist_constraints = SwingTwistConstraintStore3D(self.store)
         self.rack_and_pinion_constraints = RackAndPinionConstraintStore3D(self.store)
+        self.path_constraints = PathConstraintStore3D(self.store)
         self.pulley_constraints = PulleyConstraintStore3D(self.store)
         self.gear_constraints = GearConstraintStore3D(self.store)
         self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
@@ -209,6 +223,8 @@ public class World3D {
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
     func rack_and_pinion_constraint_count() int { return self.rack_and_pinion_constraints.live_count }
+
+    func path_constraint_count() int { return self.path_constraints.live_count }
 
     func pulley_constraint_count() int { return self.pulley_constraints.live_count }
 
@@ -358,6 +374,22 @@ public class World3D {
         self.rack_and_pinion_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_path_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:PathConstraint3DSettings
+    ) PathConstraint3D {
+        let id = self.path_constraints.append(first, second, settings)
+        return PathConstraint3D(self.path_constraints, id)
+    }
+
+    func destroy_path_constraint(constraint:@PathConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.path_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.path_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_pulley_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:PulleyConstraint3DSettings
@@ -445,6 +477,7 @@ public class World3D {
         self.cone_constraints.destroy_for_body(body.body_id())
         self.swing_twist_constraints.destroy_for_body(body.body_id())
         self.rack_and_pinion_constraints.destroy_for_body(body.body_id())
+        self.path_constraints.destroy_for_body(body.body_id())
         self.pulley_constraints.destroy_for_body(body.body_id())
         self.gear_constraints.destroy_for_body(body.body_id())
         self.six_dof_constraints.destroy_for_body(body.body_id())
@@ -740,7 +773,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -979,6 +1012,13 @@ public class World3D {
             if var constraint = slot { constraint.reset() }
         }
         self.observe_gear_phases(0.0)
+        for slot in self.path_constraints.slots {
+            if var constraint = slot {
+                constraint.reset()
+                prepare_path3d(self.store.require(constraint.first_id),
+                    self.store.require(constraint.second_id), constraint)
+            }
+        }
         for slot in self.pulley_constraints.slots {
             if var constraint = slot {
                 constraint.reset()
@@ -1116,6 +1156,19 @@ public class World3D {
                     self.store.require(constraint.second_id), constraint, delta)
             }
         }
+    }
+
+    private func has_active_path_constraint() bool {
+        for slot in self.path_constraints.slots {
+            if let constraint = slot {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
     }
 
     private func has_active_pulley_constraint() bool {
@@ -1318,6 +1371,25 @@ public class World3D {
             constraint_index++
         }
         constraint_index = 0
+        while constraint_index < self.path_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.path_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.path_constraints.slots[selected] {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_path_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
+        constraint_index = 0
         while constraint_index < self.pulley_constraints.slots.count() {
             var selected = constraint_index
             if reverse {
@@ -1416,7 +1488,7 @@ public class World3D {
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.pulley_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.path_constraints.live_count + self.pulley_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1556,6 +1628,30 @@ public class World3D {
                 }
             }
             for slot in self.rack_and_pinion_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.path_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
                         var first = self.store.require(constraint.first_id)
@@ -1986,6 +2082,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.path_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass path witness
+                            // without changing the other families' position budget.
+                            solve_path_position3d(first, second, constraint)
+                            solve_path_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             for slot in self.pulley_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -2200,6 +2312,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.rack_and_pinion_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.path_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.is_enabled {
                     islands.connect(constraint.first_id.slot,
@@ -5032,4 +5152,92 @@ func solve_pulley_position3d(first:BodyState3D, second:BodyState3D,
     shift_distance_body3d(second,row.second_axis.multiply(lambda),row.second_radius)
     state.first_normal=row.first_axis
     state.second_normal=row.second_axis.divide(state.ratio)
+}
+
+func prepare_path3d(first:@BodyState3D,second:@BodyState3D,state:PathConstraintState3D) {
+    let geometry=path_geometry3d(first,second,state)
+    state.position=geometry.position
+    var rows:PathRow3D[]=[path_linear_row3d(first,second,geometry,geometry.axis(1)),
+        path_linear_row3d(first,second,geometry,geometry.axis(2)),path_linear_row3d(first,second,geometry,geometry.axis(0))]
+    state.angular_axes=path_orientation_axes3d(state,geometry)
+    for axis in state.angular_axes { rows.append(path_angular_row3d(first,second,geometry,axis)) }
+    state.rows=rows
+    if !state.path.is_closed() {
+        if geometry.position<=0.0 { state.limit_side=1 }
+        if geometry.position>=state.path.length() { state.limit_side=-1 }
+    }
+    if let motor=state.motor {
+        if let target=motor.target_position { state.motor_error=state.path.position_error(geometry.position,target) }
+    }
+}
+func apply_path_velocity3d(first:&BodyState3D,second:&BodyState3D,state:PathConstraintState3D,row:PathRow3D,lambda:float) {
+    first.linear_velocity=first.linear_velocity.add(row.first_linear.multiply(lambda*first.inverse_mass))
+    second.linear_velocity=second.linear_velocity.add(row.second_linear.multiply(lambda*second.inverse_mass))
+    first.angular_velocity=first.angular_velocity.add(row.first_response.multiply(lambda))
+    second.angular_velocity=second.angular_velocity.add(row.second_response.multiply(lambda))
+    state.impulse=state.impulse.add(row.second_linear.multiply(lambda))
+    state.angular_impulse=state.angular_impulse.add(row.couple.multiply(lambda))
+}
+func solve_path_velocity3d(first:&BodyState3D,second:&BodyState3D,state:PathConstraintState3D,delta:float) {
+    if state.rows.count()<3 { return }
+    var index=0
+    while index<state.rows.count() {
+        if index!=2 { let row=state.rows[index];if row.mass>0.000000001 {
+            apply_path_velocity3d(first,second,state,row,-row.speed(first,second)/row.mass)
+        } }
+        index++
+    }
+    let row=state.rows[2]
+    if row.mass<=0.000000001 { return }
+    var minimum=-state.maximum_friction_force;var maximum=state.maximum_friction_force
+    var previous=state.friction_impulse;var speed=0.0;var softness=0.0;var bias=0.0
+    if let motor=state.motor {
+        minimum=motor.minimum_force;maximum=motor.maximum_force;previous=state.motor_impulse;speed=motor.speed
+        if motor.target_position!=null {
+            softness=1.0/(delta*(motor.damping+delta*motor.stiffness))
+            bias=delta*motor.stiffness*softness*state.motor_error
+        }
+    }
+    if minimum!=0.0 || maximum!=0.0 {
+        let accumulated=Math.clamp(previous-(row.speed(first,second)-speed+bias+softness*previous)/(row.mass+softness),minimum*delta,maximum*delta)
+        if state.motor!=null { state.motor_impulse=accumulated } else { state.friction_impulse=accumulated }
+        apply_path_velocity3d(first,second,state,row,accumulated-previous)
+    }
+    if state.limit_side!=0 {
+        let previous_limit=state.limit_impulse;var accumulated=previous_limit-row.speed(first,second)/row.mass
+        if state.limit_side==1 { accumulated=Math.max(0.0,accumulated) } else { accumulated=Math.min(0.0,accumulated) }
+        state.limit_impulse=accumulated
+        apply_path_velocity3d(first,second,state,row,accumulated-previous_limit)
+    }
+    state.inverse_delta=1.0/delta
+}
+func shift_path_row3d(first:BodyState3D,second:BodyState3D,row:PathRow3D,error:float) {
+    if row.mass<=0.000000001 { return }
+    var lambda=-Math.clamp(0.2*error,-0.2,0.2)/row.mass
+    let largest=Math.max(row.first_response.length(),row.second_response.length())
+    if Math.abs(lambda)*largest>0.1 { lambda*=0.1/(Math.abs(lambda)*largest) }
+    shift_fixed_body3d(first,row.first_linear.multiply(lambda),row.first_angular.multiply(lambda),Math.Vec3())
+    shift_fixed_body3d(second,row.second_linear.multiply(lambda),row.second_angular.multiply(lambda),Math.Vec3())
+}
+func solve_path_position3d(first:BodyState3D,second:BodyState3D,state:PathConstraintState3D) {
+    var index=1
+    while index<3 {
+        let geometry=path_geometry3d(first,second,state);let axis=geometry.axis(index)
+        shift_path_row3d(first,second,path_linear_row3d(first,second,geometry,axis),geometry.error.dot(axis))
+        index++
+    }
+    if !state.path.is_closed() {
+        let geometry=path_geometry3d(first,second,state)
+        if geometry.position<=0.0 || geometry.position>=state.path.length() {
+            let axis=geometry.axis(0)
+            shift_path_row3d(first,second,path_linear_row3d(first,second,geometry,axis),geometry.error.dot(axis))
+        }
+    }
+    if state.orientation!=PathOrientation3D.free {
+        let geometry=path_geometry3d(first,second,state)
+        let error=path_orientation_error3d(first,second,state,geometry)
+        for axis in path_orientation_axes3d(state,geometry) {
+            shift_path_row3d(first,second,path_angular_row3d(first,second,geometry,axis),error.dot(axis))
+        }
+    }
 }
