@@ -66,7 +66,7 @@ Le consommateur et l'oracle Jolt qualifient accélération, inversion, freinage,
 deux masses libres, ancrage excentré et charge supérieure à la capacité.
 Le rail tournant est comparé en régime établi à vitesse relative constante.
 La parité des transitions d'effort pendant une rotation du rail, des impacts
-et des chaînes spatiales générales reste à établir. Les butées souples restent à qualifier.
+et des chaînes spatiales générales reste à établir. La commande combinée reste à qualifier.
 
 `SliderMotorScene.sx` commence en montée à −1 m/s sur un rail incliné.
 T alterne montée, freinage puis descente ; F choisit 30 ou 6 N, cette dernière
@@ -78,3 +78,5 @@ R réinitialise, Espace met en pause/reprend et Échap ferme.
 Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.
 
 Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
+
+[Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.

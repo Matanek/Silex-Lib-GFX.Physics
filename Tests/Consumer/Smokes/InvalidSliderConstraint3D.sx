@@ -17,6 +17,13 @@ func main() {
     var world = Physics.World3D()
     var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
     var body = world.create_rigid_body()
+    if selected("soft-stiffness-nan") { Physics.SliderLimitSpring3D(Math.sqrt(-1.0),1.0) }
+    if selected("soft-stiffness-infinity") { Physics.SliderLimitSpring3D(1.0/0.0,1.0) }
+    if selected("soft-stiffness-zero") { Physics.SliderLimitSpring3D(0.0,1.0) }
+    if selected("soft-stiffness-negative") { Physics.SliderLimitSpring3D(-1.0,1.0) }
+    if selected("soft-damping-nan") { Physics.SliderLimitSpring3D(1.0,Math.sqrt(-1.0)) }
+    if selected("soft-damping-infinity") { Physics.SliderLimitSpring3D(1.0,1.0/0.0) }
+    if selected("soft-damping-negative") { Physics.SliderLimitSpring3D(1.0,-1.0) }
     if selected("position-nan") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings()
         ..first_local_frame = Physics.Transform3D(Math.Vec3(Math.sqrt(-1.0),0.0,0.0))) }
     if selected("rotation-zero") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings()
@@ -88,5 +95,8 @@ func main() {
     if selected("bounds-servo-damping-infinity") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 8.0, 1.0 / 0.0) }
     if selected("bounds-servo-damping-negative") { Physics.SliderMotor3D.position(0.5, -1.0, 1.0, 8.0, -1.0) }
     if selected("bounds-servo-ordered") { Physics.SliderMotor3D.position(0.5, 2.0, -1.0, 8.0, 8.0) }
+    if selected("stale-soft-read") { world.destroy_slider_constraint(joint);joint.limit_spring() }
+    if selected("stale-soft-set") { world.destroy_slider_constraint(joint);joint.set_limit_spring(null) }
+    if selected("orphan-soft") { orphan_slider().limit_spring() }
     panic("invalid slider operation was accepted")
 }

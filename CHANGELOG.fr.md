@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Butées souples de glissière : raideur/amortissement physiques, lecture/mutation, effort signé et coexistence avec moteurs/contacts.
+
 - Le moteur de glissière accepte des bornes de force signées en vitesse et position, avec formes symétriques compatibles, effort imposé, mutation/réveil, contact réel et oracle Jolt Debug/Release qualifiés.
 
 - `maximum_friction_force` freine passivement la glissière avec capacité mutable en N, effort signé séparé et priorité des moteurs ; charge, arrêt, contacts, sommeil et oracle Jolt Debug/Release qualifiés.

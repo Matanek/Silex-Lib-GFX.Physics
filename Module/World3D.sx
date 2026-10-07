@@ -1,5 +1,6 @@
 use GFX.Physics.SliderConstraint3D.SliderConstraint3D
 use GFX.Physics.SliderConstraint3D.SliderConstraint3DSettings
+use GFX.Physics.SliderConstraint3D.SliderLimitSpring3D
 use GFX.Physics.SliderConstraint3D.SliderConstraintState3D
 use GFX.Physics.SliderConstraint3D.SliderConstraintStore3D
 use GFX.Physics.SliderConstraint3D.slider_angular_error3d
@@ -759,6 +760,7 @@ public class World3D {
                 constraint.motor_error = 0.0
                 constraint.limit_impulse = 0.0
                 constraint.limit_side = 0
+                constraint.limit_error = 0.0
                 constraint.inverse_delta = 0.0
                 var first = self.store.require(constraint.first_id)
                 var second = self.store.require(constraint.second_id)
@@ -771,10 +773,10 @@ public class World3D {
                     }
                 }
                 if let lower = constraint.minimum_position {
-                    if position <= lower { constraint.limit_side = 1 }
+                    if position <= lower { constraint.limit_side = 1;constraint.limit_error = position - lower }
                 }
                 if let upper = constraint.maximum_position {
-                    if position >= upper { constraint.limit_side = -1 }
+                    if position >= upper { constraint.limit_side = -1;constraint.limit_error = position - upper }
                 }
                 if constraint.minimum_position != null && constraint.minimum_position == constraint.maximum_position {
                     constraint.limit_side = 2
@@ -3671,6 +3673,10 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     let axis = frame.rotate(Math.Vec3(1.0, 0.0, 0.0))
     solve_slider_drive_velocity3d(first, second, first_radius, second_radius, state, axis, delta)
     if state.limit_side == 0 { return }
+    if let spring = state.limit_spring {
+        solve_slider_soft_limit3d(first, second, first_radius, second_radius, state, axis, spring, delta)
+        return
+    }
     let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis)
     // A full attachment response to an axial error preserves the five locked rows.
     let limit = fixed_impulse3d(first, second, first_radius, second_radius,
@@ -3683,6 +3689,27 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state.limit_impulse = accumulated
     apply_slider_axial_response3d(first, second, first_radius, second_radius,
         state, limit, requested, change)
+}
+
+func solve_slider_soft_limit3d(first:&BodyState3D, second:&BodyState3D,
+    first_radius:Math.Vec3, second_radius:Math.Vec3, state:SliderConstraintState3D,
+    axis:Math.Vec3, spring:SliderLimitSpring3D, delta:float)
+{
+    // Include the response of all locked rows when applying the spring effort.
+    let response = fixed_impulse3d(first, second, first_radius, second_radius, axis, Math.Vec3())
+    let response_axial = response.linear.dot(axis)
+    if response_axial >= -0.000000000001 { return }
+    let inverse_mass = -1.0 / response_axial
+    let softness = 1.0 / (delta * (spring.damping + delta * spring.stiffness))
+    let bias = delta * spring.stiffness * softness * state.limit_error
+    let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis)
+    let previous = state.limit_impulse
+    var accumulated = previous - (speed + bias + softness * previous) / (inverse_mass + softness)
+    if state.limit_side == 1 { accumulated = Math.max(0.0, accumulated) }
+    if state.limit_side == -1 { accumulated = Math.min(0.0, accumulated) }
+    state.limit_impulse = accumulated
+    apply_slider_axial_response3d(first, second, first_radius, second_radius,
+        state, response, response_axial, accumulated - previous)
 }
 
 func solve_slider_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
@@ -3769,7 +3796,7 @@ func solve_slider_position3d(first:BodyState3D, second:BodyState3D,
     let angular_error = fixed_bounded_error3d(slider_angular_error3d(first.transform, second.transform, state), 0.2)
     var impulse = slider_impulse3d(first, second, first_radius, second_radius, frame,
         linear_error.multiply(0.8), angular_error.multiply(0.8))
-    if limit_error != 0.0 {
+    if state.limit_spring == null && limit_error != 0.0 {
         let limit = fixed_impulse3d(first, second, first_radius, second_radius,
             axis.multiply(Math.clamp(limit_error, -0.2, 0.2) * 0.8), Math.Vec3())
         impulse = FixedImpulse3D(impulse.linear.add(limit.linear), impulse.angular.add(limit.angular))

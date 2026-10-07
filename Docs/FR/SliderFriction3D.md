@@ -67,3 +67,5 @@ ou retire le frein ; T relance alternativement vers le haut et vers le bas.
 R redémarre, Espace met en pause/reprend et Échap ferme.
 
 Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
+
+[Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.

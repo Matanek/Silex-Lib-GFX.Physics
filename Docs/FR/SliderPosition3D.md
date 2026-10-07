@@ -61,8 +61,7 @@ sommeil, suspension et contacts. L'oracle Jolt qualifie huit cas à 60 Hz en
 Debug/Release : amortissement critique et faible, saturation, modes successifs,
 cibles limitées, charge, deux masses libres et ancrage excentré. La parité des
 impacts, des transitoires sur rail tournant et des chaînes spatiales générales
-reste à établir. Commande position/vitesse combinée et
-butées souples restent à qualifier.
+reste à établir. La commande position/vitesse combinée reste à qualifier.
 
 `SliderPositionScene.sx` compare un chariot doré fortement amorti à un chariot
 bleu qui oscille ; les repères verts montrent la cible. T inverse la cible,
@@ -71,3 +70,5 @@ R réinitialise, Espace met en pause/reprend et Échap ferme.
 Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.
 
 Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
+
+[Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.

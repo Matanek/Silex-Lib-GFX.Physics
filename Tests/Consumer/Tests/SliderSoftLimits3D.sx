@@ -1,0 +1,161 @@
+use GFX.Physics
+use STD.Math
+
+func soft_slider_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3()) }
+func soft_slider_rail(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func soft_slider_body(world:Physics.World3D, position:float = 0.4, mass:float = 2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..transform = Physics.Transform3D(Math.Vec3(position,0.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(mass,Math.Vec3(mass*0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func soft_slider_steps(world:Physics.World3D, count:int) { var i = 0;while i<count { world.step(1.0/120.0);i++ } }
+func soft_slider_alignment(joint:Physics.SliderConstraint3D) { assert(joint.anchor_error().length()<0.001 && joint.angular_error().length()<0.001) }
+
+test "slider limit spring is an immutable optional value and preserves rigid defaults" {
+    var settings = Physics.SliderConstraint3DSettings();assert(settings.limit_spring==null)
+    settings.minimum_position = 0.0;settings.maximum_position = 0.0
+    settings.limit_spring = Physics.SliderLimitSpring3D(stiffness:32.0,damping:8.0)
+    var world = soft_slider_world();var joint = world.create_slider_constraint(soft_slider_rail(world),soft_slider_body(world),settings)
+    let old = joint.limit_spring()!;settings.limit_spring = null
+    assert(old.stiffness==32.0 && old.damping==8.0 && joint.limit_spring()!=null)
+    joint.set_limit_spring(null);assert(joint.limit_spring()==null && old.stiffness==32.0)
+    soft_slider_steps(world,60);assert(Math.abs(joint.position())<0.0001)
+}
+
+test "slider bilateral stop obeys the implicit recurrence at 60 and 120 Hz" {
+    for rate in [60,120] {
+        var world = soft_slider_world();var joint = world.create_slider_constraint(soft_slider_rail(world),soft_slider_body(world),
+            Physics.SliderConstraint3DSettings() ..minimum_position = 0.1 ..maximum_position = 0.1 ..limit_spring = Physics.SliderLimitSpring3D(32.0,8.0))
+        let dt = 1.0/rate as float;var position = 0.4;var speed = 0.0;var step = 0
+        while step<rate*4 {
+            let previous = speed;speed = (2.0*speed-dt*32.0*(position-0.1))/(2.0+dt*8.0+dt*dt*32.0);position += dt*speed
+            world.step(dt)
+            assert(Math.abs(joint.position()-position)<0.00001 && Math.abs(joint.speed()-speed)<0.00001)
+            assert(Math.abs(joint.limit_force()-2.0*(speed-previous)/dt)<0.001 && joint.motor_force()==0.0 && joint.friction_force()==0.0)
+            assert(Math.abs(joint.reaction_force().x-joint.limit_force())<0.001);soft_slider_alignment(joint);step++
+        }
+    }
+}
+
+test "slider undamped bilateral spring oscillates while implicit energy never grows" {
+    for rate in [60,120] {
+        var world = soft_slider_world();var joint = world.create_slider_constraint(soft_slider_rail(world),soft_slider_body(world),
+            Physics.SliderConstraint3DSettings() ..minimum_position = 0.0 ..maximum_position = 0.0 ..limit_spring = Physics.SliderLimitSpring3D(32.0,0.0))
+        var energy = 16.0*0.4*0.4;var crossed = false;var step = 0
+        while step<rate*4 {
+            world.step(1.0/rate as float);let x = joint.position();let v = joint.speed();let next = v*v+16.0*x*x
+            assert(next<=energy+0.00001 && next>0.1);energy = next;if x< -0.1 { crossed = true }soft_slider_alignment(joint);step++
+        }
+        assert(crossed)
+    }
+}
+
+test "slider unilateral stops allow overshoot and share the exact signed recurrence" {
+    let signs:float[] = [-1.0,1.0]
+    for sign in signs { for rate in [60,120] {
+        var world = soft_slider_world();var body = soft_slider_body(world,0.0);body.set_linear_velocity(Math.Vec3(sign,0.0,0.0))
+        var joint = world.create_slider_constraint(soft_slider_rail(world),body,Physics.SliderConstraint3DSettings()
+            ..minimum_position = -0.205 ..maximum_position = 0.205 ..limit_spring = Physics.SliderLimitSpring3D(32.0,8.0))
+        let dt = 1.0/rate as float;var position = 0.0;var speed = sign;var overshoot = false;var step = 0
+        while step<rate*4 {
+            let previous = speed
+            if position<= -0.205 || position>=0.205 {
+                var bound = 0.205;if position<= -0.205 { bound = -0.205 }
+                let desired = (2.0*speed-dt*32.0*(position-bound))/(2.0+dt*8.0+dt*dt*32.0)
+                if bound<0.0 { speed = Math.max(speed,desired) } else { speed = Math.min(speed,desired) }
+            }
+            position += dt*speed;world.step(dt)
+            assert(Math.abs(joint.position()-position)<0.00001 && Math.abs(joint.speed()-speed)<0.00001)
+            assert(Math.abs(joint.limit_force()-2.0*(speed-previous)/dt)<0.001);soft_slider_alignment(joint)
+            if Math.abs(joint.position())>0.23 { overshoot = true }step++
+        }
+        assert(overshoot)
+    } }
+}
+
+test "slider one-sided spring never pulls a carriage returning into its interval" {
+    let signs:float[] = [-1.0,1.0]
+    for sign in signs {
+        var world = soft_slider_world();var body = soft_slider_body(world,sign*0.4);body.set_linear_velocity(Math.Vec3(-sign*4.0,0.0,0.0))
+        var settings = Physics.SliderConstraint3DSettings() ..limit_spring = Physics.SliderLimitSpring3D(32.0,8.0)
+        if sign>0.0 { settings.maximum_position = 0.2 } else { settings.minimum_position = -0.2 }
+        var joint = world.create_slider_constraint(soft_slider_rail(world),body,settings)
+        world.step(1.0/120.0);assert(joint.limit_force()==0.0 && Math.abs(joint.speed()+sign*4.0)<0.00001)
+        soft_slider_steps(world,120);assert(joint.limit_force()==0.0 && Math.abs(joint.speed()+sign*4.0)<0.00001)
+    }
+}
+
+test "slider spring exchange conserves momentum for unequal free masses" {
+    var world = soft_slider_world();var first = soft_slider_body(world,0.0,2.0);var second = soft_slider_body(world,0.4,8.0)
+    var joint = world.create_slider_constraint(first,second,Physics.SliderConstraint3DSettings()
+        ..minimum_position = 0.0 ..maximum_position = 0.0 ..limit_spring = Physics.SliderLimitSpring3D(32.0,4.0))
+    var x = 0.4;var v = 0.0;var step = 0;let dt = 1.0/120.0
+    while step<480 {
+        let old = v;v = (1.6*v-dt*32.0*x)/(1.6+dt*4.0+dt*dt*32.0);x += dt*v;world.step(dt)
+        assert(Math.abs(joint.position()-x)<0.00001 && Math.abs(joint.speed()-v)<0.00001)
+        assert(Math.abs(2.0*first.linear_velocity().x+8.0*second.linear_velocity().x)<0.00001)
+        assert(Math.abs(2.0*first.position().x+8.0*second.position().x-3.2)<0.0001)
+        assert(Math.abs(joint.limit_force()-1.6*(v-old)/dt)<0.001);soft_slider_alignment(joint);step++
+    }
+}
+
+test "slider soft stop preserves arbitrary 3D COM anchors and compensating free couple" {
+    var world = soft_slider_world();let rotation = Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())
+    let axis = rotation.rotate(Math.Vec3(1.0,0.0,0.0));let anchor = Math.Vec3(0.1,0.4,0.2);let center = Math.Vec3(-0.2,0.1,0.4)
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..transform = Physics.Transform3D(Math.Vec3(),rotation) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..transform = Physics.Transform3D(axis.multiply(0.4).subtract(rotation.rotate(anchor)),rotation)
+        ..mass_properties = Physics.MassProperties3D(3.0,Math.Vec3(0.3,0.6,0.9),center) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var joint = world.create_slider_constraint(rail,body,Physics.SliderConstraint3DSettings() ..second_local_frame = Physics.Transform3D(anchor)
+        ..minimum_position = 0.0 ..maximum_position = 0.0 ..limit_spring = Physics.SliderLimitSpring3D(32.0,8.0))
+    var x = 0.4;var v = 0.0;let dt = 1.0/120.0;let radius = rotation.rotate(anchor.subtract(center));var step = 0
+    while step<120 {
+        let old = v;v = (3.0*v-dt*32.0*x)/(3.0+dt*8.0+dt*dt*32.0);x += dt*v;world.step(dt)
+        let force = axis.multiply(3.0*(v-old)/dt)
+        assert(Math.abs(joint.position()-x)<0.00001 && Math.abs(joint.speed()-v)<0.00001)
+        assert(joint.reaction_force().subtract(force).length()<0.001 && joint.reaction_torque().add(radius.cross(force)).length()<0.001)
+        assert(body.angular_velocity().length()<0.00001);soft_slider_alignment(joint);step++
+    }
+}
+
+test "slider signed motor compresses its soft stops without replacing them" {
+    var world = soft_slider_world();var joint = world.create_slider_constraint(soft_slider_rail(world),soft_slider_body(world,0.0),
+        Physics.SliderConstraint3DSettings() ..minimum_position = -0.3 ..maximum_position = 0.3
+        ..limit_spring = Physics.SliderLimitSpring3D(8.0,8.0) ..maximum_friction_force = 100.0 ..motor = Physics.SliderMotor3D(1.0,-0.5,2.0))
+    soft_slider_steps(world,1200);assert(Math.abs(joint.position()-0.55)<0.001 && Math.abs(joint.limit_force()+2.0)<0.001 && Math.abs(joint.motor_force()-2.0)<0.001 && joint.friction_force()==0.0)
+    joint.set_motor(Physics.SliderMotor3D(-1.0,-0.5,2.0));soft_slider_steps(world,1440)
+    assert(Math.abs(joint.position()+0.3625)<0.001 && Math.abs(joint.limit_force()-0.5)<0.001 && Math.abs(joint.motor_force()+0.5)<0.001)
+    joint.set_limit_spring(null);soft_slider_steps(world,120);assert(Math.abs(joint.position()+0.3)<0.0001)
+}
+
+test "slider load deformation follows mass and runtime spring mutations" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3(-0.3,0.0,0.0));var body = soft_slider_body(world,0.0)
+    var joint = world.create_slider_constraint(soft_slider_rail(world),body,Physics.SliderConstraint3DSettings()
+        ..minimum_position = 0.0 ..maximum_position = 0.0 ..limit_spring = Physics.SliderLimitSpring3D(8.0,8.0))
+    soft_slider_steps(world,1200);assert(Math.abs(joint.position()+0.075)<0.001 && Math.abs(joint.limit_force()-0.6)<0.001)
+    body.set_mass_properties(Physics.MassProperties3D(4.0,Math.Vec3(0.4)));soft_slider_steps(world,1440)
+    assert(Math.abs(joint.position()+0.15)<0.001 && Math.abs(joint.limit_force()-1.2)<0.001)
+    let old = joint.limit_spring()!;joint.set_limit_spring(Physics.SliderLimitSpring3D(16.0,8.0));assert(old.stiffness==8.0 && joint.limit_force()==0.0)
+    soft_slider_steps(world,1440);assert(Math.abs(joint.position()+0.075)<0.001 && Math.abs(joint.limit_force()-1.2)<0.001)
+    let force = joint.limit_force();world.step(0.0);assert(joint.limit_force()==force)
+    joint.set_limits(-0.2,0.2);assert(joint.limit_force()==0.0);joint.set_frames(Physics.Transform3D(),Physics.Transform3D());assert(joint.reaction_force().length()==0.0)
+}
+
+test "slider spring without bounds leaves axial travel free" {
+    var world = soft_slider_world();var body = soft_slider_body(world,0.0);body.set_linear_velocity(Math.Vec3(1.0,0.0,0.0))
+    var joint = world.create_slider_constraint(soft_slider_rail(world),body,Physics.SliderConstraint3DSettings() ..limit_spring = Physics.SliderLimitSpring3D(32.0,8.0))
+    soft_slider_steps(world,120);assert(Math.abs(joint.position()-1.0)<0.00001 && joint.limit_force()==0.0)
+}
+
+test "slider spring mutation wakes sleeping bodies and suspension clears effort" {
+    var world = soft_slider_world();var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_slider_constraint(soft_slider_rail(world),body,Physics.SliderConstraint3DSettings()
+        ..minimum_position = 0.0 ..maximum_position = 0.0 ..limit_spring = Physics.SliderLimitSpring3D(8.0,8.0))
+    soft_slider_steps(world,240);assert(!body.is_awake());joint.set_limit_spring(Physics.SliderLimitSpring3D(16.0,8.0));assert(body.is_awake())
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.4,0.0,0.0)));world.step(1.0/120.0);assert(joint.limit_force()<0.0)
+    joint.set_enabled(false);assert(joint.limit_force()==0.0);world.step(1.0/120.0);assert(joint.limit_force()==0.0)
+    joint.set_enabled(true);world.step(1.0/120.0);assert(joint.limit_force()<0.0)
+    body.set_enabled(false);world.step(1.0/120.0);assert(joint.limit_force()==0.0)
+    body.set_enabled(true);world.destroy_rigid_body(body);assert(!joint.is_valid())
+}

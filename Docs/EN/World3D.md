@@ -256,6 +256,8 @@ The [slider friction brake](SliderFriction3D.md) slows travel without a motor us
 
 [Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.
 
+[Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.
+
 The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
 
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.

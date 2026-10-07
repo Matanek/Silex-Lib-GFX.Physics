@@ -69,10 +69,11 @@ Les tests vérifient les récurrences 60/120 Hz, intervalles unidirectionnels,
 sommeil, butées et contact réel. Huit trajectoires Jolt Debug/Release
 vérifient en plus les deux traces par une mécanique indépendante avant
 comparaison. La parité des impacts, transitoires tournants et chaînes
-spatiales générales reste à établir ; commande combinée et butées souples
-linéaires restent à qualifier.
+spatiales générales reste à établir ; la commande combinée reste à qualifier.
 
 `SliderForceBoundsScene.sx` compare le chariot doré à bornes [-0,5, 2] N au
 bleu symétrique ±2 N. T inverse la vitesse cible, R réinitialise,
 Espace pause/reprise et Échap ferme. Le doré inverse plus lentement son
 mouvement lorsque l'effort négatif est requis.
+
+[Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.

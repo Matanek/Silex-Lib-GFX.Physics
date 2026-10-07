@@ -44,9 +44,10 @@ vector separating the frames in radians, using the short path.
 
 `minimum_position` and `maximum_position` are optional signed bounds. `null`
 opens that side; two bounds must be finite and ordered. They may be equal,
-even away from zero, locking the last degree of freedom. Pinned Jolt rejects equal rigid slider
-bounds; this Silex case is compared to the equivalent Jolt fixed attachment.
-Stops are rigid
+even away from zero, locking the last degree of freedom when `limit_spring`
+is `null`. Pinned Jolt rejects equal rigid slider bounds; this Silex case is
+compared to the equivalent Jolt fixed attachment.
+By default, stops are rigid
 and unilateral: they oppose outgoing velocity and allow inward motion.
 
 `reaction_force()` and `reaction_torque()` return the world force in N and
@@ -71,11 +72,15 @@ remains readable; other calls through stale references are rejected.
 Constraints participate in real contacts and sleeping islands.
 
 Free travel and rigid stops can be combined with the
-[velocity motor](SliderMotor3D.md) or [position servo](SliderPosition3D.md). [Axial friction](SliderFriction3D.md) adds a passive brake; soft stops remain
-to be qualified. Jolt fixtures cover translation,
+[velocity motor](SliderMotor3D.md) or [position servo](SliderPosition3D.md).
+[Axial friction](SliderFriction3D.md) adds a passive brake; a
+[stop spring](SliderSoftLimits3D.md) allows temporary compression.
+Jolt fixtures cover translation,
 loaded stop reactions, offset frames and rotating rails; parity for impact
 transients and general spatial chains has not been established.
 `SliderScene.sx` shows an inclined rail, gravity and a launch impulse with T;
 R resets, Space pauses/resumes and Escape closes the window.
 
 [Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.
+
+[Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.

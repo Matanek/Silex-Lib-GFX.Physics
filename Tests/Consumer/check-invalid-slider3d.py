@@ -40,6 +40,11 @@ for name in ('bounds-servo-position-nan', 'bounds-servo-position-infinity', 'bou
     CASES[name] = 'requires finite position, ordered finite force bounds, positive finite stiffness and nonnegative finite damping'
 
 
+for name in ('soft-stiffness-nan', 'soft-stiffness-infinity', 'soft-stiffness-zero', 'soft-stiffness-negative', 'soft-damping-nan', 'soft-damping-infinity', 'soft-damping-negative'):
+    CASES[name] = 'requires positive finite stiffness and nonnegative finite damping'
+for name in ('stale-soft-read','stale-soft-set','orphan-soft'):
+    CASES[name] = 'no longer refers to a live constraint'
+
 def main():
     root = Path.cwd()
     assert (root / 'Packages').is_dir() and (root / 'Silex-Examples').is_dir(), 'run from the workspace or Spec group root'

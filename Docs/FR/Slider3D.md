@@ -47,8 +47,10 @@ en radians, avec le chemin court.
 `minimum_position` et `maximum_position` sont des bornes signées facultatives.
 `null` ouvre le côté correspondant ; deux bornes doivent être finies et
 ordonnées. Elles peuvent être égales, même hors de zéro : le dernier degré
-de liberté est alors bloqué. La référence Jolt refuse ces limites rigides égales
-pour sa glissière ; ce cas Silex est comparé à l’attache fixe Jolt équivalente. Les butées sont rigides et unilatérales ; elles
+de liberté est alors bloqué lorsque `limit_spring` vaut `null`. La référence
+Jolt refuse ces limites rigides égales pour sa glissière ; ce cas Silex est
+comparé à l’attache fixe Jolt équivalente. Par défaut, les butées sont rigides
+et unilatérales ; elles
 retiennent une vitesse sortante et permettent de repartir vers l’intérieur.
 
 `reaction_force()` et `reaction_torque()` donnent la force mondiale en N et
@@ -73,8 +75,10 @@ consultable, les autres appels sur une référence périmée sont refusés.
 Les contraintes participent aux contacts réels et aux îlots de sommeil.
 
 La course libre et les butées rigides peuvent être complétées par le
-[moteur à vitesse cible](SliderMotor3D.md) ou le [servo de position](SliderPosition3D.md). La [friction axiale](SliderFriction3D.md) ajoute un frein passif ; les butées souples
-restent à qualifier. Les témoins Jolt
+[moteur à vitesse cible](SliderMotor3D.md) ou le [servo de position](SliderPosition3D.md).
+La [friction axiale](SliderFriction3D.md) ajoute un frein passif ; un
+[ressort de butée](SliderSoftLimits3D.md) autorise une compression temporaire.
+Les témoins Jolt
 couvrent la translation, les réactions aux butées sous charge, les repères
 excentrés et les rails tournants ; la parité des transitoires d’impact et des
 chaînes spatiales générales n’est pas établie. La scène `SliderScene.sx`
@@ -82,3 +86,5 @@ montre le rail incliné, la gravité et une impulsion de relance avec T ; R
 réinitialise, Espace met en pause/reprend et Échap ferme.
 
 Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
+
+[Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.

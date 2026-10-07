@@ -67,9 +67,11 @@ servo, reduced mass, offset 3D COM/anchors, mutations, sleep, stops and real
 contact. Eight Debug/Release Jolt trajectories additionally qualify both
 traces against independent mechanics before comparison. Impact, rotating
 transient and general spatial-chain parity remain unestablished; combined
-commands and linear soft stops remain to be qualified.
+commands remain to be qualified.
 
 `SliderForceBoundsScene.sx` compares a gold carriage using [-0.5, 2] N with
 a blue carriage using symmetric ±2 N. T reverses target speed, R resets,
 Space pauses/resumes and Escape quits. Gold reverses motion more slowly
 when negative effort is required.
+
+[Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.

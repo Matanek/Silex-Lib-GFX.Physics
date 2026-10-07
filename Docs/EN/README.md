@@ -265,6 +265,8 @@ The [slider friction brake](SliderFriction3D.md) slows travel without a motor us
 
 [Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.
 
+[Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.
+
 The [slider position servo](SliderPosition3D.md) targets travel with a physical damped spring and bounded force.
 
 The [hinge position motor](HingePosition3D.md) targets an angle with stiffness, damping and bounded torque.

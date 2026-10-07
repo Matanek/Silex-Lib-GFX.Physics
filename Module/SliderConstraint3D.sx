@@ -81,6 +81,21 @@ public struct SliderMotor3D {
     }
 }
 
+public struct SliderLimitSpring3D {
+    let stiffness:float
+    let damping:float
+
+    init(stiffness:float, damping:float) {
+        if !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SliderLimitSpring3D requires positive finite stiffness and nonnegative finite damping")
+        }
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
 public struct SliderConstraint3DSettings {
     var first_local_frame:Transform3D = Transform3D()
     var second_local_frame:Transform3D = Transform3D()
@@ -88,6 +103,7 @@ public struct SliderConstraint3DSettings {
     var maximum_friction_force:float = 0.0
     var minimum_position:float? = null
     var maximum_position:float? = null
+    var limit_spring:SliderLimitSpring3D? = null
     var is_enabled:bool = true
     init() {}
 }
@@ -110,6 +126,8 @@ package class SliderConstraintState3D {
     var second_local_rotation:Math.Quat
     var minimum_position:float?
     var maximum_position:float?
+    var limit_spring:SliderLimitSpring3D?
+    var limit_error:float = 0.0
     var motor:SliderMotor3D?
     var motor_impulse:float = 0.0
     var maximum_friction_force:float
@@ -129,6 +147,7 @@ package class SliderConstraintState3D {
         self.motor = settings.motor
         self.minimum_position = settings.minimum_position
         self.maximum_position = settings.maximum_position
+        self.limit_spring = settings.limit_spring
         self.first_id = first_id
         self.second_id = second_id
         self.first_local_anchor = settings.first_local_frame.position
@@ -322,6 +341,13 @@ public class SliderConstraint3D {
     }
     func minimum_position() float? { return self.store.require(self.id).minimum_position }
     func maximum_position() float? { return self.store.require(self.id).maximum_position }
+    func limit_spring() SliderLimitSpring3D? { return self.store.require(self.id).limit_spring }
+    func set_limit_spring(spring:SliderLimitSpring3D?) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.limit_spring = spring
+        self.reset_reaction(state)
+    }
     func limit_force() float {
         var state = self.store.require(self.id)
         return state.limit_impulse * state.inverse_delta
@@ -348,6 +374,7 @@ public class SliderConstraint3D {
         state.friction_impulse = 0.0
         state.motor_error = 0.0
         state.limit_side = 0
+        state.limit_error = 0.0
         state.limit_impulse = 0.0
         state.impulse = Math.Vec3()
         state.angular_impulse = Math.Vec3()
