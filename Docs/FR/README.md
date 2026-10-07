@@ -18,6 +18,8 @@ La [glissière 3D](Slider3D.md) guide un chariot sur un rail tournant, avec cour
 
 Le [moteur de glissière](SliderMotor3D.md) pilote une vitesse relative avec force maximale, freinage et mutation.
 
+Le [servo de glissière](SliderPosition3D.md) vise une course par ressort amorti physique et force bornée.
+
 Le [servo de charnière](HingePosition3D.md) vise un angle avec raideur, amortissement et couple borné.
 
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.

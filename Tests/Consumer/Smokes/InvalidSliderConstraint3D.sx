@@ -33,6 +33,18 @@ func main() {
     if selected("motor-force-nan") { Physics.SliderMotor3D(0.6, Math.sqrt(-1.0)) }
     if selected("motor-force-infinity") { Physics.SliderMotor3D(0.6, 1.0 / 0.0) }
     if selected("motor-force-negative") { Physics.SliderMotor3D(0.6, -1.0) }
+    if selected("servo-position-nan") { Physics.SliderMotor3D.position(Math.sqrt(-1.0), 10.0, 8.0, 8.0) }
+    if selected("servo-position-infinity") { Physics.SliderMotor3D.position(1.0 / 0.0, 10.0, 8.0, 8.0) }
+    if selected("servo-force-nan") { Physics.SliderMotor3D.position(0.75, Math.sqrt(-1.0), 8.0, 8.0) }
+    if selected("servo-force-infinity") { Physics.SliderMotor3D.position(0.75, 1.0 / 0.0, 8.0, 8.0) }
+    if selected("servo-force-negative") { Physics.SliderMotor3D.position(0.75, -1.0, 8.0, 8.0) }
+    if selected("servo-stiffness-nan") { Physics.SliderMotor3D.position(0.75, 10.0, Math.sqrt(-1.0), 8.0) }
+    if selected("servo-stiffness-infinity") { Physics.SliderMotor3D.position(0.75, 10.0, 1.0 / 0.0, 8.0) }
+    if selected("servo-stiffness-zero") { Physics.SliderMotor3D.position(0.75, 10.0, 0.0, 8.0) }
+    if selected("servo-stiffness-negative") { Physics.SliderMotor3D.position(0.75, 10.0, -1.0, 8.0) }
+    if selected("servo-damping-nan") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, Math.sqrt(-1.0)) }
+    if selected("servo-damping-infinity") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, 1.0 / 0.0) }
+    if selected("servo-damping-negative") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, -1.0) }
     var joint = world.create_slider_constraint(support,body)
     if selected("mutation-minimum") { joint.set_limits(Math.sqrt(-1.0), null) }
     if selected("mutation-maximum") { joint.set_limits(null, 1.0 / 0.0) }

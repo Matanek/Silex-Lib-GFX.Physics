@@ -755,12 +755,20 @@ public class World3D {
                 constraint.impulse = Math.Vec3()
                 constraint.angular_impulse = Math.Vec3()
                 constraint.motor_impulse = 0.0
+                constraint.motor_error = 0.0
                 constraint.limit_impulse = 0.0
                 constraint.limit_side = 0
                 constraint.inverse_delta = 0.0
                 var first = self.store.require(constraint.first_id)
                 var second = self.store.require(constraint.second_id)
                 let position = slider_position3d(first.transform, second.transform, constraint)
+                if let motor = constraint.motor {
+                    if var target = motor.target_position {
+                        if let lower = constraint.minimum_position { target = Math.max(target, lower) }
+                        if let upper = constraint.maximum_position { target = Math.min(target, upper) }
+                        constraint.motor_error = position - target
+                    }
+                }
                 if let lower = constraint.minimum_position {
                     if position <= lower { constraint.limit_side = 1 }
                 }
@@ -1019,7 +1027,7 @@ public class World3D {
                         var second = self.store.require(constraint.second_id)
                         if first.is_enabled && second.is_enabled {
                             if let motor = constraint.motor {
-                                if motor.maximum_force > 0.0 && motor.speed != 0.0 {
+                                if motor.maximum_force > 0.0 && (motor.speed != 0.0 || motor.target_position != null) {
                                     first.wake()
                                     second.wake()
                                 }
@@ -3657,20 +3665,7 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state.angular_impulse = state.angular_impulse.add(impulse.angular)
     state.inverse_delta = 1.0 / delta
     let axis = frame.rotate(Math.Vec3(1.0, 0.0, 0.0))
-    if let motor = state.motor {
-        if motor.maximum_force > 0.0 {
-            let error = slider_velocity3d(first, second, first_radius, second_radius).dot(axis) - motor.speed
-            let response = fixed_impulse3d(first, second, first_radius, second_radius,
-                axis.multiply(error), Math.Vec3())
-            let requested = response.linear.dot(axis)
-            let capacity = motor.maximum_force * delta
-            let accumulated = Math.clamp(state.motor_impulse + requested, -capacity, capacity)
-            let change = accumulated - state.motor_impulse
-            state.motor_impulse = accumulated
-            apply_slider_axial_response3d(first, second, first_radius, second_radius,
-                state, response, requested, change)
-        }
-    }
+    solve_slider_motor_velocity3d(first, second, first_radius, second_radius, state, axis, delta)
     if state.limit_side == 0 { return }
     let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis)
     // A full attachment response to an axial error preserves the five locked rows.
@@ -3684,6 +3679,40 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state.limit_impulse = accumulated
     apply_slider_axial_response3d(first, second, first_radius, second_radius,
         state, limit, requested, change)
+}
+
+func solve_slider_motor_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    first_radius:Math.Vec3, second_radius:Math.Vec3, state:SliderConstraintState3D,
+    axis:Math.Vec3, delta:float)
+{
+    if let motor = state.motor {
+        if motor.maximum_force <= 0.0 { return }
+        let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis) - motor.speed
+        var response = FixedImpulse3D(Math.Vec3(), Math.Vec3())
+        var response_axial = 0.0
+        var requested = 0.0
+        if motor.target_position != null {
+            // A unit axial velocity error reveals the coupled effective mass.
+            response = fixed_impulse3d(first, second, first_radius, second_radius, axis, Math.Vec3())
+            response_axial = response.linear.dot(axis)
+            if response_axial >= -0.000000000001 { return }
+            let inverse_mass = -1.0 / response_axial
+            let softness = 1.0 / (delta * (motor.damping + delta * motor.stiffness))
+            let bias = delta * motor.stiffness * softness * state.motor_error
+            requested = -(speed + bias + softness * state.motor_impulse) / (inverse_mass + softness)
+        } else {
+            response = fixed_impulse3d(first, second, first_radius, second_radius,
+                axis.multiply(speed), Math.Vec3())
+            response_axial = response.linear.dot(axis)
+            requested = response_axial
+        }
+        let capacity = motor.maximum_force * delta
+        let accumulated = Math.clamp(state.motor_impulse + requested, -capacity, capacity)
+        let change = accumulated - state.motor_impulse
+        state.motor_impulse = accumulated
+        apply_slider_axial_response3d(first, second, first_radius, second_radius,
+            state, response, response_axial, change)
+    }
 }
 
 func apply_slider_axial_response3d(first:&BodyState3D, second:&BodyState3D,

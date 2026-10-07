@@ -34,3 +34,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [3D sliders](Docs/EN/Slider3D.md) guide a carriage along a rotating rail with signed travel and mutable rigid stops.
 
 [Slider motors](Docs/EN/SliderMotor3D.md) drive signed relative speed with bounded force, braking and runtime mutation.
+
+[Slider position servo](Docs/EN/SliderPosition3D.md): target travel, physical spring/damping, bounded force and runtime mutations.

@@ -8,6 +8,9 @@ use STD.Math
 public struct SliderMotor3D {
     let speed:float
     let maximum_force:float
+    let target_position:float?
+    let stiffness:float
+    let damping:float
 
     init(speed:float, maximum_force:float) {
         if !finite_body3d_value(speed) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 {
@@ -15,6 +18,27 @@ public struct SliderMotor3D {
         }
         self.speed = speed
         self.maximum_force = maximum_force
+        self.target_position = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    static func position(position:float, maximum_force:float, stiffness:float, damping:float) SliderMotor3D {
+        return SliderMotor3D(position, maximum_force, stiffness, damping)
+    }
+
+    private init(position:float, maximum_force:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(position) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SliderMotor3D.position requires finite position, nonnegative finite maximum force, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
     }
 }
 
@@ -48,6 +72,7 @@ package class SliderConstraintState3D {
     var maximum_position:float?
     var motor:SliderMotor3D?
     var motor_impulse:float = 0.0
+    var motor_error:float = 0.0
     var limit_side:int = 0
     var limit_impulse:float = 0.0
     var angular_impulse:Math.Vec3 = Math.Vec3()
@@ -264,6 +289,7 @@ public class SliderConstraint3D {
     }
     private func reset_reaction(state:SliderConstraintState3D) {
         state.motor_impulse = 0.0
+        state.motor_error = 0.0
         state.limit_side = 0
         state.limit_impulse = 0.0
         state.impulse = Math.Vec3()

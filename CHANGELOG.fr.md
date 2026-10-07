@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le servo `SliderMotor3D.position` pilote une course cible par ressort amorti physique, force symétrique bornée et cible projetée sur les limites ; mutations, contacts et oracle Jolt Debug/Release qualifiés.
+
 - Le moteur de glissière `SliderMotor3D` pilote une vitesse relative signée avec capacité symétrique en N, freinage à vitesse nulle, effort moteur séparé et mutation sûre.
 
 - Glissière 3D : repères locaux, translation libre sur X, orientation retenue, limites signées facultatives et rigides, mesures de réaction et mutations sûres.

@@ -25,6 +25,9 @@ for name in ('motor-speed-nan', 'motor-speed-infinity', 'motor-force-nan',
 for name in ('stale-motor-read', 'stale-motor-set', 'orphan-motor'):
     CASES[name] = 'no longer refers to a live constraint'
 
+for name in ('servo-position-nan', 'servo-position-infinity', 'servo-force-nan', 'servo-force-infinity', 'servo-force-negative', 'servo-stiffness-nan', 'servo-stiffness-infinity', 'servo-stiffness-zero', 'servo-stiffness-negative', 'servo-damping-nan', 'servo-damping-infinity', 'servo-damping-negative'):
+    CASES[name] = 'requires finite position, nonnegative finite maximum force, positive finite stiffness and nonnegative finite damping'
+
 
 def main():
     root = Path.cwd()

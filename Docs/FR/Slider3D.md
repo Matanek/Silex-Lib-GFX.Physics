@@ -73,7 +73,7 @@ consultable, les autres appels sur une référence périmée sont refusés.
 Les contraintes participent aux contacts réels et aux îlots de sommeil.
 
 La course libre et les butées rigides peuvent être complétées par le
-[moteur à vitesse cible](SliderMotor3D.md). Friction axiale et butées souples
+[moteur à vitesse cible](SliderMotor3D.md) ou le [servo de position](SliderPosition3D.md). Friction axiale et butées souples
 restent à qualifier. Les témoins Jolt
 couvrent la translation, les réactions aux butées sous charge, les repères
 excentrés et les rails tournants ; la parité des transitoires d’impact et des

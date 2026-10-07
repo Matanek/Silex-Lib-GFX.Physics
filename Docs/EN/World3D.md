@@ -250,7 +250,7 @@ The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’
 
 The [3D slider](Slider3D.md) guides a carriage along a rotating rail with signed travel and mutable rigid stops.
 
-The [slider motor](SliderMotor3D.md) drives a relative speed with bounded force, braking and mutation.
+The [slider motor](SliderMotor3D.md) drives a relative speed with bounded force, braking and mutation. The [position servo](SliderPosition3D.md) approaches target travel through a physical damped spring.
 
 The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
 

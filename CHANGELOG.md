@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- The `SliderMotor3D.position` servo drives target travel with a physical damped spring, bounded symmetric force and targets projected onto limits; mutations, contacts and Jolt Debug/Release oracle qualified.
+
 - The slider `SliderMotor3D` drives signed relative speed with symmetric force capacity in N, zero-speed braking, a separate motor reaction and safe runtime mutation.
 
 - 3D sliders: local frames, free translation along X, held orientation, optional signed rigid limits, reaction measurements and safe mutations.
