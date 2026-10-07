@@ -127,6 +127,8 @@ Voir les [enveloppes convexes et leurs limites](Geometry3D.md#enveloppes-convexe
 Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
 
+Les [butées souples](HingeSoftLimits3D.md) amortissent les dépassements angulaires avec une raideur physique mutable.
+
 ## Poses, masse et commandes
 
 Le repère suit `STD.Math` : droit, Y vers le haut. `Transform3D.position`

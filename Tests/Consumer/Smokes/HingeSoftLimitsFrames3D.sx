@@ -1,0 +1,28 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let base = Math.Quat.angle_axis(0.4,Math.Vec3.right())
+    let rotation = base.multiply(Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0)))
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(rotation:base) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation:rotation)
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.4,0.2,0.1),Math.Vec3(0.2,0.1,0.0))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var hinge = world.create_hinge_constraint(pivot,body,Physics.HingeConstraint3DSettings()
+        ..minimum_angle = 0.2 ..maximum_angle = 0.2 ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    var i = 0;while i<360 {
+        world.step(1.0/60.0);assert(hinge.anchor_error().length()<0.003 && hinge.axis_error()<0.002);i++
+    }
+    assert(Math.abs(hinge.angle()-0.2)<0.002)
+    body.set_mass_properties(Physics.MassProperties3D(3.0,Math.Vec3(0.6,0.3,0.2),Math.Vec3(-0.2,0.1,0.0)))
+    hinge.set_limits(-0.2,-0.2);hinge.set_limit_spring(Physics.HingeLimitSpring3D(3.2,1.6))
+    assert(hinge.limit_torque()==0.0)
+    i=0;while i<360 { world.step(1.0/60.0);assert(hinge.anchor_error().length()<0.003 && hinge.axis_error()<0.002);i++ }
+    assert(Math.abs(hinge.angle()+0.2)<0.002)
+    hinge.set_frames(hinge.first_local_axis(),hinge.first_local_normal(),hinge.second_local_axis(),hinge.second_local_normal())
+    assert(hinge.limit_torque()==0.0)
+    var clone = hinge;world.destroy_rigid_body(body);assert(!clone.is_valid())
+}

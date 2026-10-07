@@ -1,0 +1,237 @@
+use GFX.Physics
+use STD.Math
+
+func soft_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3()) }
+func soft_body(world:Physics.World3D, inertia:float = 0.1) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(inertia))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func soft_pivot(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func soft_pose(body:Physics.RigidBody3D, angle:float) {
+    body.set_transform(Physics.Transform3D(body.position(),Math.Quat.angle_axis(angle,Math.Vec3(0.0,0.0,1.0))))
+}
+func soft_steps(world:Physics.World3D, count:int) { var i = 0;while i<count { world.step(1.0/60.0);i++ } }
+
+test "soft stops preserve immutable settings and rigid default" {
+    let spring = Physics.HingeLimitSpring3D(stiffness:1.6,damping:0.8)
+    assert(spring.stiffness==1.6 && spring.damping==0.8)
+    var world = soft_world();var body = soft_body(world)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,Physics.HingeConstraint3DSettings())
+    assert(joint.limit_spring()==null && joint.limit_torque()==0.0)
+    joint.set_limit_spring(spring);assert(joint.limit_spring()!.stiffness==1.6)
+    joint.set_limit_spring(null);assert(joint.limit_spring()==null)
+}
+
+test "bilateral spring follows implicit recurrence at 60 and 120 Hz without pose projection" {
+    var rate = 60
+    while rate<=120 {
+        var world = soft_world();var body = soft_body(world);soft_pose(body,0.4)
+        var joint = world.create_hinge_constraint(soft_pivot(world),body,
+            Physics.HingeConstraint3DSettings() ..minimum_angle = 0.2 ..maximum_angle = 0.2
+            ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+        var expected_angle = 0.4;var expected_speed = 0.0;var step = 0;let dt = 1.0/rate as float
+        while step<rate*2 {
+            let previous = expected_speed
+            expected_speed = (0.1*previous-dt*1.6*(expected_angle-0.2))/(0.1+dt*0.8+dt*dt*1.6)
+            expected_angle += dt*expected_speed
+            world.step(dt)
+            assert(Math.abs(joint.angle()-expected_angle)<0.00001)
+            assert(Math.abs(joint.angular_speed()-expected_speed)<0.00002)
+            assert(Math.abs(joint.limit_torque()-0.1*(expected_speed-previous)/dt)<0.0001)
+            assert(joint.anchor_error().length()<0.0001 && joint.axis_error()<0.0001)
+            step++
+        }
+        rate += 60
+    }
+}
+
+test "interior rotation is free and crossing activates the spring on the following step" {
+    var world = soft_world();var body = soft_body(world)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.205
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    var i = 0;while i<13 { world.step(1.0/60.0);assert(joint.limit_torque()==0.0);i++ }
+    assert(joint.angle()>0.205 && Math.abs(joint.angular_speed()-1.0)<0.00001)
+    world.step(1.0/60.0);assert(joint.limit_torque()<0.0 && joint.angular_speed()<1.0 && joint.angle()>0.205)
+}
+
+test "unilateral lower and upper springs push back without pulling a departing rotor" {
+    var sign = -1.0
+    while sign<=1.0 {
+        var world = soft_world();var body = soft_body(world);soft_pose(body,sign*0.4)
+        var joint = world.create_hinge_constraint(soft_pivot(world),body,
+            Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.2
+            ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+        world.step(1.0/60.0);assert(joint.limit_torque()*sign<0.0 && joint.angle()*sign>0.2)
+        soft_pose(body,sign*0.4);body.set_angular_velocity(Math.Vec3(0.0,0.0,-sign*2.0))
+        world.step(1.0/60.0);assert(joint.limit_torque()==0.0 && Math.abs(joint.angular_speed()+sign*2.0)<0.00001)
+        sign += 2.0
+    }
+}
+
+test "undamped equal limits oscillate and two free bodies preserve angular momentum" {
+    var world = soft_world();var first = soft_body(world);var second = soft_body(world,0.4);soft_pose(second,0.4)
+    var joint = world.create_hinge_constraint(first,second,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = 0.0 ..maximum_angle = 0.0
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.0))
+    var crossed = false;var i = 0
+    while i<120 {
+        world.step(1.0/60.0);if joint.angle()<0.0 { crossed = true }
+        assert(Math.abs(0.1*first.angular_velocity().z+0.4*second.angular_velocity().z)<0.00001)
+        assert(Math.abs(joint.angle())<0.40001);i++
+    }
+    assert(crossed)
+}
+
+test "offset pivot carries spring effort through point coupling" {
+    var world = soft_world();let rotation = Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0))
+    let anchor = Math.Vec3(0.0,1.0,0.0)
+    var body = soft_body(world);body.set_transform(Physics.Transform3D(rotation.rotate(anchor).negated(),rotation))
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = anchor
+        ..minimum_angle = 0.2 ..maximum_angle = 0.2 ..limit_spring = Physics.HingeLimitSpring3D(17.6,8.8))
+    let dt = 1.0/60.0;world.step(dt)
+    let speed = -dt*17.6*0.2/(1.1+dt*8.8+dt*dt*17.6)
+    assert(Math.abs(joint.angular_speed()-speed)<0.0001)
+    assert(Math.abs(joint.angle()-(0.4+speed*dt))<0.0001)
+    assert(Math.abs(joint.limit_torque()-1.1*speed/dt)<0.001)
+    assert(joint.anchor_error().length()<0.0001 && joint.axis_error()<0.0001)
+    soft_steps(world,180);assert(Math.abs(joint.angle()-0.2)<0.001)
+    assert(joint.anchor_error().length()<0.003)
+}
+
+test "spring mutation clears reactions, wakes bodies and restores rigid stops" {
+    var world = soft_world();var body = soft_body(world);soft_pose(body,0.4)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.2
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    world.step(1.0/60.0);assert(joint.limit_torque()<0.0)
+    let observed = joint.limit_torque();world.step(0.0);assert(joint.limit_torque()==observed)
+    var clone = joint;body.set_sleep_enabled(true);body.set_sleep_threshold(1.0);soft_steps(world,180)
+    assert(!body.is_awake());joint.set_limit_spring(Physics.HingeLimitSpring3D(3.2,0.4))
+    assert(body.is_awake() && joint.limit_torque()==0.0 && joint.reaction_torque()==Math.Vec3())
+    assert(clone.limit_spring()!.stiffness==3.2)
+    world.step(0.0);assert(joint.limit_torque()==0.0)
+    joint.set_limits(-0.1,0.1);assert(joint.limit_torque()==0.0)
+    joint.set_limit_spring(null);soft_pose(body,0.4);body.set_angular_velocity(Math.Vec3())
+    soft_steps(world,2);assert(joint.angle()<0.101 && joint.limit_spring()==null)
+    world.destroy_rigid_body(body);assert(!joint.is_valid() && !clone.is_valid())
+}
+
+test "disabled spring and disabled body suspend reactions and resume safely" {
+    var world = soft_world();var body = soft_body(world);soft_pose(body,0.4)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.2
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    joint.set_enabled(false);world.step(1.0/60.0)
+    assert(joint.angle()>0.39 && joint.limit_torque()==0.0)
+    joint.set_enabled(true);world.step(1.0/60.0);assert(joint.limit_torque()<0.0)
+    body.set_enabled(false);world.step(1.0/60.0);assert(joint.limit_torque()==0.0)
+    body.set_enabled(true);world.step(1.0/60.0);assert(joint.limit_torque()<0.0)
+    body.set_mass_properties(Physics.MassProperties3D(2.0,Math.Vec3(0.2)))
+    let previous = joint.angular_speed();let error = joint.angle()-0.2;let dt = 1.0/60.0
+    let expected = Math.min(previous,(0.2*previous-dt*1.6*error)/(0.2+dt*0.8+dt*dt*1.6))
+    world.step(dt);assert(Math.abs(joint.angular_speed()-expected)<0.00002)
+    assert(Math.abs(joint.limit_torque()-0.2*(expected-previous)/dt)<0.0001)
+    joint.set_anchors(Math.Vec3(),Math.Vec3());assert(joint.limit_torque()==0.0)
+    joint.set_frames(Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,0.0))
+    assert(joint.limit_torque()==0.0)
+}
+
+test "velocity motor balances a soft stop beyond the nominal bound and retains effort limits" {
+    var world = soft_world();var body = soft_body(world)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.3 ..maximum_angle = 0.3
+        ..motor = Physics.HingeMotor3D(1.0,-0.1,0.2) ..maximum_friction_torque = 10.0
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    var i = 0;while i<360 {
+        world.step(1.0/60.0);assert(joint.motor_torque()>=-0.10001 && joint.motor_torque()<=0.20001)
+        assert(joint.friction_torque()==0.0);i++
+    }
+    assert(Math.abs(joint.angle()-0.425)<0.001 && Math.abs(joint.angular_speed())<0.001)
+    assert(Math.abs(joint.limit_torque()+0.2)<0.001)
+    joint.set_motor(Physics.HingeMotor3D(-1.0,-0.1,0.2));soft_steps(world,360)
+    assert(Math.abs(joint.angle()+0.3625)<0.001 && Math.abs(joint.limit_torque()-0.1)<0.001)
+}
+
+test "passive friction combines with a soft stop and full angular range remains free" {
+    var world = soft_world();var body = soft_body(world);soft_pose(body,0.4)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = 0.0 ..maximum_angle = 0.0
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8) ..maximum_friction_torque = 0.1)
+    soft_steps(world,360);assert(Math.abs(joint.angular_speed())<0.001)
+    assert(joint.angle()>0.02 && joint.angle()<0.065)
+    assert(Math.abs(joint.friction_torque())<=0.10001 && Math.abs(joint.limit_torque())<=0.101)
+    joint.set_limits(-Math.pi(),Math.pi());joint.set_maximum_friction_torque(0.0)
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,0.5));soft_steps(world,120)
+    assert(joint.limit_torque()==0.0 && Math.abs(joint.angular_speed()-0.5)<0.00001)
+}
+
+test "soft stops choose the closest boundary across the signed angle seam" {
+    var world = soft_world();var body = soft_body(world);soft_pose(body,3.0)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -2.9 ..maximum_angle = -2.5
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    world.step(1.0/60.0);assert(joint.limit_torque()>0.0 && joint.angular_speed()>0.0)
+    var angle = joint.angle();var speed = joint.angular_speed();var crossed = false;var i = 0;let dt = 1.0/60.0
+    while i<240 {
+        let previous = speed
+        if angle<=-2.9 || angle>=-2.5 {
+            let lower = Math.atan2(Math.sin(angle+2.9),Math.cos(angle+2.9))
+            let upper = Math.atan2(Math.sin(angle+2.5),Math.cos(angle+2.5))
+            if Math.abs(lower)<Math.abs(upper) { speed = Math.max(previous,(0.1*speed-dt*1.6*lower)/(0.1+dt*0.8+dt*dt*1.6)) }
+            else { speed = Math.min(previous,(0.1*speed-dt*1.6*upper)/(0.1+dt*0.8+dt*dt*1.6)) }
+        }
+        angle = Math.atan2(Math.sin(angle+dt*speed),Math.cos(angle+dt*speed))
+        if angle<0.0 { crossed = true }
+        world.step(dt);assert(Math.abs(joint.angle()-angle)<0.00003 && Math.abs(joint.angular_speed()-speed)<0.00003)
+        i++
+    }
+    assert(crossed)
+    joint.set_limits(3.0,3.0);soft_pose(body,-3.0);body.set_angular_velocity(Math.Vec3())
+    world.step(1.0/60.0);assert(joint.limit_torque()<0.0)
+    soft_steps(world,240);assert(Math.abs(joint.angle()-3.0)<0.002)
+}
+
+test "position motor keeps its bounded target while soft stops allow transient deformation" {
+    var world = soft_world();var body = soft_body(world)
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.2
+        ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.4)
+        ..motor = Physics.HingeMotor3D.position(0.8,-0.1,0.2,1.6,0.8))
+    soft_steps(world,360);assert(Math.abs(joint.angle()-0.2)<0.002)
+    joint.set_motor(Physics.HingeMotor3D.position(-0.8,-0.1,0.2,1.6,0.8))
+    soft_steps(world,360);assert(Math.abs(joint.angle()+0.2)<0.002 && joint.anchor_error().length()<0.001)
+}
+
+test "soft stops share a loaded planar fixed chain and real floor contacts" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D(offset:-1.5)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)) ..allow_sleep = false)
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-2.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var fixed = world.create_fixed_constraint(body,payload,
+        Physics.FixedConstraint3DSettings() ..first_local_frame = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_hinge_constraint(soft_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+        ..minimum_angle = 0.1 ..maximum_angle = 0.1 ..limit_spring = Physics.HingeLimitSpring3D(1.6,0.8))
+    var contacts = 0;var step = 0;var reacted = false
+    while step<180 {
+        if step==90 { joint.set_limits(-0.1,-0.1) }
+        world.step(1.0/60.0);contacts += world.contact_count()
+        if Math.abs(joint.limit_torque())>0.01 { reacted = true }
+        assert(fixed.anchor_error().length()<0.01 && joint.anchor_error().length()<0.01);step++
+    }
+    assert(contacts>0 && reacted && body.position().y>=-1.01 && joint.axis_error()<0.002)
+}

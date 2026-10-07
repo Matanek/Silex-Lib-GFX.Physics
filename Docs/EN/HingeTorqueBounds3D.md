@@ -76,5 +76,6 @@ the motor and arrest motion. A zero step preserves observations. Mutation,
 suspension, destruction and orphaned handles follow the [hinge](Hinge3D.md).
 
 An installed motor, including one with no effort, retains priority over
-[passive friction](HingeFriction3D.md). `set_motor(null)` removes it. Soft
-stops and combined position/velocity control remain to be qualified.
+[passive friction](HingeFriction3D.md). `set_motor(null)` removes it. [Soft
+stops](HingeSoftLimits3D.md) are available; combined position/velocity control
+remains to be qualified.

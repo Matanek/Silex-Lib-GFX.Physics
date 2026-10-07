@@ -70,6 +70,21 @@ public struct HingeMotor3D {
     }
 }
 
+public struct HingeLimitSpring3D {
+    let stiffness:float
+    let damping:float
+
+    init(stiffness:float, damping:float) {
+        if !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.HingeLimitSpring3D requires positive finite stiffness and nonnegative finite damping")
+        }
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
 public struct HingeConstraint3DSettings {
     var first_local_anchor:Math.Vec3 = Math.Vec3()
     var second_local_anchor:Math.Vec3 = Math.Vec3()
@@ -79,6 +94,7 @@ public struct HingeConstraint3DSettings {
     var second_local_normal:Math.Vec3 = Math.Vec3(1.0, 0.0, 0.0)
     var minimum_angle:float = -Math.pi()
     var maximum_angle:float = Math.pi()
+    var limit_spring:HingeLimitSpring3D? = null
     var motor:HingeMotor3D? = null
     var maximum_friction_torque:float = 0.0
     var is_enabled:bool = true
@@ -96,6 +112,9 @@ package class HingeConstraintState3D {
     var angular_impulse:Math.Vec3 = Math.Vec3()
     var lower_impulse:float = 0.0
     var upper_impulse:float = 0.0
+    var limit_spring:HingeLimitSpring3D?
+    var limit_error:float = 0.0
+    var limit_side:int = 0
     var motor:HingeMotor3D?
     var motor_impulse:float = 0.0
     var motor_error:float = 0.0
@@ -118,6 +137,7 @@ package class HingeConstraintState3D {
         self.second_local_normal = hinge_normal3d(self.second_local_axis, settings.second_local_normal)
         self.minimum_angle = settings.minimum_angle
         self.maximum_angle = settings.maximum_angle
+        self.limit_spring = settings.limit_spring
         self.motor = settings.motor
         self.maximum_friction_torque = settings.maximum_friction_torque
     }
@@ -128,6 +148,8 @@ package class HingeConstraintState3D {
         self.angular_impulse = Math.Vec3()
         self.lower_impulse = 0.0
         self.upper_impulse = 0.0
+        self.limit_error = 0.0
+        self.limit_side = 0
         self.motor_impulse = 0.0
         self.motor_error = 0.0
         self.friction_impulse = 0.0
@@ -261,6 +283,11 @@ public class HingeConstraint3D {
     func second_local_normal() Math.Vec3 { return self.store.require(self.id).second_local_normal }
     func minimum_angle() float { return self.store.require(self.id).minimum_angle }
     func maximum_angle() float { return self.store.require(self.id).maximum_angle }
+    func limit_spring() HingeLimitSpring3D? { return self.store.require(self.id).limit_spring }
+    func limit_torque() float {
+        var state = self.store.require(self.id)
+        return (state.lower_impulse + state.upper_impulse) * state.point.inverse_delta
+    }
     func motor() HingeMotor3D? { return self.store.require(self.id).motor }
     func maximum_friction_torque() float { return self.store.require(self.id).maximum_friction_torque }
     func angular_speed() float {
@@ -342,6 +369,12 @@ public class HingeConstraint3D {
         var state = self.store.require(self.id)
         state.minimum_angle = minimum
         state.maximum_angle = maximum
+        self.invalidate_reaction(state)
+    }
+    func set_limit_spring(spring:HingeLimitSpring3D?) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.limit_spring = spring
         self.invalidate_reaction(state)
     }
     func set_motor(motor:HingeMotor3D?) {

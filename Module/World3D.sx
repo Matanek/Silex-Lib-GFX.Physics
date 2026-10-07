@@ -32,6 +32,7 @@ use GFX.Physics.HingeConstraint3D.HingeConstraint3D
 use GFX.Physics.HingeConstraint3D.HingeConstraint3DSettings
 use GFX.Physics.HingeConstraint3D.HingeConstraintState3D
 use GFX.Physics.HingeConstraint3D.HingeConstraintStore3D
+use GFX.Physics.HingeConstraint3D.HingeLimitSpring3D
 use GFX.Physics.HingeConstraint3D.hinge_angle3d
 use GFX.Physics.Geometry3D.Geometry3D
 use GFX.Physics.Geometry3D.DistanceResult3D
@@ -535,7 +536,7 @@ public class World3D {
             }
         }
         self.warm_start_fixed_constraints(delta)
-        // Rigid attachments, motors and passive hinge friction act before pose integration.
+        // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
         if self.has_active_hinge_drive() || self.has_active_fixed_constraint() {
             var iteration = 0
@@ -740,6 +741,23 @@ public class World3D {
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
                 constraint.reset()
+                if constraint.limit_spring != null &&
+                    (constraint.minimum_angle > -Math.pi() || constraint.maximum_angle < Math.pi())
+                {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    let angle = hinge_angle3d(first.transform, second.transform, constraint)
+                    if angle <= constraint.minimum_angle || angle >= constraint.maximum_angle {
+                        let lower = hinge_wrapped_angle3d(angle - constraint.minimum_angle)
+                        let upper = hinge_wrapped_angle3d(angle - constraint.maximum_angle)
+                        constraint.limit_side = -1
+                        constraint.limit_error = upper
+                        if Math.abs(lower) < Math.abs(upper) {
+                            constraint.limit_side = 1
+                            constraint.limit_error = lower
+                        }
+                    }
+                }
                 if let motor = constraint.motor {
                     if let target = motor.target_angle {
                         var first = self.store.require(constraint.point.first_id)
@@ -796,7 +814,7 @@ public class World3D {
                     if let motor = constraint.motor {
                         maximum_torque = Math.max(Math.abs(motor.minimum_torque), Math.abs(motor.maximum_torque))
                     }
-                    if maximum_torque > 0.0 {
+                    if maximum_torque > 0.0 || constraint.limit_side != 0 {
                         var first = self.store.require(constraint.point.first_id)
                         var second = self.store.require(constraint.point.second_id)
                         if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
@@ -3208,6 +3226,46 @@ func solve_hinge_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state.point.impulse = state.point.impulse.add(anchor_impulse)
 }
 
+func hinge_wrapped_angle3d(angle:float) float {
+    if angle > Math.pi() { return angle - 2.0 * Math.pi() }
+    if angle < -Math.pi() { return angle + 2.0 * Math.pi() }
+    return angle
+}
+
+func solve_hinge_soft_limit3d(first:&BodyState3D, second:&BodyState3D,
+    state:HingeConstraintState3D, axis:Math.Vec3, spring:HingeLimitSpring3D, delta:float)
+{
+    if state.limit_side == 0 { return }
+    let first_radius = first.transform.point(state.point.first_local_anchor).subtract(first.world_center())
+    let second_radius = second.transform.point(state.point.second_local_anchor).subtract(second.world_center())
+    let point_mass = point_inverse_mass3d(first, second, first_radius, second_radius)
+    if Math.abs(point_mass.determinant()) <= Math.epsilon() { return }
+    let coupling = first.inverse_inertia_times(axis).cross(first_radius)
+        .add(second.inverse_inertia_times(axis).cross(second_radius))
+    let response = point_mass.inverted().multiply(coupling)
+    let inverse_mass = hinge_angular_mass3d(first, second, axis) - coupling.dot(response)
+    if inverse_mass <= 0.000000001 { return }
+    let softness = 1.0 / (delta * (spring.damping + delta * spring.stiffness))
+    let bias = delta * spring.stiffness * softness * state.limit_error
+    let speed = second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+    var previous = state.upper_impulse
+    if state.limit_side == 1 { previous = state.lower_impulse }
+    var accumulated = previous - (speed + bias + softness * previous) / (inverse_mass + softness)
+    if state.minimum_angle != state.maximum_angle {
+        if state.limit_side == 1 { accumulated = Math.max(0.0, accumulated) }
+        else { accumulated = Math.min(0.0, accumulated) }
+    }
+    if state.limit_side == 1 { state.lower_impulse = accumulated }
+    else { state.upper_impulse = accumulated }
+    let change = accumulated - previous
+    let angular = axis.multiply(change)
+    let linear = response.multiply(-change)
+    apply_hinge_angular_impulse3d(first, second, angular)
+    apply_contact_impulse3d(first, second, first_radius, second_radius, linear)
+    state.angular_impulse = state.angular_impulse.add(angular)
+    state.point.impulse = state.point.impulse.add(linear)
+}
+
 func solve_hinge_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state:HingeConstraintState3D, delta:float)
 {
@@ -3234,6 +3292,10 @@ func solve_hinge_velocity3d(first:&BodyState3D, second:&BodyState3D,
     if mass <= 0.000000001 { return }
     solve_hinge_drive_velocity3d(first, second, state, axis, delta)
     if state.minimum_angle == -Math.pi() && state.maximum_angle == Math.pi() { return }
+    if let spring = state.limit_spring {
+        solve_hinge_soft_limit3d(first, second, state, axis, spring, delta)
+        return
+    }
     let angle = hinge_angle3d(first.transform, second.transform, state)
     row = 0
     while row < 2 {
@@ -3275,7 +3337,9 @@ func solve_hinge_position3d(first:BodyState3D, second:BodyState3D,
     state:HingeConstraintState3D)
 {
     var row = 0
-    while row < 3 {
+    var row_count = 3
+    if state.limit_spring != null { row_count = 2 }
+    while row < row_count {
         let axis = first.transform.vector(state.first_local_axis)
         let normal = first.transform.vector(state.first_local_normal)
         var direction = normal

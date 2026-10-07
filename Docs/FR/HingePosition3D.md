@@ -87,4 +87,4 @@ le monde réel, ses contacts et sa sûreté ; la récupération de pose ne fourn
 pas un nouvel élan au corps.
 
 Le [frein d’axe](HingeFriction3D.md) agit quand le moteur est absent. Les
-[bornes signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens. Les butées souples restent à compléter. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).
+[bornes signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens. Les [butées souples](HingeSoftLimits3D.md) permettent une déformation amortie. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).

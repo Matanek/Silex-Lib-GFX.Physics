@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `HingeLimitSpring3D` rend les butées angulaires souples : raideur/amortissement physiques, mesure signée séparée et mutation sûre, avec butées rigides conservées par défaut. Oscillations, charge, pivot excentré, moteurs et contacts qualifiés face à Jolt en Native Debug/Release.
+
 - Les moteurs de charnière en vitesse et position acceptent des bornes de couple signées : effort asymétrique, unidirectionnel ou imposé, avec budget par pas, mutation et gardes ; constructeurs symétriques conservés.
 
 - `maximum_friction_torque` freine passivement une charnière sans moteur, avec capacité mutable, effort signé séparé et tenue sous charge. Budget du pas, priorité des moteurs, contacts, sommeil et invalidation qualifiés ; trajectoires comparées à Jolt en Native Debug/Release.

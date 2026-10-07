@@ -150,7 +150,7 @@ asymétriques et des contacts terrain sur macOS ARM64 Native Debug/Release.
 Le moteur à vitesse cible est qualifié par accélération analytique, inertie au
 pivot, inversion, arrêt, butées, chaîne et contacts. Le
 [pilotage en position](HingePosition3D.md) et la
-[friction d’axe](HingeFriction3D.md) sont disponibles. Les butées souples
-restent à implémenter.
+[friction d’axe](HingeFriction3D.md) sont disponibles. Les [butées souples](HingeSoftLimits3D.md) sont disponibles avec raideur et
+amortissement physiques.
 
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.

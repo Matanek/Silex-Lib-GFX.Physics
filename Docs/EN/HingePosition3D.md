@@ -84,5 +84,5 @@ corrected in the pose. Narrowed limits and the servo share the real world,
 its contacts and safety; pose recovery does not supply new momentum.
 
 The [axis brake](HingeFriction3D.md) acts when the motor is absent. [Signed
-bounds](HingeTorqueBounds3D.md) permit different effort in each direction. Soft stops remain to be completed.
+bounds](HingeTorqueBounds3D.md) permit different effort in each direction. [Soft stops](HingeSoftLimits3D.md) allow damped deflection.
 For velocity control, see the [hinge motor](Hinge3D.md#request-a-speed-with-a-maximum-torque).

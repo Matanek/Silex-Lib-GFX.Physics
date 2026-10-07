@@ -78,4 +78,5 @@ suivent la [charnière](Hinge3D.md).
 
 Un moteur installé, même sans effort, conserve la priorité sur la
 [friction passive](HingeFriction3D.md). `set_motor(null)` le retire. Les
-butées souples et la commande combinée position/vitesse restent à qualifier.
+[butées souples](HingeSoftLimits3D.md) sont disponibles ; la commande combinée
+position/vitesse reste à qualifier.

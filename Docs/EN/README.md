@@ -263,6 +263,8 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.
 
+[Soft hinge stops](HingeSoftLimits3D.md) cushion angular overshoot with mutable physical stiffness.
+
 ## Tile maps
 
 [Tile map collisions](TileMap2D.md)

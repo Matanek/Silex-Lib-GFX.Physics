@@ -147,7 +147,6 @@ terrain contacts on macOS ARM64 Native Debug/Release. The velocity motor is
 qualified by analytical acceleration, inertia about the pivot, reversal,
 motor off, stops, a chain and contacts.
 [Position control](HingePosition3D.md) and
-[axis friction](HingeFriction3D.md) are available. Soft stops remain to be
-implemented.
+[axis friction](HingeFriction3D.md) are available. [Soft stops](HingeSoftLimits3D.md) are available with physical stiffness and damping.
 
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.

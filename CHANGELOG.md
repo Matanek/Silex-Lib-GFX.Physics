@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `HingeLimitSpring3D` adds soft angular stops: physical stiffness/damping, separate signed torque and safe mutation, with rigid stops retained by default. Oscillations, load, offset pivot, motors and contacts qualified against Jolt in Native Debug/Release.
+
 - Hinge velocity and position motors accept signed torque bounds: asymmetric, one-sided or prescribed effort, with a per-step budget, mutation and guards; existing symmetric constructors remain available.
 
 - `maximum_friction_torque` passively brakes an unpowered hinge, with mutable capacity, separate signed effort and load holding. Step budget, motor precedence, contacts, sleep and invalidation qualified; trajectories compared against Jolt in Native Debug/Release.

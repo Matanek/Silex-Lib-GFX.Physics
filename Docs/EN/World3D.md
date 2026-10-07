@@ -119,6 +119,8 @@ triangles and meshes. See
 A capsule lying across a slope can roll under friction; friction does not
 guarantee that a rounded shape stays still.
 
+[Soft hinge stops](HingeSoftLimits3D.md) cushion angular overshoot with mutable physical stiffness.
+
 ## Poses, mass, and commands
 
 Coordinates follow `STD.Math`: right handed, with Y up.
