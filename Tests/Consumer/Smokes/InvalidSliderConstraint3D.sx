@@ -45,6 +45,9 @@ func main() {
     if selected("servo-damping-nan") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, Math.sqrt(-1.0)) }
     if selected("servo-damping-infinity") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, 1.0 / 0.0) }
     if selected("servo-damping-negative") { Physics.SliderMotor3D.position(0.75, 10.0, 8.0, -1.0) }
+    if selected("friction-nan") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..maximum_friction_force = Math.sqrt(-1.0)) }
+    if selected("friction-infinity") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..maximum_friction_force = 1.0 / 0.0) }
+    if selected("friction-negative") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..maximum_friction_force = -1.0) }
     var joint = world.create_slider_constraint(support,body)
     if selected("mutation-minimum") { joint.set_limits(Math.sqrt(-1.0), null) }
     if selected("mutation-maximum") { joint.set_limits(null, 1.0 / 0.0) }
@@ -57,5 +60,12 @@ func main() {
     if selected("stale-motor-read") { world.destroy_slider_constraint(joint); joint.motor() }
     if selected("stale-motor-set") { world.destroy_slider_constraint(joint); joint.set_motor(Physics.SliderMotor3D(0.6, 2.0)) }
     if selected("orphan-motor") { orphan_slider().motor_force() }
+    if selected("mutation-friction-nan") { joint.set_maximum_friction_force(Math.sqrt(-1.0)) }
+    if selected("mutation-friction-infinity") { joint.set_maximum_friction_force(1.0 / 0.0) }
+    if selected("mutation-friction-negative") { joint.set_maximum_friction_force(-1.0) }
+    if selected("stale-friction-read") { world.destroy_slider_constraint(joint);joint.maximum_friction_force() }
+    if selected("stale-friction-force") { world.destroy_slider_constraint(joint);joint.friction_force() }
+    if selected("stale-friction-set") { world.destroy_slider_constraint(joint);joint.set_maximum_friction_force(1.0) }
+    if selected("orphan-friction") { orphan_slider().friction_force() }
     panic("invalid slider operation was accepted")
 }

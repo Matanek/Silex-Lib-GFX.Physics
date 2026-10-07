@@ -46,6 +46,7 @@ public struct SliderConstraint3DSettings {
     var first_local_frame:Transform3D = Transform3D()
     var second_local_frame:Transform3D = Transform3D()
     var motor:SliderMotor3D? = null
+    var maximum_friction_force:float = 0.0
     var minimum_position:float? = null
     var maximum_position:float? = null
     var is_enabled:bool = true
@@ -72,6 +73,8 @@ package class SliderConstraintState3D {
     var maximum_position:float?
     var motor:SliderMotor3D?
     var motor_impulse:float = 0.0
+    var maximum_friction_force:float
+    var friction_impulse:float = 0.0
     var motor_error:float = 0.0
     var limit_side:int = 0
     var limit_impulse:float = 0.0
@@ -82,6 +85,8 @@ package class SliderConstraintState3D {
 
     init(first_id:BodyId3D, second_id:BodyId3D, settings:SliderConstraint3DSettings) {
         validate_slider_limits3d(settings.minimum_position, settings.maximum_position)
+        validate_slider_friction3d(settings.maximum_friction_force)
+        self.maximum_friction_force = settings.maximum_friction_force
         self.motor = settings.motor
         self.minimum_position = settings.minimum_position
         self.maximum_position = settings.maximum_position
@@ -253,6 +258,18 @@ public class SliderConstraint3D {
             .subtract(first.linear_velocity.add(first.angular_velocity.cross(first_radius)))
             .dot(slider_axis3d(first.transform, state))
     }
+    func maximum_friction_force() float { return self.store.require(self.id).maximum_friction_force }
+    func friction_force() float {
+        var state = self.store.require(self.id)
+        return state.friction_impulse * state.inverse_delta
+    }
+    func set_maximum_friction_force(force:float) {
+        validate_slider_friction3d(force)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.maximum_friction_force = force
+        self.reset_reaction(state)
+    }
     func motor() SliderMotor3D? { return self.store.require(self.id).motor }
     func motor_force() float {
         var state = self.store.require(self.id)
@@ -289,6 +306,7 @@ public class SliderConstraint3D {
     }
     private func reset_reaction(state:SliderConstraintState3D) {
         state.motor_impulse = 0.0
+        state.friction_impulse = 0.0
         state.motor_error = 0.0
         state.limit_side = 0
         state.limit_impulse = 0.0
@@ -321,6 +339,12 @@ package func slider_angular_error3d(first:Transform3D, second:Transform3D,
     let length = axis.length()
     if length <= 0.00000001 { return Math.Vec3() }
     return axis.multiply(2.0 * Math.atan2(length, Math.abs(difference.w)) / length)
+}
+
+func validate_slider_friction3d(force:float) {
+    if !finite_body3d_value(force) || force < 0.0 {
+        panic("GFX.Physics.SliderConstraint3D requires nonnegative finite maximum friction force")
+    }
 }
 
 func validate_slider_limits3d(minimum:float?, maximum:float?) {

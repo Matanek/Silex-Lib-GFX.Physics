@@ -67,7 +67,7 @@ deux masses libres, ancrage excentré et charge supérieure à la capacité.
 Le rail tournant est comparé en régime établi à vitesse relative constante.
 La parité des transitions d'effort pendant une rotation du rail, des impacts
 et des chaînes spatiales générales reste à établir. Bornes de force signées,
-friction passive et butées souples restent à qualifier.
+butées souples restent à qualifier.
 
 `SliderMotorScene.sx` commence en montée à −1 m/s sur un rail incliné.
 T alterne montée, freinage puis descente ; F choisit 30 ou 6 N, cette dernière
@@ -75,3 +75,5 @@ capacité étant insuffisante pour monter. D désactive/réactive le moteur ;
 R réinitialise, Espace met en pause/reprend et Échap ferme.
 
 [Le servo de position](SliderPosition3D.md) ajoute une course cible par ressort amorti.
+
+Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.

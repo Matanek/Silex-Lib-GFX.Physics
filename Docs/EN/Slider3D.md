@@ -71,7 +71,7 @@ remains readable; other calls through stale references are rejected.
 Constraints participate in real contacts and sleeping islands.
 
 Free travel and rigid stops can be combined with the
-[velocity motor](SliderMotor3D.md) or [position servo](SliderPosition3D.md). Axial friction and soft stops remain
+[velocity motor](SliderMotor3D.md) or [position servo](SliderPosition3D.md). [Axial friction](SliderFriction3D.md) adds a passive brake; soft stops remain
 to be qualified. Jolt fixtures cover translation,
 loaded stop reactions, offset frames and rotating rails; parity for impact
 transients and general spatial chains has not been established.

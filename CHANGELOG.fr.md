@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `maximum_friction_force` freine passivement la glissière avec capacité mutable en N, effort signé séparé et priorité des moteurs ; charge, arrêt, contacts, sommeil et oracle Jolt Debug/Release qualifiés.
+
 - Le servo `SliderMotor3D.position` pilote une course cible par ressort amorti physique, force symétrique bornée et cible projetée sur les limites ; mutations, contacts et oracle Jolt Debug/Release qualifiés.
 
 - Le moteur de glissière `SliderMotor3D` pilote une vitesse relative signée avec capacité symétrique en N, freinage à vitesse nulle, effort moteur séparé et mutation sûre.

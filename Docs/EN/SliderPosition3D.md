@@ -60,8 +60,10 @@ and contacts. The Jolt oracle qualifies eight 60 Hz cases in Debug/Release:
 critical/weak damping, saturation, successive modes, limited targets, load,
 two free masses and an offset anchor. Impact, rotating-rail transient and general
 spatial-chain parity remain unestablished. Combined position/velocity commands,
-signed force bounds, friction and soft stops remain to be qualified.
+signed force bounds and soft stops remain to be qualified.
 
 `SliderPositionScene.sx` compares a strongly damped gold carriage with an
 oscillating blue carriage; green markers show the target. T reverses the target,
 R resets, Space pauses/resumes and Escape quits.
+
+The [slider friction brake](SliderFriction3D.md) slows travel without a motor using mutable maximum force.

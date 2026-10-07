@@ -62,8 +62,10 @@ Debug/Release : amortissement critique et faible, saturation, modes successifs,
 cibles limitées, charge, deux masses libres et ancrage excentré. La parité des
 impacts, des transitoires sur rail tournant et des chaînes spatiales générales
 reste à établir. Commande position/vitesse combinée, bornes de force signées,
-friction et butées souples restent à qualifier.
+butées souples restent à qualifier.
 
 `SliderPositionScene.sx` compare un chariot doré fortement amorti à un chariot
 bleu qui oscille ; les repères verts montrent la cible. T inverse la cible,
 R réinitialise, Espace met en pause/reprend et Échap ferme.
+
+Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur avec une force maximale mutable.

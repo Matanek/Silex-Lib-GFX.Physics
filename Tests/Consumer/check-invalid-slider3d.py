@@ -28,6 +28,11 @@ for name in ('stale-motor-read', 'stale-motor-set', 'orphan-motor'):
 for name in ('servo-position-nan', 'servo-position-infinity', 'servo-force-nan', 'servo-force-infinity', 'servo-force-negative', 'servo-stiffness-nan', 'servo-stiffness-infinity', 'servo-stiffness-zero', 'servo-stiffness-negative', 'servo-damping-nan', 'servo-damping-infinity', 'servo-damping-negative'):
     CASES[name] = 'requires finite position, nonnegative finite maximum force, positive finite stiffness and nonnegative finite damping'
 
+for name in ('friction-nan', 'friction-infinity', 'friction-negative', 'mutation-friction-nan', 'mutation-friction-infinity', 'mutation-friction-negative'):
+    CASES[name] = 'requires nonnegative finite maximum friction force'
+for name in ('stale-friction-read', 'stale-friction-force', 'stale-friction-set', 'orphan-friction'):
+    CASES[name] = 'no longer refers to a live constraint'
+
 
 def main():
     root = Path.cwd()

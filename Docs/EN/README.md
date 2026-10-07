@@ -261,6 +261,8 @@ The [3D slider](Slider3D.md) guides a carriage along a rotating rail with signed
 
 The [slider motor](SliderMotor3D.md) drives a relative speed with bounded force, braking and mutation.
 
+The [slider friction brake](SliderFriction3D.md) slows travel without a motor using mutable maximum force.
+
 The [slider position servo](SliderPosition3D.md) targets travel with a physical damped spring and bounded force.
 
 The [hinge position motor](HingePosition3D.md) targets an angle with stiffness, damping and bounded torque.

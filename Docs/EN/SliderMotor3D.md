@@ -64,7 +64,7 @@ The consumer and Jolt oracle qualify acceleration, reversal, braking,
 two free unequal masses, an offset anchor and loads above capacity.
 The rotating rail is compared at steady constant relative speed. Parity
 of force transitions while the rail rotates, impacts and general spatial
-chains remains open. Signed force bounds, passive friction
+chains remains open. Signed force bounds
 and soft stops remain to be qualified.
 
 `SliderMotorScene.sx` starts uphill at −1 m/s on an inclined rail. T cycles
@@ -73,3 +73,5 @@ climb. D disables/enables the motor; R resets, Space pauses/resumes and
 Escape closes the window.
 
 [The position servo](SliderPosition3D.md) adds target travel through a damped spring.
+
+The [slider friction brake](SliderFriction3D.md) slows travel without a motor using mutable maximum force.

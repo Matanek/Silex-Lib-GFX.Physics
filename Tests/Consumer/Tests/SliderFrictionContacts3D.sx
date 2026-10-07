@@ -1,0 +1,31 @@
+use GFX.Physics
+use STD.Math
+
+test "slider friction preserves a real obstacle contact and brakes reverse separation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(Math.Vec3(1.0, 0.0, 0.0))
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0, 4.0, 4.0))))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.25)) ..restitution = 0.0
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(0.2)) ..allow_sleep = false)
+    body.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    var joint = world.create_slider_constraint(rail, body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 0.2)
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.friction_force()) <= 0.20001 && joint.motor_force() == 0.0 && joint.limit_force() == 0.0)
+        assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+        step++
+    }
+    assert(world.contact_count() == 1 && Math.abs(joint.position() - 0.25) < 0.001 && Math.abs(joint.speed()) < 0.001)
+    body.set_linear_velocity(Math.Vec3(-0.5, 0.0, 0.0))
+    step = 0
+    while step < 120 { world.step(1.0 / 120.0); step++ }
+    print("slider friction contact: x=$(joint.position()) speed=$(joint.speed()) friction=$(joint.friction_force()) count=$(world.contact_count())")
+    assert(joint.position() < 0.2 && Math.abs(joint.speed() + 0.4) < 0.0001 && world.contact_count() == 0)
+    assert(Math.abs(joint.friction_force() - 0.2) < 0.0001)
+}

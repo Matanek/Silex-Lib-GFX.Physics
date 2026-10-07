@@ -1,0 +1,265 @@
+use GFX.Physics
+use STD.Math
+
+func friction_carriage(world:Physics.World3D, mass:float = 2.0, position:Math.Vec3 = Math.Vec3()) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..transform = Physics.Transform3D(position)
+        ..mass_properties = Physics.MassProperties3D(mass, Math.Vec3(mass * 0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func friction_rail(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func friction_alignment(joint:Physics.SliderConstraint3D) {
+    assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+}
+func friction_slider_steps(world:Physics.World3D, count:int) {
+    var step = 0
+    while step < count { world.step(1.0 / 120.0); step++ }
+}
+
+test "slider friction brakes both signs without inversion using one budget at sixty and one hundred twenty hertz" {
+    let signs:float[] = [-1.0, 1.0]
+    for sign in signs {
+        for rate in [60, 120] {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            var body = friction_carriage(world)
+            body.set_linear_velocity(Math.Vec3(sign, 0.0, 0.0))
+            var joint = world.create_slider_constraint(friction_rail(world), body,
+                Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0)
+            let dt = 1.0 / rate as float
+            var speed = sign
+            var position = 0.0
+            var step = 0
+            while step < rate * 2 {
+                let previous = speed
+                speed = sign * Math.max(0.0, Math.abs(speed) - dt)
+                position += speed * dt
+                world.step(dt)
+                assert(Math.abs(joint.speed() - speed) < 0.00001 && Math.abs(joint.position() - position) < 0.00001)
+                assert(Math.abs(joint.friction_force() - 2.0 * (speed - previous) / dt) < 0.0001)
+                assert(joint.speed() * sign >= -0.00001 && Math.abs(joint.friction_force()) <= 2.00001)
+                assert(joint.motor_force() == 0.0 && joint.limit_force() == 0.0)
+                assert(Math.abs(joint.reaction_force().x - joint.friction_force()) < 0.00001)
+                friction_alignment(joint)
+                step++
+            }
+            assert(joint.maximum_friction_force() == 2.0 && Math.abs(joint.speed()) < 0.00001)
+        }
+    }
+}
+
+test "slider zero friction leaves the axial course free" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = friction_carriage(world)
+    body.set_linear_velocity(Math.Vec3(0.5, 0.0, 0.0))
+    var joint = world.create_slider_constraint(friction_rail(world), body)
+    friction_slider_steps(world, 240)
+    assert(joint.maximum_friction_force() == 0.0 && joint.friction_force() == 0.0)
+    assert(Math.abs(joint.speed() - 0.5) < 0.00001 && Math.abs(joint.position() - 1.0) < 0.00001)
+}
+
+test "slider friction holds signed loads below capacity and releases under insufficient capacity" {
+    let signs:float[] = [-1.0, 1.0]
+    for sign in signs {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3(sign * 0.3, -9.81, 0.0))
+        var joint = world.create_slider_constraint(friction_rail(world), friction_carriage(world),
+            Physics.SliderConstraint3DSettings() ..maximum_friction_force = 1.0)
+        friction_slider_steps(world, 240)
+        assert(Math.abs(joint.position()) < 0.00001 && Math.abs(joint.speed()) < 0.00001)
+        assert(Math.abs(joint.friction_force() + sign * 0.6) < 0.00001)
+        assert(Math.abs(joint.reaction_force().y - 19.62) < 0.0001)
+        joint.set_maximum_friction_force(0.2)
+        assert(joint.friction_force() == 0.0 && joint.reaction_force().length() == 0.0)
+        var step = 0
+        while step < 120 {
+            world.step(1.0 / 120.0)
+            let n = (step + 1) as float
+            assert(Math.abs(joint.speed() - sign * 0.2 * n / 120.0) < 0.00001)
+            assert(Math.abs(joint.position() - sign * 0.2 * n * (n + 1.0) / (2.0 * 120.0 * 120.0)) < 0.00001)
+            assert(Math.abs(joint.friction_force() + sign * 0.2) < 0.00001)
+            friction_alignment(joint)
+            step++
+        }
+    }
+}
+
+test "slider friction exchanges momentum between unequal free masses until their velocities coincide" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = friction_carriage(world, 2.0)
+    var second = friction_carriage(world, 8.0)
+    second.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    var joint = world.create_slider_constraint(first, second,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 0.8)
+    var speed = 1.0
+    var position = 0.0
+    var step = 0
+    while step < 360 {
+        speed = Math.max(0.0, speed - 0.5 / 120.0)
+        position += speed / 120.0
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.speed() - speed) < 0.00002 && Math.abs(joint.position() - position) < 0.00002)
+        assert(Math.abs(2.0 * first.linear_velocity().x + 8.0 * second.linear_velocity().x - 8.0) < 0.00001)
+        friction_alignment(joint)
+        step++
+    }
+    assert(Math.abs(first.linear_velocity().x - 0.8) < 0.00001 && Math.abs(second.linear_velocity().x - 0.8) < 0.00001)
+}
+
+test "slider offset friction supplies a compensating free couple and transverse support" {
+    var world = Physics.World3D()
+    var body = friction_carriage(world, position:Math.Vec3(0.0, -0.5, 0.0))
+    body.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    var joint = world.create_slider_constraint(friction_rail(world), body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0
+        ..second_local_frame = Physics.Transform3D(Math.Vec3(0.0, 0.5, 0.0)))
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.speed() - (1.0 - (step + 1) as float / 120.0)) < 0.00001)
+        assert(Math.abs(joint.friction_force() + 2.0) < 0.0001 && Math.abs(joint.reaction_torque().z + 1.0) < 0.0001)
+        assert(Math.abs(joint.reaction_force().y - 19.62) < 0.0001 && body.angular_velocity().length() < 0.00001)
+        friction_alignment(joint)
+        step++
+    }
+}
+
+test "slider friction preserves arbitrary three dimensional offset anchors and mass frames" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0).normalized())
+    let origin = Math.Vec3(0.7, 1.2, -0.6)
+    let anchor = Math.Vec3(0.1, 0.4, 0.2)
+    let center = Math.Vec3(-0.2, 0.1, 0.4)
+    var rail = friction_rail(world)
+    rail.set_transform(Physics.Transform3D(origin, rotation))
+    var body = friction_carriage(world, 3.0, origin.subtract(rotation.rotate(anchor)))
+    body.set_transform(Physics.Transform3D(body.position(), rotation))
+    body.set_mass_properties(Physics.MassProperties3D(3.0, Math.Vec3(0.3, 0.6, 0.9), center))
+    let axis = rotation.rotate(Math.Vec3(1.0, 0.0, 0.0))
+    body.set_linear_velocity(axis)
+    var joint = world.create_slider_constraint(rail, body, Physics.SliderConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(anchor) ..maximum_friction_force = 3.0)
+    let force = axis.multiply(-3.0)
+    let radius = rotation.rotate(anchor.subtract(center))
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.speed() - (1.0 - (step + 1) as float / 120.0)) < 0.00001)
+        assert(joint.reaction_force().subtract(force).length() < 0.001)
+        assert(joint.reaction_torque().add(radius.cross(force)).length() < 0.001)
+        assert(body.angular_velocity().length() < 0.00001)
+        friction_alignment(joint)
+        step++
+    }
+}
+
+test "slider friction settings are snapshots and mutations clear reactions and adapt to mass" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = friction_carriage(world)
+    body.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    var settings = Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0
+    var joint = world.create_slider_constraint(friction_rail(world), body, settings)
+    settings.maximum_friction_force = 0.0
+    world.step(1.0 / 120.0)
+    let force = joint.friction_force()
+    world.step(0.0)
+    assert(joint.friction_force() == force && joint.maximum_friction_force() == 2.0)
+    joint.set_maximum_friction_force(4.0)
+    assert(joint.friction_force() == 0.0 && joint.reaction_force().length() == 0.0 && body.is_awake())
+    body.set_mass_properties(Physics.MassProperties3D(4.0, Math.Vec3(0.4)))
+    let previous = joint.speed()
+    world.step(1.0 / 120.0)
+    assert(Math.abs(joint.speed() - previous + 1.0 / 120.0) < 0.00001 && Math.abs(joint.friction_force() + 4.0) < 0.0001)
+    joint.set_frames(Physics.Transform3D(), Physics.Transform3D())
+    assert(joint.friction_force() == 0.0)
+    joint.set_limits(-1.0, 1.0)
+    assert(joint.friction_force() == 0.0)
+    joint.set_maximum_friction_force(0.0)
+    body.set_linear_velocity(Math.Vec3(-0.5, 0.0, 0.0))
+    friction_slider_steps(world, 60)
+    assert(Math.abs(joint.speed() + 0.5) < 0.00001 && joint.friction_force() == 0.0)
+}
+
+test "slider installed velocity and position motors suppress friction even with zero capacity" {
+    for position_mode in [false, true] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var body = friction_carriage(world)
+        body.set_linear_velocity(Math.Vec3(0.5, 0.0, 0.0))
+        var motor = Physics.SliderMotor3D(0.0, 0.0)
+        if position_mode { motor = Physics.SliderMotor3D.position(0.0, 0.0, 8.0, 8.0) }
+        var joint = world.create_slider_constraint(friction_rail(world), body,
+            Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0 ..motor = motor)
+        friction_slider_steps(world, 120)
+        assert(Math.abs(joint.speed() - 0.5) < 0.00001 && joint.friction_force() == 0.0 && joint.motor_force() == 0.0)
+        if position_mode { joint.set_motor(Physics.SliderMotor3D.position(0.0, 10.0, 8.0, 8.0)) }
+        else { joint.set_motor(Physics.SliderMotor3D(-0.5, 2.0)) }
+        friction_slider_steps(world, 120)
+        assert(joint.friction_force() == 0.0 && Math.abs(joint.motor_force()) <= 10.0001)
+        joint.set_motor(null)
+        assert(joint.friction_force() == 0.0 && joint.motor_force() == 0.0 && joint.maximum_friction_force() == 2.0)
+        friction_slider_steps(world, 120)
+        assert(Math.abs(joint.speed()) < 0.00001 && joint.motor_force() == 0.0)
+    }
+}
+
+test "slider friction can sleep and suspends with either the joint or a body" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = friction_carriage(world)
+    body.set_sleep_enabled(true)
+    body.set_linear_velocity(Math.Vec3(0.5, 0.0, 0.0))
+    var joint = world.create_slider_constraint(friction_rail(world), body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0)
+    friction_slider_steps(world, 480)
+    assert(!body.is_awake())
+    joint.set_maximum_friction_force(4.0)
+    assert(body.is_awake())
+    body.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    joint.set_enabled(false)
+    friction_slider_steps(world, 30)
+    assert(joint.friction_force() == 0.0 && Math.abs(joint.speed() - 1.0) < 0.00001)
+    joint.set_enabled(true)
+    world.step(1.0 / 120.0)
+    assert(joint.friction_force() < -3.99)
+    body.set_enabled(false)
+    world.step(1.0 / 120.0)
+    assert(joint.friction_force() == 0.0)
+    body.set_enabled(true)
+    world.step(1.0 / 120.0)
+    assert(joint.friction_force() < -3.99)
+    world.destroy_slider_constraint(joint)
+    assert(!joint.is_valid())
+}
+
+test "slider friction is relative to a translating kinematic rail" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic)
+    var body = friction_carriage(world)
+    body.set_linear_velocity(Math.Vec3(0.9, 0.0, 0.0))
+    var joint = world.create_slider_constraint(rail, body,
+        Physics.SliderConstraint3DSettings() ..maximum_friction_force = 2.0)
+    rail.move_kinematic(Physics.Transform3D(Math.Vec3(0.8, 0.0, 0.0)), 2.0)
+    friction_slider_steps(world, 240)
+    assert(Math.abs(joint.speed()) < 0.00001 && Math.abs(body.linear_velocity().x - 0.4) < 0.00001)
+    friction_alignment(joint)
+}
+
+test "slider friction shares its axis with rigid limits and permits reverse travel" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = friction_carriage(world)
+    body.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    var joint = world.create_slider_constraint(friction_rail(world), body,
+        Physics.SliderConstraint3DSettings() ..minimum_position = -0.25 ..maximum_position = 0.25
+        ..maximum_friction_force = 0.2)
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.friction_force()) <= 0.20001 && joint.position() <= 0.25001)
+        friction_alignment(joint)
+        step++
+    }
+    assert(Math.abs(joint.position() - 0.25) < 0.00001 && Math.abs(joint.speed()) < 0.00001)
+    joint.set_maximum_friction_force(0.0)
+    body.set_linear_velocity(Math.Vec3(-0.5, 0.0, 0.0))
+    friction_slider_steps(world, 60)
+    assert(Math.abs(joint.speed() + 0.5) < 0.00001 && joint.friction_force() == 0.0 && joint.limit_force() == 0.0)
+}
