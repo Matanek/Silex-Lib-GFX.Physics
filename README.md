@@ -46,3 +46,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Combined slider position and velocity](Docs/EN/SliderCombined3D.md).
 
 [3D cone joint](Docs/EN/Cone3D.md) · [Articulation cône](Docs/FR/Cone3D.md).
+
+[3D swing and twist](Docs/EN/SwingTwist3D.md) · [Inclinaison et torsion](Docs/FR/SwingTwist3D.md).

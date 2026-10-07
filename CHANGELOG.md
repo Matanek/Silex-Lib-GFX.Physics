@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D swing/twist joint: local frames, elliptical cone/pyramid, bounded twist, separate drives and passive friction; headless qualification.
+
 - 3D cone joint: bounded inclination, free twist, local anchors, reactions and safe runtime mutations; headless consumers and Jolt witness.
 
 - Sliders follow a position and velocity together with `SliderMotor3D.position_and_velocity`, symmetric or signed force bounds and a physical spring; tracking, mutations, contacts and Jolt witnesses qualified.

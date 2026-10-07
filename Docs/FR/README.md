@@ -165,3 +165,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Suivi de cible mobile par position et vitesse](SliderCombined3D.md).
 
 [Articulation cône 3D](Cone3D.md).
+
+[Inclinaison et torsion 3D](SwingTwist3D.md).

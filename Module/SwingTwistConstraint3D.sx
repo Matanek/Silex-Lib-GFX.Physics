@@ -1,0 +1,571 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.PointConstraint3D.PointConstraintState3D
+use GFX.Physics.PointConstraint3D.PointConstraint3DSettings
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public enum SwingLimits3D {
+    cone(Math.Vec2)
+    pyramid(Math.Vec2, Math.Vec2)
+}
+
+public struct TwistMotor3D {
+    let speed:float
+    let minimum_torque:float
+    let maximum_torque:float
+    let target_angle:float?
+    let stiffness:float
+    let damping:float
+
+    init(speed:float, maximum_torque:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(maximum_torque) || maximum_torque < 0.0 {
+            panic("GFX.Physics.TwistMotor3D requires finite speed and nonnegative finite maximum torque")
+        }
+        self.speed = speed
+        self.minimum_torque = -maximum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    init(speed:float, minimum_torque:float, maximum_torque:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(minimum_torque) ||
+            !finite_body3d_value(maximum_torque) || minimum_torque > maximum_torque
+        {
+            panic("GFX.Physics.TwistMotor3D requires finite speed and ordered finite torque bounds")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    static func position(angle:float, maximum_torque:float, stiffness:float, damping:float) TwistMotor3D {
+        return TwistMotor3D(angle, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position(angle:float, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float) TwistMotor3D
+    {
+        return TwistMotor3D(angle, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angle:float, speed:float, maximum_torque:float,
+        stiffness:float, damping:float) TwistMotor3D
+    {
+        return TwistMotor3D(angle, speed, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angle:float, speed:float, minimum_torque:float,
+        maximum_torque:float, stiffness:float, damping:float) TwistMotor3D
+    {
+        return TwistMotor3D(angle, speed, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    private init(angle:float, speed:float, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float)
+    {
+        if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
+            !finite_body3d_value(speed) ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.TwistMotor3D.position_and_velocity requires an angle within [-pi, pi], finite speed, ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = angle
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
+    private init(angle:float, minimum_torque:float, maximum_torque:float, stiffness:float, damping:float) {
+        if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.TwistMotor3D.position requires an angle within [-pi, pi], ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = 0.0
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = angle
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
+public struct SwingMotor3D {
+    let speed:Math.Vec2
+    let minimum_torque:float
+    let maximum_torque:float
+    let target_angles:Math.Vec2?
+    let stiffness:float
+    let damping:float
+
+    init(speed:Math.Vec2, maximum_torque:float) {
+        if !finite_swing_vector3d(speed) || !finite_body3d_value(maximum_torque) || maximum_torque < 0.0 {
+            panic("GFX.Physics.SwingMotor3D requires finite speed and nonnegative finite maximum torque")
+        }
+        self.speed = speed
+        self.minimum_torque = -maximum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angles = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    init(speed:Math.Vec2, minimum_torque:float, maximum_torque:float) {
+        if !finite_swing_vector3d(speed) || !finite_body3d_value(minimum_torque) ||
+            !finite_body3d_value(maximum_torque) || minimum_torque > maximum_torque
+        {
+            panic("GFX.Physics.SwingMotor3D requires finite speed and ordered finite torque bounds")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angles = null
+        self.stiffness = 0.0
+        self.damping = 0.0
+    }
+
+    static func position(angles:Math.Vec2, maximum_torque:float, stiffness:float, damping:float) SwingMotor3D {
+        return SwingMotor3D(angles, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position(angles:Math.Vec2, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float) SwingMotor3D
+    {
+        return SwingMotor3D(angles, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angles:Math.Vec2, speed:Math.Vec2, maximum_torque:float,
+        stiffness:float, damping:float) SwingMotor3D
+    {
+        return SwingMotor3D(angles, speed, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angles:Math.Vec2, speed:Math.Vec2, minimum_torque:float,
+        maximum_torque:float, stiffness:float, damping:float) SwingMotor3D
+    {
+        return SwingMotor3D(angles, speed, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    private init(angles:Math.Vec2, speed:Math.Vec2, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float)
+    {
+        if !valid_swing_angles3d(angles) ||
+            !finite_swing_vector3d(speed) ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SwingMotor3D.position_and_velocity requires an angle within [-pi, pi], finite speed, ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angles = angles
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
+    private init(angles:Math.Vec2, minimum_torque:float, maximum_torque:float, stiffness:float, damping:float) {
+        if !valid_swing_angles3d(angles) ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SwingMotor3D.position requires an angle within [-pi, pi], ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = Math.Vec2()
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angles = angles
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+}
+
+public struct SwingTwistConstraint3DSettings {
+    var first_local_frame:Transform3D = Transform3D()
+    var second_local_frame:Transform3D = Transform3D()
+    var swing_limits:SwingLimits3D = SwingLimits3D.cone(Math.Vec2(Math.pi()))
+    var minimum_twist:float = -Math.pi()
+    var maximum_twist:float = Math.pi()
+    var twist_motor:TwistMotor3D? = null
+    var swing_motor:SwingMotor3D? = null
+    var maximum_friction_torque:float = 0.0
+    var is_enabled:bool = true
+    init() {}
+}
+
+package class SwingTwistConstraintState3D {
+    var point:PointConstraintState3D
+    var first_frame:Math.Quat
+    var second_frame:Math.Quat
+    var swing_limits:SwingLimits3D
+    var swing_radii:Math.Vec2
+    var minimum_twist:float
+    var maximum_twist:float
+    var twist_motor:TwistMotor3D?
+    var swing_motor:SwingMotor3D?
+    var maximum_friction_torque:float
+    var angular_impulse:Math.Vec3 = Math.Vec3()
+    var limit_impulses:float[] = [0.0,0.0,0.0]
+    var drive_impulses:float[] = [0.0,0.0,0.0]
+    var friction_impulses:float[] = [0.0,0.0,0.0]
+    var drive_frame:Math.Quat = Math.Quat.identity()
+    var drive_error:Math.Vec3 = Math.Vec3()
+
+    init(first_id:BodyId3D,second_id:BodyId3D,settings:SwingTwistConstraint3DSettings) {
+        validate_swing_limits3d(settings.swing_limits)
+        validate_twist_limits3d(settings.minimum_twist,settings.maximum_twist)
+        validate_swing_friction3d(settings.maximum_friction_torque)
+        var anchors = PointConstraint3DSettings()
+        anchors.first_local_anchor = settings.first_local_frame.position
+        anchors.second_local_anchor = settings.second_local_frame.position
+        anchors.is_enabled = settings.is_enabled
+        self.point = PointConstraintState3D(first_id,second_id,anchors)
+        self.first_frame = settings.first_local_frame.rotation
+        self.second_frame = settings.second_local_frame.rotation
+        self.swing_radii = swing_radii3d(settings.swing_limits)
+        self.swing_limits = settings.swing_limits
+        self.minimum_twist = settings.minimum_twist
+        self.maximum_twist = settings.maximum_twist
+        self.twist_motor = settings.twist_motor
+        self.swing_motor = settings.swing_motor
+        self.maximum_friction_torque = settings.maximum_friction_torque
+    }
+    func reset() {
+        self.point.impulse = Math.Vec3();self.point.inverse_delta = 0.0
+        self.angular_impulse = Math.Vec3();self.drive_error = Math.Vec3()
+        var i = 0;while i<3 { self.limit_impulses[i]=0.0;self.drive_impulses[i]=0.0;self.friction_impulses[i]=0.0;i++ }
+    }
+}
+
+package struct SwingTwistConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class SwingTwistConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:SwingTwistConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:SwingTwistConstraint3DSettings) SwingTwistConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.SwingTwistConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.SwingTwistConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.SwingTwistConstraint3D requires a dynamic body")
+        }
+        var state = SwingTwistConstraintState3D(first.body_id(), second.body_id(), settings)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return SwingTwistConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:SwingTwistConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:SwingTwistConstraintId3D) SwingTwistConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.SwingTwistConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:SwingTwistConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.point.first_id).wake()
+        self.bodies.require(state.point.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_swing_twist_body_id3d(state.point.first_id, body_id) ||
+                    same_swing_twist_body_id3d(state.point.second_id, body_id)
+                {
+                    var other_id = state.point.first_id
+                    if same_swing_twist_body_id3d(state.point.first_id, body_id) {
+                        other_id = state.point.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class SwingTwistConstraint3D {
+    private var store:SwingTwistConstraintStore3D
+    private let id:SwingTwistConstraintId3D
+
+    package init(store:SwingTwistConstraintStore3D, id:SwingTwistConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:SwingTwistConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() SwingTwistConstraintId3D { return self.id }
+    func first_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.first_id)
+    }
+    func second_body() RigidBody3D {
+        return RigidBody3D(self.store.bodies, self.store.require(self.id).point.second_id)
+    }
+    func is_enabled() bool { return self.store.require(self.id).point.is_enabled }
+    func first_local_anchor() Math.Vec3 { return self.store.require(self.id).point.first_local_anchor }
+    func second_local_anchor() Math.Vec3 { return self.store.require(self.id).point.second_local_anchor }
+    func first_local_frame() Transform3D {
+        var s = self.store.require(self.id);return Transform3D(s.point.first_local_anchor,s.first_frame)
+    }
+    func second_local_frame() Transform3D {
+        var s = self.store.require(self.id);return Transform3D(s.point.second_local_anchor,s.second_frame)
+    }
+    func swing_limits() SwingLimits3D { return self.store.require(self.id).swing_limits }
+    func minimum_twist() float { return self.store.require(self.id).minimum_twist }
+    func maximum_twist() float { return self.store.require(self.id).maximum_twist }
+    func twist_motor() TwistMotor3D? { return self.store.require(self.id).twist_motor }
+    func swing_motor() SwingMotor3D? { return self.store.require(self.id).swing_motor }
+    func maximum_friction_torque() float { return self.store.require(self.id).maximum_friction_torque }
+    func orientation() Math.Quat {
+        var s = self.store.require(self.id)
+        return swing_twist_orientation3d(self.store.bodies.require(s.point.first_id).transform,
+            self.store.bodies.require(s.point.second_id).transform,s)
+    }
+    func twist_angle() float { return decompose_swing_twist3d(self.orientation()).twist_angle }
+    func swing_angles() Math.Vec2 { return swing_angles3d(decompose_swing_twist3d(self.orientation()).swing) }
+    func angular_speed() Math.Vec3 {
+        var s = self.store.require(self.id)
+        var a = self.store.bodies.require(s.point.first_id);var b = self.store.bodies.require(s.point.second_id)
+        let frame = b.transform.rotation.multiply(s.second_frame)
+        return frame.conjugated().rotate(b.angular_velocity.subtract(a.angular_velocity))
+    }
+    func motor_torque() Math.Vec3 {
+        var s = self.store.require(self.id)
+        return Math.Vec3(s.drive_impulses[0],s.drive_impulses[1],s.drive_impulses[2]).multiply(s.point.inverse_delta)
+    }
+    func friction_torque() Math.Vec3 {
+        var s = self.store.require(self.id)
+        return Math.Vec3(s.friction_impulses[0],s.friction_impulses[1],s.friction_impulses[2]).multiply(s.point.inverse_delta)
+    }
+    func anchor_error() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return self.store.bodies.require(state.second_id).transform.point(state.second_local_anchor).subtract(
+            self.store.bodies.require(state.first_id).transform.point(state.first_local_anchor))
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id).point
+        return state.impulse.multiply(state.inverse_delta)
+    }
+    func reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.angular_impulse.multiply(state.point.inverse_delta)
+    }
+    private func invalidate_reaction(state:SwingTwistConstraintState3D) {
+        state.reset()
+        self.store.bodies.require(state.point.first_id).wake()
+        self.store.bodies.require(state.point.second_id).wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.is_enabled = enabled
+        self.invalidate_reaction(state)
+    }
+    func set_anchors(first:Math.Vec3, second:Math.Vec3) {
+        if !finite_body3d_point(first) || !finite_body3d_point(second) {
+            panic("GFX.Physics.SwingTwistConstraint3D requires finite local anchors")
+        }
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.point.first_local_anchor = first
+        state.point.second_local_anchor = second
+        self.invalidate_reaction(state)
+    }
+    func set_frames(first:Transform3D,second:Transform3D) {
+        self.store.bodies.require_mutable();var s = self.store.require(self.id)
+        s.point.first_local_anchor=first.position;s.point.second_local_anchor=second.position
+        s.first_frame=first.rotation;s.second_frame=second.rotation;self.invalidate_reaction(s)
+    }
+    func set_swing_limits(limits:SwingLimits3D) {
+        validate_swing_limits3d(limits);self.store.bodies.require_mutable()
+        var s = self.store.require(self.id);s.swing_limits=limits;s.swing_radii=swing_radii3d(limits);self.invalidate_reaction(s)
+    }
+    func set_twist_limits(minimum:float,maximum:float) {
+        validate_twist_limits3d(minimum,maximum);self.store.bodies.require_mutable()
+        var s = self.store.require(self.id);s.minimum_twist=minimum;s.maximum_twist=maximum;self.invalidate_reaction(s)
+    }
+    func set_twist_motor(motor:TwistMotor3D?) {
+        self.store.bodies.require_mutable();var s = self.store.require(self.id);s.twist_motor=motor;self.invalidate_reaction(s)
+    }
+    func set_swing_motor(motor:SwingMotor3D?) {
+        self.store.bodies.require_mutable();var s = self.store.require(self.id);s.swing_motor=motor;self.invalidate_reaction(s)
+    }
+    func set_maximum_friction_torque(torque:float) {
+        validate_swing_friction3d(torque);self.store.bodies.require_mutable()
+        var s = self.store.require(self.id);s.maximum_friction_torque=torque;self.invalidate_reaction(s)
+    }
+}
+
+package func finite_swing_vector3d(value:Math.Vec2) bool {
+    return finite_body3d_value(value.x) && finite_body3d_value(value.y)
+}
+package func valid_swing_angles3d(value:Math.Vec2) bool {
+    return finite_swing_vector3d(value) && Math.abs(value.x)<=Math.pi() && Math.abs(value.y)<=Math.pi()
+}
+package func validate_swing_friction3d(torque:float) {
+    if !finite_body3d_value(torque) || torque<0.0 { panic("GFX.Physics.SwingTwistConstraint3D requires nonnegative finite friction torque") }
+}
+package func validate_twist_limits3d(minimum:float,maximum:float) {
+    if !finite_body3d_value(minimum) || !finite_body3d_value(maximum) || minimum < -Math.pi() || maximum > Math.pi() || minimum>maximum {
+        panic("GFX.Physics.SwingTwistConstraint3D requires ordered finite twist limits within [-pi, pi]")
+    }
+}
+package func validate_swing_limits3d(limits:SwingLimits3D) {
+    match limits {
+        cone(half_angles) => {
+            if !valid_swing_angles3d(half_angles) || half_angles.x<0.0 || half_angles.y<0.0 {
+                panic("GFX.Physics.SwingLimits3D.cone requires finite half-angles within [0, pi]")
+            }
+        }
+        pyramid(minimum,maximum) => {
+            if !valid_swing_angles3d(minimum) || !valid_swing_angles3d(maximum) || minimum.x>0.0 || maximum.x<0.0 || minimum.y>0.0 || maximum.y<0.0 {
+                panic("GFX.Physics.SwingLimits3D.pyramid requires ordered finite angles within [-pi, pi] containing the neutral orientation")
+            }
+        }
+    }
+}
+package struct SwingTwistRotation3D {
+    let swing:Math.Quat
+    let twist:Math.Quat
+    let twist_angle:float
+    init(swing:Math.Quat,twist:Math.Quat,twist_angle:float) { self.swing=swing;self.twist=twist;self.twist_angle=twist_angle }
+}
+package func swing_twist_orientation3d(first:Transform3D,second:Transform3D,state:SwingTwistConstraintState3D) Math.Quat {
+    return first.rotation.multiply(state.first_frame).conjugated().multiply(second.rotation.multiply(state.second_frame)).normalized()
+}
+package func decompose_swing_twist3d(rotation:Math.Quat) SwingTwistRotation3D {
+    var q = rotation;if q.w<0.0 { q=q.multiply(-1.0) }
+    var twist = Math.Quat.identity()
+    let norm = Math.sqrt(q.x*q.x+q.w*q.w)
+    if norm>0.0000001 { twist=Math.Quat(q.x/norm,0.0,0.0,q.w/norm) }
+    var swing = q.multiply(twist.conjugated()).normalized()
+    swing=Math.Quat(0.0,swing.y,swing.z,swing.w).normalized()
+    if swing.w<0.0 { swing=swing.multiply(-1.0) }
+    return SwingTwistRotation3D(swing,twist,2.0*Math.atan2(twist.x,twist.w))
+}
+package func swing_angles3d(swing:Math.Quat) Math.Vec2 {
+    return Math.Vec2(2.0*Math.atan2(swing.y,swing.w),2.0*Math.atan2(swing.z,swing.w))
+}
+package func swing_from_angles3d(angles:Math.Vec2) Math.Quat {
+    let y=angles.x*0.5;let z=angles.y*0.5
+    return Math.Quat(0.0,Math.sin(y)*Math.cos(z),Math.cos(y)*Math.sin(z),Math.cos(y)*Math.cos(z)).normalized()
+}
+package func swing_radii3d(limits:SwingLimits3D) Math.Vec2 {
+    match limits {
+        cone(half_angles) => { return Math.Vec2(Math.sin(half_angles.x*0.5),Math.sin(half_angles.y*0.5)) }
+        pyramid(minimum,maximum) => { return Math.Vec2() }
+    }
+}
+package func clamp_swing3d(swing:Math.Quat,limits:SwingLimits3D,radii:Math.Vec2) Math.Quat {
+    match limits {
+        pyramid(minimum,maximum) => {
+            let angles=swing_angles3d(swing)
+            let clamped=Math.Vec2(Math.clamp(angles.x,minimum.x,maximum.x),Math.clamp(angles.y,minimum.y,maximum.y))
+            if angles.x==clamped.x && angles.y==clamped.y { return swing }
+            return swing_from_angles3d(clamped)
+        }
+        cone(half_angles) => {
+            let a=radii.x;let b=radii.y
+            var y=swing.y;var z=swing.z
+            if a==0.0 { y=0.0 }
+            if b==0.0 { z=0.0 }
+            if a>0.0 && b>0.0 {
+                let normalized=y*y/(a*a)+z*z/(b*b)
+                if normalized>1.0 {
+                    // Euclidean projection onto the quaternion-plane ellipse.
+                    var low=0.0;var high=Math.sqrt(a*a*y*y+b*b*z*z)
+                    var i=0
+                    while i<32 {
+                        let lambda=(low+high)*0.5
+                        let yy=a*a*y/(lambda+a*a);let zz=b*b*z/(lambda+b*b)
+                        if yy*yy/(a*a)+zz*zz/(b*b)>1.0 { low=lambda } else { high=lambda }
+                        i++
+                    }
+                    y=a*a*y/(high+a*a);z=b*b*z/(high+b*b)
+                }
+            } else {
+                y=Math.clamp(y,-a,a);z=Math.clamp(z,-b,b)
+            }
+            if y==swing.y && z==swing.z { return swing }
+            return Math.Quat(0.0,y,z,Math.sqrt(Math.max(0.0,1.0-y*y-z*z))).normalized()
+        }
+    }
+}
+package func same_swing_twist_body_id3d(first:BodyId3D,second:BodyId3D) bool {
+    return first.slot==second.slot && first.generation==second.generation
+}

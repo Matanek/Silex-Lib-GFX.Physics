@@ -1,3 +1,12 @@
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintState3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintStore3D
+use GFX.Physics.SwingTwistConstraint3D.SwingLimits3D
+use GFX.Physics.SwingTwistConstraint3D.swing_twist_orientation3d
+use GFX.Physics.SwingTwistConstraint3D.decompose_swing_twist3d
+use GFX.Physics.SwingTwistConstraint3D.clamp_swing3d
+use GFX.Physics.SwingTwistConstraint3D.swing_from_angles3d
 use GFX.Physics.ConeConstraint3D.ConeConstraint3D
 use GFX.Physics.ConeConstraint3D.ConeConstraint3DSettings
 use GFX.Physics.ConeConstraint3D.ConeConstraintState3D
@@ -101,6 +110,7 @@ public class World3D {
     private var slider_constraints:SliderConstraintStore3D
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
+    private var swing_twist_constraints:SwingTwistConstraintStore3D
     private var cone_constraints:ConeConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
@@ -116,6 +126,7 @@ public class World3D {
         self.point_constraints.invalidate_all()
         self.hinge_constraints.invalidate_all()
         self.cone_constraints.invalidate_all()
+        self.swing_twist_constraints.invalidate_all()
         self.store.invalidate_all()
     }
 
@@ -130,6 +141,7 @@ public class World3D {
         self.point_constraints = PointConstraintStore3D(self.store)
         self.hinge_constraints = HingeConstraintStore3D(self.store)
         self.cone_constraints = ConeConstraintStore3D(self.store)
+        self.swing_twist_constraints = SwingTwistConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
         self.contact_begins = []
@@ -153,6 +165,7 @@ public class World3D {
     func slider_constraint_count() int { return self.slider_constraints.live_count }
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
+    func swing_twist_constraint_count() int { return self.swing_twist_constraints.live_count }
     func cone_constraint_count() int { return self.cone_constraints.live_count }
     func hinge_constraint_count() int { return self.hinge_constraints.live_count }
     func contact_count() int { return self.contacts.count() }
@@ -247,6 +260,22 @@ public class World3D {
         self.point_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_swing_twist_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:SwingTwistConstraint3DSettings = SwingTwistConstraint3DSettings()
+    ) SwingTwistConstraint3D {
+        let id = self.swing_twist_constraints.append(first, second, settings)
+        return SwingTwistConstraint3D(self.swing_twist_constraints, id)
+    }
+
+    func destroy_swing_twist_constraint(constraint:@SwingTwistConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.swing_twist_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.swing_twist_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_cone_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:ConeConstraint3DSettings = ConeConstraint3DSettings()
@@ -300,6 +329,7 @@ public class World3D {
         self.point_constraints.destroy_for_body(body.body_id())
         self.hinge_constraints.destroy_for_body(body.body_id())
         self.cone_constraints.destroy_for_body(body.body_id())
+        self.swing_twist_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -592,7 +622,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -827,6 +857,13 @@ public class World3D {
         for slot in self.cone_constraints.slots {
             if var constraint = slot { constraint.reset() }
         }
+        for slot in self.swing_twist_constraints.slots {
+            if var constraint = slot {
+                constraint.reset()
+                prepare_swing_twist_drive3d(self.store.require(constraint.point.first_id),
+                    self.store.require(constraint.point.second_id),constraint)
+            }
+        }
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
                 constraint.reset()
@@ -910,6 +947,19 @@ public class World3D {
 
     private func has_active_cone_constraint() bool {
         for slot in self.cone_constraints.slots {
+            if let constraint = slot {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
+    }
+
+    private func has_active_swing_twist_constraint() bool {
+        for slot in self.swing_twist_constraints.slots {
             if let constraint = slot {
                 if constraint.point.is_enabled {
                     var first = self.store.require(constraint.point.first_id)
@@ -1055,11 +1105,30 @@ public class World3D {
             }
             constraint_index++
         }
+        constraint_index = 0
+        while constraint_index < self.swing_twist_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.swing_twist_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.swing_twist_constraints.slots[selected] {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_swing_twist_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
     }
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1204,6 +1273,40 @@ public class World3D {
                         var first = self.store.require(constraint.point.first_id)
                         var second = self.store.require(constraint.point.second_id)
                         if first.is_enabled && second.is_enabled {
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.swing_twist_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled {
+                            if let motor=constraint.twist_motor {
+                                if (motor.minimum_torque!=0.0 || motor.maximum_torque!=0.0) &&
+                                    (motor.speed!=0.0 || motor.target_angle!=null || motor.minimum_torque>0.0 || motor.maximum_torque<0.0)
+                                { first.wake();second.wake() }
+                            }
+                            if let motor=constraint.swing_motor {
+                                if (motor.minimum_torque!=0.0 || motor.maximum_torque!=0.0) &&
+                                    (motor.speed.length_squared()!=0.0 || motor.target_angles!=null || motor.minimum_torque>0.0 || motor.maximum_torque<0.0)
+                                { first.wake();second.wake() }
+                            }
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
                                     first.angular_velocity.length_squared() > 0.0)
@@ -1498,6 +1601,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.swing_twist_constraints.slots {
+                if var constraint = slot {
+                    if constraint.point.is_enabled {
+                        var first = self.store.require(constraint.point.first_id)
+                        var second = self.store.require(constraint.point.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass swing_twist witness
+                            // without changing the other families' position budget.
+                            solve_swing_twist_position3d(first, second, constraint)
+                            solve_swing_twist_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             var pair_index = pairs.count()
             while pair_index > 0 {
                 pair_index--
@@ -1632,6 +1751,14 @@ public class World3D {
             }
         }
         for constraint_slot in self.cone_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.point.is_enabled {
+                    islands.connect(constraint.point.first_id.slot,
+                        constraint.point.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.swing_twist_constraints.slots {
             if let constraint = constraint_slot {
                 if constraint.point.is_enabled {
                     islands.connect(constraint.point.first_id.slot,
@@ -3962,4 +4089,143 @@ func solve_cone_position3d(first:BodyState3D, second:BodyState3D,
     let impulse = axis.multiply(-0.2 * error / mass)
     shift_hinge_rotation3d(first, impulse.negated())
     shift_hinge_rotation3d(second, impulse)
+}
+
+func swing_axis3d(row:int) Math.Vec3 {
+    if row==0 { return Math.Vec3(1.0,0.0,0.0) }
+    if row==1 { return Math.Vec3(0.0,1.0,0.0) }
+    return Math.Vec3(0.0,0.0,1.0)
+}
+func swing_component3d(value:Math.Vec3,row:int) float {
+    if row==0 { return value.x }
+if row==1 { return value.y }
+return value.z
+}
+func prepare_swing_twist_drive3d(first:@BodyState3D,second:@BodyState3D,state:SwingTwistConstraintState3D) {
+    state.drive_frame=second.transform.rotation.multiply(state.second_frame)
+    if (state.twist_motor==null || state.twist_motor!.target_angle==null) &&
+        (state.swing_motor==null || state.swing_motor!.target_angles==null) { return }
+    let q=swing_twist_orientation3d(first.transform,second.transform,state)
+    let rotation=decompose_swing_twist3d(q)
+    var swing=rotation.swing;var twist_angle=rotation.twist_angle
+    if let motor=state.swing_motor {
+        if let target=motor.target_angles { swing=clamp_swing3d(swing_from_angles3d(target),state.swing_limits,state.swing_radii) }
+    }
+    if let motor=state.twist_motor {
+        if let target=motor.target_angle { twist_angle=Math.clamp(target,state.minimum_twist,state.maximum_twist) }
+    }
+    var target=swing.multiply(Math.Quat.angle_axis(twist_angle,Math.Vec3(1.0,0.0,0.0)))
+    if q.dot(target)<0.0 { target=target.multiply(-1.0) }
+    let diff=q.conjugated().multiply(target)
+    state.drive_error=Math.Vec3(diff.x,diff.y,diff.z).multiply(-2.0)
+}
+func solve_swing_drive_row3d(first:&BodyState3D,second:&BodyState3D,
+    state:SwingTwistConstraintState3D,row:int,delta:float)
+{
+    var minimum=-state.maximum_friction_torque;var maximum=state.maximum_friction_torque
+    var speed=0.0;var stiffness=0.0;var damping=0.0;var servo=false;var powered=false
+    if row==0 {
+        if let motor=state.twist_motor {
+            minimum=motor.minimum_torque;maximum=motor.maximum_torque;speed=motor.speed
+            stiffness=motor.stiffness;damping=motor.damping;servo=motor.target_angle!=null;powered=true
+        }
+    } else {
+        if let motor=state.swing_motor {
+            minimum=motor.minimum_torque;maximum=motor.maximum_torque
+            speed=motor.speed.x;if row==2 { speed=motor.speed.y }
+            stiffness=motor.stiffness;damping=motor.damping;servo=motor.target_angles!=null;powered=true
+        }
+    }
+    if minimum==0.0 && maximum==0.0 { return }
+    let axis=state.drive_frame.rotate(swing_axis3d(row))
+    let a=first.transform.point(state.point.first_local_anchor).subtract(first.world_center())
+    let b=second.transform.point(state.point.second_local_anchor).subtract(second.world_center())
+    let point_inverse=fixed_inverse3d(point_inverse_mass3d(first,second,a,b))
+    let coupling=first.inverse_inertia_times(axis).cross(a).add(second.inverse_inertia_times(axis).cross(b))
+    let response=point_inverse.multiply(coupling)
+    let mass=hinge_angular_mass3d(first,second,axis)-coupling.dot(response)
+    if mass<=0.000000001 { return }
+    var previous=state.friction_impulses[row];if powered { previous=state.drive_impulses[row] }
+    var softness=0.0;var bias=-speed
+    if servo {
+        softness=1.0/(delta*(damping+delta*stiffness))
+        bias+=delta*stiffness*softness*swing_component3d(state.drive_error,row)
+    }
+    let velocity=second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+    let accumulated=Math.clamp(previous-(velocity+bias+softness*previous)/(mass+softness),minimum*delta,maximum*delta)
+    if powered { state.drive_impulses[row]=accumulated } else { state.friction_impulses[row]=accumulated }
+    let angular=axis.multiply(accumulated-previous);let linear=response.multiply(previous-accumulated)
+    apply_hinge_angular_impulse3d(first,second,angular)
+    apply_contact_impulse3d(first,second,a,b,linear)
+    state.angular_impulse=state.angular_impulse.add(angular);state.point.impulse=state.point.impulse.add(linear)
+}
+func swing_locked3d(limits:SwingLimits3D,row:int) bool {
+    match limits {
+        cone(half_angles) => { if row==1 { return half_angles.x==0.0 }
+return half_angles.y==0.0 }
+        pyramid(minimum,maximum) => {
+            if row==1 { return minimum.x==0.0 && maximum.x==0.0 }
+            return minimum.y==0.0 && maximum.y==0.0
+        }
+    }
+}
+func solve_swing_limit_row3d(first:&BodyState3D,second:&BodyState3D,
+    state:SwingTwistConstraintState3D,row:int,axis:Math.Vec3,bilateral:bool)
+{
+    let mass=hinge_angular_mass3d(first,second,axis)
+    if mass<=0.000000001 { return }
+    let velocity=second.angular_velocity.subtract(first.angular_velocity).dot(axis)
+    let previous=state.limit_impulses[row];var accumulated=previous-velocity/mass
+    if !bilateral { accumulated=Math.max(0.0,accumulated) }
+    state.limit_impulses[row]=accumulated
+    let impulse=axis.multiply(accumulated-previous)
+    apply_hinge_angular_impulse3d(first,second,impulse)
+    state.angular_impulse=state.angular_impulse.add(impulse)
+}
+func solve_swing_twist_velocity3d(first:&BodyState3D,second:&BodyState3D,
+    state:SwingTwistConstraintState3D,delta:float)
+{
+    solve_point_velocity3d(first,second,state.point,delta)
+    var row=0;while row<3 { solve_swing_drive_row3d(first,second,state,row,delta);row++ }
+    let frame=first.transform.rotation.multiply(state.first_frame)
+    let rotation=decompose_swing_twist3d(swing_twist_orientation3d(first.transform,second.transform,state))
+    let swing_frame=frame.multiply(rotation.swing)
+    let y_locked=swing_locked3d(state.swing_limits,1);let z_locked=swing_locked3d(state.swing_limits,2)
+    if y_locked { solve_swing_limit_row3d(first,second,state,1,swing_frame.rotate(swing_axis3d(1)),true) }
+    if z_locked { solve_swing_limit_row3d(first,second,state,2,swing_frame.rotate(swing_axis3d(2)),true) }
+    if !y_locked || !z_locked {
+        let clamped=clamp_swing3d(rotation.swing,state.swing_limits,state.swing_radii)
+        let current=swing_frame.rotate(swing_axis3d(0))
+        let desired=frame.multiply(clamped).rotate(swing_axis3d(0))
+        let cross=current.cross(desired)
+        if cross.length_squared()>0.000000000001 {
+            var slot=1;if y_locked { slot=2 }
+            solve_swing_limit_row3d(first,second,state,slot,cross.normalized(),false)
+        }
+    }
+    let angle=rotation.twist_angle
+    var axis=swing_frame.rotate(swing_axis3d(0))
+    if state.minimum_twist==state.maximum_twist {
+        solve_swing_limit_row3d(first,second,state,0,axis,true)
+    } else if angle<state.minimum_twist || angle>state.maximum_twist {
+        if angle>state.maximum_twist { axis=axis.negated() }
+        solve_swing_limit_row3d(first,second,state,0,axis,false)
+    }
+}
+func solve_swing_twist_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
+    let q=swing_twist_orientation3d(first.transform,second.transform,state)
+    let rotation=decompose_swing_twist3d(q)
+    let swing=clamp_swing3d(rotation.swing,state.swing_limits,state.swing_radii)
+    let twist=Math.Quat.angle_axis(Math.clamp(rotation.twist_angle,state.minimum_twist,state.maximum_twist),swing_axis3d(0))
+    let target=swing.multiply(twist)
+    var diff=q.multiply(target.conjugated());if diff.w<0.0 { diff=diff.multiply(-1.0) }
+    let error=first.transform.rotation.multiply(state.first_frame).rotate(Math.Vec3(diff.x,diff.y,diff.z)).multiply(2.0)
+    if error.length_squared()>0.000000000001 {
+        let x=swing_axis3d(0);let y=swing_axis3d(1);let z=swing_axis3d(2)
+        let mass=Math.Mat3(first.inverse_inertia_times(x).add(second.inverse_inertia_times(x)),
+            first.inverse_inertia_times(y).add(second.inverse_inertia_times(y)),first.inverse_inertia_times(z).add(second.inverse_inertia_times(z)))
+        let impulse=fixed_inverse3d(mass).multiply(error).multiply(-0.2)
+        shift_hinge_rotation3d(first,impulse.negated());shift_hinge_rotation3d(second,impulse)
+    }
+    solve_point_position3d(first,second,state.point)
 }

@@ -1,0 +1,21 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var support=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var body=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..allow_sleep=false ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var joint=world.create_swing_twist_constraint(support,body,
+        Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.6))
+        ..minimum_twist=-0.4 ..maximum_twist=0.4
+        ..twist_motor=Physics.TwistMotor3D.position(0.2,5.0,2.0,1.0))
+    var i=0;while i<240 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(joint.twist_angle()-0.2)<0.002 && joint.anchor_error().length()<0.001)
+    joint.set_twist_motor(null)
+    joint.set_swing_motor(Physics.SwingMotor3D.position(Math.Vec2(0.2,0.0),5.0,2.0,1.0))
+    i=0;while i<240 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(joint.swing_angles().x-0.2)<0.002)
+    world.destroy_swing_twist_constraint(joint);assert(!joint.is_valid())
+    print("swing twist recipe: ok")
+}

@@ -1,0 +1,43 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var world=Physics.World3D()
+    var fixed=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)
+    var body=world.create_rigid_body();var settings=Physics.SwingTwistConstraint3DSettings()
+    if selected("frame") { settings.first_local_frame=Physics.Transform3D(Math.Vec3(Math.sqrt(-1.0),0.0,0.0)) }
+    if selected("rotation") { settings.second_local_frame=Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,0.0)) }
+    if selected("cone-negative") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(-0.1,0.4)) }
+    if selected("cone-range") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(4.0,0.4)) }
+    if selected("cone-nan") { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(Math.sqrt(-1.0),0.4)) }
+    if selected("pyramid-order") { settings.swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2),Math.Vec2(-0.2)) }
+    if selected("pyramid-neutral") { settings.swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(0.2),Math.Vec2(0.4)) }
+    if selected("twist-order") { settings.minimum_twist=0.2;settings.maximum_twist=-0.2 }
+    if selected("twist-range") { settings.minimum_twist=-4.0 }
+    if selected("friction") { settings.maximum_friction_torque=-1.0 }
+    if selected("twist-speed") { settings.twist_motor=Physics.TwistMotor3D(Math.sqrt(-1.0),1.0) }
+    if selected("twist-budget") { settings.twist_motor=Physics.TwistMotor3D(1.0,2.0,-1.0) }
+    if selected("twist-servo") { settings.twist_motor=Physics.TwistMotor3D.position(0.2,1.0,0.0,1.0) }
+    if selected("swing-speed") { settings.swing_motor=Physics.SwingMotor3D(Math.Vec2(Math.sqrt(-1.0),0.0),1.0) }
+    if selected("swing-budget") { settings.swing_motor=Physics.SwingMotor3D(Math.Vec2(1.0),-1.0) }
+    if selected("swing-servo") { settings.swing_motor=Physics.SwingMotor3D.position(Math.Vec2(0.2),1.0,1.0,-1.0) }
+    if selected("same") { world.create_swing_twist_constraint(body,body) }
+    if selected("fixed-fixed") { world.create_swing_twist_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)) }
+    if selected("foreign") { var other=Physics.World3D();world.create_swing_twist_constraint(fixed,other.create_rigid_body()) }
+    var joint=world.create_swing_twist_constraint(fixed,body,settings)
+    if selected("mutation-anchors") { joint.set_anchors(Math.Vec3(),Math.Vec3(Math.sqrt(-1.0),0.0,0.0)) }
+    if selected("mutation-swing") { joint.set_swing_limits(Physics.SwingLimits3D.cone(Math.Vec2(-0.1,0.2))) }
+    if selected("mutation-twist") { joint.set_twist_limits(0.3,0.2) }
+    if selected("mutation-friction") { joint.set_maximum_friction_torque(-1.0) }
+    if selected("stale") { world.destroy_swing_twist_constraint(joint);world.create_swing_twist_constraint(fixed,body);joint.orientation() }
+    if selected("stale-mutation") { world.destroy_swing_twist_constraint(joint);joint.set_twist_motor(null) }
+    if selected("foreign-destroy") { var other=Physics.World3D();other.destroy_swing_twist_constraint(joint) }
+    panic("invalid swing twist operation was accepted")
+}

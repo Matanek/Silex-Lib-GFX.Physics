@@ -1,0 +1,222 @@
+use GFX.Physics
+use STD.Math
+func swing_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func swing_fixed(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func swing_body(world:Physics.World3D,mass:float=2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(mass*0.1)))
+}
+func swing_steps(world:Physics.World3D,count:int,rate:float=60.0) { var i=0;while i<count { world.step(1.0/rate);i++ } }
+
+test "swing twist free frames retain all rotations without reaction" {
+    let axes:Math.Vec3[]=[Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,0.0,1.0)]
+    for axis in axes {
+        var world=swing_world();var body=swing_body(world)
+        var joint=world.create_swing_twist_constraint(swing_fixed(world),body)
+        body.set_angular_velocity(axis.multiply(0.5));swing_steps(world,30)
+        assert(body.angular_velocity().nearly_equal(axis.multiply(0.5),0.00001))
+        assert(joint.reaction_torque().length()<0.00001 && joint.anchor_error().length()<0.00001)
+        if axis.x==1.0 { assert(Math.abs(joint.twist_angle()-0.25)<0.00001) }
+        else { assert(Math.abs(joint.swing_angles().x+joint.swing_angles().y-0.25)<0.00001) }
+        assert(world.swing_twist_constraint_count()==1 && world.point_constraint_count()==0)
+    }
+}
+test "swing twist signed twist stops preserve free swing" {
+    let signs:float[]=[-1.0,1.0]
+    for sign in signs {
+        var world=swing_world();var body=swing_body(world)
+        var joint=world.create_swing_twist_constraint(swing_fixed(world),body,
+            Physics.SwingTwistConstraint3DSettings() ..minimum_twist=-0.3 ..maximum_twist=0.4)
+        body.set_angular_velocity(Math.Vec3(sign*2.0,0.0,0.0));swing_steps(world,120)
+        var target=0.4;if sign<0.0 { target=-0.3 }
+        assert(Math.abs(joint.twist_angle()-target)<0.002 && body.angular_velocity().length()<0.0001)
+        body.set_angular_velocity(Math.Vec3(0.0,0.3,0.0));swing_steps(world,20)
+        assert(Math.abs(body.angular_velocity().y-0.3)<0.001)
+    }
+}
+test "elliptical swing cone has separate normal and plane extents" {
+    for row in [1,2] {
+        var world=swing_world();var body=swing_body(world)
+        var joint=world.create_swing_twist_constraint(swing_fixed(world),body,
+            Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.5)))
+        var speed=Math.Vec3(0.0,2.0,0.0);var expected=0.3
+        if row==2 { speed=Math.Vec3(0.0,0.0,2.0);expected=0.5 }
+        body.set_angular_velocity(speed);swing_steps(world,120)
+        assert(Math.abs(joint.swing_angles().x+joint.swing_angles().y-expected)<0.003)
+        assert(body.angular_velocity().length()<0.001 && Math.abs(joint.twist_angle())<0.001)
+    }
+}
+test "diagonal swing stays in the quaternion ellipse" {
+    var world=swing_world();var body=swing_body(world)
+    var joint=world.create_swing_twist_constraint(swing_fixed(world),body,
+        Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.6)))
+    body.set_angular_velocity(Math.Vec3(0.0,1.5,1.5))
+    var i=0;while i<240 {
+        world.step(1.0/120.0)
+        let q=joint.orientation();let twist=Math.Quat(q.x,0.0,0.0,q.w).normalized();let swing=q.multiply(twist.conjugated())
+        let metric=swing.y*swing.y/(Math.sin(0.15)*Math.sin(0.15))+swing.z*swing.z/(Math.sin(0.3)*Math.sin(0.3))
+        assert(metric<1.01 && body.angular_velocity().length()<2.13);i++
+    }
+}
+test "pyramid swing stops allow asymmetric angles and mutation" {
+    var world=swing_world();var body=swing_body(world)
+    var joint=world.create_swing_twist_constraint(swing_fixed(world),body,Physics.SwingTwistConstraint3DSettings()
+        ..swing_limits=Physics.SwingLimits3D.pyramid(Math.Vec2(-0.2,-0.4),Math.Vec2(0.3,0.5)))
+    body.set_angular_velocity(Math.Vec3(0.0,-2.0,0.0));swing_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x+0.2)<0.003)
+    joint.set_swing_limits(Physics.SwingLimits3D.cone(Math.Vec2(0.1,0.2)));swing_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x+0.1)<0.003)
+}
+test "locked swing axes preserve twist and locked twist preserves swing" {
+    for locked_swing in [false,true] {
+        var world=swing_world();var body=swing_body(world);var settings=Physics.SwingTwistConstraint3DSettings()
+        if locked_swing { settings.swing_limits=Physics.SwingLimits3D.cone(Math.Vec2()) }
+        else { settings.minimum_twist=0.0;settings.maximum_twist=0.0 }
+        var joint=world.create_swing_twist_constraint(swing_fixed(world),body,settings)
+        body.set_angular_velocity(Math.Vec3(1.0,0.5,0.0));swing_steps(world,30)
+        if locked_swing { assert(Math.abs(body.angular_velocity().x-1.0)<0.001 && joint.swing_angles().length()<0.001) }
+        else { assert(Math.abs(body.angular_velocity().y-0.5)<0.001 && Math.abs(joint.twist_angle())<0.001) }
+    }
+}
+test "twist and swing drives follow nonlinear independent servo recurrences" {
+    for row in [0,1] {
+        for rate in [60,120] {
+            var world=swing_world();var body=swing_body(world);var settings=Physics.SwingTwistConstraint3DSettings()
+            if row==0 { settings.twist_motor=Physics.TwistMotor3D.position_and_velocity(0.6,0.1,10.0,2.0,0.8) }
+            else { settings.swing_motor=Physics.SwingMotor3D.position_and_velocity(Math.Vec2(0.6,0.0),Math.Vec2(0.1,0.0),10.0,2.0,0.8) }
+            var joint=world.create_swing_twist_constraint(swing_fixed(world),body,settings)
+            let dt=1.0/rate as float;var angle=0.0;var velocity=0.0;var i=0
+            while i<rate*4 {
+                let error=2.0*Math.sin((angle-0.6)*0.5)
+                velocity=(0.2*velocity-dt*2.0*error+dt*(0.8+dt*2.0)*0.1)/(0.2+dt*0.8+dt*dt*2.0)
+                angle+=dt*velocity;world.step(dt)
+                var actual=joint.twist_angle();var actual_speed=joint.angular_speed().x
+                if row==1 { actual=joint.swing_angles().x;actual_speed=joint.angular_speed().y }
+                assert(Math.abs(actual-angle)<0.0001 && Math.abs(actual_speed-velocity)<0.0001);i++
+            }
+        }
+    }
+}
+test "axis friction is passive and an enabled zero-capacity motor overrides it" {
+    for motor in [false,true] {
+        var world=swing_world();var body=swing_body(world)
+        var settings=Physics.SwingTwistConstraint3DSettings() ..maximum_friction_torque=0.2
+        if motor { settings.twist_motor=Physics.TwistMotor3D(0.0,0.0) }
+        var joint=world.create_swing_twist_constraint(swing_fixed(world),body,settings)
+        body.set_angular_velocity(Math.Vec3(1.0,0.0,0.0));swing_steps(world,90)
+        if motor { assert(Math.abs(body.angular_velocity().x-1.0)<0.0001) }
+        else { assert(body.angular_velocity().length()<0.0001) }
+        assert(Math.abs(joint.friction_torque().x)<=0.2001)
+    }
+}
+test "signed twist and swing motor efforts stay within their independent budgets" {
+    var world=swing_world();var body=swing_body(world)
+    var joint=world.create_swing_twist_constraint(swing_fixed(world),body,
+        Physics.SwingTwistConstraint3DSettings() ..twist_motor=Physics.TwistMotor3D(3.0,-0.1,0.2))
+    var i=0;while i<60 { world.step(1.0/60.0);assert(joint.motor_torque().x>=-0.1001 && joint.motor_torque().x<=0.2001);i++ }
+    joint.set_twist_motor(null);joint.set_swing_motor(Physics.SwingMotor3D(Math.Vec2(-3.0,0.0),-0.15,0.25))
+    i=0;while i<60 { world.step(1.0/60.0);assert(joint.motor_torque().y>=-0.1501 && joint.motor_torque().y<=0.2501);i++ }
+}
+test "swing twist frame changes clear reactions and preserve local anchors" {
+    var world=Physics.World3D();var fixed=swing_fixed(world);var body=swing_body(world)
+    var joint=world.create_swing_twist_constraint(fixed,body)
+    swing_steps(world,30);assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+    joint.set_frames(Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)),Physics.Transform3D())
+    assert(joint.reaction_force().length()==0.0 && joint.reaction_torque().length()==0.0)
+    swing_steps(world,60);assert(joint.anchor_error().length()<0.002)
+    joint.set_enabled(false);swing_steps(world,10);assert(joint.anchor_error().length()>0.1)
+    joint.set_enabled(true);swing_steps(world,120);assert(joint.anchor_error().length()<0.002)
+    body.set_sleep_enabled(true);swing_steps(world,120);assert(!body.is_awake())
+    joint.set_twist_limits(-0.2,0.2);assert(body.is_awake())
+}
+test "swing twist unequal bodies retain momentum while closing a locked frame" {
+    var world=swing_world();var first=swing_body(world);var second=swing_body(world,8.0)
+    var joint=world.create_swing_twist_constraint(first,second,Physics.SwingTwistConstraint3DSettings()
+        ..minimum_twist=0.0 ..maximum_twist=0.0 ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2()))
+    second.set_angular_velocity(Math.Vec3(1.0,0.0,0.0));swing_steps(world,30)
+    assert(first.angular_velocity().multiply(0.2).add(second.angular_velocity().multiply(0.8)).nearly_equal(Math.Vec3(0.8,0.0,0.0),0.0001))
+    assert(Math.abs(joint.twist_angle())<0.001)
+}
+test "swing twist handle deletion and body suspension are safe" {
+    var world=Physics.World3D();var fixed=swing_fixed(world);var body=swing_body(world)
+    var old=world.create_swing_twist_constraint(fixed,body);world.destroy_swing_twist_constraint(old)
+    var joint=world.create_swing_twist_constraint(fixed,body);assert(!old.is_valid() && joint.is_valid())
+    body.set_enabled(false);swing_steps(world,2);assert(joint.reaction_force().length()==0.0)
+    body.set_enabled(true);swing_steps(world,2);assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+    world.destroy_rigid_body(body);assert(!joint.is_valid() && world.swing_twist_constraint_count()==0)
+}
+test "elliptical motor target projects to the Euclidean closest quaternion point" {
+    let a=Math.sin(0.15);let b=Math.sin(0.3);let theta=0.73
+    let expected_y=a*Math.cos(theta);let expected_z=b*Math.sin(theta)
+    let outside_y=expected_y+0.01*expected_y/(a*a)
+    let outside_z=expected_z+0.01*expected_z/(b*b)
+    let outside_w=Math.sqrt(1.0-outside_y*outside_y-outside_z*outside_z)
+    let target=Math.Vec2(2.0*Math.atan2(outside_y,outside_w),2.0*Math.atan2(outside_z,outside_w))
+    var world=swing_world();var joint=world.create_swing_twist_constraint(swing_fixed(world),swing_body(world),
+        Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.6))
+        ..swing_motor=Physics.SwingMotor3D.position(target,10.0,2.0,1.0))
+    swing_steps(world,1200,120.0)
+    let q=joint.orientation();let twist=Math.Quat(q.x,0.0,0.0,q.w).normalized();let swing=q.multiply(twist.conjugated())
+    assert(Math.abs(swing.y-expected_y)<0.001 && Math.abs(swing.z-expected_z)<0.001)
+}
+
+test "swing twist local frame rotations retain their public axes" {
+    var world=swing_world()
+    var first=swing_fixed(world)
+    let first_frame=Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0))
+    let second_frame=Math.Quat.angle_axis(-0.4,Math.Vec3(0.0,0.0,1.0))
+    var body=swing_body(world)
+    body.set_transform(Physics.Transform3D(rotation:first_frame.multiply(second_frame.conjugated())))
+    var joint=world.create_swing_twist_constraint(first,body,Physics.SwingTwistConstraint3DSettings()
+        ..first_local_frame=Physics.Transform3D(rotation:first_frame)
+        ..second_local_frame=Physics.Transform3D(rotation:second_frame)
+        ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.6)))
+    assert(joint.orientation().w>0.99999)
+    body.set_angular_velocity(first_frame.rotate(Math.Vec3(0.0,2.0,0.0)))
+    swing_steps(world,120)
+    assert(Math.abs(joint.swing_angles().x-0.3)<0.003 && Math.abs(joint.swing_angles().y)<0.001)
+    assert(joint.anchor_error().length()<0.001 && body.angular_velocity().length()<0.001)
+}
+func orphan_swing_twist() Physics.SwingTwistConstraint3D {
+    var world=swing_world()
+    return world.create_swing_twist_constraint(swing_fixed(world),swing_body(world))
+}
+test "world destruction invalidates retained swing twist handles" {
+    var joint=orphan_swing_twist()
+    assert(!joint.is_valid())
+}
+test "swing twist and floor contacts share the physical step" {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,1.0,10.0))))
+    var fixed=swing_fixed(world)
+    fixed.set_transform(Physics.Transform3D(Math.Vec3(0.0,4.0,0.0)))
+    var body=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,1.15,0.0)))
+    var joint=world.create_swing_twist_constraint(fixed,body,Physics.SwingTwistConstraint3DSettings()
+        ..second_local_frame=Physics.Transform3D(Math.Vec3(0.0,3.0,0.0))
+        ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.4,0.6)))
+    swing_steps(world,120)
+    assert(world.contact_count()>=1 && body.position().y>0.99 && body.position().y<1.01)
+    assert(joint.anchor_error().length()<0.01 && joint.swing_angles().length()<0.001)
+}
+test "swing twist zero step retains reactions while mutations reset all efforts" {
+    var world=swing_world()
+    var joint=world.create_swing_twist_constraint(swing_fixed(world),swing_body(world),
+        Physics.SwingTwistConstraint3DSettings() ..twist_motor=Physics.TwistMotor3D(3.0,0.2)
+        ..swing_motor=Physics.SwingMotor3D(Math.Vec2(2.0,0.0),0.3))
+    world.step(1.0/60.0)
+    let before=joint.motor_torque()
+    assert(before.x>0.19 && before.y>0.29)
+    world.step(0.0)
+    assert(joint.motor_torque().nearly_equal(before,0.000001))
+    joint.set_twist_motor(null)
+    assert(joint.motor_torque().length()==0.0 && joint.reaction_torque().length()==0.0)
+    joint.set_swing_motor(null)
+    world.step(1.0/60.0)
+    assert(joint.motor_torque().length()==0.0)
+}

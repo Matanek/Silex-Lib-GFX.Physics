@@ -285,3 +285,5 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 [Follow a moving target with position and velocity](SliderCombined3D.md).
 
 [3D cone joint](Cone3D.md).
+
+[3D swing and twist](SwingTwist3D.md).
