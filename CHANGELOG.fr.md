@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La charnière suit ensemble un angle et une vitesse avec `HingeMotor3D.position_and_velocity`, ressort physique et bornes symétriques ou signées ; poursuite, mutations et consommateurs qualifiés.
+
 - `HingeLimitSpring3D` rend les butées angulaires souples : raideur/amortissement physiques, mesure signée séparée et mutation sûre, avec butées rigides conservées par défaut. Oscillations, charge, pivot excentré, moteurs et contacts qualifiés face à Jolt en Native Debug/Release.
 
 - Les moteurs de charnière en vitesse et position acceptent des bornes de couple signées : effort asymétrique, unidirectionnel ou imposé, avec budget par pas, mutation et gardes ; constructeurs symétriques conservés.

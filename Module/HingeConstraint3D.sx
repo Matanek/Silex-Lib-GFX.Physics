@@ -52,6 +52,38 @@ public struct HingeMotor3D {
         return HingeMotor3D(angle, minimum_torque, maximum_torque, stiffness, damping)
     }
 
+    static func position_and_velocity(angle:float, speed:float, maximum_torque:float,
+        stiffness:float, damping:float) HingeMotor3D
+    {
+        return HingeMotor3D(angle, speed, -maximum_torque, maximum_torque, stiffness, damping)
+    }
+
+    static func position_and_velocity(angle:float, speed:float, minimum_torque:float,
+        maximum_torque:float, stiffness:float, damping:float) HingeMotor3D
+    {
+        return HingeMotor3D(angle, speed, minimum_torque, maximum_torque, stiffness, damping)
+    }
+
+    private init(angle:float, speed:float, minimum_torque:float, maximum_torque:float,
+        stiffness:float, damping:float)
+    {
+        if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
+            !finite_body3d_value(speed) ||
+            !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||
+            minimum_torque > maximum_torque ||
+            !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.HingeMotor3D.position_and_velocity requires an angle within [-pi, pi], finite speed, ordered finite torque bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_torque = minimum_torque
+        self.maximum_torque = maximum_torque
+        self.target_angle = angle
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
     private init(angle:float, minimum_torque:float, maximum_torque:float, stiffness:float, damping:float) {
         if !finite_body3d_value(angle) || angle < -Math.pi() || angle > Math.pi() ||
             !finite_body3d_value(minimum_torque) || !finite_body3d_value(maximum_torque) ||

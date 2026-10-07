@@ -128,6 +128,7 @@ Une capsule couchée transversalement à une pente peut rouler sous l’effet de
 la friction ; celle-ci ne garantit pas l’immobilité d’une forme arrondie.
 
 Les [butées souples](HingeSoftLimits3D.md) amortissent les dépassements angulaires avec une raideur physique mutable.
+La [commande combinée](HingeCombined3D.md) suit un angle et une vitesse actualisés ensemble.
 
 ## Poses, masse et commandes
 

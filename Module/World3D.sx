@@ -3199,7 +3199,7 @@ func solve_hinge_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
         bias = -motor.speed
         if motor.target_angle != null {
             softness = 1.0 / (delta * (motor.damping + delta * motor.stiffness))
-            bias = delta * motor.stiffness * softness * state.motor_error
+            bias += delta * motor.stiffness * softness * state.motor_error
         }
     }
     if minimum_torque == 0.0 && maximum_torque == 0.0 { return }

@@ -1,0 +1,176 @@
+use GFX.Physics
+use STD.Math
+
+func combined_pivot(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func combined_body(world:Physics.World3D, inertia:float = 0.1) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(inertia)) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func combined_steps(world:Physics.World3D, count:int) { var i = 0;while i<count { world.step(1.0/60.0);i++ } }
+
+test "combined fixed target follows implicit velocity bias at both step rates" {
+    var rate = 60
+    while rate<=120 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var hinge = world.create_hinge_constraint(combined_pivot(world),combined_body(world),
+            Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(0.5,0.4,10.0,1.6,0.8))
+        let dt = 1.0/rate as float;var angle = 0.0;var speed = 0.0;var i = 0
+        while i<rate*6 {
+            let previous = speed
+            speed = (0.1*speed+dt*1.6*(0.5-angle)+dt*(0.8+dt*1.6)*0.4)/(0.1+dt*0.8+dt*dt*1.6)
+            angle += dt*speed;world.step(dt)
+            assert(Math.abs(hinge.angle()-angle)<0.00003 && Math.abs(hinge.angular_speed()-speed)<0.00003)
+            assert(Math.abs(hinge.motor_torque()-0.1*(speed-previous)/dt)<0.00003);i++
+        }
+        assert(Math.abs(hinge.angle()-(0.5+(0.8+dt*1.6)*0.4/1.6))<0.001)
+        assert(hinge.motor()!.target_angle==0.5 && hinge.motor()!.speed==0.4);rate += 60
+    }
+}
+
+test "zero combined velocity reproduces the position servo" {
+    var a = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var b = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = a.create_hinge_constraint(combined_pivot(a),combined_body(a),Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(0.75,-0.1,0.2,1.6,0.08))
+    var second = b.create_hinge_constraint(combined_pivot(b),combined_body(b),Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(0.75,0.0,-0.1,0.2,1.6,0.08))
+    var i = 0;while i<360 {
+        a.step(1.0/60.0);b.step(1.0/60.0)
+        assert(Math.abs(first.angle()-second.angle())<0.000001 && Math.abs(first.motor_torque()-second.motor_torque())<0.000001);i++
+    }
+}
+
+test "moving angle and commanded velocity follow an independent saturated recurrence" {
+    var rate = 60
+    while rate<=120 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var hinge = world.create_hinge_constraint(combined_pivot(world),combined_body(world))
+        let dt = 1.0/rate as float;var angle = 0.0;var speed = 0.0;var i = 0
+        while i<rate*8 {
+            let time = i as float*dt
+            let target = 0.75*Math.sin(time*0.8);let target_speed = 0.6*Math.cos(time*0.8)
+            hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(target,target_speed,-0.2,0.4,1.6,0.8))
+            let expected = (0.1*speed+dt*1.6*(target-angle)+dt*(0.8+dt*1.6)*target_speed)/(0.1+dt*0.8+dt*dt*1.6)
+            let torque = Math.clamp(0.1*(expected-speed)/dt,-0.2,0.4)
+            speed += dt*torque/0.1;angle += dt*speed;world.step(dt)
+            assert(Math.abs(hinge.angle()-angle)<0.00003 && Math.abs(hinge.angular_speed()-speed)<0.00003)
+            assert(Math.abs(hinge.motor_torque()-torque)<0.00003 && hinge.motor()!.target_angle==target);i++
+        }
+        rate += 60
+    }
+}
+
+test "combined drive saturates one shared signed torque budget in both directions" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var hinge = world.create_hinge_constraint(combined_pivot(world),combined_body(world),Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(1.0,0.5,-0.02,0.01,100.0,1.0))
+    var i = 0;while i<60 { world.step(1.0/60.0);assert(Math.abs(hinge.motor_torque()-0.01)<0.000001);i++ }
+    hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(-1.0,-0.5,-0.02,0.01,100.0,1.0))
+    assert(hinge.motor_torque()==0.0);i=0
+    while i<60 { world.step(1.0/60.0);assert(Math.abs(hinge.motor_torque()+0.02)<0.000001);i++ }
+    assert(Math.abs(hinge.angular_speed()+0.1)<0.00001)
+}
+
+test "combined drive compensates the inertia of an offset pivot" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = combined_body(world);body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var hinge = world.create_hinge_constraint(combined_pivot(world),body,Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0) ..motor = Physics.HingeMotor3D.position_and_velocity(0.5,0.4,20.0,17.6,8.8))
+    let dt = 1.0/60.0;let speed = (dt*17.6*0.5+dt*(8.8+dt*17.6)*0.4)/(1.1+dt*8.8+dt*dt*17.6)
+    world.step(dt);assert(Math.abs(hinge.angular_speed()-speed)<0.0001 && Math.abs(hinge.motor_torque()-1.1*speed/dt)<0.001)
+    combined_steps(world,359);assert(hinge.anchor_error().length()<0.003 && Math.abs(hinge.angle()-(0.5+(8.8+dt*17.6)*0.4/17.6))<0.003)
+}
+
+test "combined drive conserves momentum on unequal free bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = combined_body(world);var second = combined_body(world,0.4)
+    var hinge = world.create_hinge_constraint(first,second,Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(0.5,0.4,10.0,1.6,0.8))
+    var i = 0;while i<360 { world.step(1.0/60.0);assert(Math.abs(0.1*first.angular_velocity().z+0.4*second.angular_velocity().z)<0.00001);i++ }
+    assert(Math.abs(hinge.angle()-(0.5+(0.8+1.6/60.0)*0.4/1.6))<0.001)
+}
+
+test "combined velocity loads soft stops while hard stops bound the requested target" {
+    var soft = false;var index = 0
+    while index<2 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var hinge = world.create_hinge_constraint(combined_pivot(world),combined_body(world),Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.2 ..motor = Physics.HingeMotor3D.position_and_velocity(0.8,0.4,-0.2,0.2,1.6,0.8))
+        if soft { hinge.set_limit_spring(Physics.HingeLimitSpring3D(1.6,0.4)) }
+        combined_steps(world,360)
+        let offset = (0.8+1.6/60.0)*0.4/1.6
+        var expected = 0.2;if soft { expected += offset*0.5 }
+        assert(Math.abs(hinge.angle()-expected)<0.001 && hinge.motor()!.target_angle==0.8)
+        if soft { assert(Math.abs(hinge.limit_torque()+1.6*offset*0.5)<0.001) }
+        hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(-0.8,-0.4,-0.2,0.2,1.6,0.8))
+        combined_steps(world,360);assert(Math.abs(hinge.angle()+expected)<0.001)
+        soft = true;index++
+    }
+}
+
+test "combined modes reset reactions preserve zero steps and suppress passive friction" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = combined_body(world);var hinge = world.create_hinge_constraint(combined_pivot(world),body,Physics.HingeConstraint3DSettings() ..maximum_friction_torque = 0.1 ..motor = Physics.HingeMotor3D.position_and_velocity(0.5,0.4,1.0,1.6,0.8))
+    var clone = hinge;world.step(1.0/60.0);let observed = hinge.motor_torque()
+    world.step(0.0);assert(clone.motor_torque()==observed && clone.friction_torque()==0.0)
+    clone.set_motor(Physics.HingeMotor3D.position(-0.5,1.0,1.6,0.8));assert(hinge.motor_torque()==0.0)
+    combined_steps(world,180);assert(Math.abs(hinge.angle()+0.5)<0.001 && hinge.motor()!.speed==0.0)
+    hinge.set_motor(Physics.HingeMotor3D(0.5,1.0));combined_steps(world,30);assert(Math.abs(hinge.angular_speed()-0.5)<0.00001)
+    hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(1.0,1.0,0.0,1.6,0.8))
+    combined_steps(world,30);assert(Math.abs(hinge.angular_speed()-0.5)<0.00001 && hinge.friction_torque()==0.0)
+    hinge.set_motor(null);combined_steps(world,60);assert(Math.abs(hinge.angular_speed())<0.00001)
+    world.destroy_hinge_constraint(hinge);assert(!clone.is_valid())
+}
+
+test "combined mutation wakes suspension resumes and changed inertia applies next step" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1)) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var hinge = world.create_hinge_constraint(combined_pivot(world),body)
+    combined_steps(world,120);assert(!body.is_awake())
+    hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(0.5,0.4,10.0,1.6,0.8));assert(body.is_awake())
+    world.step(1.0/60.0);hinge.set_enabled(false);world.step(1.0/60.0);assert(hinge.motor_torque()==0.0)
+    hinge.set_enabled(true);body.set_enabled(false);world.step(1.0/60.0);assert(hinge.motor_torque()==0.0)
+    body.set_enabled(true);body.set_transform(Physics.Transform3D());body.set_angular_velocity(Math.Vec3())
+    body.set_mass_properties(Physics.MassProperties3D(2.0,Math.Vec3(0.2)))
+    let dt = 1.0/60.0;let expected = (dt*1.6*0.5+dt*(0.8+dt*1.6)*0.4)/(0.2+dt*0.8+dt*dt*1.6)
+    world.step(dt);assert(Math.abs(hinge.angular_speed()-expected)<0.00001)
+    hinge.set_frames(hinge.first_local_axis(),hinge.first_local_normal(),hinge.second_local_axis(),hinge.second_local_normal());assert(hinge.motor_torque()==0.0)
+    world.destroy_rigid_body(body);assert(!hinge.is_valid())
+}
+
+test "combined servo keeps the short angular path across pi" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = combined_body(world);body.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(-3.0,Math.Vec3(0.0,0.0,1.0))))
+    var hinge = world.create_hinge_constraint(combined_pivot(world),body,Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(3.0,-0.1,10.0,1.6,0.8))
+    world.step(1.0/60.0);assert(hinge.angular_speed()<0.0)
+    combined_steps(world,359);assert(Math.abs(hinge.angle()-(3.0-(0.8+1.6/60.0)*0.1/1.6))<0.001)
+}
+
+test "combined servo shares a planar fixed load and real floor contacts" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.plane(Physics.Plane3D(offset:-1.5)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5)) ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)) ..allow_sleep = false)
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings() ..transform = Physics.Transform3D(Math.Vec3(0.0,-2.0,0.0)) ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var fixed = world.create_fixed_constraint(body,payload,Physics.FixedConstraint3DSettings() ..first_local_frame = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var hinge = world.create_hinge_constraint(combined_pivot(world),body,Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0) ..motor = Physics.HingeMotor3D.position_and_velocity(0.1,0.2,-1.0,1.0,1.6,0.8))
+    var contacts = 0;var i = 0;var reacted = false
+    while i<180 {
+        if i==90 { hinge.set_motor(Physics.HingeMotor3D.position_and_velocity(-0.1,-0.2,-1.0,1.0,1.6,0.8)) }
+        world.step(1.0/60.0);contacts += world.contact_count()
+        if Math.abs(hinge.motor_torque())>0.01 { reacted = true }
+        assert(Math.abs(hinge.motor_torque())<=1.00001 && hinge.anchor_error().length()<0.01 && fixed.anchor_error().length()<0.01);i++
+    }
+    assert(contacts>0 && reacted && body.position().y>=-1.01 && hinge.axis_error()<0.002)
+}
+
+test "combined drive supports intervals that exclude zero" {
+    var sign = 1.0;var index = 0
+    while index<2 {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var low = 0.01;var high = 0.02
+        if sign<0.0 { low = -0.02;high = -0.01 }
+        var hinge = world.create_hinge_constraint(combined_pivot(world),combined_body(world),
+            Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position_and_velocity(0.0,0.0,low,high,1.6,0.8))
+        var clone = hinge;assert(clone.motor()!.minimum_torque==low && clone.motor()!.maximum_torque==high)
+        var i = 1;while i<=60 {
+            world.step(1.0/60.0);assert(Math.abs(hinge.motor_torque()-sign*0.01)<0.000001)
+            assert(Math.abs(hinge.angular_speed()-sign*i as float/600.0)<0.00001);i++
+        }
+        sign = -1.0;index++
+    }
+}

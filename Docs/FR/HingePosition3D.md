@@ -65,10 +65,10 @@ ressort équilibre le couple extérieur. Une borne de couple trop faible peut
 empêcher de rejoindre cet équilibre. La raideur et l’amortissement explicites
 conservent leurs unités lorsque l’inertie, la masse ou l’ancrage changent.
 
-L’instantané `hinge.motor()` distingue le mode position par `target_angle`
+L’instantané `hinge.motor()` distingue un servo par `target_angle`
 présent ; il porte aussi `stiffness` et `damping`. En mode vitesse, cet angle
 est absent et ces coefficients valent zéro ; `speed` reste la cible signée.
-En mode position, `speed` vaut zéro.
+Avec `position`, `speed` vaut zéro. La [commande combinée](HingeCombined3D.md) fournit aussi une vitesse.
 
 ## Modifier et observer
 

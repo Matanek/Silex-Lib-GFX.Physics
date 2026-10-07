@@ -86,3 +86,5 @@ les bornes égales, deux inerties, un pivot excentré, les mutations, les moteur
 la friction et une chaîne chargée dans son plan avec contacts réels. Les
 trajectoires et efforts sont comparés à Jolt en Native Debug/Release sur
 macOS ARM64. Cela ne qualifie pas les chaînes spatiales générales.
+
+La [commande combinée](HingeCombined3D.md) suit un angle et une vitesse actualisés ensemble.

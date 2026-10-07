@@ -85,3 +85,5 @@ equal bounds, two inertias, an offset pivot, mutations, motors, friction and
 a loaded chain within its plane with real contacts. Trajectories and efforts
 are compared against Jolt in Native Debug/Release on macOS ARM64. General
 spatial chains are not qualified by this evidence.
+
+[Combined control](HingeCombined3D.md) follows an angle and velocity updated together.

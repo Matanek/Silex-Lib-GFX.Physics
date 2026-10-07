@@ -150,3 +150,5 @@ motor off, stops, a chain and contacts.
 [axis friction](HingeFriction3D.md) are available. [Soft stops](HingeSoftLimits3D.md) are available with physical stiffness and damping.
 
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.
+
+[Combined control](HingeCombined3D.md) follows an angle and velocity updated together.

@@ -154,3 +154,5 @@ pivot, inversion, arrêt, butées, chaîne et contacts. Le
 amortissement physiques.
 
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.
+
+La [commande combinée](HingeCombined3D.md) suit un angle et une vitesse actualisés ensemble.

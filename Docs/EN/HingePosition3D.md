@@ -64,10 +64,10 @@ balances external torque. An insufficient torque bound can prevent reaching
 that equilibrium. Explicit stiffness and damping retain their units when
 inertia, mass or the anchor changes.
 
-The `hinge.motor()` snapshot identifies position control through a present
+The `hinge.motor()` snapshot identifies a servo through a present
 `target_angle`; it also carries `stiffness` and `damping`. In velocity mode,
 the angle is absent and these coefficients are zero; `speed` remains the
-signed velocity target. In position mode, `speed` is zero.
+signed velocity target. With `position`, `speed` is zero. [Combined control](HingeCombined3D.md) also supplies a velocity.
 
 ## Change and observe
 

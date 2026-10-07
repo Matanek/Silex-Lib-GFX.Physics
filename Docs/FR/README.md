@@ -21,6 +21,7 @@ Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.
 
 Les [butées souples](HingeSoftLimits3D.md) amortissent les dépassements angulaires avec une raideur physique mutable.
+La [commande combinée](HingeCombined3D.md) suit un angle et une vitesse actualisés ensemble.
 
 ## Corps et monde
 
