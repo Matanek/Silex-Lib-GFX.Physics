@@ -1,0 +1,286 @@
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public struct GearConstraint3DSettings {
+    var first_local_axis:Math.Vec3 = Math.Vec3(0.0, 0.0, 1.0)
+    var second_local_axis:Math.Vec3 = Math.Vec3(0.0, 0.0, 1.0)
+    var ratio:float = 1.0
+    var is_enabled:bool = true
+    init() {}
+}
+
+package class GearConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    var first_local_axis:Math.Vec3
+    var second_local_axis:Math.Vec3
+    var ratio:float
+    var is_enabled:bool
+    var first_reference:Math.Quat
+    var second_reference:Math.Quat
+    var first_phase:float = 0.0
+    var second_phase:float = 0.0
+    var first_raw:float = 0.0
+    var second_raw:float = 0.0
+    var first_impulse:Math.Vec3 = Math.Vec3()
+    var second_impulse:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:GearConstraint3DSettings,
+        first_rotation:Math.Quat, second_rotation:Math.Quat)
+    {
+        validate_gear_axis3d(settings.first_local_axis)
+        validate_gear_axis3d(settings.second_local_axis)
+        validate_gear_ratio3d(settings.ratio)
+        self.first_id = first_id
+        self.second_id = second_id
+        self.first_local_axis = settings.first_local_axis.normalized()
+        self.second_local_axis = settings.second_local_axis.normalized()
+        self.ratio = settings.ratio
+        self.is_enabled = settings.is_enabled
+        self.first_reference = first_rotation
+        self.second_reference = second_rotation
+    }
+    func reset() {
+        self.first_impulse = Math.Vec3()
+        self.second_impulse = Math.Vec3()
+        self.inverse_delta = 0.0
+    }
+    func reset_phase(first:Math.Quat, second:Math.Quat) {
+        self.first_reference = first
+        self.second_reference = second
+        self.first_phase = 0.0
+        self.second_phase = 0.0
+        self.first_raw = 0.0
+        self.second_raw = 0.0
+    }
+}
+
+package struct GearConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class GearConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:GearConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:GearConstraint3DSettings) GearConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.GearConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.GearConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.GearConstraint3D requires a dynamic body")
+        }
+        var state = GearConstraintState3D(first.body_id(), second.body_id(), settings,
+            first_state.transform.rotation, second_state.transform.rotation)
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return GearConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:GearConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:GearConstraintId3D) GearConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.GearConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:GearConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_gear_body_id3d(state.first_id, body_id) ||
+                    same_gear_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_gear_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class GearConstraint3D {
+    private var store:GearConstraintStore3D
+    private let id:GearConstraintId3D
+    package init(store:GearConstraintStore3D, id:GearConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:GearConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() GearConstraintId3D { return self.id }
+    func first_body() RigidBody3D { return RigidBody3D(self.store.bodies, self.store.require(self.id).first_id) }
+    func second_body() RigidBody3D { return RigidBody3D(self.store.bodies, self.store.require(self.id).second_id) }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func first_local_axis() Math.Vec3 { return self.store.require(self.id).first_local_axis }
+    func second_local_axis() Math.Vec3 { return self.store.require(self.id).second_local_axis }
+    func ratio() float { return self.store.require(self.id).ratio }
+    func phase_error() float {
+        var state = self.store.require(self.id)
+        return gear_phase_error3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state)
+    }
+    func speed_error() float {
+        var state = self.store.require(self.id)
+        return gear_speed_error3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state)
+    }
+    func first_reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.first_impulse.multiply(state.inverse_delta)
+    }
+    func reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.second_impulse.multiply(state.inverse_delta)
+    }
+    private func invalidate(state:GearConstraintState3D, reset_phase:bool) {
+        var first = self.store.bodies.require(state.first_id)
+        var second = self.store.bodies.require(state.second_id)
+        if reset_phase { state.reset_phase(first.transform.rotation, second.transform.rotation) }
+        state.reset()
+        first.wake()
+        second.wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        // Observe any external pose change before preserving the phase.
+        observe_gear_phase3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state, 0.0)
+        state.is_enabled = enabled
+        self.invalidate(state, false)
+    }
+    func set_axes(first:Math.Vec3, second:Math.Vec3) {
+        validate_gear_axis3d(first)
+        validate_gear_axis3d(second)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.first_local_axis = first.normalized()
+        state.second_local_axis = second.normalized()
+        self.invalidate(state, true)
+    }
+    func set_ratio(ratio:float) {
+        validate_gear_ratio3d(ratio)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.ratio = ratio
+        self.invalidate(state, true)
+    }
+}
+
+package func validate_gear_axis3d(axis:Math.Vec3) {
+    if !finite_body3d_point(axis) || !finite_body3d_value(axis.length_squared()) ||
+        axis.length_squared() <= 0.0000000001
+    { panic("GFX.Physics.GearConstraint3D requires finite nonzero axes") }
+}
+package func validate_gear_ratio3d(ratio:float) {
+    if !finite_body3d_value(ratio) || ratio == 0.0 || !finite_body3d_value(ratio*ratio) || ratio*ratio == 0.0 {
+        panic("GFX.Physics.GearConstraint3D requires a finite nonzero representable ratio")
+    }
+}
+package func same_gear_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}
+package func gear_wrapped_angle3d(angle:float) float {
+    let period = 2.0*Math.pi()
+    return angle-period*Math.floor((angle+Math.pi())/period)
+}
+package func gear_raw_angle3d(rotation:Math.Quat, reference:Math.Quat, axis:Math.Vec3) float {
+    let relative = reference.conjugated().multiply(rotation)
+    return gear_wrapped_angle3d(2.0*Math.atan2(Math.Vec3(relative.x, relative.y, relative.z).dot(axis), relative.w))
+}
+package func gear_phase_error3d(first:@BodyState3D, second:@BodyState3D, state:GearConstraintState3D) float {
+    let a = state.first_phase + gear_wrapped_angle3d(gear_raw_angle3d(first.transform.rotation,
+        state.first_reference, state.first_local_axis)-state.first_raw)
+    let b = state.second_phase + gear_wrapped_angle3d(gear_raw_angle3d(second.transform.rotation,
+        state.second_reference, state.second_local_axis)-state.second_raw)
+    return a+state.ratio*b
+}
+package func gear_speed_error3d(first:@BodyState3D, second:@BodyState3D, state:GearConstraintState3D) float {
+    return first.angular_velocity.dot(first.transform.vector(state.first_local_axis)) + state.ratio*
+        second.angular_velocity.dot(second.transform.vector(state.second_local_axis))
+}
+package func gear_phase_advance3d(raw:float, previous:float, prediction:float) float {
+    let difference = gear_wrapped_angle3d(raw-previous)
+    let period = 2.0*Math.pi()
+    return difference+period*Math.floor((prediction-difference)/period+0.5)
+}
+package func observe_gear_phase3d(first:@BodyState3D, second:@BodyState3D,
+    state:GearConstraintState3D, delta:float)
+{
+    let a = gear_raw_angle3d(first.transform.rotation, state.first_reference, state.first_local_axis)
+    let b = gear_raw_angle3d(second.transform.rotation, state.second_reference, state.second_local_axis)
+    var predicted_a = 0.0
+    var predicted_b = 0.0
+    if first.is_enabled && (first.awake || first.body_type == BodyType3D.kinematic) { predicted_a = delta*first.angular_velocity.dot(first.transform.vector(state.first_local_axis)) }
+    if second.is_enabled && (second.awake || second.body_type == BodyType3D.kinematic) { predicted_b = delta*second.angular_velocity.dot(second.transform.vector(state.second_local_axis)) }
+    state.first_phase += gear_phase_advance3d(a, state.first_raw, predicted_a)
+    state.second_phase += gear_phase_advance3d(b, state.second_raw, predicted_b)
+    state.first_raw = a
+    state.second_raw = b
+}

@@ -1,0 +1,21 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var settings=Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    var first=world.create_rigid_body(settings);var second=world.create_rigid_body(settings)
+    var gear=world.create_gear_constraint(first,second,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    second.set_angular_velocity(Math.Vec3(0.0,0.0,1.0))
+    world.step(1.0/60.0)
+    assert(Math.abs(first.angular_velocity().z+0.4)<0.00001)
+    assert(Math.abs(second.angular_velocity().z-0.2)<0.00001)
+    assert(Math.abs(gear.first_reaction_torque().z+4.8)<0.0001)
+    assert(Math.abs(gear.reaction_torque().z+9.6)<0.0001)
+    assert(Math.abs(gear.phase_error())<0.00001 && Math.abs(gear.speed_error())<0.00001)
+    gear.set_ratio(-1.0);world.step(1.0/60.0)
+    assert(Math.abs(first.angular_velocity().z-second.angular_velocity().z)<0.00001)
+    world.destroy_gear_constraint(gear);assert(!gear.is_valid())
+    print("gear recipe: ok")
+}

@@ -1,0 +1,160 @@
+use GFX.Physics
+use STD.Math
+func gear_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func gear_body(world:Physics.World3D,inertia:float=0.2) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(inertia))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func gear_steps(world:Physics.World3D,count:int,rate:float=60.0) { var i=0;while i<count { world.step(1.0/rate);i++ } }
+
+test "gear projects velocity by the signed ratio and each body's inertia" {
+    let ratios:float[]=[1.0,2.0,-1.0,-0.5,0.25,8.0]
+    let inertias:float[]=[0.2,0.8]
+    for ratio in ratios { for inertia in inertias {
+        var world=gear_world();var first=gear_body(world);var second=gear_body(world,inertia)
+        var joint=world.create_gear_constraint(first,second,Physics.GearConstraint3DSettings() ..ratio=ratio)
+        second.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+        let lambda=-ratio/(5.0+ratio*ratio/inertia)
+        assert(Math.abs(first.angular_velocity().z-5.0*lambda)<0.00001)
+        assert(Math.abs(second.angular_velocity().z-(1.0+ratio*lambda/inertia))<0.00001)
+        assert(Math.abs(joint.first_reaction_torque().z-lambda*60.0)<0.0001)
+        assert(Math.abs(joint.reaction_torque().z-ratio*lambda*60.0)<0.0001)
+        assert(Math.abs(joint.speed_error())<0.00001 && Math.abs(joint.phase_error())<0.00001)
+        let power=joint.first_reaction_torque().dot(first.angular_velocity())+joint.reaction_torque().dot(second.angular_velocity())
+        assert(Math.abs(power)<0.0001)
+        assert(0.2*first.angular_velocity().length_squared()+inertia*second.angular_velocity().length_squared()<=inertia+0.00001)
+        assert(world.gear_constraint_count()==1 && world.point_constraint_count()==0)
+    } }
+}
+test "gear only couples the selected rotations and leaves translations free" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+    var joint=world.create_gear_constraint(a,b)
+    a.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));b.set_linear_velocity(Math.Vec3(0.0,1.0,0.0))
+    a.set_angular_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    assert(a.angular_velocity().nearly_equal(Math.Vec3(1.0,0.0,0.0),0.00001))
+    assert(a.position().nearly_equal(Math.Vec3(1.0/60.0,0.0,0.0),0.00001))
+    assert(b.position().nearly_equal(Math.Vec3(0.0,1.0/60.0,0.0),0.00001))
+    assert(joint.reaction_torque().length()<0.00001)
+}
+test "gear tracks fractional ratios through multiple turns at both rates" {
+    for rate in [60,120] {
+        var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+        var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=0.5)
+        b.set_angular_velocity(Math.Vec3(0.0,0.0,4.0));gear_steps(world,rate*20,rate as float)
+        assert(Math.abs(joint.phase_error())<0.001 && Math.abs(joint.speed_error())<0.00001)
+        assert(Math.abs(a.angular_velocity().z+1.6)<0.00001 && Math.abs(b.angular_velocity().z-3.2)<0.00001)
+    }
+}
+test "gear disambiguates rotations exceeding half a turn in one step" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+    var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    b.set_angular_velocity(Math.Vec3(0.0,0.0,1000.0));gear_steps(world,120)
+    assert(Math.abs(joint.phase_error())<0.002 && Math.abs(joint.speed_error())<0.001)
+    assert(Math.abs(a.angular_velocity().z+400.0)<0.001 && Math.abs(b.angular_velocity().z-200.0)<0.001)
+}
+test "gear references the poses at creation and normalizes local axes" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+    a.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0))))
+    b.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(-0.4,Math.Vec3(1.0,0.0,0.0))))
+    var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings()
+        ..first_local_axis=Math.Vec3(0.0,0.0,2.0) ..second_local_axis=Math.Vec3(0.0,0.0,3.0) ..ratio=2.0)
+    assert(joint.phase_error()==0.0 && joint.first_local_axis().z==1.0 && joint.second_local_axis().z==1.0)
+    b.set_angular_velocity(b.transform().vector(Math.Vec3(0.0,0.0,1.0)).multiply(1.0));gear_steps(world,120)
+    assert(Math.abs(joint.speed_error())<0.00001 && Math.abs(joint.phase_error())<0.0001)
+}
+test "gear corrects external phase displacement without adding velocity energy" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+    var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    b.set_transform(Physics.Transform3D(rotation:Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0))))
+    assert(Math.abs(joint.phase_error()-0.8)<0.00001);gear_steps(world,60)
+    assert(Math.abs(joint.phase_error())<0.00001 && a.angular_velocity().length()==0.0 && b.angular_velocity().length()==0.0)
+    let aa=a.transform().rotation;let bb=b.transform().rotation
+    assert(Math.abs(2.0*Math.atan2(aa.z,aa.w)+0.16)<0.0001)
+    assert(Math.abs(2.0*Math.atan2(bb.z,bb.w)-0.08)<0.0001)
+}
+test "gear ratio and axes mutations reset phase and reaction" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world);var joint=world.create_gear_constraint(a,b)
+    b.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+    let torque=joint.reaction_torque();world.step(0.0);assert(joint.reaction_torque().nearly_equal(torque,0.00001))
+    joint.set_ratio(-2.0);assert(joint.ratio()==-2.0 && joint.phase_error()==0.0 && joint.reaction_torque().length()==0.0)
+    world.step(1.0/60.0);assert(Math.abs(joint.speed_error())<0.00001)
+    joint.set_axes(Math.Vec3(0.0,2.0,0.0),Math.Vec3(0.0,3.0,0.0))
+    assert(joint.phase_error()==0.0 && joint.first_local_axis().y==1.0 && joint.first_reaction_torque().length()==0.0)
+}
+test "gear suspension preserves phase and restores it on reactivation" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world);var joint=world.create_gear_constraint(a,b)
+    joint.set_enabled(false);b.set_angular_velocity(Math.Vec3(0.0,0.0,2.0));gear_steps(world,120)
+    assert(Math.abs(joint.phase_error()-4.0)<0.0001 && joint.reaction_torque().length()==0.0)
+    joint.set_enabled(true);gear_steps(world,120)
+    assert(Math.abs(joint.phase_error())<0.0001 && Math.abs(joint.speed_error())<0.00001)
+    b.set_enabled(false);a.set_angular_velocity(Math.Vec3(0.0,0.0,0.5));world.step(1.0/60.0)
+    assert(joint.reaction_torque().length()==0.0)
+    b.set_enabled(true);gear_steps(world,60);assert(Math.abs(joint.speed_error())<0.00001)
+}
+test "gear fixed and kinematic bodies prescribe the dynamic body's speed" {
+    for kinematic in [false,true] {
+        var world=gear_world();var settings=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+        if kinematic { settings.body_type=Physics.BodyType3D.kinematic }
+        var a=world.create_rigid_body(settings);var b=gear_body(world)
+        var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=2.0)
+        if kinematic { a.set_angular_velocity(Math.Vec3(0.0,0.0,1.0)) } else { b.set_angular_velocity(Math.Vec3(0.0,0.0,1.0)) }
+        gear_steps(world,120)
+        if kinematic { assert(Math.abs(b.angular_velocity().z+0.5)<0.00001) } else { assert(b.angular_velocity().length()==0.0) }
+        assert(Math.abs(joint.speed_error())<0.00001 && Math.abs(joint.phase_error())<0.0001)
+    }
+}
+test "gear joins sleeping islands and mutations wake linked bodies" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world);a.set_sleep_enabled(true);b.set_sleep_enabled(true)
+    var joint=world.create_gear_constraint(a,b);gear_steps(world,120);assert(!a.is_awake() && !b.is_awake())
+    joint.set_ratio(2.0);assert(a.is_awake() && b.is_awake());gear_steps(world,120)
+    a.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+    assert(b.is_awake() && Math.abs(joint.speed_error())<0.00001)
+}
+test "gear handles survive slot reuse safely and body deletion wakes the peer" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world);var joint=world.create_gear_constraint(a,b)
+    assert(joint.first_body().is_valid() && joint.second_body().is_valid())
+    world.destroy_gear_constraint(joint);var newer=world.create_gear_constraint(a,b)
+    assert(!joint.is_valid() && newer.is_valid() && world.gear_constraint_count()==1)
+    b.set_sleep_enabled(true);a.set_sleep_enabled(true);gear_steps(world,120)
+    world.destroy_rigid_body(a);assert(!newer.is_valid() && b.is_awake() && world.gear_constraint_count()==0)
+}
+test "gear world destruction invalidates retained handles" {
+    var retained:Physics.GearConstraint3D?=null
+    { var world=gear_world();retained=world.create_gear_constraint(gear_body(world),gear_body(world)) }
+    assert(!retained!.is_valid())
+}
+test "gear transmits a hinge motor between separately retained axles" {
+    var world=gear_world();var support=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var a=gear_body(world);var b=gear_body(world)
+    world.create_hinge_constraint(support,a,Physics.HingeConstraint3DSettings() ..motor=Physics.HingeMotor3D(1.0,0.2))
+    world.create_hinge_constraint(support,b)
+    var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    gear_steps(world,600)
+    assert(Math.abs(a.angular_velocity().z-1.0)<0.001 && Math.abs(b.angular_velocity().z+0.5)<0.001)
+    assert(Math.abs(joint.phase_error())<0.001 && Math.abs(joint.speed_error())<0.001)
+}
+
+test "gear recovers a long disconnected phase without losing turns" {
+    var world=gear_world();var a=gear_body(world);var b=gear_body(world)
+    var joint=world.create_gear_constraint(a,b,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    joint.set_enabled(false);b.set_angular_velocity(Math.Vec3(0.0,0.0,4.0));gear_steps(world,600)
+    assert(Math.abs(joint.phase_error()-80.0)<0.001)
+    joint.set_enabled(true);gear_steps(world,240)
+    assert(Math.abs(joint.phase_error())<0.001 && Math.abs(joint.speed_error())<0.00001)
+}
+test "gear remains coupled while one sphere contacts the floor" {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(8.0,0.5,8.0))) ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.25,0.0)))
+    var first=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25)) ..transform=Physics.Transform3D(Math.Vec3(0.0,0.5,0.0)))
+    var second=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false ..gravity_scale=0.0
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var joint=world.create_gear_constraint(first,second,Physics.GearConstraint3DSettings() ..ratio=2.0)
+    first.set_angular_velocity(Math.Vec3(0.0,0.0,2.0));gear_steps(world,240)
+    assert(Math.abs(first.position().y-0.25)<0.01 && Math.abs(joint.speed_error())<0.001)
+    assert(Math.abs(joint.phase_error())<0.001)
+}

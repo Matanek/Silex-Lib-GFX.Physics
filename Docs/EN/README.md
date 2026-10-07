@@ -289,3 +289,5 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 [3D swing and twist](SwingTwist3D.md).
 
 [Six degrees of freedom](SixDOF3D.md).
+
+[3D gear](Gear3D.md): signed ratio, tracked phase and torques on both bodies.

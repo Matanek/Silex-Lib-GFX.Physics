@@ -169,3 +169,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Inclinaison et torsion 3D](SwingTwist3D.md).
 
 [Attache à six degrés de liberté](SixDOF3D.md).
+
+[Engrenage 3D](Gear3D.md) : rapport signé, phase suivie et couples sur les deux corps.

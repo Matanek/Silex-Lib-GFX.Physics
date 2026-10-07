@@ -1,3 +1,10 @@
+use GFX.Physics.GearConstraint3D.GearConstraint3D
+use GFX.Physics.GearConstraint3D.GearConstraint3DSettings
+use GFX.Physics.GearConstraint3D.GearConstraintState3D
+use GFX.Physics.GearConstraint3D.GearConstraintStore3D
+use GFX.Physics.GearConstraint3D.gear_phase_error3d
+use GFX.Physics.GearConstraint3D.gear_speed_error3d
+use GFX.Physics.GearConstraint3D.observe_gear_phase3d
 use GFX.Physics.SwingTwistConstraint3D.swing_angles3d
 use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3D
 use GFX.Physics.SixDOFConstraint3D.SixDOFConstraint3DSettings
@@ -121,6 +128,7 @@ public class World3D {
     private var slider_constraints:SliderConstraintStore3D
     private var fixed_constraints:FixedConstraintStore3D
     private var point_constraints:PointConstraintStore3D
+    private var gear_constraints:GearConstraintStore3D
     private var six_dof_constraints:SixDOFConstraintStore3D
     private var swing_twist_constraints:SwingTwistConstraintStore3D
     private var cone_constraints:ConeConstraintStore3D
@@ -139,6 +147,7 @@ public class World3D {
         self.hinge_constraints.invalidate_all()
         self.cone_constraints.invalidate_all()
         self.swing_twist_constraints.invalidate_all()
+        self.gear_constraints.invalidate_all()
         self.six_dof_constraints.invalidate_all()
         self.store.invalidate_all()
     }
@@ -155,6 +164,7 @@ public class World3D {
         self.hinge_constraints = HingeConstraintStore3D(self.store)
         self.cone_constraints = ConeConstraintStore3D(self.store)
         self.swing_twist_constraints = SwingTwistConstraintStore3D(self.store)
+        self.gear_constraints = GearConstraintStore3D(self.store)
         self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.contacts = []
@@ -179,6 +189,8 @@ public class World3D {
     func slider_constraint_count() int { return self.slider_constraints.live_count }
     func fixed_constraint_count() int { return self.fixed_constraints.live_count }
     func point_constraint_count() int { return self.point_constraints.live_count }
+    func gear_constraint_count() int { return self.gear_constraints.live_count }
+
     func six_dof_constraint_count() int { return self.six_dof_constraints.live_count }
     func swing_twist_constraint_count() int { return self.swing_twist_constraints.live_count }
     func cone_constraint_count() int { return self.cone_constraints.live_count }
@@ -307,6 +319,22 @@ public class World3D {
         self.swing_twist_constraints.destroy(constraint.constraint_id())
     }
 
+    func create_gear_constraint(
+        first:@RigidBody3D, second:@RigidBody3D,
+        settings:GearConstraint3DSettings = GearConstraint3DSettings()
+    ) GearConstraint3D {
+        let id = self.gear_constraints.append(first, second, settings)
+        return GearConstraint3D(self.gear_constraints, id)
+    }
+
+    func destroy_gear_constraint(constraint:@GearConstraint3D) {
+        self.store.require_mutable()
+        if !constraint.belongs_to(self.gear_constraints) {
+            panic("GFX.Physics.World3D cannot destroy a constraint owned by another world")
+        }
+        self.gear_constraints.destroy(constraint.constraint_id())
+    }
+
     func create_cone_constraint(
         first:@RigidBody3D, second:@RigidBody3D,
         settings:ConeConstraint3DSettings = ConeConstraint3DSettings()
@@ -361,6 +389,7 @@ public class World3D {
         self.hinge_constraints.destroy_for_body(body.body_id())
         self.cone_constraints.destroy_for_body(body.body_id())
         self.swing_twist_constraints.destroy_for_body(body.body_id())
+        self.gear_constraints.destroy_for_body(body.body_id())
         self.six_dof_constraints.destroy_for_body(body.body_id())
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
@@ -654,7 +683,7 @@ public class World3D {
         self.warm_start_fixed_constraints(delta)
         // Rigid attachments, hinge drives and active soft stops act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() {
+        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_gear_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -672,6 +701,7 @@ public class World3D {
                 }
             }
         }
+        self.observe_gear_phases(delta)
         if has_continuous_body { self.apply_continuous_motion(previous_poses) }
         var continuous_poses:Transform3D[] = []
         if has_continuous_body {
@@ -886,6 +916,10 @@ public class World3D {
                 constraint.inverse_delta = 0.0
             }
         }
+        self.observe_gear_phases(0.0)
+        for slot in self.gear_constraints.slots {
+            if var constraint = slot { constraint.reset() }
+        }
         for slot in self.cone_constraints.slots {
             if var constraint = slot { constraint.reset() }
         }
@@ -973,6 +1007,28 @@ public class World3D {
 
     private func has_active_fixed_constraint() bool {
         for slot in self.fixed_constraints.slots {
+            if let constraint = slot {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
+                }
+            }
+        }
+        return false
+    }
+
+    private func observe_gear_phases(delta:float) {
+        for slot in self.gear_constraints.slots {
+            if var constraint = slot {
+                observe_gear_phase3d(self.store.require(constraint.first_id),
+                    self.store.require(constraint.second_id), constraint, delta)
+            }
+        }
+    }
+
+    private func has_active_gear_constraint() bool {
+        for slot in self.gear_constraints.slots {
             if let constraint = slot {
                 if constraint.is_enabled {
                     var first = self.store.require(constraint.first_id)
@@ -1139,6 +1195,25 @@ public class World3D {
             constraint_index++
         }
         constraint_index = 0
+        while constraint_index < self.gear_constraints.slots.count() {
+            var selected = constraint_index
+            if reverse {
+                selected = self.gear_constraints.slots.count() - 1 - constraint_index
+            }
+            if var constraint = self.gear_constraints.slots[selected] {
+                if constraint.is_enabled {
+                    var first = self.store.require(constraint.first_id)
+                    var second = self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled &&
+                        (first.awake || second.awake)
+                    {
+                        solve_gear_velocity3d(first, second, constraint, delta)
+                    }
+                }
+            }
+            constraint_index++
+        }
+        constraint_index = 0
         while constraint_index < self.cone_constraints.slots.count() {
             var selected = constraint_index
             if reverse {
@@ -1199,7 +1274,7 @@ public class World3D {
 
     private func wake_constraint_islands() {
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count {
+        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.gear_constraints.live_count {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -1320,6 +1395,30 @@ public class World3D {
                                     second.wake()
                                 }
                             }
+                            if first.body_type == BodyType3D.kinematic &&
+                                (first.linear_velocity.length_squared() > 0.0 ||
+                                    first.angular_velocity.length_squared() > 0.0)
+                            {
+                                second.wake()
+                            }
+                            if second.body_type == BodyType3D.kinematic &&
+                                (second.linear_velocity.length_squared() > 0.0 ||
+                                    second.angular_velocity.length_squared() > 0.0)
+                            {
+                                first.wake()
+                            }
+                            if first.awake && !second.awake { second.wake() }
+                            if second.awake && !first.awake { first.wake() }
+                        }
+                    }
+                }
+            }
+            for slot in self.gear_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled {
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
                                     first.angular_velocity.length_squared() > 0.0)
@@ -1681,6 +1780,22 @@ public class World3D {
                     }
                 }
             }
+            for slot in self.gear_constraints.slots {
+                if var constraint = slot {
+                    if constraint.is_enabled {
+                        var first = self.store.require(constraint.first_id)
+                        var second = self.store.require(constraint.second_id)
+                        if first.is_enabled && second.is_enabled &&
+                            (first.awake || second.awake)
+                        {
+                            // Two local sweeps preserve the eight-pass gear witness
+                            // without changing the other families' position budget.
+                            solve_gear_position3d(first, second, constraint)
+                            solve_gear_position3d(first, second, constraint)
+                        }
+                    }
+                }
+            }
             for slot in self.cone_constraints.slots {
                 if var constraint = slot {
                     if constraint.point.is_enabled {
@@ -1859,6 +1974,14 @@ public class World3D {
                 if constraint.point.is_enabled {
                     islands.connect(constraint.point.first_id.slot,
                         constraint.point.second_id.slot, self.store)
+                }
+            }
+        }
+        for constraint_slot in self.gear_constraints.slots {
+            if let constraint = constraint_slot {
+                if constraint.is_enabled {
+                    islands.connect(constraint.first_id.slot,
+                        constraint.second_id.slot, self.store)
                 }
             }
         }
@@ -4547,4 +4670,42 @@ func six_has_drive3d(state:SixDOFConstraintState3D) bool {
         row++
     }
     return false
+}
+
+func gear_inverse_mass3d(first:@BodyState3D, second:@BodyState3D,
+    first_axis:Math.Vec3, second_axis:Math.Vec3, ratio:float) float
+{
+    return first_axis.dot(first.inverse_inertia_times(first_axis)) +
+        ratio*ratio*second_axis.dot(second.inverse_inertia_times(second_axis))
+}
+func solve_gear_velocity3d(first:&BodyState3D, second:&BodyState3D,
+    state:GearConstraintState3D, delta:float)
+{
+    let a = first.transform.vector(state.first_local_axis)
+    let b = second.transform.vector(state.second_local_axis)
+    let mass = gear_inverse_mass3d(first,second,a,b,state.ratio)
+    if mass <= 0.000000001 { return }
+    let lambda = -gear_speed_error3d(first,second,state)/mass
+    let first_impulse = a.multiply(lambda)
+    let second_impulse = b.multiply(state.ratio*lambda)
+    first.angular_velocity = first.angular_velocity.add(first.inverse_inertia_times(first_impulse))
+    second.angular_velocity = second.angular_velocity.add(second.inverse_inertia_times(second_impulse))
+    state.first_impulse = state.first_impulse.add(first_impulse)
+    state.second_impulse = state.second_impulse.add(second_impulse)
+    state.inverse_delta = 1.0/delta
+}
+func solve_gear_position3d(first:BodyState3D, second:BodyState3D,
+    state:GearConstraintState3D)
+{
+    let a = first.transform.vector(state.first_local_axis)
+    let b = second.transform.vector(state.second_local_axis)
+    let mass = gear_inverse_mass3d(first,second,a,b,state.ratio)
+    if mass <= 0.000000001 { return }
+    var lambda = -0.2*gear_phase_error3d(first,second,state)/mass
+    // Keep the accumulated correction within the phase chart over eight sweeps.
+    let response = Math.max(first.inverse_inertia_times(a).length(),
+        Math.abs(state.ratio)*second.inverse_inertia_times(b).length())
+    if response > 0.0 { lambda = Math.clamp(lambda, -0.1/response, 0.1/response) }
+    shift_hinge_rotation3d(first,a.multiply(lambda))
+    shift_hinge_rotation3d(second,b.multiply(state.ratio*lambda))
 }

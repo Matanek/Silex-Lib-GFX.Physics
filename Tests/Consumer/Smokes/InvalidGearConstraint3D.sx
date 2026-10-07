@@ -1,0 +1,32 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func main() {
+    var world=Physics.World3D();var body=world.create_rigid_body()
+    var fixed=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)
+    var settings=Physics.GearConstraint3DSettings()
+    if selected("axis-zero") { settings.first_local_axis=Math.Vec3() }
+    if selected("axis-nan") { settings.second_local_axis=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("axis-overflow") { settings.first_local_axis=Math.Vec3(1.0e30,0.0,0.0) }
+    if selected("ratio-zero") { settings.ratio=0.0 }
+    if selected("ratio-nan") { settings.ratio=Math.sqrt(-1.0) }
+    if selected("ratio-overflow") { settings.ratio=1.0e30 }
+    if selected("ratio-underflow") { settings.ratio=1.0e-30 }
+    if selected("same") { world.create_gear_constraint(body,body) }
+    if selected("fixed-fixed") { world.create_gear_constraint(fixed,world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed)) }
+    if selected("foreign") { var other=Physics.World3D();world.create_gear_constraint(body,other.create_rigid_body()) }
+    var joint=world.create_gear_constraint(fixed,body,settings)
+    if selected("mutation-axes") { joint.set_axes(Math.Vec3(),Math.Vec3(0.0,0.0,1.0)) }
+    if selected("mutation-ratio") { joint.set_ratio(0.0) }
+    if selected("stale") { world.destroy_gear_constraint(joint);world.create_gear_constraint(fixed,body);joint.phase_error() }
+    if selected("stale-mutation") { world.destroy_gear_constraint(joint);joint.set_ratio(2.0) }
+    if selected("foreign-destroy") { var other=Physics.World3D();other.destroy_gear_constraint(joint) }
+    panic("invalid gear operation was accepted")
+}

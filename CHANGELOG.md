@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D gear: signed ratio, turn tracking, physical torques and safe mutations; pinned Jolt nonunit-ratio defect preserved explicitly.
+
 - 3D six DOF joint: free/locked/bounded translations, per-axis drives, friction and soft linear stops; angular pyramids support ranges excluding zero and nonzero locked angles.
 
 - 3D swing/twist joint: local frames, elliptical cone/pyramid, bounded twist, separate drives and passive friction; headless qualification.

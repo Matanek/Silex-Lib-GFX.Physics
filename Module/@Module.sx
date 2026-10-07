@@ -181,3 +181,6 @@ public use GFX.Physics.SixDOFConstraint3D.LinearLimit3D
 public use GFX.Physics.SixDOFConstraint3D.LinearMotor3D
 public use GFX.Physics.SixDOFConstraint3D.AngularMotor3D
 public use GFX.Physics.SixDOFConstraint3D.LinearLimitSpring3D
+
+public use GFX.Physics.GearConstraint3D.GearConstraint3D
+public use GFX.Physics.GearConstraint3D.GearConstraint3DSettings
