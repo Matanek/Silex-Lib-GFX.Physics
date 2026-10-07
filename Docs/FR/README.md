@@ -14,6 +14,8 @@ La [charnière 3D](Hinge3D.md) relie deux corps autour d’un axe avec des buté
 
 La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
 
+La [glissière 3D](Slider3D.md) guide un chariot sur un rail tournant, avec course signée et butées rigides modifiables.
+
 Le [servo de charnière](HingePosition3D.md) vise un angle avec raideur, amortissement et couple borné.
 
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.

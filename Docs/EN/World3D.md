@@ -248,6 +248,8 @@ cross an obstacle when continuous collision is disabled, which is the default.
 
 The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
 
+The [3D slider](Slider3D.md) guides a carriage along a rotating rail with signed travel and mutable rigid stops.
+
 The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
 
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.

@@ -267,6 +267,8 @@ est le réglage par défaut.
 
 La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de deux corps, avec capture de l’assemblage courant, repères locaux modifiables et réactions de force/couple.
 
+La [glissière 3D](Slider3D.md) guide un chariot sur un rail tournant, avec course signée et butées rigides modifiables.
+
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
 
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.

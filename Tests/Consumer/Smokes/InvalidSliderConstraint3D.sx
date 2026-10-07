@@ -1,0 +1,41 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument == expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func orphan_slider() Physics.SliderConstraint3D {
+    var world = Physics.World3D()
+    return world.create_slider_constraint(world.create_rigid_body(),world.create_rigid_body())
+}
+func main() {
+    var world = Physics.World3D()
+    var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
+    var body = world.create_rigid_body()
+    if selected("position-nan") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings()
+        ..first_local_frame = Physics.Transform3D(Math.Vec3(Math.sqrt(-1.0),0.0,0.0))) }
+    if selected("rotation-zero") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,0.0))) }
+    if selected("same") { world.create_slider_constraint(body,body) }
+    if selected("fixed-kinematic") { world.create_slider_constraint(support,world.create_rigid_body(
+        Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic)) }
+    if selected("foreign") { var other = Physics.World3D(); world.create_slider_constraint(support,other.create_rigid_body()) }
+    if selected("minimum-nan") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..minimum_position = Math.sqrt(-1.0)) }
+    if selected("maximum-infinity") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..maximum_position = 1.0 / 0.0) }
+    if selected("reversed") { world.create_slider_constraint(support,body,Physics.SliderConstraint3DSettings() ..minimum_position = 1.0 ..maximum_position = -1.0) }
+    var joint = world.create_slider_constraint(support,body)
+    if selected("mutation-minimum") { joint.set_limits(Math.sqrt(-1.0), null) }
+    if selected("mutation-maximum") { joint.set_limits(null, 1.0 / 0.0) }
+    if selected("mutation-reversed") { joint.set_limits(2.0, 1.0) }
+    if selected("mutation-frame") { joint.set_frames(Physics.Transform3D(),Physics.Transform3D(rotation:Math.Quat(0.0,0.0,0.0,2.0))) }
+    if selected("stale") { world.destroy_slider_constraint(joint); world.create_slider_constraint(support,body); joint.anchor_error() }
+    if selected("stale-mutation") { world.destroy_slider_constraint(joint); joint.set_frames(Physics.Transform3D(),Physics.Transform3D()) }
+    if selected("foreign-destroy") { var other = Physics.World3D(); other.destroy_slider_constraint(joint) }
+    if selected("orphan") { orphan_slider().reaction_torque() }
+    panic("invalid slider operation was accepted")
+}

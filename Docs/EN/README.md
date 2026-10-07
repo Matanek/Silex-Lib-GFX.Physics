@@ -257,6 +257,8 @@ The [3D hinge](Hinge3D.md) connects two bodies around an axis with hard stops an
 
 The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’ relative pose, with current-assembly capture, mutable local frames and force/torque reactions.
 
+The [3D slider](Slider3D.md) guides a carriage along a rotating rail with signed travel and mutable rigid stops.
+
 The [hinge position motor](HingePosition3D.md) targets an angle with stiffness, damping and bounded torque.
 
 The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Glissière 3D : repères locaux, translation libre sur X, orientation retenue, limites signées facultatives et rigides, mesures de réaction et mutations sûres.
+
 - La charnière suit ensemble un angle et une vitesse avec `HingeMotor3D.position_and_velocity`, ressort physique et bornes symétriques ou signées ; poursuite, mutations et consommateurs qualifiés.
 
 - `HingeLimitSpring3D` rend les butées angulaires souples : raideur/amortissement physiques, mesure signée séparée et mutation sûre, avec butées rigides conservées par défaut. Oscillations, charge, pivot excentré, moteurs et contacts qualifiés face à Jolt en Native Debug/Release.

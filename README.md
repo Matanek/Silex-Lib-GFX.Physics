@@ -30,3 +30,5 @@ silex install GFX.Physics
 The package requires Silex 0.44.0 or newer.
 
 Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · [Français](Docs/FR/HingeCombined3D.md).
+
+[3D sliders](Docs/EN/Slider3D.md) guide a carriage along a rotating rail with signed travel and mutable rigid stops.
