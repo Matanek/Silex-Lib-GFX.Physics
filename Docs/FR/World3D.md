@@ -266,6 +266,8 @@ La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de
 
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
 
+Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.
+
 ## Interroger les corps du monde
 
 `ray_cast(ray, ignore_body, filter)` retourne le premier impact de `Ray3D`, ou `null`.

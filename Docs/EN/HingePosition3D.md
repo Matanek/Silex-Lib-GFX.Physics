@@ -49,7 +49,7 @@ therefore reevaluates the target without reinstalling the motor.
 
 ## Set effort and response
 
-`maximum_torque` is finite and nonnegative, in N·m. The bound applies to the
+In the symmetric form, `maximum_torque` is finite and nonnegative, in N·m. The bound applies to the
 accumulated motor torque of the step. Zero leaves the axis free, like an absent
 motor; it does not act as a rigid brake.
 
@@ -83,6 +83,6 @@ A unilateral hard stop arrests velocities that would cross it; existing penetrat
 corrected in the pose. Narrowed limits and the servo share the real world,
 its contacts and safety; pose recovery does not supply new momentum.
 
-The [axis brake](HingeFriction3D.md) acts when the motor is absent. Asymmetric
-bounds and soft stops remain to be completed.
+The [axis brake](HingeFriction3D.md) acts when the motor is absent. [Signed
+bounds](HingeTorqueBounds3D.md) permit different effort in each direction. Soft stops remain to be completed.
 For velocity control, see the [hinge motor](Hinge3D.md#request-a-speed-with-a-maximum-torque).

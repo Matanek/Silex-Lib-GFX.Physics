@@ -1,0 +1,29 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.4,Math.Vec3.right())
+    let axis = rotation.rotate(Math.Vec3(0.0,0.0,1.0))
+    var pivot = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(rotation:rotation) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(rotation:rotation)
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.4,0.2,0.1),Math.Vec3(0.2,0.1,0.0))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var hinge = world.create_hinge_constraint(pivot,body,Physics.HingeConstraint3DSettings()
+        ..motor = Physics.HingeMotor3D(-0.5,-0.2,0.0))
+    var i = 0;while i<180 {
+        world.step(1.0/60.0);assert(hinge.motor_torque()>=-0.20001 && hinge.motor_torque()<=0.00001)
+        assert(hinge.anchor_error().length()<0.003 && hinge.axis_error()<0.002);i++
+    }
+    assert(Math.abs(body.angular_velocity().dot(axis)+0.5)<0.003)
+    body.set_mass_properties(Physics.MassProperties3D(3.0,Math.Vec3(0.6,0.3,0.2),Math.Vec3(-0.2,0.1,0.0)))
+    hinge.set_motor(Physics.HingeMotor3D.position(0.3,-0.4,0.2,1.6,0.8))
+    assert(hinge.motor_torque()==0.0)
+    i=0;while i<360 { world.step(1.0/60.0);assert(hinge.motor_torque()>=-0.40001 && hinge.motor_torque()<=0.20001);i++ }
+    assert(Math.abs(hinge.angle()-0.3)<0.03 && hinge.anchor_error().length()<0.003)
+    hinge.set_frames(hinge.first_local_axis(),hinge.first_local_normal(),hinge.second_local_axis(),hinge.second_local_normal())
+    assert(hinge.motor_torque()==0.0)
+    var clone = hinge;world.destroy_rigid_body(body);assert(!clone.is_valid())
+}

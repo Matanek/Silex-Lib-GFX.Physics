@@ -247,6 +247,8 @@ The [3D fixed attachment](Fixed3D.md) preserves all six degrees of two bodies’
 
 The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with bounded, mutable torque.
 
+[Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.
+
 ## Query bodies in the world
 
 `ray_cast(ray, ignore_body, filter)` returns the nearest `Ray3D` hit or `null`.

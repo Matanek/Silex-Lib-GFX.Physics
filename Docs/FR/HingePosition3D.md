@@ -49,7 +49,7 @@ limites réévalue donc la cible, sans devoir réinstaller le moteur.
 
 ## Régler l’effort et la réponse
 
-`maximum_torque` est une valeur finie positive ou nulle, en N·m. La borne
+Dans la forme symétrique, `maximum_torque` est une valeur finie positive ou nulle, en N·m. La borne
 porte sur le couple moteur cumulé du pas. Zéro laisse l’axe libre, comme un
 moteur absent ; ce n’est pas un frein rigide.
 
@@ -87,4 +87,4 @@ le monde réel, ses contacts et sa sûreté ; la récupération de pose ne fourn
 pas un nouvel élan au corps.
 
 Le [frein d’axe](HingeFriction3D.md) agit quand le moteur est absent. Les
-bornes asymétriques et les butées souples restent à compléter. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).
+[bornes signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens. Les butées souples restent à compléter. Pour le pilotage en vitesse, voir le [moteur de charnière](Hinge3D.md#viser-une-vitesse-avec-un-couple-maximal).

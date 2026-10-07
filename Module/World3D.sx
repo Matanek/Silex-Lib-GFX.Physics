@@ -793,7 +793,9 @@ public class World3D {
             if let constraint = slot {
                 if constraint.point.is_enabled {
                     var maximum_torque = constraint.maximum_friction_torque
-                    if let motor = constraint.motor { maximum_torque = motor.maximum_torque }
+                    if let motor = constraint.motor {
+                        maximum_torque = Math.max(Math.abs(motor.minimum_torque), Math.abs(motor.maximum_torque))
+                    }
                     if maximum_torque > 0.0 {
                         var first = self.store.require(constraint.point.first_id)
                         var second = self.store.require(constraint.point.second_id)
@@ -966,7 +968,10 @@ public class World3D {
                         var second = self.store.require(constraint.point.second_id)
                         if first.is_enabled && second.is_enabled {
                             if let motor = constraint.motor {
-                                if motor.maximum_torque > 0.0 && (motor.speed != 0.0 || motor.target_angle != null) {
+                                if (motor.minimum_torque != 0.0 || motor.maximum_torque != 0.0) &&
+                                    (motor.speed != 0.0 || motor.target_angle != null ||
+                                     motor.minimum_torque > 0.0 || motor.maximum_torque < 0.0)
+                                {
                                     first.wake()
                                     second.wake()
                                 }
@@ -3165,11 +3170,13 @@ func solve_hinge_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state:HingeConstraintState3D, axis:Math.Vec3, delta:float)
 {
     var maximum_torque = state.maximum_friction_torque
+    var minimum_torque = -maximum_torque
     var previous = state.friction_impulse
     var softness = 0.0
     var bias = 0.0
     if let motor = state.motor {
         maximum_torque = motor.maximum_torque
+        minimum_torque = motor.minimum_torque
         previous = state.motor_impulse
         bias = -motor.speed
         if motor.target_angle != null {
@@ -3177,7 +3184,7 @@ func solve_hinge_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
             bias = delta * motor.stiffness * softness * state.motor_error
         }
     }
-    if maximum_torque == 0.0 { return }
+    if minimum_torque == 0.0 && maximum_torque == 0.0 { return }
     let first_radius = first.transform.point(state.point.first_local_anchor).subtract(first.world_center())
     let second_radius = second.transform.point(state.point.second_local_anchor).subtract(second.world_center())
     let point_mass = point_inverse_mass3d(first, second, first_radius, second_radius)
@@ -3188,9 +3195,8 @@ func solve_hinge_drive_velocity3d(first:&BodyState3D, second:&BodyState3D,
     let inverse_mass = hinge_angular_mass3d(first, second, axis) - coupling.dot(point_response)
     if inverse_mass <= 0.000000001 { return }
     let speed = second.angular_velocity.subtract(first.angular_velocity).dot(axis)
-    let maximum_impulse = maximum_torque * delta
     let accumulated = Math.clamp(previous - (speed + bias + softness * previous) /
-        (inverse_mass + softness), -maximum_impulse, maximum_impulse)
+        (inverse_mass + softness), minimum_torque * delta, maximum_torque * delta)
     if state.motor != null { state.motor_impulse = accumulated }
     else { state.friction_impulse = accumulated }
     let change = accumulated - previous

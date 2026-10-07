@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les moteurs de charnière en vitesse et position acceptent des bornes de couple signées : effort asymétrique, unidirectionnel ou imposé, avec budget par pas, mutation et gardes ; constructeurs symétriques conservés.
+
 - `maximum_friction_torque` freine passivement une charnière sans moteur, avec capacité mutable, effort signé séparé et tenue sous charge. Budget du pas, priorité des moteurs, contacts, sommeil et invalidation qualifiés ; trajectoires comparées à Jolt en Native Debug/Release.
 
 - `HingeMotor3D.position` pilote un angle signé par raideur/amortissement explicites et couple borné, avec mutation de cible, modes vitesse/position et butées actuelles. Le resserrement d’une butée unilatérale corrige la pose sans créer de vitesse de récupération.

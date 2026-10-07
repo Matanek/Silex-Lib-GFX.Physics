@@ -1,0 +1,208 @@
+use GFX.Physics
+use STD.Math
+
+func bounds_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3()) }
+func bounds_pivot(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func bounds_body(world:Physics.World3D, inertia:float = 0.1) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(inertia))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func bounds_steps(world:Physics.World3D, count:int) {
+    var i = 0; while i < count { world.step(1.0/60.0); i++ }
+}
+
+test "symmetric constructors retain their contract and signed bounds are immutable snapshots" {
+    let speed = Physics.HingeMotor3D(speed:1.0,maximum_torque:0.2)
+    assert(speed.minimum_torque == -0.2 && speed.maximum_torque == 0.2 && speed.target_angle == null)
+    let position = Physics.HingeMotor3D.position(angle:0.5,maximum_torque:0.4,stiffness:1.6,damping:0.8)
+    assert(position.minimum_torque == -0.4 && position.maximum_torque == 0.4)
+    let signed = Physics.HingeMotor3D(speed:-1.0,minimum_torque:-0.3,maximum_torque:0.05)
+    assert(signed.minimum_torque == -0.3 && signed.maximum_torque == 0.05)
+    let servo = Physics.HingeMotor3D.position(angle:-0.5,minimum_torque:-0.3,maximum_torque:0.05,stiffness:1.6,damping:0.8)
+    assert(servo.target_angle == -0.5 && servo.minimum_torque == -0.3 && servo.maximum_torque == 0.05)
+}
+
+test "signed effort accelerates at each bound and advances pose before integration at 60 and 120 Hz" {
+    var sign = -1.0
+    while sign <= 1.0 {
+        var rate = 60
+        while rate <= 120 {
+            var world = bounds_world(); var body = bounds_body(world)
+            var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+                Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D(sign*10.0,-0.03,0.12))
+            var torque = 0.12; if sign < 0.0 { torque = -0.03 }
+            var angle = 0.0; var step = 1; let dt = 1.0/rate as float
+            while step <= rate {
+                world.step(dt); let speed = torque/0.1*step as float*dt; angle += speed*dt
+                assert(Math.abs(joint.angular_speed()-speed)<0.00003)
+                assert(Math.abs(joint.angle()-angle)<0.00005)
+                assert(Math.abs(joint.motor_torque()-torque)<0.00001)
+                assert(joint.friction_torque()==0.0)
+                step++
+            }
+            rate += 60
+        }
+        sign += 2.0
+    }
+}
+
+test "one-sided motor limits effort rather than the direction of an existing rotation" {
+    var world = bounds_world();var body = bounds_body(world)
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..maximum_friction_torque = 10.0
+        ..motor = Physics.HingeMotor3D(-1.0,0.0,0.1))
+    bounds_steps(world,30);assert(joint.angular_speed()==0.0 && joint.motor_torque()==0.0)
+    joint.set_motor(Physics.HingeMotor3D(0.0,0.0,0.1))
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,0.5));bounds_steps(world,30)
+    assert(Math.abs(joint.angular_speed()-0.5)<0.00001 && joint.motor_torque()==0.0 && joint.friction_torque()==0.0)
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,-0.5));bounds_steps(world,30)
+    assert(Math.abs(joint.angular_speed())<0.00001)
+    let before = joint.angle()
+    joint.set_motor(Physics.HingeMotor3D(-1.0,-0.1,0.0));world.step(1.0/60.0)
+    assert(Math.abs(joint.angular_speed()+1.0/60.0)<0.00001)
+    assert(Math.abs(joint.angle()-(before-1.0/3600.0))<0.00001)
+}
+
+test "equal and same-sign bounds impose a persistent signed effort including zero target" {
+    var sign = -1.0
+    while sign <= 1.0 {
+        var world = bounds_world();var body = bounds_body(world)
+        var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+            Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D(0.0,sign*0.05,sign*0.05))
+        bounds_steps(world,60)
+        assert(Math.abs(joint.angular_speed()-sign*0.5)<0.00002)
+        assert(Math.abs(joint.motor_torque()-sign*0.05)<0.00001)
+        var low = 0.03;var high = 0.08;if sign < 0.0 { low = -0.08;high = -0.03 }
+        joint.set_motor(Physics.HingeMotor3D(0.0,low,high));world.step(1.0/60.0)
+        assert(Math.abs(joint.motor_torque()-sign*0.03)<0.00001)
+        sign += 2.0
+    }
+}
+
+test "offset anchor keeps the pivot inertia and one signed budget across passes" {
+    var world = bounds_world();var body = bounds_body(world)
+    body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+        ..motor = Physics.HingeMotor3D(10.0,-0.022,0.11))
+    world.step(1.0/60.0)
+    assert(Math.abs(joint.angular_speed()-0.1/60.0)<0.00001)
+    bounds_steps(world,59);let before = joint.angular_speed()
+    assert(Math.abs(before-0.1)<0.0003 && joint.anchor_error().length()<0.003)
+    joint.set_motor(Physics.HingeMotor3D(-10.0,-0.022,0.11));world.step(1.0/60.0)
+    assert(Math.abs(joint.angular_speed()-(before-0.02/60.0))<0.00003)
+    assert(Math.abs(joint.motor_torque()+0.022)<0.00001)
+}
+
+test "different dynamic inertias preserve total momentum through signed reversal" {
+    var world = bounds_world();var first = bounds_body(world,0.1);var second = bounds_body(world,0.4)
+    var joint = world.create_hinge_constraint(first,second,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D(10.0,-0.02,0.1))
+    bounds_steps(world,30)
+    assert(Math.abs(joint.angular_speed()-0.625)<0.00002)
+    joint.set_motor(Physics.HingeMotor3D(-10.0,-0.02,0.1));bounds_steps(world,30)
+    assert(Math.abs(joint.angular_speed()-0.5)<0.00002)
+    assert(first.angular_velocity().multiply(0.1).add(second.angular_velocity().multiply(0.4)).length()<0.00001)
+}
+
+test "motor replacement clears observations and retains independent friction configuration" {
+    var world = bounds_world();var body = bounds_body(world)
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..maximum_friction_torque = 0.4
+        ..motor = Physics.HingeMotor3D(1.0,-0.05,0.2))
+    world.step(1.0/60.0);let old = joint.motor()!
+    joint.set_motor(Physics.HingeMotor3D(-1.0,-0.3,0.01))
+    assert(old.minimum_torque == -0.05 && joint.motor()!.minimum_torque == -0.3)
+    assert(joint.motor_torque()==0.0 && joint.reaction_torque().length()==0.0 && body.is_awake())
+    world.step(1.0/60.0);assert(joint.motor_torque()<0.0 && joint.friction_torque()==0.0)
+    let observation = joint.motor_torque();world.step(0.0);assert(joint.motor_torque()==observation)
+    joint.set_motor(Physics.HingeMotor3D(2.0,0.0,0.0));body.set_angular_velocity(Math.Vec3(0.0,0.0,0.5))
+    bounds_steps(world,30);assert(Math.abs(joint.angular_speed()-0.5)<0.00001 && joint.friction_torque()==0.0)
+    joint.set_motor(null);bounds_steps(world,30);assert(Math.abs(joint.angular_speed())<0.00001)
+    assert(joint.maximum_friction_torque()==0.4 && joint.motor_torque()==0.0)
+}
+
+test "position mode uses signed bounds and one-sided servo cannot pull toward its target" {
+    var world = bounds_world();var joint = world.create_hinge_constraint(bounds_pivot(world),bounds_body(world),
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D.position(-0.5,0.0,0.1,1.6,0.8))
+    bounds_steps(world,120);assert(joint.angle()==0.0 && joint.motor_torque()==0.0)
+    joint.set_motor(Physics.HingeMotor3D.position(0.5,-0.08,0.32,1.6,0.8))
+    var step = 0
+    while step < 240 {
+        world.step(1.0/60.0);assert(joint.motor_torque() >= -0.08001 && joint.motor_torque() <= 0.32001);step++
+    }
+    assert(Math.abs(joint.angle()-0.5)<0.02)
+    joint.set_motor(Physics.HingeMotor3D.position(-0.5,-0.08,0.32,1.6,0.8));step = 0
+    while step < 360 {
+        world.step(1.0/60.0);assert(joint.motor_torque() >= -0.08001 && joint.motor_torque() <= 0.32001);step++
+    }
+    assert(Math.abs(joint.angle()+0.5)<0.02)
+}
+
+test "same-sign zero-target motor stays awake and zero interval permits sleep" {
+    var world = bounds_world();var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body)
+    bounds_steps(world,120);assert(!body.is_awake())
+    joint.set_motor(Physics.HingeMotor3D(0.0,-0.000001,-0.000001));assert(body.is_awake())
+    bounds_steps(world,120);assert(body.is_awake() && joint.angular_speed()<0.0)
+    joint.set_motor(Physics.HingeMotor3D(1.0,0.0,0.0));bounds_steps(world,120)
+    assert(!body.is_awake() && joint.motor_torque()==0.0)
+}
+
+test "disabled constraint or body suspends the signed effort and mutation wakes on resumption" {
+    var world = bounds_world();var body = bounds_body(world)
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..motor = Physics.HingeMotor3D(-1.0,-0.1,0.0))
+    world.step(1.0/60.0);assert(joint.motor_torque()<0.0)
+    joint.set_enabled(false);let speed = joint.angular_speed();bounds_steps(world,30)
+    assert(joint.motor_torque()==0.0 && Math.abs(joint.angular_speed()-speed)<0.00001)
+    joint.set_enabled(true);body.set_enabled(false);world.step(1.0/60.0)
+    assert(joint.motor_torque()==0.0)
+    body.set_enabled(true);world.step(1.0/60.0);assert(joint.motor_torque()<0.0)
+    var clone = joint;world.destroy_rigid_body(body);assert(!clone.is_valid() && !joint.is_valid())
+}
+
+test "signed motor preserves hard stops and separate reaction at either limit" {
+    var world = bounds_world();var joint = world.create_hinge_constraint(bounds_pivot(world),bounds_body(world),
+        Physics.HingeConstraint3DSettings() ..minimum_angle = -0.2 ..maximum_angle = 0.3
+        ..motor = Physics.HingeMotor3D(2.0,-0.1,0.4))
+    bounds_steps(world,180);assert(Math.abs(joint.angle()-0.3)<0.003)
+    assert(Math.abs(joint.motor_torque()-0.4)<0.00001 && joint.reaction_torque().length()<0.003)
+    joint.set_motor(Physics.HingeMotor3D(-2.0,-0.1,0.4));bounds_steps(world,180)
+    assert(Math.abs(joint.angle()+0.2)<0.003 && Math.abs(joint.motor_torque()+0.1)<0.00001)
+    joint.set_limits(0.0,0.0);bounds_steps(world,120)
+    assert(Math.abs(joint.angle())<0.003 && Math.abs(joint.angular_speed())<0.003)
+}
+
+test "signed effort remains bounded in a loaded fixed chain sharing real contacts" {
+    var world = Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.plane(Physics.Plane3D(offset:-1.5)))
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)) ..allow_sleep = false)
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-2.0,0.0))
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var fixed = world.create_fixed_constraint(body,payload,
+        Physics.FixedConstraint3DSettings() ..first_local_frame = Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    var joint = world.create_hinge_constraint(bounds_pivot(world),body,
+        Physics.HingeConstraint3DSettings() ..second_local_anchor = Math.Vec3(0.0,1.0,0.0)
+        ..motor = Physics.HingeMotor3D(0.25,-0.05,0.2))
+    var contacts = 0;var step = 0
+    while step < 180 {
+        if step==90 { joint.set_motor(Physics.HingeMotor3D(-0.25,-0.05,0.2)) }
+        world.step(1.0/60.0);contacts += world.contact_count()
+        assert(joint.motor_torque() >= -0.05001 && joint.motor_torque() <= 0.20001)
+        assert(fixed.anchor_error().length()<0.01 && joint.anchor_error().length()<0.01);step++
+    }
+    assert(contacts>0 && body.position().y>=-1.01 && joint.axis_error()<0.002)
+}

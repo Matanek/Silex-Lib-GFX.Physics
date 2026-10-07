@@ -18,6 +18,8 @@ Le [servo de charnière](HingePosition3D.md) vise un angle avec raideur, amortis
 
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.
 
+Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.
+
 ## Corps et monde
 
 ```silex

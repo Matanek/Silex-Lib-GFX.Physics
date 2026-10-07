@@ -1,0 +1,36 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    match Process.arguments() {
+        success(arguments) => { for argument in arguments { if argument==expected { return true } } }
+        failure(error) => { panic(error.detail) }
+    }
+    return false
+}
+func orphan() Physics.HingeConstraint3D {
+    var world = Physics.World3D()
+    return world.create_hinge_constraint(world.create_rigid_body(),world.create_rigid_body())
+}
+func main() {
+    let nan = Math.sqrt(-1.0);let inf = 1.0/0.0
+    if selected("speed-nan") { Physics.HingeMotor3D(nan,-1.0,1.0) }
+    if selected("speed-inf") { Physics.HingeMotor3D(inf,-1.0,1.0) }
+    if selected("minimum-nan") { Physics.HingeMotor3D(0.0,nan,1.0) }
+    if selected("maximum-nan") { Physics.HingeMotor3D(0.0,-1.0,nan) }
+    if selected("minimum-inf") { Physics.HingeMotor3D(0.0,-inf,1.0) }
+    if selected("maximum-inf") { Physics.HingeMotor3D(0.0,-1.0,inf) }
+    if selected("reversed") { Physics.HingeMotor3D(0.0,0.2,-0.2) }
+    if selected("position-minimum-nan") { Physics.HingeMotor3D.position(0.0,nan,1.0,1.6,0.8) }
+    if selected("position-maximum-inf") { Physics.HingeMotor3D.position(0.0,-1.0,inf,1.6,0.8) }
+    if selected("position-reversed") { Physics.HingeMotor3D.position(0.0,0.2,-0.2,1.6,0.8) }
+    if selected("position-angle") { Physics.HingeMotor3D.position(4.0,-1.0,1.0,1.6,0.8) }
+    if selected("position-stiffness") { Physics.HingeMotor3D.position(0.0,-1.0,1.0,0.0,0.8) }
+    if selected("position-damping") { Physics.HingeMotor3D.position(0.0,-1.0,1.0,1.6,-1.0) }
+    var world = Physics.World3D()
+    var hinge = world.create_hinge_constraint(world.create_rigid_body(),world.create_rigid_body())
+    if selected("stale") { world.destroy_hinge_constraint(hinge);hinge.set_motor(Physics.HingeMotor3D(0.0,-1.0,0.0)) }
+    if selected("orphan") { orphan().set_motor(Physics.HingeMotor3D.position(0.0,0.0,1.0,1.6,0.8)) }
+    panic("invalid signed motor was accepted")
+}
