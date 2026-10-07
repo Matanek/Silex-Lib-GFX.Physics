@@ -52,3 +52,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Six degrees of freedom](Docs/EN/SixDOF3D.md) · [Six degrés de liberté](Docs/FR/SixDOF3D.md).
 
 [3D gear](Docs/EN/Gear3D.md): signed rotational transmission and tracked phase.
+
+[3D rack and pinion](Docs/EN/RackAndPinion3D.md): signed rotation/travel transmission.

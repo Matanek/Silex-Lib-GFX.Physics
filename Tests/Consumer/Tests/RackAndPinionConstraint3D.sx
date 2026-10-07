@@ -1,0 +1,157 @@
+use GFX.Physics
+use STD.Math
+func rack_world() Physics.World3D { return Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3()) }
+func rack_body(world:Physics.World3D,mass:float=2.0,inertia:float=0.2) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(inertia)) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func rack_steps(world:Physics.World3D,count:int,rate:float=60.0) { var i=0;while i<count { world.step(1.0/rate);i++ } }
+test "rack and pinion projects each signed ratio by mass and inertia" {
+    let ratios:float[]=[1.0,2.0,-2.0,0.5,-0.25,8.0]
+    let masses:float[]=[2.0,8.0]
+    for ratio in ratios { for mass in masses {
+        var world=rack_world();var p=rack_body(world);var rack=rack_body(world,mass)
+        var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=ratio)
+        rack.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+        let lambda=ratio/(5.0+ratio*ratio/mass)
+        assert(Math.abs(p.angular_velocity().z-5.0*lambda)<0.00001)
+        assert(Math.abs(rack.linear_velocity().x-(1.0-ratio*lambda/mass))<0.00001)
+        assert(Math.abs(joint.pinion_reaction_torque().z-lambda*60.0)<0.0001)
+        assert(Math.abs(joint.reaction_force().x+ratio*lambda*60.0)<0.0001)
+        assert(Math.abs(joint.speed_error())<0.00001 && Math.abs(joint.phase_error())<0.00001)
+        assert(Math.abs(joint.pinion_reaction_torque().dot(p.angular_velocity())+joint.reaction_force().dot(rack.linear_velocity()))<0.0001)
+        assert(0.2*p.angular_velocity().length_squared()+mass*rack.linear_velocity().length_squared()<=mass+0.00001)
+        assert(world.rack_and_pinion_constraint_count()==1 && world.gear_constraint_count()==0)
+    } }
+}
+test "rack and pinion leaves unrelated translation and rotation free" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+    var joint=world.create_rack_and_pinion_constraint(p,rack)
+    p.set_linear_velocity(Math.Vec3(0.0,1.0,0.0));rack.set_linear_velocity(Math.Vec3(0.0,0.0,1.0))
+    p.set_angular_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    assert(p.angular_velocity().x==1.0 && p.position().y>0.0 && rack.position().z>0.0)
+    assert(joint.reaction_force().length()<0.00001 && joint.pinion_reaction_torque().length()<0.00001)
+}
+test "rack and pinion tracks travel and repeated turns at both step rates" {
+    for rate in [60,120] {
+        var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+        var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+        rack.set_linear_velocity(Math.Vec3(4.0,0.0,0.0));rack_steps(world,rate*10,rate as float)
+        assert(Math.abs(joint.phase_error())<0.001 && Math.abs(joint.pinion_angle()-2.0*joint.travel())<0.001)
+        assert(joint.pinion_angle()>30.0 && joint.travel()>15.0)
+    }
+}
+test "rack and pinion tracks high angular displacement per step" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    p.set_angular_velocity(Math.Vec3(0.0,0.0,1000.0));rack_steps(world,120)
+    assert(Math.abs(joint.phase_error())<0.004 && Math.abs(joint.speed_error())<0.001)
+}
+test "rack and pinion uses initial poses and rotated local axes" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+    let rotation=Math.Quat.angle_axis(0.7,Math.Vec3(0.0,1.0,0.0))
+    p.set_transform(Physics.Transform3D(Math.Vec3(2.0,0.0,0.0),rotation))
+    rack.set_transform(Physics.Transform3D(Math.Vec3(-2.0,0.0,0.0),rotation))
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings()
+        ..pinion_local_axis=Math.Vec3(0.0,0.0,2.0) ..rack_local_axis=Math.Vec3(3.0,0.0,0.0) ..ratio=-2.0)
+    rack.set_linear_velocity(rotation.rotate(Math.Vec3(1.0,0.0,0.0)));rack_steps(world,120)
+    assert(Math.abs(joint.phase_error())<0.0001 && Math.abs(joint.speed_error())<0.00001)
+    assert(joint.pinion_local_axis().z==1.0 && joint.rack_local_axis().x==1.0)
+}
+test "rack and pinion corrects displaced travel without kinetic energy" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    rack.set_transform(Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)));assert(Math.abs(joint.phase_error()+1.0)<0.00001)
+    rack_steps(world,60)
+    assert(Math.abs(joint.phase_error())<0.00001 && p.angular_velocity().length()==0.0 && rack.linear_velocity().length()==0.0)
+    assert(Math.abs(joint.pinion_angle()-5.0/7.0)<0.0001 && Math.abs(joint.travel()-2.5/7.0)<0.0001)
+}
+test "rack and pinion mutations establish a new phase and clear reactions" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world);var joint=world.create_rack_and_pinion_constraint(p,rack)
+    rack.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    let force=joint.reaction_force();world.step(0.0);assert(joint.reaction_force().nearly_equal(force,0.00001))
+    joint.set_ratio(-2.0);assert(joint.ratio()==-2.0 && joint.phase_error()==0.0 && joint.travel()==0.0 && joint.pinion_angle()==0.0)
+    assert(joint.reaction_force().length()==0.0);world.step(1.0/60.0);assert(Math.abs(joint.speed_error())<0.00001)
+    joint.set_axes(Math.Vec3(0.0,2.0,0.0),Math.Vec3(0.0,0.0,3.0))
+    assert(joint.phase_error()==0.0 && joint.pinion_local_axis().y==1.0 && joint.rack_local_axis().z==1.0)
+}
+test "rack and pinion preserves disconnected phase for later recovery" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world);var joint=world.create_rack_and_pinion_constraint(p,rack)
+    joint.set_enabled(false);rack.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));rack_steps(world,120)
+    assert(Math.abs(joint.phase_error()+2.0)<0.0001 && joint.reaction_force().length()==0.0)
+    joint.set_enabled(true);rack_steps(world,120);assert(Math.abs(joint.phase_error())<0.0001 && Math.abs(joint.speed_error())<0.00001)
+    rack.set_enabled(false);p.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+    assert(joint.reaction_force().length()==0.0);rack.set_enabled(true);rack_steps(world,60);assert(Math.abs(joint.speed_error())<0.00001)
+}
+test "rack and pinion supports a fixed endpoint in either role" {
+    for fixed_pinion in [false,true] {
+        var world=rack_world();var fixed=world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        var dynamic=rack_body(world);var p=dynamic;var rack=fixed
+        if fixed_pinion { p=fixed;rack=dynamic }
+        var joint=world.create_rack_and_pinion_constraint(p,rack)
+        dynamic.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));dynamic.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));world.step(1.0/60.0)
+        if fixed_pinion { assert(dynamic.linear_velocity().x==0.0) } else { assert(dynamic.angular_velocity().z==0.0) }
+        assert(Math.abs(joint.speed_error())<0.00001)
+    }
+}
+test "rack and pinion joins sleep and lifetime safely" {
+    var world=rack_world();var p=rack_body(world);var rack=rack_body(world)
+    p.set_sleep_enabled(true);rack.set_sleep_enabled(true);var joint=world.create_rack_and_pinion_constraint(p,rack)
+    rack_steps(world,120);assert(!p.is_awake() && !rack.is_awake());joint.set_ratio(2.0);assert(p.is_awake() && rack.is_awake())
+    world.destroy_rack_and_pinion_constraint(joint);var newer=world.create_rack_and_pinion_constraint(p,rack)
+    assert(!joint.is_valid() && newer.is_valid() && newer.pinion_body().is_valid())
+    world.destroy_rigid_body(p);assert(!newer.is_valid() && world.rack_and_pinion_constraint_count()==0)
+}
+test "rack and pinion world destruction invalidates retained handles" {
+    var joint:Physics.RackAndPinionConstraint3D?=null
+    { var world=rack_world();joint=world.create_rack_and_pinion_constraint(rack_body(world),rack_body(world)) }
+    assert(!joint!.is_valid())
+}
+test "rack and pinion drives a held slider from a held hinge" {
+    var world=rack_world();var fixed=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var p=rack_body(world);var rack=rack_body(world)
+    world.create_hinge_constraint(fixed,p,Physics.HingeConstraint3DSettings() ..motor=Physics.HingeMotor3D(1.0,0.5))
+    world.create_slider_constraint(fixed,rack)
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    rack_steps(world,600)
+    assert(Math.abs(p.angular_velocity().z-1.0)<0.001 && Math.abs(rack.linear_velocity().x-0.5)<0.001)
+    assert(Math.abs(joint.phase_error())<0.001 && Math.abs(joint.speed_error())<0.001)
+}
+test "rack and pinion transmits a slider stop back to the driven pinion" {
+    var world=rack_world();var fixed=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var p=rack_body(world);var rack=rack_body(world)
+    world.create_hinge_constraint(fixed,p,Physics.HingeConstraint3DSettings() ..motor=Physics.HingeMotor3D(1.0,0.5))
+    world.create_slider_constraint(fixed,rack,Physics.SliderConstraint3DSettings() ..minimum_position=0.0 ..maximum_position=0.5)
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    rack_steps(world,600)
+    assert(Math.abs(joint.travel()-0.5)<0.002 && Math.abs(joint.pinion_angle()-1.0)<0.004)
+    assert(Math.abs(p.angular_velocity().z)<0.002 && Math.abs(rack.linear_velocity().x)<0.002)
+    assert(Math.abs(joint.pinion_reaction_torque().z+0.5)<0.003 && Math.abs(joint.reaction_force().x-1.0)<0.006)
+}
+test "rack and pinion transmits a real obstacle contact to the driven pinion" {
+    var world=rack_world();var fixed=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5,2.0,2.0))) ..transform=Physics.Transform3D(Math.Vec3(1.25,0.0,0.0)))
+    var p=rack_body(world)
+    var rack=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5))) ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)))
+    world.create_hinge_constraint(fixed,p,Physics.HingeConstraint3DSettings() ..motor=Physics.HingeMotor3D(1.0,0.5))
+    world.create_slider_constraint(fixed,rack)
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    rack_steps(world,600)
+    assert(Math.abs(joint.travel()-0.75)<0.003 && Math.abs(joint.speed_error())<0.002)
+    assert(Math.abs(joint.phase_error())<0.003 && Math.abs(p.angular_velocity().z)<0.003)
+}
+test "rack and pinion can be driven by a kinematic rack" {
+    var world=rack_world();var p=rack_body(world)
+    var rack=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var joint=world.create_rack_and_pinion_constraint(p,rack,Physics.RackAndPinionConstraint3DSettings() ..ratio=-2.0)
+    rack.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));rack_steps(world,120)
+    assert(Math.abs(p.angular_velocity().z+2.0)<0.00001 && Math.abs(joint.phase_error())<0.0001)
+    assert(joint.pinion_body().is_valid() && joint.rack_body().is_valid())
+}

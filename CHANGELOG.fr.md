@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Crémaillère/pignon 3D : rapport signé en rad/m, phase suivie, couple et force physiques, mutations sûres et témoins Jolt.
+
 - Engrenage 3D : rapport signé, suivi des tours, couples physiques et mutations sûres ; divergence du Jolt épinglé sur les rapports non unitaires conservée explicitement.
 
 - Attache six degrés 3D : translations libres/verrouillées/bornées, moteurs par axe, friction et butées linéaires souples ; les pyramides angulaires acceptent les plages hors zéro et les angles verrouillés non nuls.

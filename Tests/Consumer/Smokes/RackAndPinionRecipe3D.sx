@@ -1,0 +1,21 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var settings=Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    var pinion=world.create_rigid_body(settings);var rack=world.create_rigid_body(settings)
+    var joint=world.create_rack_and_pinion_constraint(pinion,rack,
+        Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    rack.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));world.step(1.0/60.0)
+    assert(Math.abs(pinion.angular_velocity().z-10.0/7.0)<0.00001)
+    assert(Math.abs(rack.linear_velocity().x-5.0/7.0)<0.00001)
+    assert(Math.abs(joint.pinion_reaction_torque().z-120.0/7.0)<0.0001)
+    assert(Math.abs(joint.reaction_force().x+240.0/7.0)<0.0001)
+    assert(Math.abs(joint.pinion_angle()-2.0*joint.travel())<0.00001)
+    joint.set_ratio(-1.0);assert(joint.travel()==0.0 && joint.pinion_angle()==0.0)
+    world.step(1.0/60.0);assert(Math.abs(joint.speed_error())<0.00001)
+    world.destroy_rack_and_pinion_constraint(joint);assert(!joint.is_valid())
+    print("rack recipe: ok")
+}

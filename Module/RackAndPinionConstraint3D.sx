@@ -1,0 +1,280 @@
+use GFX.Physics.GearConstraint3D.gear_wrapped_angle3d
+use GFX.Physics.GearConstraint3D.gear_raw_angle3d
+use GFX.Physics.GearConstraint3D.gear_phase_advance3d
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public struct RackAndPinionConstraint3DSettings {
+    var pinion_local_axis:Math.Vec3 = Math.Vec3(0.0, 0.0, 1.0)
+    var rack_local_axis:Math.Vec3 = Math.Vec3(1.0, 0.0, 0.0)
+    var ratio:float = 1.0
+    var is_enabled:bool = true
+    init() {}
+}
+
+package class RackAndPinionConstraintState3D {
+    let first_id:BodyId3D
+    let second_id:BodyId3D
+    var pinion_local_axis:Math.Vec3
+    var rack_local_axis:Math.Vec3
+    var ratio:float
+    var is_enabled:bool
+    var first_reference:Math.Quat
+    var rack_reference:Math.Vec3
+    var first_phase:float = 0.0
+    var first_raw:float = 0.0
+    var first_impulse:Math.Vec3 = Math.Vec3()
+    var second_impulse:Math.Vec3 = Math.Vec3()
+    var inverse_delta:float = 0.0
+
+    init(first_id:BodyId3D, second_id:BodyId3D, settings:RackAndPinionConstraint3DSettings,
+        first_rotation:Math.Quat, rack_center:Math.Vec3)
+    {
+        validate_rack_axis3d(settings.pinion_local_axis)
+        validate_rack_axis3d(settings.rack_local_axis)
+        validate_rack_ratio3d(settings.ratio)
+        self.first_id = first_id
+        self.second_id = second_id
+        self.pinion_local_axis = settings.pinion_local_axis.normalized()
+        self.rack_local_axis = settings.rack_local_axis.normalized()
+        self.ratio = settings.ratio
+        self.is_enabled = settings.is_enabled
+        self.first_reference = first_rotation
+        self.rack_reference = rack_center
+    }
+    func reset() {
+        self.first_impulse = Math.Vec3()
+        self.second_impulse = Math.Vec3()
+        self.inverse_delta = 0.0
+    }
+    func reset_phase(first:Math.Quat, rack_center:Math.Vec3) {
+        self.first_reference = first
+        self.rack_reference = rack_center
+        self.first_phase = 0.0
+        self.first_raw = 0.0
+    }
+}
+
+package struct RackAndPinionConstraintId3D {
+    let slot:int
+    let generation:int
+    init(slot:int, generation:int) {
+        self.slot = slot
+        self.generation = generation
+    }
+}
+
+package class RackAndPinionConstraintStore3D {
+    var bodies:BodyStore3D
+    var slots:RackAndPinionConstraintState3D?[] = []
+    var generations:int[] = []
+    var free_slots:int[] = []
+    var live_count:int = 0
+
+    init(bodies:BodyStore3D) { self.bodies = bodies }
+
+    func invalidate_all() {
+        self.slots = []
+        self.generations = []
+        self.free_slots = []
+        self.live_count = 0
+    }
+
+    func append(first:@RigidBody3D, second:@RigidBody3D,
+        settings:RackAndPinionConstraint3DSettings) RackAndPinionConstraintId3D
+    {
+        self.bodies.require_mutable()
+        if !first.belongs_to(self.bodies) || !second.belongs_to(self.bodies) {
+            panic("GFX.Physics.RackAndPinionConstraint3D requires bodies from its world")
+        }
+        if first.same_body(second) {
+            panic("GFX.Physics.RackAndPinionConstraint3D requires two distinct bodies")
+        }
+        var first_state = self.bodies.require(first.body_id())
+        var second_state = self.bodies.require(second.body_id())
+        if first_state.inverse_mass == 0.0 && second_state.inverse_mass == 0.0 {
+            panic("GFX.Physics.RackAndPinionConstraint3D requires a dynamic body")
+        }
+        var state = RackAndPinionConstraintState3D(first.body_id(), second.body_id(), settings,
+            first_state.transform.rotation, second_state.world_center())
+        var slot = self.slots.count()
+        if self.free_slots.count() > 0 {
+            slot = self.free_slots.take_last()
+            self.slots[slot] = state
+        } else {
+            self.slots.append(state)
+            self.generations.append(0)
+        }
+        self.live_count++
+        first_state.wake()
+        second_state.wake()
+        return RackAndPinionConstraintId3D(slot, self.generations[slot])
+    }
+
+    func contains(id:RackAndPinionConstraintId3D) bool {
+        return id.slot >= 0 && id.slot < self.slots.count() &&
+            self.generations[id.slot] == id.generation && self.slots[id.slot] != null
+    }
+
+    func require(id:RackAndPinionConstraintId3D) RackAndPinionConstraintState3D {
+        if !self.contains(id) {
+            panic("GFX.Physics.RackAndPinionConstraint3D no longer refers to a live constraint")
+        }
+        return self.slots[id.slot]!
+    }
+
+    func destroy(id:RackAndPinionConstraintId3D) {
+        self.bodies.require_mutable()
+        var state = self.require(id)
+        self.bodies.require(state.first_id).wake()
+        self.bodies.require(state.second_id).wake()
+        self.slots[id.slot] = null
+        self.generations[id.slot]++
+        self.free_slots.append(id.slot)
+        self.live_count--
+    }
+
+    func destroy_for_body(body_id:BodyId3D) {
+        var slot = 0
+        while slot < self.slots.count() {
+            if var state = self.slots[slot] {
+                if same_rack_body_id3d(state.first_id, body_id) ||
+                    same_rack_body_id3d(state.second_id, body_id)
+                {
+                    var other_id = state.first_id
+                    if same_rack_body_id3d(state.first_id, body_id) {
+                        other_id = state.second_id
+                    }
+                    self.bodies.require(other_id).wake()
+                    self.slots[slot] = null
+                    self.generations[slot]++
+                    self.free_slots.append(slot)
+                    self.live_count--
+                }
+            }
+            slot++
+        }
+    }
+}
+
+public class RackAndPinionConstraint3D {
+    private var store:RackAndPinionConstraintStore3D
+    private let id:RackAndPinionConstraintId3D
+    package init(store:RackAndPinionConstraintStore3D, id:RackAndPinionConstraintId3D) {
+        self.store = store
+        self.id = id
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    package func belongs_to(store:RackAndPinionConstraintStore3D) bool { return self.store == store }
+    package func constraint_id() RackAndPinionConstraintId3D { return self.id }
+    func pinion_body() RigidBody3D { return RigidBody3D(self.store.bodies, self.store.require(self.id).first_id) }
+    func rack_body() RigidBody3D { return RigidBody3D(self.store.bodies, self.store.require(self.id).second_id) }
+    func is_enabled() bool { return self.store.require(self.id).is_enabled }
+    func pinion_local_axis() Math.Vec3 { return self.store.require(self.id).pinion_local_axis }
+    func rack_local_axis() Math.Vec3 { return self.store.require(self.id).rack_local_axis }
+    func ratio() float { return self.store.require(self.id).ratio }
+    func travel() float {
+        var state = self.store.require(self.id)
+        return rack_travel3d(self.store.bodies.require(state.second_id),state)
+    }
+    func pinion_angle() float {
+        var state = self.store.require(self.id)
+        return rack_angle3d(self.store.bodies.require(state.first_id),state)
+    }
+    func phase_error() float {
+        var state = self.store.require(self.id)
+        return rack_phase_error3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state)
+    }
+    func speed_error() float {
+        var state = self.store.require(self.id)
+        return rack_speed_error3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state)
+    }
+    func pinion_reaction_torque() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.first_impulse.multiply(state.inverse_delta)
+    }
+    func reaction_force() Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.second_impulse.multiply(state.inverse_delta)
+    }
+    private func invalidate(state:RackAndPinionConstraintState3D, reset_phase:bool) {
+        var first = self.store.bodies.require(state.first_id)
+        var second = self.store.bodies.require(state.second_id)
+        if reset_phase { state.reset_phase(first.transform.rotation, second.world_center()) }
+        state.reset()
+        first.wake()
+        second.wake()
+    }
+    func set_enabled(enabled:bool) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        // Observe any external pose change before preserving the phase.
+        observe_rack_phase3d(self.store.bodies.require(state.first_id),
+            self.store.bodies.require(state.second_id), state, 0.0)
+        state.is_enabled = enabled
+        self.invalidate(state, false)
+    }
+    func set_axes(pinion:Math.Vec3, rack:Math.Vec3) {
+        validate_rack_axis3d(pinion)
+        validate_rack_axis3d(rack)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.pinion_local_axis = pinion.normalized()
+        state.rack_local_axis = rack.normalized()
+        self.invalidate(state, true)
+    }
+    func set_ratio(ratio:float) {
+        validate_rack_ratio3d(ratio)
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.ratio = ratio
+        self.invalidate(state, true)
+    }
+}
+
+package func validate_rack_axis3d(axis:Math.Vec3) {
+    if !finite_body3d_point(axis) || !finite_body3d_value(axis.length_squared()) ||
+        axis.length_squared() <= 0.0000000001
+    { panic("GFX.Physics.RackAndPinionConstraint3D requires finite nonzero axes") }
+}
+package func validate_rack_ratio3d(ratio:float) {
+    if !finite_body3d_value(ratio) || ratio == 0.0 || !finite_body3d_value(ratio*ratio) || ratio*ratio == 0.0 {
+        panic("GFX.Physics.RackAndPinionConstraint3D requires a finite nonzero representable ratio")
+    }
+}
+package func same_rack_body_id3d(first:BodyId3D, second:BodyId3D) bool {
+    return first.slot == second.slot && first.generation == second.generation
+}
+package func rack_travel3d(second:@BodyState3D, state:RackAndPinionConstraintState3D) float {
+    return second.world_center().subtract(state.rack_reference).dot(second.transform.vector(state.rack_local_axis))
+}
+package func rack_angle3d(first:@BodyState3D, state:RackAndPinionConstraintState3D) float {
+    return state.first_phase + gear_wrapped_angle3d(gear_raw_angle3d(first.transform.rotation,
+        state.first_reference, state.pinion_local_axis)-state.first_raw)
+}
+package func rack_phase_error3d(first:@BodyState3D, second:@BodyState3D, state:RackAndPinionConstraintState3D) float {
+    return rack_angle3d(first,state)-state.ratio*rack_travel3d(second,state)
+}
+package func rack_speed_error3d(first:@BodyState3D, second:@BodyState3D, state:RackAndPinionConstraintState3D) float {
+    return first.angular_velocity.dot(first.transform.vector(state.pinion_local_axis)) - state.ratio*
+        second.linear_velocity.dot(second.transform.vector(state.rack_local_axis))
+}
+package func observe_rack_phase3d(first:@BodyState3D, second:@BodyState3D,
+    state:RackAndPinionConstraintState3D, delta:float)
+{
+    let raw = gear_raw_angle3d(first.transform.rotation, state.first_reference, state.pinion_local_axis)
+    var prediction = 0.0
+    if first.is_enabled && (first.awake || first.body_type == BodyType3D.kinematic) {
+        prediction = delta*first.angular_velocity.dot(first.transform.vector(state.pinion_local_axis))
+    }
+    state.first_phase += gear_phase_advance3d(raw,state.first_raw,prediction)
+    state.first_raw = raw
+}

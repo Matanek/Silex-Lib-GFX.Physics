@@ -171,3 +171,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Attache à six degrés de liberté](SixDOF3D.md).
 
 [Engrenage 3D](Gear3D.md) : rapport signé, phase suivie et couples sur les deux corps.
+
+[Crémaillère 3D](RackAndPinion3D.md) : rapport rotation/course signé, phase, couple et force.
