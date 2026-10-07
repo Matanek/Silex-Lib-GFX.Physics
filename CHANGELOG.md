@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- The slider `SliderMotor3D` drives signed relative speed with symmetric force capacity in N, zero-speed braking, a separate motor reaction and safe runtime mutation.
+
 - 3D sliders: local frames, free translation along X, held orientation, optional signed rigid limits, reaction measurements and safe mutations.
 
 - Hinges follow angle and velocity together through `HingeMotor3D.position_and_velocity`, physical spring and symmetric or signed torque bounds; tracking, mutations and public consumers qualified.

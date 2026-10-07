@@ -72,8 +72,9 @@ un corps lié ou libérer le monde les invalide également. `is_valid()` reste
 consultable, les autres appels sur une référence périmée sont refusés.
 Les contraintes participent aux contacts réels et aux îlots de sommeil.
 
-Cette première tranche propose course libre et butées rigides. Moteurs,
-friction axiale et butées souples restent à qualifier. Les témoins Jolt
+La course libre et les butées rigides peuvent être complétées par le
+[moteur à vitesse cible](SliderMotor3D.md). Friction axiale et butées souples
+restent à qualifier. Les témoins Jolt
 couvrent la translation, les réactions aux butées sous charge, les repères
 excentrés et les rails tournants ; la parité des transitoires d’impact et des
 chaînes spatiales générales n’est pas établie. La scène `SliderScene.sx`

@@ -161,4 +161,5 @@ public use GFX.Physics.Plane3D.Plane3D
 public use GFX.Physics.FixedConstraint3D.FixedConstraint3D
 public use GFX.Physics.FixedConstraint3D.FixedConstraint3DSettings
 public use GFX.Physics.SliderConstraint3D.SliderConstraint3D
+public use GFX.Physics.SliderConstraint3D.SliderMotor3D
 public use GFX.Physics.SliderConstraint3D.SliderConstraint3DSettings

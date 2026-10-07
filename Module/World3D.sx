@@ -754,6 +754,7 @@ public class World3D {
             if var constraint = slot {
                 constraint.impulse = Math.Vec3()
                 constraint.angular_impulse = Math.Vec3()
+                constraint.motor_impulse = 0.0
                 constraint.limit_impulse = 0.0
                 constraint.limit_side = 0
                 constraint.inverse_delta = 0.0
@@ -1017,6 +1018,12 @@ public class World3D {
                         var first = self.store.require(constraint.first_id)
                         var second = self.store.require(constraint.second_id)
                         if first.is_enabled && second.is_enabled {
+                            if let motor = constraint.motor {
+                                if motor.maximum_force > 0.0 && motor.speed != 0.0 {
+                                    first.wake()
+                                    second.wake()
+                                }
+                            }
                             if first.body_type == BodyType3D.kinematic &&
                                 (first.linear_velocity.length_squared() > 0.0 ||
                                     first.angular_velocity.length_squared() > 0.0)
@@ -3649,8 +3656,22 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state.impulse = state.impulse.add(impulse.linear)
     state.angular_impulse = state.angular_impulse.add(impulse.angular)
     state.inverse_delta = 1.0 / delta
-    if state.limit_side == 0 { return }
     let axis = frame.rotate(Math.Vec3(1.0, 0.0, 0.0))
+    if let motor = state.motor {
+        if motor.maximum_force > 0.0 {
+            let error = slider_velocity3d(first, second, first_radius, second_radius).dot(axis) - motor.speed
+            let response = fixed_impulse3d(first, second, first_radius, second_radius,
+                axis.multiply(error), Math.Vec3())
+            let requested = response.linear.dot(axis)
+            let capacity = motor.maximum_force * delta
+            let accumulated = Math.clamp(state.motor_impulse + requested, -capacity, capacity)
+            let change = accumulated - state.motor_impulse
+            state.motor_impulse = accumulated
+            apply_slider_axial_response3d(first, second, first_radius, second_radius,
+                state, response, requested, change)
+        }
+    }
+    if state.limit_side == 0 { return }
     let speed = slider_velocity3d(first, second, first_radius, second_radius).dot(axis)
     // A full attachment response to an axial error preserves the five locked rows.
     let limit = fixed_impulse3d(first, second, first_radius, second_radius,
@@ -3661,10 +3682,18 @@ func solve_slider_velocity3d(first:&BodyState3D, second:&BodyState3D,
     if state.limit_side == -1 { accumulated = Math.min(0.0, accumulated) }
     let change = accumulated - state.limit_impulse
     state.limit_impulse = accumulated
+    apply_slider_axial_response3d(first, second, first_radius, second_radius,
+        state, limit, requested, change)
+}
+
+func apply_slider_axial_response3d(first:&BodyState3D, second:&BodyState3D,
+    first_radius:Math.Vec3, second_radius:Math.Vec3, state:SliderConstraintState3D,
+    response:FixedImpulse3D, requested:float, change:float)
+{
     if Math.abs(requested) <= 0.000000000001 { return }
     let scale = change / requested
-    let linear = limit.linear.multiply(scale)
-    let angular = limit.angular.multiply(scale)
+    let linear = response.linear.multiply(scale)
+    let angular = response.angular.multiply(scale)
     apply_contact_impulse3d(first, second, first_radius, second_radius, linear)
     apply_hinge_angular_impulse3d(first, second, angular)
     state.impulse = state.impulse.add(linear)

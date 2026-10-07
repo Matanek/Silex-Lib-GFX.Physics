@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Le moteur de glissière `SliderMotor3D` pilote une vitesse relative signée avec capacité symétrique en N, freinage à vitesse nulle, effort moteur séparé et mutation sûre.
+
 - Glissière 3D : repères locaux, translation libre sur X, orientation retenue, limites signées facultatives et rigides, mesures de réaction et mutations sûres.
 
 - La charnière suit ensemble un angle et une vitesse avec `HingeMotor3D.position_and_velocity`, ressort physique et bornes symétriques ou signées ; poursuite, mutations et consommateurs qualifiés.

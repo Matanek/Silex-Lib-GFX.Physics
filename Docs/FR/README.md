@@ -16,6 +16,8 @@ La [liaison fixe 3D](Fixed3D.md) conserve les six degrés de la pose relative de
 
 La [glissière 3D](Slider3D.md) guide un chariot sur un rail tournant, avec course signée et butées rigides modifiables.
 
+Le [moteur de glissière](SliderMotor3D.md) pilote une vitesse relative avec force maximale, freinage et mutation.
+
 Le [servo de charnière](HingePosition3D.md) vise un angle avec raideur, amortissement et couple borné.
 
 Le [frein de charnière](HingeFriction3D.md) ralentit un axe sans moteur avec un couple borné, réglable à l’exécution.

@@ -1,0 +1,24 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed)
+    var carriage = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(0.2))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0)
+        ..allow_sleep = false)
+    var joint = world.create_slider_constraint(rail, carriage,
+        Physics.SliderConstraint3DSettings()
+        ..motor = Physics.SliderMotor3D(0.6, 2.0))
+    var step = 0
+    while step < 120 { world.step(1.0 / 120.0); step++ }
+    assert(Math.abs(joint.speed() - 0.6) < 0.0001)
+    joint.set_motor(Physics.SliderMotor3D(0.0, 2.0))
+    step = 0
+    while step < 120 { world.step(1.0 / 120.0); step++ }
+    assert(Math.abs(joint.speed()) < 0.0001)
+    joint.set_motor(null)
+    assert(joint.motor() == null && joint.motor_force() == 0.0)
+}

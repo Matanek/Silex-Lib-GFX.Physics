@@ -19,6 +19,12 @@ CASES = {'minimum-nan': 'requires ordered finite position limits',
          'orphan': 'no longer refers to a live constraint',
          'foreign-destroy': 'cannot destroy a constraint owned by another world'}
 
+for name in ('motor-speed-nan', 'motor-speed-infinity', 'motor-force-nan',
+             'motor-force-infinity', 'motor-force-negative'):
+    CASES[name] = 'requires finite speed and nonnegative finite maximum force'
+for name in ('stale-motor-read', 'stale-motor-set', 'orphan-motor'):
+    CASES[name] = 'no longer refers to a live constraint'
+
 
 def main():
     root = Path.cwd()

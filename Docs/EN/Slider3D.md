@@ -70,8 +70,9 @@ a connected body or dropping the world also invalidates them. `is_valid()`
 remains readable; other calls through stale references are rejected.
 Constraints participate in real contacts and sleeping islands.
 
-This first slice provides free travel and rigid stops. Motors, axial friction
-and soft stops remain to be qualified. Jolt fixtures cover translation,
+Free travel and rigid stops can be combined with the
+[velocity motor](SliderMotor3D.md). Axial friction and soft stops remain
+to be qualified. Jolt fixtures cover translation,
 loaded stop reactions, offset frames and rotating rails; parity for impact
 transients and general spatial chains has not been established.
 `SliderScene.sx` shows an inclined rail, gravity and a launch impulse with T;

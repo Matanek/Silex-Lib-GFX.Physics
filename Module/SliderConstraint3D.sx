@@ -5,9 +5,23 @@ use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use STD.Math
 
+public struct SliderMotor3D {
+    let speed:float
+    let maximum_force:float
+
+    init(speed:float, maximum_force:float) {
+        if !finite_body3d_value(speed) || !finite_body3d_value(maximum_force) || maximum_force < 0.0 {
+            panic("GFX.Physics.SliderMotor3D requires finite speed and nonnegative finite maximum force")
+        }
+        self.speed = speed
+        self.maximum_force = maximum_force
+    }
+}
+
 public struct SliderConstraint3DSettings {
     var first_local_frame:Transform3D = Transform3D()
     var second_local_frame:Transform3D = Transform3D()
+    var motor:SliderMotor3D? = null
     var minimum_position:float? = null
     var maximum_position:float? = null
     var is_enabled:bool = true
@@ -32,6 +46,8 @@ package class SliderConstraintState3D {
     var second_local_rotation:Math.Quat
     var minimum_position:float?
     var maximum_position:float?
+    var motor:SliderMotor3D?
+    var motor_impulse:float = 0.0
     var limit_side:int = 0
     var limit_impulse:float = 0.0
     var angular_impulse:Math.Vec3 = Math.Vec3()
@@ -41,6 +57,7 @@ package class SliderConstraintState3D {
 
     init(first_id:BodyId3D, second_id:BodyId3D, settings:SliderConstraint3DSettings) {
         validate_slider_limits3d(settings.minimum_position, settings.maximum_position)
+        self.motor = settings.motor
         self.minimum_position = settings.minimum_position
         self.maximum_position = settings.maximum_position
         self.first_id = first_id
@@ -211,6 +228,17 @@ public class SliderConstraint3D {
             .subtract(first.linear_velocity.add(first.angular_velocity.cross(first_radius)))
             .dot(slider_axis3d(first.transform, state))
     }
+    func motor() SliderMotor3D? { return self.store.require(self.id).motor }
+    func motor_force() float {
+        var state = self.store.require(self.id)
+        return state.motor_impulse * state.inverse_delta
+    }
+    func set_motor(motor:SliderMotor3D?) {
+        self.store.bodies.require_mutable()
+        var state = self.store.require(self.id)
+        state.motor = motor
+        self.reset_reaction(state)
+    }
     func minimum_position() float? { return self.store.require(self.id).minimum_position }
     func maximum_position() float? { return self.store.require(self.id).maximum_position }
     func limit_force() float {
@@ -235,6 +263,7 @@ public class SliderConstraint3D {
         self.reset_reaction(state)
     }
     private func reset_reaction(state:SliderConstraintState3D) {
+        state.motor_impulse = 0.0
         state.limit_side = 0
         state.limit_impulse = 0.0
         state.impulse = Math.Vec3()

@@ -1,0 +1,242 @@
+use GFX.Physics
+use STD.Math
+
+func motor_body(world:Physics.World3D, mass:float = 2.0, position:Math.Vec3 = Math.Vec3()) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform = Physics.Transform3D(position)
+        ..mass_properties = Physics.MassProperties3D(mass, Math.Vec3(mass * 0.1))
+        ..allow_sleep = false ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func motor_rail(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func motor_steps(world:Physics.World3D, count:int) {
+    var step = 0
+    while step < count { world.step(1.0 / 120.0); step++ }
+}
+func motor_alignment(joint:Physics.SliderConstraint3D) {
+    assert(joint.anchor_error().length() < 0.0001)
+    assert(joint.angular_error().length() < 0.0001)
+}
+
+test "slider speed motor shares its force budget across passes at sixty and one hundred twenty hertz" {
+    for rate in [60, 120] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var body = motor_body(world)
+        var joint = world.create_slider_constraint(motor_rail(world), body,
+            Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 2.0))
+        let dt = 1.0 / rate as float
+        var speed = 0.0
+        var position = 0.0
+        var step = 0
+        while step < rate * 3 {
+            var target = 0.6
+            if step >= rate { target = -0.6 }
+            if step >= rate * 2 { target = 0.0 }
+            if step == rate || step == rate * 2 { joint.set_motor(Physics.SliderMotor3D(target, 2.0)) }
+            let previous = speed
+            speed += Math.clamp(target - speed, -dt, dt)
+            position += speed * dt
+            world.step(dt)
+            assert(Math.abs(joint.speed() - speed) < 0.00001)
+            assert(Math.abs(joint.position() - position) < 0.00001)
+            assert(Math.abs(joint.motor_force() - 2.0 * (speed - previous) / dt) < 0.0001)
+            assert(Math.abs(joint.motor_force()) <= 2.00001)
+            assert(Math.abs(joint.reaction_force().x - joint.motor_force()) < 0.00001)
+            assert(joint.limit_force() == 0.0)
+            motor_alignment(joint)
+            step++
+        }
+        let force = joint.motor_force()
+        world.step(0.0)
+        assert(joint.motor_force() == force)
+    }
+}
+
+test "slider motor conserves momentum for two free unequal masses" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = motor_body(world, 2.0)
+    var second = motor_body(world, 8.0)
+    var joint = world.create_slider_constraint(first, second,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 3.2))
+    var speed = 0.0
+    var position = 0.0
+    var step = 0
+    while step < 240 {
+        var target = 0.6
+        if step >= 120 { target = -0.6 }
+        if step == 120 { joint.set_motor(Physics.SliderMotor3D(target, 3.2)) }
+        speed += Math.clamp(target - speed, -2.0 / 120.0, 2.0 / 120.0)
+        position += speed / 120.0
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.speed() - speed) < 0.00001 && Math.abs(joint.position() - position) < 0.00001)
+        assert(first.linear_velocity().multiply(2.0).add(second.linear_velocity().multiply(8.0)).length() < 0.00001)
+        assert(first.position().multiply(2.0).add(second.position().multiply(8.0)).length() < 0.00001)
+        assert(first.angular_velocity().length() < 0.00001 && second.angular_velocity().length() < 0.00001)
+        assert(Math.abs(joint.motor_force()) <= 3.20001)
+        motor_alignment(joint)
+        step++
+    }
+}
+
+test "slider offset motor supplies a compensating free couple rather than rotating the carriage" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3(0.0, -9.81, 0.0))
+    var body = motor_body(world, position:Math.Vec3(0.0, -0.5, 0.0))
+    var joint = world.create_slider_constraint(motor_rail(world), body,
+        Physics.SliderConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(Math.Vec3(0.0, 0.5, 0.0))
+        ..motor = Physics.SliderMotor3D(1.0, 2.0))
+    var step = 0
+    while step < 60 {
+        world.step(1.0 / 120.0)
+        assert(Math.abs(joint.speed() - (step + 1) as float / 120.0) < 0.00001)
+        assert(Math.abs(joint.motor_force() - 2.0) < 0.0001)
+        assert(Math.abs(joint.reaction_torque().z - 1.0) < 0.0001)
+        assert(Math.abs(joint.reaction_force().y - 19.62) < 0.0001)
+        assert(body.angular_velocity().length() < 0.00001)
+        motor_alignment(joint)
+        step++
+    }
+}
+
+test "slider motor capacity below an axial load cannot invent acceleration" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3(-2.0, 0.0, 0.0))
+    var joint = world.create_slider_constraint(motor_rail(world), motor_body(world),
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 2.0))
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        let n = (step + 1) as float
+        assert(Math.abs(joint.speed() + n / 120.0) < 0.00001)
+        assert(Math.abs(joint.position() + n * (n + 1.0) / (2.0 * 120.0 * 120.0)) < 0.00001)
+        assert(Math.abs(joint.motor_force() - 2.0) < 0.00001)
+        step++
+    }
+}
+
+test "slider motor remains force bounded against either rigid stop and equal limits" {
+    let positions:float[] = [-0.5, 0.5, 0.0]
+    for position in positions {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var speed = -0.6
+        if position >= 0.0 { speed = 0.6 }
+        var lower = -0.5
+        var upper = 0.5
+        if position == 0.0 { lower = 0.0; upper = 0.0 }
+        var joint = world.create_slider_constraint(motor_rail(world), motor_body(world, position:Math.Vec3(position, 0.0, 0.0)),
+            Physics.SliderConstraint3DSettings() ..minimum_position = lower ..maximum_position = upper
+            ..motor = Physics.SliderMotor3D(speed, 2.0))
+        motor_steps(world, 60)
+        assert(Math.abs(joint.position() - position) < 0.00001 && Math.abs(joint.speed()) < 0.00001)
+        assert(Math.abs(joint.motor_force() - speed / 0.6 * 2.0) < 0.00001)
+        assert(Math.abs(joint.limit_force() + joint.motor_force()) < 0.00001)
+        assert(joint.reaction_force().length() < 0.00001)
+        joint.set_motor(Physics.SliderMotor3D(-speed, 2.0))
+        world.step(1.0 / 120.0)
+        if position != 0.0 { assert(Math.abs(joint.speed()) > 0.005 && joint.limit_force() == 0.0) }
+    }
+}
+
+test "slider null motor and zero capacity preserve the free axis" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3(0.3, 0.0, 0.0))
+    var joint = world.create_slider_constraint(motor_rail(world), motor_body(world),
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(100.0, 0.0))
+    motor_steps(world, 120)
+    assert(Math.abs(joint.speed() - 0.3) < 0.00001 && joint.motor_force() == 0.0)
+    joint.set_motor(null)
+    assert(joint.motor() == null)
+    motor_steps(world, 120)
+    assert(Math.abs(joint.speed() - 0.6) < 0.00001 && joint.motor_force() == 0.0)
+}
+
+test "slider motor settings are snapshots and mutations clear observations and wake both bodies" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = motor_body(world)
+    var settings = Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 2.0)
+    var joint = world.create_slider_constraint(motor_rail(world), body, settings)
+    settings.motor = null
+    assert(joint.motor()!.speed == 0.6 && joint.motor()!.maximum_force == 2.0)
+    world.step(1.0 / 120.0)
+    assert(Math.abs(joint.motor_force() - 2.0) < 0.00001)
+    joint.set_motor(Physics.SliderMotor3D(-0.6, 4.0))
+    assert(joint.motor_force() == 0.0 && joint.reaction_force().length() == 0.0)
+    body.set_mass_properties(Physics.MassProperties3D(4.0, Math.Vec3(0.4)))
+    let previous = joint.speed()
+    world.step(1.0 / 120.0)
+    assert(Math.abs(joint.speed() - previous + 1.0 / 120.0) < 0.00001)
+    assert(Math.abs(joint.motor_force() + 4.0) < 0.00001)
+    joint.set_frames(Physics.Transform3D(), Physics.Transform3D())
+    assert(joint.motor_force() == 0.0)
+    joint.set_limits(null, null)
+    assert(joint.motor_force() == 0.0)
+}
+
+test "slider motor suspends with either the constraint or a body" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = motor_body(world)
+    var joint = world.create_slider_constraint(motor_rail(world), body,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 2.0))
+    joint.set_enabled(false)
+    motor_steps(world, 20)
+    assert(joint.motor_force() == 0.0 && joint.speed() == 0.0)
+    joint.set_enabled(true)
+    world.step(1.0 / 120.0)
+    assert(joint.motor_force() > 1.99)
+    body.set_enabled(false)
+    world.step(1.0 / 120.0)
+    assert(joint.motor_force() == 0.0)
+    body.set_enabled(true)
+    world.step(1.0 / 120.0)
+    assert(joint.motor_force() > 1.99)
+}
+
+test "slider zero speed can sleep and a nonzero motor wakes the assembly" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = motor_body(world)
+    body.set_sleep_enabled(true)
+    var joint = world.create_slider_constraint(motor_rail(world), body,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.0, 2.0))
+    motor_steps(world, 480)
+    assert(!body.is_awake())
+    joint.set_motor(Physics.SliderMotor3D(0.6, 2.0))
+    assert(body.is_awake())
+    motor_steps(world, 120)
+    assert(Math.abs(joint.speed() - 0.6) < 0.00001)
+}
+
+test "slider speed is relative to a moving kinematic rail" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.kinematic)
+    var body = motor_body(world)
+    var joint = world.create_slider_constraint(rail, body,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 2.0))
+    rail.move_kinematic(Physics.Transform3D(Math.Vec3(0.8, 0.0, 0.0)), 2.0)
+    motor_steps(world, 240)
+    assert(Math.abs(joint.speed() - 0.6) < 0.00001 && Math.abs(body.linear_velocity().x - 1.0) < 0.00001)
+    assert(Math.abs(rail.position().x - 0.8) < 0.00001)
+    motor_alignment(joint)
+}
+
+test "slider motor preserves a rotating rail and arbitrary three dimensional mass frame" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let rotation = Math.Quat.angle_axis(0.7, Math.Vec3(1.0, 2.0, 3.0).normalized())
+    let origin = Math.Vec3(0.7, 1.2, -0.6)
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..transform = Physics.Transform3D(origin, rotation))
+    var body = motor_body(world, 3.0, origin)
+    body.set_transform(Physics.Transform3D(origin, rotation))
+    body.set_mass_properties(Physics.MassProperties3D(3.0, Math.Vec3(0.3, 0.6, 0.9), Math.Vec3(-0.2, 0.1, 0.4)))
+    var joint = world.create_slider_constraint(rail, body,
+        Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D(0.6, 3.0))
+    let destination = Math.Quat.angle_axis(0.4, Math.Vec3(0.0, 0.0, 1.0)).multiply(rotation)
+    rail.move_kinematic(Physics.Transform3D(origin, destination), 2.0)
+    var step = 0
+    while step < 240 {
+        world.step(1.0 / 120.0)
+        assert(joint.anchor_error().length() < 0.001 && joint.angular_error().length() < 0.001)
+        assert(Math.abs(joint.motor_force()) <= 3.0001)
+        step++
+    }
+    assert(Math.abs(joint.speed() - 0.6) < 0.003)
+}
