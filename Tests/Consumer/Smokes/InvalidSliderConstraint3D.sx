@@ -17,6 +17,23 @@ func main() {
     var world = Physics.World3D()
     var support = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed)
     var body = world.create_rigid_body()
+    if selected("combined-position-nan") { Physics.SliderMotor3D.position_and_velocity(Math.sqrt(-1.0),0.3,-2.0,3.0,8.0,4.0) }
+    if selected("combined-position-infinity") { Physics.SliderMotor3D.position_and_velocity(1.0/0.0,0.3,-2.0,3.0,8.0,4.0) }
+    if selected("combined-speed-nan") { Physics.SliderMotor3D.position_and_velocity(0.75,Math.sqrt(-1.0),-2.0,3.0,8.0,4.0) }
+    if selected("combined-speed-infinity") { Physics.SliderMotor3D.position_and_velocity(0.75,1.0/0.0,-2.0,3.0,8.0,4.0) }
+    if selected("combined-minimum-nan") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,Math.sqrt(-1.0),3.0,8.0,4.0) }
+    if selected("combined-minimum-infinity") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,1.0/0.0,3.0,8.0,4.0) }
+    if selected("combined-maximum-nan") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,Math.sqrt(-1.0),8.0,4.0) }
+    if selected("combined-maximum-infinity") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,1.0/0.0,8.0,4.0) }
+    if selected("combined-stiffness-nan") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,Math.sqrt(-1.0),4.0) }
+    if selected("combined-stiffness-infinity") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,1.0/0.0,4.0) }
+    if selected("combined-damping-nan") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,8.0,Math.sqrt(-1.0)) }
+    if selected("combined-damping-infinity") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,8.0,1.0/0.0) }
+    if selected("combined-stiffness-zero") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,0.0,4.0) }
+    if selected("combined-stiffness-negative") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,-1.0,4.0) }
+    if selected("combined-damping-negative") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-2.0,3.0,8.0,-1.0) }
+    if selected("combined-ordered") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,4.0,3.0,8.0,4.0) }
+    if selected("combined-symmetric-negative") { Physics.SliderMotor3D.position_and_velocity(0.75,0.3,-1.0,8.0,4.0) }
     if selected("soft-stiffness-nan") { Physics.SliderLimitSpring3D(Math.sqrt(-1.0),1.0) }
     if selected("soft-stiffness-infinity") { Physics.SliderLimitSpring3D(1.0/0.0,1.0) }
     if selected("soft-stiffness-zero") { Physics.SliderLimitSpring3D(0.0,1.0) }

@@ -84,3 +84,5 @@ R resets, Space pauses/resumes and Escape closes the window.
 [Signed force bounds](SliderForceBounds3D.md) set different effort in each direction, in velocity and position modes.
 
 [Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.
+
+[Follow a moving target with position and velocity](SliderCombined3D.md).

@@ -488,3 +488,5 @@ not a universal rotational guarantee. Qualification compares the absence
 then presence of contact; post-impact trajectories are not declared identical
 between engines. Choose the step according to angular speed, swept distance
 and obstacle thickness.
+
+[Follow a moving target with position and velocity](SliderCombined3D.md).

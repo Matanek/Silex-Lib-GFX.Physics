@@ -59,8 +59,7 @@ load, reduced mass, offset 3D frames/COM, limits, mutations, sleep, suspension
 and contacts. The Jolt oracle qualifies eight 60 Hz cases in Debug/Release:
 critical/weak damping, saturation, successive modes, limited targets, load,
 two free masses and an offset anchor. Impact, rotating-rail transient and general
-spatial-chain parity remain unestablished. Combined position/velocity commands
-remain to be qualified.
+spatial-chain parity remain unestablished. [Combined control](SliderCombined3D.md) adds a desired velocity to the target.
 
 `SliderPositionScene.sx` compares a strongly damped gold carriage with an
 oscillating blue carriage; green markers show the target. T reverses the target,

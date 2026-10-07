@@ -523,3 +523,5 @@ n'offre pas une garantie universelle en rotation. La qualification compare
 l'absence puis la présence d'un contact ; les trajectoires après impact ne
 sont pas déclarées identiques entre moteurs. Choisir le pas selon la vitesse
 angulaire, la distance balayée et l'épaisseur des obstacles.
+
+[Suivi de cible mobile par position et vitesse](SliderCombined3D.md).

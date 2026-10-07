@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La glissière suit ensemble une position et une vitesse avec `SliderMotor3D.position_and_velocity`, capacité symétrique ou bornes signées et ressort physique ; poursuite, mutations, contacts et oracle Jolt qualifiés.
+
 - Butées souples de glissière : raideur/amortissement physiques, lecture/mutation, effort signé et coexistence avec moteurs/contacts.
 
 - Le moteur de glissière accepte des bornes de force signées en vitesse et position, avec formes symétriques compatibles, effort imposé, mutation/réveil, contact réel et oracle Jolt Debug/Release qualifiés.

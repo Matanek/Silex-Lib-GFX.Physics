@@ -49,6 +49,36 @@ public struct SliderMotor3D {
         return SliderMotor3D(position, minimum_force, maximum_force, stiffness, damping)
     }
 
+    static func position_and_velocity(position:float, speed:float, maximum_force:float,
+        stiffness:float, damping:float) SliderMotor3D
+    {
+        return SliderMotor3D(position, speed, -maximum_force, maximum_force, stiffness, damping)
+    }
+
+    static func position_and_velocity(position:float, speed:float, minimum_force:float,
+        maximum_force:float, stiffness:float, damping:float) SliderMotor3D
+    {
+        return SliderMotor3D(position, speed, minimum_force, maximum_force, stiffness, damping)
+    }
+
+    private init(position:float, speed:float, minimum_force:float, maximum_force:float,
+        stiffness:float, damping:float)
+    {
+        if !finite_body3d_value(position) || !finite_body3d_value(speed) ||
+            !finite_body3d_value(minimum_force) || !finite_body3d_value(maximum_force) ||
+            minimum_force > maximum_force || !finite_body3d_value(stiffness) || stiffness <= 0.0 ||
+            !finite_body3d_value(damping) || damping < 0.0
+        {
+            panic("GFX.Physics.SliderMotor3D.position_and_velocity requires finite position and speed, ordered finite force bounds, positive finite stiffness and nonnegative finite damping")
+        }
+        self.speed = speed
+        self.minimum_force = minimum_force
+        self.maximum_force = maximum_force
+        self.target_position = position
+        self.stiffness = stiffness
+        self.damping = damping
+    }
+
     private init(position:float, minimum_force:float, maximum_force:float, stiffness:float, damping:float) {
         if !finite_body3d_value(position) || !finite_body3d_value(minimum_force) ||
             !finite_body3d_value(maximum_force) || minimum_force > maximum_force ||

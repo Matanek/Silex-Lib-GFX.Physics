@@ -45,6 +45,9 @@ for name in ('soft-stiffness-nan', 'soft-stiffness-infinity', 'soft-stiffness-ze
 for name in ('stale-soft-read','stale-soft-set','orphan-soft'):
     CASES[name] = 'no longer refers to a live constraint'
 
+for name in ('combined-position-nan', 'combined-position-infinity', 'combined-speed-nan', 'combined-speed-infinity', 'combined-minimum-nan', 'combined-minimum-infinity', 'combined-maximum-nan', 'combined-maximum-infinity', 'combined-stiffness-nan', 'combined-stiffness-infinity', 'combined-damping-nan', 'combined-damping-infinity', 'combined-stiffness-zero', 'combined-stiffness-negative', 'combined-damping-negative', 'combined-ordered', 'combined-symmetric-negative'):
+    CASES[name] = 'requires finite position and speed, ordered finite force bounds, positive finite stiffness and nonnegative finite damping'
+
 def main():
     root = Path.cwd()
     assert (root / 'Packages').is_dir() and (root / 'Silex-Examples').is_dir(), 'run from the workspace or Spec group root'

@@ -80,3 +80,5 @@ Le [frein de glissière](SliderFriction3D.md) ralentit la course sans moteur ave
 Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts différents selon le sens, en vitesse et en position.
 
 [Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.
+
+[Suivi de cible mobile par position et vitesse](SliderCombined3D.md).

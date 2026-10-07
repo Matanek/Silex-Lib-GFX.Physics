@@ -281,3 +281,5 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 ## Tile maps
 
 [Tile map collisions](TileMap2D.md)
+
+[Follow a moving target with position and velocity](SliderCombined3D.md).

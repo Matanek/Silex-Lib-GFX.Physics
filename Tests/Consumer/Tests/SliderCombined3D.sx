@@ -1,0 +1,135 @@
+use GFX.Physics
+use STD.Math
+
+func combined_rail(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+}
+func combined_body(world:Physics.World3D, mass:float = 2.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..mass_properties = Physics.MassProperties3D(mass,Math.Vec3(mass*0.1))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+}
+func combined_steps(world:Physics.World3D,count:int) { var i = 0;while i<count { world.step(1.0/120.0);i++ } }
+func combined_alignment(joint:Physics.SliderConstraint3D) {
+    assert(joint.anchor_error().length()<0.0001 && joint.angular_error().length()<0.0001)
+}
+
+test "combined fixed target follows implicit recurrence at sixty and one hundred twenty hertz" {
+    for rate in [60,120] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var joint = world.create_slider_constraint(combined_rail(world),combined_body(world),
+            Physics.SliderConstraint3DSettings() ..motor = Physics.SliderMotor3D.position_and_velocity(0.75,0.3,100.0,8.0,8.0))
+        let dt = 1.0/rate as float;var x = 0.0;var v = 0.0;var i = 0
+        while i<rate*8 {
+            let old = v
+            v = (2.0*v+dt*8.0*(0.75-x)+dt*(8.0+dt*8.0)*0.3)/(2.0+dt*8.0+dt*dt*8.0)
+            x += dt*v;world.step(dt)
+            assert(Math.abs(joint.position()-x)<0.00002 && Math.abs(joint.speed()-v)<0.00002)
+            assert(Math.abs(joint.motor_force()-2.0*(v-old)/dt)<0.0002)
+            combined_alignment(joint);i++
+        }
+        assert(Math.abs(joint.position()-(0.75+(8.0+dt*8.0)*0.3/8.0))<0.0001)
+        assert(joint.motor()!.target_position==0.75 && joint.motor()!.speed==0.3)
+    }
+}
+
+test "zero combined velocity preserves the existing position servo" {
+    var a = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var b = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = a.create_slider_constraint(combined_rail(a),combined_body(a),Physics.SliderConstraint3DSettings()
+        ..motor = Physics.SliderMotor3D.position(0.75,-0.2,0.4,8.0,0.8))
+    var second = b.create_slider_constraint(combined_rail(b),combined_body(b),Physics.SliderConstraint3DSettings()
+        ..motor = Physics.SliderMotor3D.position_and_velocity(0.75,0.0,-0.2,0.4,8.0,0.8))
+    var i = 0;while i<360 {
+        a.step(1.0/60.0);b.step(1.0/60.0)
+        assert(Math.abs(first.position()-second.position())<0.000001 && Math.abs(first.motor_force()-second.motor_force())<0.000001);i++
+    }
+}
+
+test "moving combined target follows independent signed saturation at both step rates" {
+    for rate in [60,120] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var joint = world.create_slider_constraint(combined_rail(world),combined_body(world))
+        let dt = 1.0/rate as float;var x = 0.0;var v = 0.0;var i = 0
+        while i<rate*8 {
+            let t = i as float*dt;let target = 0.75*Math.sin(t*0.8);let speed = 0.6*Math.cos(t*0.8)
+            joint.set_motor(Physics.SliderMotor3D.position_and_velocity(target,speed,-0.4,0.8,8.0,4.0))
+            let next = (2.0*v+dt*8.0*(target-x)+dt*(4.0+dt*8.0)*speed)/(2.0+dt*4.0+dt*dt*8.0)
+            let force = Math.clamp(2.0*(next-v)/dt,-0.4,0.8)
+            v += dt*force/2.0;x += dt*v;world.step(dt)
+            assert(Math.abs(joint.position()-x)<0.00002 && Math.abs(joint.speed()-v)<0.00002)
+            assert(Math.abs(joint.motor_force()-force)<0.0002 && joint.motor()!.speed==speed);i++
+        }
+    }
+}
+
+test "combined free masses conserve momentum and center of mass" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = combined_body(world);var second = combined_body(world,8.0)
+    var joint = world.create_slider_constraint(first,second,Physics.SliderConstraint3DSettings()
+        ..motor = Physics.SliderMotor3D.position_and_velocity(0.75,0.3,20.0,6.4,6.4))
+    let dt = 1.0/120.0;var x = 0.0;var v = 0.0;var i = 0
+    while i<720 {
+        v = (1.6*v+dt*6.4*(0.75-x)+dt*(6.4+dt*6.4)*0.3)/(1.6+dt*6.4+dt*dt*6.4)
+        x += dt*v;world.step(dt)
+        assert(Math.abs(joint.position()-x)<0.00002 && Math.abs(joint.speed()-v)<0.00002)
+        assert(first.linear_velocity().multiply(2.0).add(second.linear_velocity().multiply(8.0)).length()<0.00002)
+        assert(first.position().multiply(2.0).add(second.position().multiply(8.0)).length()<0.00002)
+        combined_alignment(joint);i++
+    }
+}
+
+test "offset attachment retains transverse support and compensating free couple" {
+    var world = Physics.World3D()
+    var body = combined_body(world);body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0)))
+    var joint = world.create_slider_constraint(combined_rail(world),body,Physics.SliderConstraint3DSettings()
+        ..second_local_frame = Physics.Transform3D(Math.Vec3(0.0,0.5,0.0))
+        ..motor = Physics.SliderMotor3D.position_and_velocity(0.75,0.3,100.0,8.0,8.0))
+    var i = 0;while i<360 {
+        world.step(1.0/60.0);combined_alignment(joint)
+        assert(Math.abs(joint.reaction_force().y-19.62)<0.001)
+        assert(Math.abs(joint.reaction_torque().z-0.5*joint.motor_force())<0.001);i++
+    }
+}
+
+test "combined drive loads soft stops and rigid stops retain the projected target" {
+    for soft in [false,true] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var joint = world.create_slider_constraint(combined_rail(world),combined_body(world),Physics.SliderConstraint3DSettings()
+            ..minimum_position = -0.2 ..maximum_position = 0.2
+            ..motor = Physics.SliderMotor3D.position_and_velocity(0.8,0.3,20.0,8.0,8.0))
+        if soft { joint.set_limit_spring(Physics.SliderLimitSpring3D(8.0,4.0)) }
+        combined_steps(world,960)
+        var expected = 0.2;if soft { expected += (8.0+8.0/120.0)*0.3/16.0 }
+        assert(Math.abs(joint.position()-expected)<0.0002 && joint.motor()!.target_position==0.8)
+        if soft { assert(Math.abs(joint.limit_force()+8.0*(expected-0.2))<0.002) }
+        joint.set_motor(Physics.SliderMotor3D.position_and_velocity(-0.8,-0.3,-20.0,20.0,8.0,8.0))
+        combined_steps(world,960);assert(Math.abs(joint.position()+expected)<0.0002)
+    }
+}
+
+test "combined mode mutations reset effort retain zero steps and suppress passive friction" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = combined_body(world)
+    var joint = world.create_slider_constraint(combined_rail(world),body,Physics.SliderConstraint3DSettings()
+        ..maximum_friction_force = 1.0 ..motor = Physics.SliderMotor3D.position_and_velocity(0.75,0.3,20.0,8.0,8.0))
+    var clone = joint;world.step(1.0/60.0);let force = joint.motor_force()
+    world.step(0.0);assert(clone.motor_force()==force && clone.friction_force()==0.0)
+    clone.set_motor(Physics.SliderMotor3D.position(-0.5,20.0,8.0,8.0));assert(joint.motor_force()==0.0)
+    combined_steps(world,960);assert(Math.abs(joint.position()+0.5)<0.0002)
+    joint.set_motor(Physics.SliderMotor3D(0.5,20.0));combined_steps(world,60);assert(Math.abs(joint.speed()-0.5)<0.00001)
+    joint.set_motor(Physics.SliderMotor3D.position_and_velocity(1.0,1.0,0.0,8.0,8.0));combined_steps(world,60)
+    assert(Math.abs(joint.speed()-0.5)<0.00001 && joint.friction_force()==0.0)
+    joint.set_motor(null);combined_steps(world,240);assert(Math.abs(joint.speed())<0.00001)
+    world.destroy_slider_constraint(joint);assert(!clone.is_valid())
+}
+
+test "combined mutation wakes suspended bodies and disabled drive has no effect" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var joint = world.create_slider_constraint(combined_rail(world),body)
+    combined_steps(world,240);assert(!body.is_awake())
+    joint.set_motor(Physics.SliderMotor3D.position_and_velocity(0.5,0.3,10.0,8.0,8.0));assert(body.is_awake())
+    joint.set_enabled(false);combined_steps(world,60);assert(joint.motor_force()==0.0 && body.position().length()<0.00001)
+    joint.set_enabled(true);combined_steps(world,60);assert(joint.position()>0.01 && joint.motor_force()!=0.0)
+}

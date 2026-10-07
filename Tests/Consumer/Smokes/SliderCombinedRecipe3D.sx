@@ -1,0 +1,26 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var carriage = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep = false)
+    var joint = world.create_slider_constraint(rail,carriage)
+    var step = 0
+    let dt = 1.0/120.0
+    while step<960 {
+        let time = step as float*dt
+        let position = 0.75*Math.sin(time*0.8)
+        let speed = 0.6*Math.cos(time*0.8)
+        joint.set_motor(Physics.SliderMotor3D.position_and_velocity(position,speed,20.0,8.0,4.0))
+        world.step(dt)
+        assert(Math.abs(joint.motor_force())<=20.0001 && joint.anchor_error().length()<0.0001)
+        step++
+    }
+    joint.set_motor(Physics.SliderMotor3D.position_and_velocity(0.5,0.3,-2.0,3.0,8.0,8.0))
+    assert(joint.motor()!.speed==0.3 && joint.motor()!.minimum_force== -2.0)
+    print("Moving slider target followed with bounded combined position and velocity drive")
+}

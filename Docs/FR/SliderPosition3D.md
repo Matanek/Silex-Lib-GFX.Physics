@@ -61,7 +61,7 @@ sommeil, suspension et contacts. L'oracle Jolt qualifie huit cas à 60 Hz en
 Debug/Release : amortissement critique et faible, saturation, modes successifs,
 cibles limitées, charge, deux masses libres et ancrage excentré. La parité des
 impacts, des transitoires sur rail tournant et des chaînes spatiales générales
-reste à établir. La commande position/vitesse combinée reste à qualifier.
+reste à établir. La [commande combinée](SliderCombined3D.md) ajoute une vitesse souhaitée à la cible.
 
 `SliderPositionScene.sx` compare un chariot doré fortement amorti à un chariot
 bleu qui oscille ; les repères verts montrent la cible. T inverse la cible,

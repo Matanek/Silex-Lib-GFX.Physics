@@ -42,3 +42,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Signed slider force bounds](Docs/EN/SliderForceBounds3D.md): different effort in each direction, velocity and position modes, including one-sided motors.
 
 [Soft slider stops](Docs/EN/SliderSoftLimits3D.md): load compression, physical stiffness/damping and runtime mutation.
+
+[Combined slider position and velocity](Docs/EN/SliderCombined3D.md).
