@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Impacts des butées rigides de charnière : bilan d’impulsion, travail dissipatif et sortie de butée qualifiés à 60/120 Hz ; activation anticipée explicitée et écarts Jolt conservés, sans modification du solveur.
+
 - Qualification du servo de crémaillère avec deux butées et inversion : chemin angulaire court explicite, réactions statiques et repos comparés à Jolt à 60/120 Hz ; écarts transitoires conservés sans changement du solveur.
 
 - Une charnière rejette l’effort mémorisé d’une butée souple devenue inactive ou opposée après mutation du corps ; le déplacement dans la zone libre ne conserve aucun couple de l’ancienne butée.

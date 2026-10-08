@@ -59,6 +59,24 @@ exprimer les deux normales locales afin qu'elles coïncident dans le monde.
 friction sur l'axe libre. Elles sont résolues à chaque pas de simulation ;
 elles ne constituent pas une détection continue de toutes les rotations.
 
+Une butée peut freiner avant que l’angle mesuré atteigne sa limite : le
+solveur borne la vitesse à la distance restante sur un pas et réévalue cette
+distance après le déplacement. L’angle et la vitesse retournés après `step`
+appartiennent donc à la fin du pas ; diviser le déplacement par la durée ne
+reproduit pas nécessairement cette vitesse après freinage.
+`limit_torque()*delta` mesure l’impulsion de butée du dernier pas, appliquée
+au second corps. Pour un pivot fixe, un axe aligné et une inertie axiale I
+sans autres efforts, `I*(omega_after-omega_before)` égale la somme des
+impulsions de butée et de moteur.
+
+Le [test consommateur d’impact](../../Tests/Consumer/Tests/HingeImpact3D.sx)
+vérifie cette somme, le travail dissipatif de la butée, l’axe libre et la
+sortie de butée à 60/120 Hz dans les deux sens. Jolt prépare ses limites à
+l’angle du début du pas : son premier freinage peut arriver plus tard. Cette
+qualification ne promet ni vitesse identique pendant l’impact ni arrêt
+motorisé exactement nul à une date donnée ; les écarts historiques restent
+conservés dans la campagne de comparaison.
+
 `set_limits(minimum, maximum)`, `set_anchors(first, second)` et
 `set_frames(first_axis, first_normal, second_axis, second_normal)` modifient
 la charnière vivante. `set_enabled(false)` suspend ses réactions sans détruire

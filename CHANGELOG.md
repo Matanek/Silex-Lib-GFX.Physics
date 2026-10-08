@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Rigid hinge stop impacts: impulse balance, dissipative work and stop release qualified at 60/120 Hz; anticipatory activation explained and Jolt differences retained, without a solver change.
+
 - Rack servo qualification with two stops and reversal: explicit short angular path, static reactions and rest compared with Jolt at 60/120 Hz; transient differences retained without a solver change.
 
 - Hinges discard stored soft-stop effort when body mutation makes that stop inactive or changes its side; moving into the free interval retains no torque from the previous stop.

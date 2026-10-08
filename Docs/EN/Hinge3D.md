@@ -58,6 +58,22 @@ Stops are rigid, with no imposed bounce or friction on the free axis. They
 are resolved at each simulation step; they do not continuously detect every
 rotation.
 
+A stop can brake before the measured angle reaches its limit: the solver
+bounds speed by the remaining distance over one step and reevaluates that
+distance after movement. Angle and speed returned after `step` therefore
+describe the end of the step; dividing movement by duration need not reproduce
+that speed after braking. `limit_torque()*delta` measures the last step's stop
+impulse applied to the second body. With a fixed pivot, an aligned axis and
+axial inertia I without other efforts, `I*(omega_after-omega_before)` equals
+the sum of stop and motor impulses.
+
+The [impact consumer test](../../Tests/Consumer/Tests/HingeImpact3D.sx) checks
+that sum, dissipative stop work, the free axis and stop release at 60/120 Hz
+in both directions. Jolt prepares its limits using the angle at the start of
+the step, so its first braking can occur later. This qualification promises
+neither matching impact speeds nor exactly zero driven speed at a given time;
+the historical differences remain preserved in the comparison campaign.
+
 `set_limits(minimum, maximum)`, `set_anchors(first, second)` and
 `set_frames(first_axis, first_normal, second_axis, second_normal)` modify the
 live hinge. `set_enabled(false)` suspends its reactions without destroying

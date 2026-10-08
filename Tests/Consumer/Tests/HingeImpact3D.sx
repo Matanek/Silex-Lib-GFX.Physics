@@ -1,0 +1,91 @@
+use GFX.Physics
+use STD.Math
+
+class ImpactFixture {
+    var world:Physics.World3D
+    var body:Physics.RigidBody3D
+    var hinge:Physics.HingeConstraint3D
+    init(angle:float,speed:float,limited:bool=true) {
+        self.world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var fixed=self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        self.body=self.world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+            ..transform=Physics.Transform3D(rotation:Math.Quat.angle_axis(angle,Math.Vec3(0.0,0.0,1.0)))
+            ..angular_velocity=Math.Vec3(0.0,0.0,speed)
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        var settings=Physics.HingeConstraint3DSettings()
+        if limited { settings.minimum_angle=-0.3;settings.maximum_angle=0.3 }
+        self.hinge=self.world.create_hinge_constraint(fixed,self.body,settings)
+    }
+    func step(delta:float) {
+        let before=self.hinge.angular_speed();let angle=self.hinge.angle()
+        self.world.step(delta)
+        let after=self.hinge.angular_speed()
+        let motor=self.hinge.motor_torque()*delta
+        let limit=self.hinge.limit_torque()*delta
+        assert(Math.abs(0.1*(after-before)-motor-limit)<0.000002)
+        assert(limit*(before+after)*0.5<=0.000001)
+        assert(0.05*(after*after-before*before)-motor*(before+after)*0.5<=0.000001)
+        assert(Math.abs(self.hinge.motor_torque())<=10.0002)
+        assert(self.hinge.anchor_error().length()<0.00001 && self.hinge.axis_error()<0.00001)
+        if self.hinge.maximum_angle()==0.3 {
+            let advance=Math.max(Math.max(0.0,Math.abs(angle)-0.3),Math.abs(before)*delta+100.0*delta*delta)
+            assert(Math.abs(self.hinge.angle())<=0.3+advance+0.00001)
+        }
+    }
+}
+
+test "hinge stop approach dissipates energy with a complete impulse balance at both rates and signs" {
+    let rates:int[]=[60,120];let signs:float[]=[-1.0,1.0]
+    for rate in rates { for sign in signs {
+        var fixture=ImpactFixture(sign*0.283,sign)
+        var impulse=0.0;var step=0
+        while step<rate {
+            fixture.step(1.0/rate as float);impulse+=fixture.hinge.limit_torque()/rate as float;step++
+        }
+        assert(Math.abs(impulse+0.1*sign)<0.000002)
+        assert(Math.abs(fixture.hinge.angle()-0.3*sign)<0.00001)
+        assert(Math.abs(fixture.hinge.angular_speed())<0.00001)
+    } }
+}
+
+test "initially active hinge stop brakes immediately and releases an inward command without stored effort" {
+    let rates:int[]=[60,120];let signs:float[]=[-1.0,1.0]
+    for rate in rates { for sign in signs {
+        var fixture=ImpactFixture(sign*0.3,sign)
+        fixture.step(1.0/rate as float)
+        assert(Math.abs(fixture.hinge.angular_speed())<0.00001)
+        fixture.body.set_angular_velocity(Math.Vec3(0.0,0.0,-sign))
+        fixture.step(1.0/rate as float)
+        assert(Math.abs(fixture.hinge.angular_speed()+sign)<0.00001)
+        assert(Math.abs(fixture.hinge.angle())<0.3 && Math.abs(fixture.hinge.limit_torque())<0.00001)
+    } }
+}
+
+test "free hinge axis retains its velocity and receives no stop impulse" {
+    let rates:int[]=[60,120];let signs:float[]=[-1.0,1.0]
+    for rate in rates { for sign in signs {
+        var fixture=ImpactFixture(0.0,sign,false);var step=0
+        while step<rate { fixture.step(1.0/rate as float);step++ }
+        assert(Math.abs(fixture.hinge.angle()-sign)<0.00001)
+        assert(Math.abs(fixture.hinge.angular_speed()-sign)<0.00001)
+        assert(fixture.hinge.limit_torque()==0.0)
+    } }
+}
+
+test "motor hinge impact and reversal preserve effort work and impulse through every step" {
+    let rates:int[]=[60,120];let signs:float[]=[-1.0,1.0]
+    for rate in rates { for sign in signs {
+        var fixture=ImpactFixture(0.0,0.0)
+        fixture.hinge.set_motor(Physics.HingeMotor3D.position(sign*0.8,10.0,1.6,0.08))
+        var step=0
+        while step<rate*6 {
+            if step==rate*3 { fixture.hinge.set_motor(Physics.HingeMotor3D.position(-sign*0.8,10.0,1.6,0.08)) }
+            fixture.step(1.0/rate as float)
+            if step==rate*3 { assert(fixture.hinge.angular_speed()*sign<0.0) }
+            step++
+        }
+        assert(fixture.hinge.angle()*sign<0.0)
+    } }
+}
