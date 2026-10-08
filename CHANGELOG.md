@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Hinges discard stored soft-stop effort when body mutation makes that stop inactive or changes its side; moving into the free interval retains no torque from the previous stop.
+
 - 3D hinges converge with a fixed payload outside the rotation plane under gravity; passive preparation, reactions and motor budget retained across step changes and mutations. Full-run mechanical qualification and settled Jolt comparison; initial differences retained.
 
 - 3D path guidance: open/closed Hermite geometry, metric drives, friction, endpoints, physical orientation transport, safe mutations and explicit pinned Jolt gap witnesses.

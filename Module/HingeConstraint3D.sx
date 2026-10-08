@@ -197,13 +197,17 @@ package class HingeConstraintState3D {
         self.warm_upper = upper
     }
 
-    func reset() {
+    func discard_warm_start() {
         self.warm_linear = Math.Vec3()
         self.warm_angular = Math.Vec3()
         self.warm_motor = 0.0
         self.warm_friction = 0.0
         self.warm_lower = 0.0
         self.warm_upper = 0.0
+    }
+
+    func reset() {
+        self.discard_warm_start()
         self.point.impulse = Math.Vec3()
         self.point.inverse_delta = 0.0
         self.angular_impulse = Math.Vec3()

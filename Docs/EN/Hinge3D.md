@@ -164,7 +164,9 @@ inertia about the pivot.
 
 The motor limit remains shared across the whole step, including step-duration
 changes. Hinge mutations clear previous efforts. Reenabling after free motion
-may take several steps to recover the anchors, like correcting an initial pose.
+may take several steps to recover the anchors, like correcting an initial pose. If a body
+is moved into a soft stop’s free interval, that previous stop’s effort ends
+on the next positive step.
 
 Positions, speeds and reactions are compared with Jolt after 2.5 s in 3 s runs.
 Initial trajectories and contact phases differ; these proofs do not guarantee

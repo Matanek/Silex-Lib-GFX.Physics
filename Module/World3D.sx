@@ -1067,6 +1067,13 @@ public class World3D {
                         }
                     }
                 }
+                if constraint.limit_spring != null &&
+                    ((constraint.warm_lower != 0.0 && constraint.limit_side != 1) ||
+                        (constraint.warm_upper != 0.0 && constraint.limit_side != -1))
+                {
+                    // An inactive or changed stop cannot seed this step with its old effort.
+                    constraint.discard_warm_start()
+                }
                 if let motor = constraint.motor {
                     if let target = motor.target_angle {
                         var first = self.store.require(constraint.point.first_id)

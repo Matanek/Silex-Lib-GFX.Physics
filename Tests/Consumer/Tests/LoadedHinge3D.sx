@@ -138,3 +138,36 @@ test "disabled hinge and body discard warm effort and restart after explicit fra
     fixture.check()
     assert(fixture.joint.axis_error()<0.002)
 }
+
+
+test "soft hinge drops cached stop effort when body mutation enters the free interval" {
+    var sign=-1.0
+    while sign<=1.0 {
+        var rate=60
+        while rate<=120 {
+            var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+            var pivot=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+                ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+            var body=world.create_rigid_body(Physics.RigidBody3DSettings()
+                ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.1))
+                ..transform=Physics.Transform3D(rotation:Math.Quat.angle_axis(sign*0.4,Math.Vec3(0.0,0.0,1.0)))
+                ..angular_velocity=Math.Vec3(0.0,0.0,-sign*0.2) ..allow_sleep=false
+                ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+            var joint=world.create_hinge_constraint(pivot,body,Physics.HingeConstraint3DSettings()
+                ..minimum_angle=-0.3 ..maximum_angle=0.3 ..limit_spring=Physics.HingeLimitSpring3D(10.0,0.05))
+            world.step(1.0/rate as float)
+            assert(sign*joint.limit_torque()<-0.5)
+            body.set_transform(Physics.Transform3D())
+            body.set_angular_velocity(Math.Vec3())
+            var step=0
+            while step<30 {
+                world.step(1.0/rate as float)
+                assert(joint.limit_torque()==0.0 && Math.abs(joint.angular_speed())<0.00001)
+                assert(Math.abs(joint.angle())<0.00001)
+                step++
+            }
+            rate+=60
+        }
+        sign+=2.0
+    }
+}

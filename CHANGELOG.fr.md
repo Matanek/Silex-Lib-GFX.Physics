@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Une charnière rejette l’effort mémorisé d’une butée souple devenue inactive ou opposée après mutation du corps ; le déplacement dans la zone libre ne conserve aucun couple de l’ancienne butée.
+
 - Les charnières 3D convergent avec une charge fixe hors du plan sous gravité ; préparation passive, réactions et budget moteur conservés avec changement de pas et mutations. Qualification mécanique complète et comparaison Jolt après convergence ; écarts initiaux conservés.
 
 - Guidage sur chemin 3D : Hermite ouvert/bouclé, distances et moteurs en mètres, friction, extrémités, transport physique d’orientation, mutations et témoins explicites des écarts Jolt.

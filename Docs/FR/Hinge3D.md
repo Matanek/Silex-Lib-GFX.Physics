@@ -169,7 +169,9 @@ vérifie aussi l’inertie complète de l’assemblage autour du pivot.
 Le plafond moteur reste partagé sur tout le pas, même lorsque sa durée
 change. Une mutation de charnière efface ses efforts précédents. Une
 réactivation après déplacement libre peut demander plusieurs pas pour
-retrouver les ancrages, comme une correction de pose initiale.
+retrouver les ancrages, comme une correction de pose initiale. Si un corps
+est déplacé dans la zone libre d’une butée souple, l’effort de cette ancienne
+butée cesse au prochain pas positif.
 
 Les positions, vitesses et réactions sont comparées à Jolt après 2,5 s sur
 des parcours de 3 s. Les trajectoires initiales et les phases de contact
