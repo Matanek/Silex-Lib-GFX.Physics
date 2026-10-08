@@ -53,6 +53,28 @@ pendant un pas, même au-delà de π rad ; les poses externes utilisent leur
 changement angulaire le plus court. La correction de phase est progressive
 et n’ajoute pas d’énergie cinétique.
 
+## Servo et rail borné
+
+Le servo de charnière choisit le chemin angulaire court, même lorsqu’une
+crémaillère possède une course limitée. De +2 vers −2 rad, ce chemin tourne
+dans le sens positif ; une butée peut l’empêcher de rejoindre la cible.
+Choisir les cibles en tenant compte du chemin et du rail. Aucun couplage ne
+change silencieusement la convention du moteur ou n’ajoute une butée angulaire.
+
+Le témoin de servo fort utilise un rapport de 2 rad/m, deux corps de 2 kg
+et inertie isotrope 0,4 kg·m², des cibles ±1,5 rad, un plafond de 12 N·m,
+une raideur de 15 et un amortissement de 8. Le rail ±0,6 m arrête le pignon à
+±1,2 rad ; le couple statique attendu vaut ±4,5 N·m et la force transmise
+±9 N. Les inversions, les réactions et le repos sont qualifiés à 60/120 Hz.
+À 120 Hz, ce témoin conserve moins de 0,002 rad de phase à chaque pas.
+
+Au premier franchissement, une avance libre peut précéder la correction de
+pose. Le témoin à 60 Hz et celui historique ±2 rad à 120 Hz dépassent 0,002 rad
+transitoirement dans Silex et Jolt. Ces échecs sont conservés ; les tolérances
+ne sont pas élargies. Les comparaisons complètes qui dépassent leurs bornes
+restent rejetées, tandis que le repos est comparé séparément après 2,5 s par
+commande. Cela ne prouve ni une phase exacte des impacts ni des chaînes générales.
+
 ## Réactions et mutation
 
 `pinion_reaction_torque()` est le couple sur le pignon en N·m,

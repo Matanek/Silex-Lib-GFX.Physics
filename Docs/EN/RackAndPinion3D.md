@@ -50,6 +50,28 @@ disambiguates turns within a step, including more than π radians; external
 poses use their shortest angular change. Phase correction is gradual and
 adds no kinetic energy.
 
+## Servo and finite rail
+
+The hinge servo takes the short angular path even when the rack has a finite
+stroke. From +2 to −2 rad, that path rotates in the positive direction; a
+stop can prevent it from reaching the target. Choose targets with both path
+and rail in mind. No coupling silently changes the motor convention or adds
+an angular stop.
+
+The strong servo witness uses a 2 rad/m ratio, two 2 kg bodies with isotropic
+inertia 0.4 kg·m², targets ±1.5 rad, a 12 N·m cap, stiffness 15 and damping 8.
+The ±0.6 m rail stops the pinion at ±1.2 rad; expected static torque is
+±4.5 N·m and transmitted force ±9 N. Reversals, reactions and rest are
+qualified at 60/120 Hz. At 120 Hz this witness retains phase below 0.002 rad
+on every step.
+
+At the first crossing, a free advance can precede pose correction. The 60 Hz
+witness and historical ±2 rad witness at 120 Hz transiently exceed 0.002 rad
+in both Silex and Jolt. These failures are retained; tolerances are not widened.
+Full comparisons that exceed their bounds remain rejected, while rest is
+compared separately after 2.5 s per command. This proves neither exact impact
+phase nor general chains.
+
 ## Reactions and mutation
 
 `pinion_reaction_torque()` is the pinion torque in N·m; `reaction_force()` is

@@ -1,0 +1,90 @@
+use GFX.Physics
+use STD.Math
+
+func servo_fixed(world:Physics.World3D,position:Math.Vec3) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..transform=Physics.Transform3D(position) ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+func servo_moving(world:Physics.World3D,position:Math.Vec3,size:Math.Vec3) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..transform=Physics.Transform3D(position) ..shape=Physics.Shape3D.box(Physics.Box3D(size))
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.4))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+}
+
+class RackServo {
+    var world:Physics.World3D=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var pinion:Physics.RigidBody3D
+    var rack:Physics.RigidBody3D
+    var driver:Physics.HingeConstraint3D
+    var transmission:Physics.RackAndPinionConstraint3D
+    var guide:Physics.SliderConstraint3D
+    var extent:float
+    init(extent:float) {
+        self.extent=extent
+        self.pinion=servo_moving(self.world,Math.Vec3(0.0,2.4,0.0),Math.Vec3(1.1,0.2,0.3))
+        self.rack=servo_moving(self.world,Math.Vec3(0.0,1.8,0.0),Math.Vec3(3.0,0.2,0.35))
+        self.driver=self.world.create_hinge_constraint(servo_fixed(self.world,self.pinion.position()),self.pinion)
+        self.guide=self.world.create_slider_constraint(servo_fixed(self.world,self.rack.position()),self.rack,
+            Physics.SliderConstraint3DSettings() ..minimum_position=-extent ..maximum_position=extent)
+        self.transmission=self.world.create_rack_and_pinion_constraint(self.pinion,self.rack,
+            Physics.RackAndPinionConstraint3DSettings() ..ratio=2.0)
+    }
+    func aim(target:float) { self.driver.set_motor(Physics.HingeMotor3D.position(target,12.0,15.0,8.0)) }
+    func step(delta:float) {
+        let previous_phase=Math.abs(self.transmission.phase_error())
+        let previous_penetration=Math.max(0.0,Math.abs(self.transmission.travel())-self.extent)
+        let advance=delta*(Math.abs(self.pinion.angular_velocity().z)+30.0*delta)
+        self.world.step(delta)
+        assert(Math.abs(self.transmission.travel())<=self.extent+Math.max(previous_penetration,advance/2.0)+0.00001)
+        assert(Math.abs(self.transmission.phase_error())<=previous_phase+advance+0.00001)
+        assert(Math.abs(self.transmission.speed_error())<0.001 && Math.abs(self.driver.motor_torque())<=12.0001)
+        assert(self.driver.anchor_error().length()<0.001 && self.driver.axis_error()<0.001)
+        assert(self.guide.angular_error().length()<0.001)
+        assert(Math.abs(self.rack.position().y-1.8)<0.001 && Math.abs(self.rack.position().z)<0.001)
+    }
+    func stopped(direction:float,torque:float) {
+        assert(Math.abs(self.transmission.phase_error())<0.002)
+        assert(Math.abs(self.transmission.travel()-direction*self.extent)<0.002)
+        assert(Math.abs(self.pinion.angular_velocity().z)<0.001)
+        assert(Math.abs(self.driver.motor_torque()-torque)<0.01)
+        assert(Math.abs(self.transmission.pinion_reaction_torque().z+torque)<0.01)
+        assert(Math.abs(self.transmission.reaction_force().x-2.0*torque)<0.02)
+    }
+}
+test "strong rack servo reaches both rail stops and reverses at 120 Hz" {
+    var fixture=RackServo(0.6)
+    let targets:float[]=[1.5,-1.5]
+    for target in targets {
+        fixture.aim(target)
+        fixture.step(1.0/120.0)
+        assert(fixture.pinion.angular_velocity().z*target>0.0)
+        var step=1
+        while step<360 {
+            fixture.step(1.0/120.0)
+            assert(Math.abs(fixture.transmission.phase_error())<0.002)
+            step++
+        }
+        fixture.stopped(target/1.5,3.0*target)
+    }
+}
+test "strong rack servo preserves finite step crossing and settles at 60 Hz" {
+    var fixture=RackServo(0.6)
+    let targets:float[]=[1.5,-1.5]
+    for target in targets {
+        fixture.aim(target);var step=0
+        while step<180 {
+            fixture.step(1.0/60.0);step++
+        }
+        fixture.stopped(target/1.5,3.0*target)
+    }
+}
+test "periodic rack servo short route can be blocked by a finite rail" {
+    var fixture=RackServo(1.1);fixture.aim(2.0)
+    var step=0;while step<360 { fixture.step(1.0/120.0);step++ }
+    fixture.aim(-2.0);fixture.step(1.0/120.0)
+    assert(fixture.pinion.angular_velocity().z>0.0 && fixture.driver.motor_torque()>0.0)
+    step=0
+    while step<360 { fixture.step(1.0/120.0);step++ }
+    fixture.stopped(1.0,12.0)
+}

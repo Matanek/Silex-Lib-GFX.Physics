@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Rack servo qualification with two stops and reversal: explicit short angular path, static reactions and rest compared with Jolt at 60/120 Hz; transient differences retained without a solver change.
+
 - Hinges discard stored soft-stop effort when body mutation makes that stop inactive or changes its side; moving into the free interval retains no torque from the previous stop.
 
 - 3D hinges converge with a fixed payload outside the rotation plane under gravity; passive preparation, reactions and motor budget retained across step changes and mutations. Full-run mechanical qualification and settled Jolt comparison; initial differences retained.
