@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les charnières 3D convergent avec une charge fixe hors du plan sous gravité ; préparation passive, réactions et budget moteur conservés avec changement de pas et mutations. Qualification mécanique complète et comparaison Jolt après convergence ; écarts initiaux conservés.
+
 - Guidage sur chemin 3D : Hermite ouvert/bouclé, distances et moteurs en mètres, friction, extrémités, transport physique d’orientation, mutations et témoins explicites des écarts Jolt.
 
 - Poulie 3D : longueur pondérée à limites, câble détendu ou rigide, rapport de palan, ancrages et réactions physiques, mutations sûres et témoins Jolt.

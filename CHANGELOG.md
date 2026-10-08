@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- 3D hinges converge with a fixed payload outside the rotation plane under gravity; passive preparation, reactions and motor budget retained across step changes and mutations. Full-run mechanical qualification and settled Jolt comparison; initial differences retained.
+
 - 3D path guidance: open/closed Hermite geometry, metric drives, friction, endpoints, physical orientation transport, safe mutations and explicit pinned Jolt gap witnesses.
 
 - 3D pulley: bounded weighted length, slack or rigid cable, tackle ratios, physical anchor reactions, safe mutations and Jolt witnesses.

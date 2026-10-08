@@ -141,6 +141,12 @@ package class HingeConstraintState3D {
     var second_local_normal:Math.Vec3
     var minimum_angle:float
     var maximum_angle:float
+    var warm_linear:Math.Vec3 = Math.Vec3()
+    var warm_angular:Math.Vec3 = Math.Vec3()
+    var warm_motor:float = 0.0
+    var warm_friction:float = 0.0
+    var warm_lower:float = 0.0
+    var warm_upper:float = 0.0
     var angular_impulse:Math.Vec3 = Math.Vec3()
     var lower_impulse:float = 0.0
     var upper_impulse:float = 0.0
@@ -174,7 +180,30 @@ package class HingeConstraintState3D {
         self.maximum_friction_torque = settings.maximum_friction_torque
     }
 
+    func prepare_warm_start(delta:float) {
+        let factor = delta * self.point.inverse_delta
+        let linear = self.point.impulse.multiply(factor)
+        let angular = self.angular_impulse.multiply(factor)
+        let motor = self.motor_impulse * factor
+        let friction = self.friction_impulse * factor
+        let lower = self.lower_impulse * factor
+        let upper = self.upper_impulse * factor
+        self.reset()
+        self.warm_linear = linear
+        self.warm_angular = angular
+        self.warm_motor = motor
+        self.warm_friction = friction
+        self.warm_lower = lower
+        self.warm_upper = upper
+    }
+
     func reset() {
+        self.warm_linear = Math.Vec3()
+        self.warm_angular = Math.Vec3()
+        self.warm_motor = 0.0
+        self.warm_friction = 0.0
+        self.warm_lower = 0.0
+        self.warm_upper = 0.0
         self.point.impulse = Math.Vec3()
         self.point.inverse_delta = 0.0
         self.angular_impulse = Math.Vec3()

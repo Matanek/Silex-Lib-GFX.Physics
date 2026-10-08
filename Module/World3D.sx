@@ -771,9 +771,10 @@ public class World3D {
             }
         }
         self.warm_start_fixed_constraints(delta)
-        // Rigid attachments, hinge drives and active soft stops act before pose integration.
+        self.warm_start_hinge_constraints(delta)
+        // Rigid attachments and hinges act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_drive() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
+        if self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
             var iteration = 0
             while iteration < 12 {
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
@@ -1048,7 +1049,7 @@ public class World3D {
         }
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
-                constraint.reset()
+                constraint.prepare_warm_start(delta)
                 if constraint.limit_spring != null &&
                     (constraint.minimum_angle > -Math.pi() || constraint.maximum_angle < Math.pi())
                 {
@@ -1095,6 +1096,30 @@ public class World3D {
                         constraint.impulse = constraint.warm_linear
                         constraint.angular_impulse = constraint.warm_angular
                         constraint.inverse_delta = 1.0 / delta
+                    }
+                }
+            }
+        }
+    }
+
+    private func warm_start_hinge_constraints(delta:float) {
+        for slot in self.hinge_constraints.slots {
+            if var constraint = slot {
+                if constraint.point.is_enabled {
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        let first_radius = first.transform.point(constraint.point.first_local_anchor).subtract(first.world_center())
+                        let second_radius = second.transform.point(constraint.point.second_local_anchor).subtract(second.world_center())
+                        apply_contact_impulse3d(first, second, first_radius, second_radius, constraint.warm_linear)
+                        apply_hinge_angular_impulse3d(first, second, constraint.warm_angular)
+                        constraint.point.impulse = constraint.warm_linear
+                        constraint.angular_impulse = constraint.warm_angular
+                        constraint.motor_impulse = constraint.warm_motor
+                        constraint.friction_impulse = constraint.warm_friction
+                        constraint.lower_impulse = constraint.warm_lower
+                        constraint.upper_impulse = constraint.warm_upper
+                        constraint.point.inverse_delta = 1.0 / delta
                     }
                 }
             }
@@ -1236,19 +1261,13 @@ public class World3D {
         return false
     }
 
-    private func has_active_hinge_drive() bool {
+    private func has_active_hinge_constraint() bool {
         for slot in self.hinge_constraints.slots {
             if let constraint = slot {
                 if constraint.point.is_enabled {
-                    var maximum_torque = constraint.maximum_friction_torque
-                    if let motor = constraint.motor {
-                        maximum_torque = Math.max(Math.abs(motor.minimum_torque), Math.abs(motor.maximum_torque))
-                    }
-                    if maximum_torque > 0.0 || constraint.limit_side != 0 {
-                        var first = self.store.require(constraint.point.first_id)
-                        var second = self.store.require(constraint.point.second_id)
-                        if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
-                    }
+                    var first = self.store.require(constraint.point.first_id)
+                    var second = self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) { return true }
                 }
             }
         }

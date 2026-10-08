@@ -1,0 +1,140 @@
+use GFX.Physics
+use STD.Math
+
+class LoadedHingeFixture {
+    var world:Physics.World3D
+    var body:Physics.RigidBody3D
+    var payload:Physics.RigidBody3D
+    var joint:Physics.HingeConstraint3D
+    var attachment:Physics.FixedConstraint3D
+
+    init(offset:float=1.0, gravity:bool=true, floor:bool=true, motor:bool=true) {
+        var settings=Physics.World3DSettings()
+        if !gravity { settings.gravity=Math.Vec3() }
+        self.world=Physics.World3D(settings)
+        if floor {
+            self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+                ..shape=Physics.Shape3D.plane(Physics.Plane3D(offset:-1.5)))
+        }
+        var pivot=self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        self.body=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)) ..allow_sleep=false)
+        self.payload=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,-1.0,offset))
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep=false)
+        self.attachment=self.world.create_fixed_constraint(self.body,self.payload,Physics.FixedConstraint3DSettings()
+            ..first_local_frame=Physics.Transform3D(Math.Vec3(0.0,0.0,offset)))
+        var hinge=Physics.HingeConstraint3DSettings() ..second_local_anchor=Math.Vec3(0.0,1.0,0.0)
+        if motor { hinge.motor=Physics.HingeMotor3D(0.25,0.2) }
+        self.joint=self.world.create_hinge_constraint(pivot,self.body,hinge)
+    }
+    func check() {
+        assert(self.joint.anchor_error().length()<0.01)
+        assert(self.attachment.anchor_error().length()<0.01)
+        assert(self.attachment.angular_error().length()<0.01)
+        assert(Math.abs(self.joint.motor_torque())<=0.20001)
+    }
+    func steps(count:int,delta:float=1.0/60.0) {
+        var step=0;while step<count { self.world.step(delta);self.check();step++ }
+    }
+}
+
+test "loaded spatial hinge converges at both rates and offsets through reversal and contact" {
+    var rate=60
+    while rate<=120 {
+        var sign=-1.0
+        while sign<=1.0 {
+            var fixture=LoadedHingeFixture(sign)
+            var step=0
+            while step<rate*3 {
+                if step==rate*3/2 { fixture.joint.set_motor(Physics.HingeMotor3D(-0.25,0.2)) }
+                fixture.world.step(1.0/rate as float);fixture.check()
+                assert(fixture.joint.axis_error()<0.006)
+                if step>=rate*5/2 { assert(fixture.joint.axis_error()<0.002) }
+                step++
+            }
+            sign+=2.0
+        }
+        rate+=60
+    }
+}
+
+test "removing contact preserves spatial load convergence and lever reaction" {
+    var fixture=LoadedHingeFixture(floor:false,motor:false)
+    fixture.steps(180)
+    assert(fixture.joint.axis_error()<0.002)
+    let weight=(2.0+fixture.body.mass_properties().mass)*9.81
+    assert(Math.abs(fixture.joint.reaction_force().y-weight)<0.05)
+    assert(Math.abs(fixture.joint.reaction_torque().x+19.62)<0.05)
+    assert(Math.abs(fixture.attachment.reaction_force().y-19.62)<0.05)
+}
+
+test "free spatial assembly retains its complete pivot inertia and signed motor budget" {
+    var fixture=LoadedHingeFixture(gravity:false,floor:false)
+    let inertia=fixture.body.mass_properties().mass*1.1+2.2
+    var speed=0.0;var angle=0.0;var step=0
+    while step<180 {
+        var torque=0.2
+        if step>=90 { torque=-0.2 }
+        if step==90 { fixture.joint.set_motor(Physics.HingeMotor3D(-0.25,0.2)) }
+        speed+=torque/inertia/60.0;angle+=speed/60.0
+        fixture.world.step(1.0/60.0);fixture.check()
+        if step>=150 {
+            assert(Math.abs(fixture.joint.angular_speed()-speed)<0.0002)
+            assert(Math.abs(fixture.joint.angle()-angle)<0.0002)
+        }
+        assert(Math.abs(fixture.joint.motor_torque()-torque)<0.00001)
+        step++
+    }
+}
+
+test "warm impulses scale with delta without doubling the motor budget" {
+    var fixture=LoadedHingeFixture()
+    fixture.steps(120)
+    fixture.steps(120,1.0/120.0)
+    fixture.steps(60)
+    fixture.joint.set_motor(Physics.HingeMotor3D(-0.25,-0.03,0.12))
+    assert(fixture.joint.reaction_force().length()==0.0 && fixture.joint.motor_torque()==0.0)
+    var step=0
+    while step<120 {
+        var delta=1.0/60.0
+        if step%2==1 { delta=1.0/120.0 }
+        fixture.world.step(delta);fixture.check()
+        assert(fixture.joint.motor_torque()>=-0.03001 && fixture.joint.motor_torque()<=0.12001)
+        step++
+    }
+    assert(fixture.joint.axis_error()<0.002)
+}
+
+test "disabled hinge and body discard warm effort and restart after explicit frame mutation" {
+    var fixture=LoadedHingeFixture();fixture.steps(120)
+    fixture.joint.set_enabled(false)
+    var disabled_step=0;while disabled_step<3 { fixture.world.step(1.0/60.0);disabled_step++ }
+    assert(fixture.joint.reaction_force().length()==0.0 && fixture.joint.reaction_torque().length()==0.0)
+    fixture.body.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,0.0)))
+    fixture.payload.set_transform(Physics.Transform3D(Math.Vec3(0.0,-1.0,1.0)))
+    fixture.body.set_linear_velocity(Math.Vec3());fixture.body.set_angular_velocity(Math.Vec3())
+    fixture.payload.set_linear_velocity(Math.Vec3());fixture.payload.set_angular_velocity(Math.Vec3())
+    fixture.attachment.set_frames(Physics.Transform3D(Math.Vec3(0.0,0.0,1.0)),Physics.Transform3D())
+    fixture.joint.set_enabled(true)
+    var fresh=LoadedHingeFixture()
+    fixture.world.step(1.0/60.0);fresh.world.step(1.0/60.0)
+    assert(fixture.body.position().subtract(fresh.body.position()).length()<0.00001)
+    assert(Math.abs(fixture.joint.axis_error()-fresh.joint.axis_error())<0.00001)
+    fixture.steps(120)
+    fixture.body.set_enabled(false)
+    disabled_step=0;while disabled_step<3 { fixture.world.step(1.0/60.0);disabled_step++ }
+    assert(fixture.joint.motor_torque()==0.0 && fixture.joint.reaction_force().length()==0.0)
+    fixture.body.set_enabled(true)
+    var resumed_step=0
+    while resumed_step<120 {
+        fixture.world.step(1.0/60.0)
+        assert(Math.abs(fixture.joint.motor_torque())<=0.20001)
+        resumed_step++
+    }
+    fixture.check()
+    assert(fixture.joint.axis_error()<0.002)
+}

@@ -120,9 +120,9 @@ Une mutation efface les observations et réveille les corps liés. Un moteur
 actif à vitesse non nulle et couple disponible garde ses corps éveillés ;
 une cible nulle peut les laisser dormir une fois arrêtés. Désactiver la
 charnière ou un corps suspend le moteur. `step(0)` conserve son observation.
-Les articulations d’un monde contenant un moteur actif sont préparées après
-les forces et avant le déplacement, puis résolues avec les contacts ;
-le plafond d’effort est partagé entre ces phases.
+Les charnières actives, y compris passives, sont préparées après les forces
+et avant le déplacement, puis résolues avec les contacts ; le plafond
+d’effort est partagé entre ces phases.
 
 ## Lire les réactions et gérer la durée de vie
 
@@ -156,3 +156,22 @@ amortissement physiques.
 Les [bornes de couple signées](HingeTorqueBounds3D.md) permettent un effort différent dans chaque sens, en vitesse ou en position.
 
 La [commande combinée](HingeCombined3D.md) suit un angle et une vitesse actualisés ensemble.
+
+## Porter une charge hors du plan
+
+Une charnière peut porter une charge déportée par une attache fixe. La
+qualification couvre un déport de ±1 m sous gravité, une charge de 2 kg,
+l’inversion d’un moteur plafonné à 0,2 N·m, un sol présent ou retiré et des
+pas à 60/120 Hz. Les ancrages restent sous 0,01 m pendant ces parcours ;
+l’erreur d’axe descend sous 0,002 rad après convergence. Le cas sans gravité
+vérifie aussi l’inertie complète de l’assemblage autour du pivot.
+
+Le plafond moteur reste partagé sur tout le pas, même lorsque sa durée
+change. Une mutation de charnière efface ses efforts précédents. Une
+réactivation après déplacement libre peut demander plusieurs pas pour
+retrouver les ancrages, comme une correction de pose initiale.
+
+Les positions, vitesses et réactions sont comparées à Jolt après 2,5 s sur
+des parcours de 3 s. Les trajectoires initiales et les phases de contact
+diffèrent ; ces preuves ne garantissent pas une chaîne quelconque, une
+charge arbitraire ou une correction identique dès le premier pas.

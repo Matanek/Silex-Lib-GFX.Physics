@@ -117,9 +117,9 @@ guarantee that the speed will be reached under excessive load.
 Mutations clear observations and wake the linked bodies. An active motor
 with nonzero speed and available torque keeps its bodies awake; a zero target
 can let them sleep once stopped. Disabling the hinge or either body suspends
-the motor. `step(0)` preserves its observation. Joints in a world containing
-an active powered motor are prepared after forces and before movement, then
-solved with contacts; the effort limit is shared between those phases.
+the motor. `step(0)` preserves its observation. Active hinges, including passive ones, are prepared after forces and before
+movement, then solved with contacts; the effort limit is shared between those
+phases.
 
 ## Read reactions and manage lifetime
 
@@ -152,3 +152,20 @@ motor off, stops, a chain and contacts.
 [Signed torque bounds](HingeTorqueBounds3D.md) permit different effort in each direction, in velocity or position mode.
 
 [Combined control](HingeCombined3D.md) follows an angle and velocity updated together.
+
+## Carry a load outside the rotation plane
+
+A hinge can carry an offset payload through a fixed attachment. Qualification
+covers offsets of ±1 m under gravity, a 2 kg payload, reversal of a motor
+limited to 0.2 N·m, a floor present or absent, and steps at 60/120 Hz. Anchors
+stay below 0.01 m throughout these runs; axis error falls below 0.002 rad
+after convergence. The gravity-free case also checks the complete assembly
+inertia about the pivot.
+
+The motor limit remains shared across the whole step, including step-duration
+changes. Hinge mutations clear previous efforts. Reenabling after free motion
+may take several steps to recover the anchors, like correcting an initial pose.
+
+Positions, speeds and reactions are compared with Jolt after 2.5 s in 3 s runs.
+Initial trajectories and contact phases differ; these proofs do not guarantee
+arbitrary chains, arbitrary loads, or identical correction from the first step.
