@@ -84,9 +84,22 @@ the handle; only `is_valid()` can then read it.
 
 ## Qualification
 
-Headless consumers cover free motion, Y/Z/twist limits, diagonal ellipse,
-asymmetric pyramid, locked axes, 60/120 Hz servos checked against independent
-recurrences, friction, signed budgets, frame mutations, sleep, contacts and
-lifetime. The pinned Jolt witness compares reduced cases in Debug/Release.
-General spatial chains, loaded offset servos and exact impact-step reaction
-parity remain to be qualified.
+Headless consumers cover free motion, Y/Z/twist limits, diagonal ellipses,
+asymmetric pyramids, locked axes, independent servo recurrences at 60/120 Hz,
+friction, signed budgets, frame changes, sleep, contacts and lifetime. The
+pinned Jolt witness compares reduced cases in Debug/Release.
+
+The [loaded consumer](../../Tests/Consumer/Tests/LoadedSwingTwist3D.sx) drives
+all three axes simultaneously under gravity, with an offset anchor, rotated
+frames, 1/2 kg masses and 60/120 Hz steps. Targets reverse and then recenter;
+each motor axis remains bounded to 30 N·m. Weight deflects the equilibrium:
+a finite-stiffness position target is not a rigid attachment. Vector balances,
+anchors and steady states are qualified against Jolt; equal transient responses
+are not established. This recipe has no contact or second dynamic articulation.
+
+Reactions are accumulated impulses divided by the step duration. Resolution
+uses the anchor before and after pose advancement, so the moment of the total
+force cannot be reconstructed exactly with a single initial lever. An exact
+local spin balance must separate these phases; the public consumer checks total
+angular momentum and static reactions. General spatial chains and exact
+impact-step reaction equality remain unqualified.

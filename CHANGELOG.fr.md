@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Trois servos swing/twist simultanés sous gravité : ancrage déporté, repères tournés, inversion et recentrage, réactions et régimes établis qualifiés à 60/120 Hz contre Jolt ; temporalité des bras de levier explicitée, sans changement du solveur.
+
 - Chaîne spatiale charnière/glissière verticale sous charge déportée : gravité, contact au plan, inversion, réactions vectorielles et budgets qualifiés à 60/120 Hz contre Jolt, sans changement de solveur.
 
 - Une chaîne de charnières motorisées conserve son bras retenu par un moteur de vitesse nulle pendant une poussée prolongée contre un plan : l’appui persistant participe au solveur avant intégration. Efforts conservés sans double application, téléportations invalidant le cache, recette et bilans à 60/120 Hz qualifiés contre Jolt.

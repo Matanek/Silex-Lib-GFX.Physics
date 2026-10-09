@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Simultaneous three-axis swing/twist servos under gravity: offset anchor, rotated frames, reversal and recentering, reactions and steady states qualified at 60/120 Hz against Jolt; lever timing documented without solver changes.
+
 - Spatial hinge and vertical slider chain with an offset load: gravity, floor contact, reversal, vector reactions and budgets qualified against Jolt at 60/120 Hz, without a solver change.
 
 - A motorized hinge chain retains an arm held by a zero velocity motor during sustained pressure against a floor: persistent support participates in the solve before integration. Efforts carry across phases without double application, teleportation invalidates the cache, and the recipe and balances are qualified against Jolt at 60/120 Hz.

@@ -1,0 +1,68 @@
+use GFX.Physics
+use STD.Math
+
+func qualify_loaded_swing(mass:int, rate:int, side:int) {
+    var world=Physics.World3D()
+    let base=Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,-1.0).normalized())
+    let frame=Math.Quat.angle_axis(0.35,Math.Vec3(0.0,0.0,1.0))
+    let lever=Math.Vec3(0.5,0.2,0.4*side as float)
+    var support=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..transform=Physics.Transform3D(rotation:base)
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var body=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform=Physics.Transform3D(base.rotate(lever),base)
+        ..mass_properties=Physics.MassProperties3D(mass as float,Math.Vec3(0.4))
+        ..allow_sleep=false ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var joint=world.create_swing_twist_constraint(support,body,Physics.SwingTwistConstraint3DSettings()
+        ..first_local_frame=Physics.Transform3D(rotation:frame)
+        ..second_local_frame=Physics.Transform3D(lever.negated(),frame)
+        ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.8))
+        ..minimum_twist=-0.8 ..maximum_twist=0.8)
+    let dt=1.0/rate as float
+    var cumulative=Math.Vec3()
+    var first_orientation=Math.Quat.identity()
+    var step=1
+    while step<=rate*9 {
+        if step==1 || step==rate*3+1 || step==rate*6+1 {
+            var direction=side as float
+            if step>rate*3 { direction=-direction }
+            if step>rate*6 { direction=0.0 }
+            joint.set_twist_motor(Physics.TwistMotor3D.position(0.25*direction,30.0,80.0,15.0))
+            joint.set_swing_motor(Physics.SwingMotor3D.position(Math.Vec2(0.2*direction,-0.15*direction),30.0,80.0,15.0))
+        }
+        let bp=body.transform().position;let bq=body.transform().rotation
+        let bv=body.linear_velocity();let bw=body.angular_velocity()
+        world.step(dt)
+        let p=body.transform().position;let q=body.transform().rotation
+        let v=body.linear_velocity();let w=body.angular_velocity()
+        let f=joint.reaction_force();let t=joint.reaction_torque();let m=joint.motor_torque()
+        let o=joint.orientation();let a=joint.angular_speed();let e=joint.anchor_error()
+        let gravity=Math.Vec3(0.0,-9.81*mass as float,0.0)
+        assert(v.subtract(bv).multiply(mass as float).subtract(f.add(gravity).multiply(dt)).length()<0.00001)
+        let before=bp.cross(bv.multiply(mass as float)).add(bw.multiply(0.4))
+        let after=p.cross(v.multiply(mass as float)).add(w.multiply(0.4))
+        let residual=after.subtract(before).subtract(t.add(bp.cross(gravity)).multiply(dt))
+        cumulative=cumulative.add(residual)
+        assert(residual.length()<0.003 && cumulative.length()<0.03)
+        assert(e.length()<0.005)
+        assert(Math.abs(m.x)<=30.0001 && Math.abs(m.y)<=30.0001 && Math.abs(m.z)<=30.0001)
+        assert(t.subtract(bq.multiply(frame).rotate(m)).length()<0.02)
+        assert(a.subtract(q.multiply(frame).conjugated().rotate(w)).length()<0.00001)
+        if step==rate*3 { first_orientation=o }
+        if step==rate*6 {
+            let change=first_orientation.conjugated().multiply(o)
+            assert(2.0*Math.atan2(Math.Vec3(change.x,change.y,change.z).length(),Math.abs(change.w))>0.5)
+        }
+        if step==rate*3 || step==rate*6 || step==rate*9 {
+            assert(v.length()<0.003 && w.length()<0.003)
+            assert(f.add(gravity).length()<0.05)
+            assert(t.add(q.rotate(lever.negated()).cross(f)).length()<0.05)
+        }
+        step++
+    }
+}
+
+test "three swing twist servo axes reverse an offset load under gravity in rotated frames" {
+    let masses:int[]=[1,2];let rates:int[]=[60,120];let sides:int[]=[-1,1]
+    for mass in masses { for rate in rates { for side in sides { qualify_loaded_swing(mass,rate,side) } } }
+}

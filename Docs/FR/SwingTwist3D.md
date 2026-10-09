@@ -92,5 +92,21 @@ Consommateurs sans rendu : mouvements libres, limites Y/Z/twist, ellipse
 diagonale, pyramide asymétrique, axes verrouillés, servos à 60/120 Hz par
 récurrence indépendante, friction, budgets signés, changements de repères,
 sommeil, contacts et durée de vie. Le témoin Jolt épinglé compare des cas
-réduits en Debug/Release. Les chaînes spatiales générales, les servos excentrés
-sous charge et l’égalité exacte des réactions au pas d’impact restent à qualifier.
+réduits en Debug/Release.
+
+Le [consommateur sous charge](../../Tests/Consumer/Tests/LoadedSwingTwist3D.sx)
+commande simultanément les trois axes sous gravité, avec ancrage déporté,
+repères tournés, masses de 1/2 kg et pas de 60/120 Hz. Les cibles s’inversent
+puis se recentrent ; les moteurs restent bornés à 30 N·m par axe. L’équilibre
+se déforme sous le poids : une cible de position avec raideur finie n’est pas
+une attache rigide. Bilans vectoriels, ancrage et régimes établis sont qualifiés
+contre Jolt ; l’égalité des réponses transitoires n’est pas acquise. La recette
+n’a ni contact ni deuxième articulation dynamique.
+
+Les réactions sont les impulsions cumulées divisées par la durée du pas.
+La résolution utilise l’ancrage avant puis après avancement de la pose : le
+moment de la force cumulée ne se reconstruit donc pas exactement avec un seul
+bras de levier initial. Un bilan de rotation propre exact doit séparer ces
+phases ; le consommateur public vérifie le moment cinétique total et les
+réactions statiques. Les chaînes spatiales générales et l’égalité exacte des
+réactions au pas d’impact restent à qualifier.
