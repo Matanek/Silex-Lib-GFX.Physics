@@ -6,6 +6,7 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Contact followed by release in a chain with two perpendicular hinges: balances with contact impulses and application points, loads and reversal qualified at 60/120 Hz against Jolt; recipe and limits documented, solver unchanged.
 - Loaded chain with two perpendicular hinges: force, spin and total angular momentum balances, reactions and reversal qualified at 60/120 Hz against Jolt; spatial recipe without contacts documented, solver unchanged.
 
 - Dynamic rail held under gravity, with axial impact and wall release: balances, weight reactions, budgets and real contact qualified at 60/120 Hz; measured Silex and inferred Jolt impulses distinguished, planar recipe documented without a solver change.

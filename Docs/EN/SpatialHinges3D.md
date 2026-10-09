@@ -71,3 +71,5 @@ This recipe disables collisions, sleep and damping, with no stops. It does
 not qualify contacts in a spatial chain, arbitrary chains, or transient/cost
 parity with Jolt. For a loaded slider with axial contact, follow
 [the held-rail recipe](LoadedRail3D.md).
+
+To add a plane to this chain, follow [the spatial contact path](SpatialContacts3D.md).

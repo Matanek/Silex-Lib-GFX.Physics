@@ -183,3 +183,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Retenir un rail chargé et libérer un contact](LoadedRail3D.md) : reprise du poids, effort moteur borné et inversion devant une paroi.
 
 [Porter une charge avec deux charnières perpendiculaires](SpatialHinges3D.md) : poids, couples hors du plan et inversion sous charge.
+
+[Mettre une chaîne spatiale en contact avec un plan](SpatialContacts3D.md) : contact, moment d’impulsion et libération.

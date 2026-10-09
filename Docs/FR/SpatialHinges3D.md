@@ -76,3 +76,5 @@ Cette recette désactive collisions, sommeil et amortissement, sans butées.
 Elle ne qualifie pas les contacts d’une chaîne spatiale, ni une chaîne arbitraire,
 ni une parité transitoire ou de coût avec Jolt. Pour une glissière chargée avec
 contact axial, suivre [le parcours du rail retenu](LoadedRail3D.md).
+
+Pour ajouter un plan à cette chaîne, suivre [le parcours de contact spatial](SpatialContacts3D.md).

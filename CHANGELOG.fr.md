@@ -6,6 +6,7 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Contact puis libération dans une chaîne à deux charnières perpendiculaires : bilans avec impulsions et points de contact, charges et inversion qualifiés à 60/120 Hz contre Jolt ; recette et limites documentées, solveur inchangé.
 - Chaîne de deux charnières perpendiculaires sous charge : bilans de force, rotation propre et moment total, réactions et inversion qualifiés à 60/120 Hz contre Jolt ; recette spatiale sans contacts documentée, solveur inchangé.
 
 - Rail dynamique retenu sous gravité, avec impact axial et libération d’une paroi : bilans, réactions de poids, budgets et contact réel qualifiés à 60/120 Hz ; impulsions Silex mesurées et Jolt inférées distinguées, recette plane documentée sans changement du solveur.

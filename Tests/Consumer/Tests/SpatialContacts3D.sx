@@ -1,0 +1,144 @@
+use GFX.Physics
+use STD.Math
+
+class SpatialContactsFixture {
+    var world:Physics.World3D
+    var arm:Physics.RigidBody3D
+    var payload:Physics.RigidBody3D
+    var first:Physics.HingeConstraint3D
+    var second:Physics.HingeConstraint3D
+    var mass:float
+    var side:float
+    var cumulative_error:Math.Vec3=Math.Vec3()
+    var peak_angle:float=0.0
+    var maximum_speed:float=0.0
+    var minimum_speed:float=0.0
+    var contacts:Physics.Contact3D[]=[]
+    var points:Physics.ContactPoint3D[]=[]
+    var peak_impulse:float=0.0
+    var contact_steps:int=0
+
+    init(mass:float,side:float,floor:bool) {
+        self.mass=mass;self.side=side
+        self.world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3(0.0,-9.81,0.0))
+        let disabled=Physics.CollisionFilter3D(mask_bits:0)
+        var pivot=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type=Physics.BodyType3D.fixed ..collision_filter=disabled)
+        self.arm=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..transform=Physics.Transform3D(Math.Vec3(0.5,0.0,0.0))
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.4))
+            ..allow_sleep=false ..collision_filter=disabled)
+        if floor {
+            self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+                ..shape=Physics.Shape3D.plane(Physics.Plane3D(Math.Vec3(0.0,1.0,0.0),-0.22))
+                ..friction=0.0 ..restitution=0.0)
+        }
+        self.payload=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.15))
+            ..transform=Physics.Transform3D(Math.Vec3(1.0,0.0,0.8*side))
+            ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(0.2))
+            ..allow_sleep=false ..friction=0.0 ..restitution=0.0)
+        self.first=self.world.create_hinge_constraint(pivot,self.arm,Physics.HingeConstraint3DSettings()
+            ..second_local_anchor=Math.Vec3(-0.5,0.0,0.0) ..motor=Physics.HingeMotor3D(0.0,60.0))
+        let target=0.2*side
+        self.second=self.world.create_hinge_constraint(self.arm,self.payload,Physics.HingeConstraint3DSettings()
+            ..first_local_anchor=Math.Vec3(0.5,0.0,0.0) ..second_local_anchor=Math.Vec3(0.0,0.0,-0.8*side)
+            ..first_local_axis=Math.Vec3(1.0,0.0,0.0) ..second_local_axis=Math.Vec3(1.0,0.0,0.0)
+            ..first_local_normal=Math.Vec3(0.0,1.0,0.0) ..second_local_normal=Math.Vec3(0.0,1.0,0.0)
+            ..motor=Physics.HingeMotor3D(target,40.0))
+    }
+
+    func momentum() Math.Vec3 {
+        return self.arm.angular_velocity().multiply(0.4).add(self.payload.angular_velocity().multiply(0.2))
+            .add(self.arm.position().cross(self.arm.linear_velocity()).multiply(2.0))
+            .add(self.payload.position().cross(self.payload.linear_velocity()).multiply(self.mass))
+    }
+
+    func step(delta:float,floor:bool) {
+        let v1=copy self.arm.linear_velocity();let v2=copy self.payload.linear_velocity()
+        let w1=copy self.arm.angular_velocity();let w2=copy self.payload.angular_velocity()
+        let before=self.momentum()
+        let gravity1=Math.Vec3(0.0,-2.0*9.81,0.0);let gravity2=Math.Vec3(0.0,-self.mass*9.81,0.0)
+        let gravity_torque=self.arm.position().cross(gravity1).add(self.payload.position().cross(gravity2))
+        let r1=self.arm.transform().vector(Math.Vec3(-0.5,0.0,0.0))
+        let r12=self.arm.transform().vector(Math.Vec3(0.5,0.0,0.0))
+        let r2=self.payload.transform().vector(Math.Vec3(0.0,0.0,-0.8*self.side))
+        let motor_axis=self.arm.transform().vector(Math.Vec3(1.0,0.0,0.0))
+        self.world.step(delta);self.world.write_contacts(self.contacts)
+        var contact_impulse=Math.Vec3();var contact_moment=Math.Vec3();var contact_spin=Math.Vec3()
+        for contact in self.contacts {
+            assert(contact.first_body().same_body(self.payload) || contact.second_body().same_body(self.payload))
+            contact.write_points(self.points);assert(self.points.count()==1 && self.contacts.count()==1)
+            var impulse=contact.normal().multiply(contact.normal_impulse()).add(contact.tangent_impulse())
+            if contact.first_body().same_body(self.payload) { impulse=impulse.negated() }
+            contact_impulse=contact_impulse.add(impulse)
+            contact_moment=contact_moment.add(self.points[0].position.cross(impulse))
+            let lever=Math.Vec3(0.0,-0.15-0.5*contact.separation(),0.0)
+            contact_spin=contact_spin.add(lever.cross(impulse))
+        }
+        assert(Math.abs(contact_impulse.x)<0.00001 && Math.abs(contact_impulse.z)<0.00001 && contact_impulse.y>=0.0)
+        if !self.contacts.is_empty() { self.contact_steps++ }
+        self.peak_impulse=Math.max(self.peak_impulse,contact_impulse.y)
+        if floor { assert(self.payload.position().y>= -0.073) }
+        else { assert(self.contacts.is_empty()) }
+        let f1=self.first.reaction_force();let f2=self.second.reaction_force()
+        let t1=self.first.reaction_torque();let t2=self.second.reaction_torque()
+        assert(self.arm.linear_velocity().subtract(v1).multiply(2.0)
+            .subtract(f1.subtract(f2).add(gravity1).multiply(delta)).length()<0.00001)
+        assert(self.payload.linear_velocity().subtract(v2).multiply(self.mass)
+            .subtract(f2.add(gravity2).multiply(delta)).subtract(contact_impulse).length()<0.00001)
+        assert(self.arm.angular_velocity().subtract(w1).multiply(0.4)
+            .subtract(t1.subtract(t2).add(r1.cross(f1)).subtract(r12.cross(f2)).multiply(delta)).length()<0.001)
+        assert(self.payload.angular_velocity().subtract(w2).multiply(0.2)
+            .subtract(t2.add(r2.cross(f2)).multiply(delta)).subtract(contact_spin).length()<0.001)
+        let error=self.momentum().subtract(before).subtract(t1.add(gravity_torque).multiply(delta)).subtract(contact_moment)
+        self.cumulative_error=self.cumulative_error.add(error)
+        assert(error.length()<0.003 && self.cumulative_error.length()<0.03)
+        assert(Math.abs(self.first.motor_torque())<=60.0001 && Math.abs(self.second.motor_torque())<=40.0001)
+        assert(Math.abs(t1.z-self.first.motor_torque())<0.02)
+        assert(Math.abs(t2.dot(motor_axis)-self.second.motor_torque())<0.02)
+        assert(self.first.anchor_error().length()<0.005 && self.second.anchor_error().length()<0.005)
+        assert(self.first.axis_error()<0.005 && self.second.axis_error()<0.005)
+        assert(Math.abs(self.first.angle())<0.02)
+        self.peak_angle=Math.max(self.peak_angle,Math.abs(self.second.angle()))
+        self.maximum_speed=Math.max(self.maximum_speed,self.side*self.second.angular_speed())
+        self.minimum_speed=Math.min(self.minimum_speed,self.side*self.second.angular_speed())
+    }
+
+    func verify_rest() {
+        assert(self.contacts.is_empty())
+        assert(self.arm.linear_velocity().length()<0.005 && self.payload.linear_velocity().length()<0.005)
+        assert(self.arm.angular_velocity().length()<0.005 && self.payload.angular_velocity().length()<0.005)
+        let gravity1=Math.Vec3(0.0,-2.0*9.81,0.0);let gravity2=Math.Vec3(0.0,-self.mass*9.81,0.0)
+        assert(self.first.reaction_force().add(gravity1).add(gravity2).length()<0.05)
+        assert(self.second.reaction_force().add(gravity2).length()<0.05)
+        let root_torque=self.arm.position().cross(gravity1).add(self.payload.position().cross(gravity2)).negated()
+        let payload_torque=self.payload.transform().vector(Math.Vec3(0.0,0.0,-0.8*self.side))
+            .cross(gravity2.negated()).negated()
+        assert(self.first.reaction_torque().subtract(root_torque).length()<0.05)
+        assert(self.second.reaction_torque().subtract(payload_torque).length()<0.05)
+    }
+}
+
+func exercise_spatial_contacts(floor:bool) {
+    let rates:int[]=[60,120];let masses:float[]=[1.0,2.0];let sides:float[]=[-1.0,1.0]
+    for rate in rates { for mass in masses { for side in sides {
+        var fixture=SpatialContactsFixture(mass,side,floor);var step=1
+        while step<=rate*2 {
+            if step==rate*2/3+1 { fixture.second.set_motor(Physics.HingeMotor3D(-0.2*side,40.0)) }
+            if step==rate*4/3+1 { fixture.second.set_motor(Physics.HingeMotor3D(0.0,40.0)) }
+            fixture.step(1.0/rate as float,floor);step++
+        }
+        fixture.verify_rest()
+        assert(fixture.peak_angle>0.07 && fixture.maximum_speed>0.15 && fixture.minimum_speed< -0.15)
+        if floor { assert(fixture.contact_steps>0 && fixture.peak_impulse>0.1) }
+    } } }
+}
+
+test "driven spatial hinge chain keeps independent balances without a floor" {
+    exercise_spatial_contacts(false)
+}
+
+test "spatial hinge chain composes measured floor impulses and moments then releases on reversal" {
+    exercise_spatial_contacts(true)
+}
