@@ -299,3 +299,5 @@ The [hinge friction brake](HingeFriction3D.md) slows an unpowered axis with boun
 [3D path guidance](Path3D.md) follows a Hermite curve in meters with motors, friction and orientation transport.
 
 A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial load to a dynamic support, with free rotation or a bounded motor.
+
+[Hold a loaded rail and release a contact](LoadedRail3D.md): weight support, bounded motor effort and reversal against a wall.

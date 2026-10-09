@@ -179,3 +179,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 Le [guidage sur chemin 3D](Path3D.md) suit une courbe Hermite en mètres avec moteurs, friction et transport d’orientation.
 
 Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge radiale au support dynamique, avec rotation libre ou moteur borné.
+
+[Retenir un rail chargé et libérer un contact](LoadedRail3D.md) : reprise du poids, effort moteur borné et inversion devant une paroi.

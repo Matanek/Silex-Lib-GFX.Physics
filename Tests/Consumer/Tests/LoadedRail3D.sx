@@ -1,0 +1,105 @@
+use GFX.Physics
+use STD.Math
+
+class LoadedRailFixture {
+    var world:Physics.World3D
+    var rail:Physics.RigidBody3D
+    var cart:Physics.RigidBody3D
+    var hinge:Physics.HingeConstraint3D
+    var slider:Physics.SliderConstraint3D
+    var mass:float
+    var direction:float
+    var contacts:Physics.Contact3D[]=[]
+    var contact_seen:bool=false
+    var peak_contact_impulse:float=0.0
+    var maximum_radius:float=1.0
+    var minimum_speed:float=0.0
+
+    init(mass:float,direction:float,wall:bool) {
+        self.mass=mass;self.direction=direction
+        self.world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3(0.0,-9.81,0.0))
+        let disabled=Physics.CollisionFilter3D(mask_bits:0)
+        var pivot=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type=Physics.BodyType3D.fixed ..collision_filter=disabled)
+        self.rail=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.4))
+            ..allow_sleep=false ..collision_filter=disabled)
+        if wall {
+            self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+                ..shape=Physics.Shape3D.plane(Physics.Plane3D(Math.Vec3(-direction,0.0,0.0),-1.4))
+                ..friction=0.0 ..restitution=0.0)
+        }
+        self.cart=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+            ..transform=Physics.Transform3D(Math.Vec3(direction,0.0,0.0))
+            ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(0.2))
+            ..allow_sleep=false ..friction=0.0 ..restitution=0.0)
+        self.hinge=self.world.create_hinge_constraint(pivot,self.rail,Physics.HingeConstraint3DSettings()
+            ..motor=Physics.HingeMotor3D(0.0,30.0))
+        self.slider=self.world.create_slider_constraint(self.rail,self.cart,Physics.SliderConstraint3DSettings()
+            ..motor=Physics.SliderMotor3D(0.6*direction,2.0))
+    }
+
+    func step(delta:float,wall:bool) {
+        let before=copy self.cart.linear_velocity();let before_rail=copy self.rail.linear_velocity()
+        let before_spin=self.cart.angular_velocity().z
+        self.world.step(delta);self.world.write_contacts(self.contacts)
+        var contact_impulse=Math.Vec3()
+        for contact in self.contacts {
+            assert(contact.first_body().same_body(self.cart) || contact.second_body().same_body(self.cart))
+            var impulse=contact.normal().multiply(contact.normal_impulse()).add(contact.tangent_impulse())
+            if contact.first_body().same_body(self.cart) { impulse=impulse.negated() }
+            contact_impulse=contact_impulse.add(impulse);self.contact_seen=true
+        }
+        self.peak_contact_impulse=Math.max(self.peak_contact_impulse,contact_impulse.length())
+        let cart_change=self.cart.linear_velocity().subtract(before).multiply(self.mass)
+        let cart_expected=self.slider.reaction_force().multiply(delta)
+            .add(Math.Vec3(0.0,-self.mass*9.81*delta,0.0)).add(contact_impulse)
+        assert(cart_change.subtract(cart_expected).length()<0.00001)
+        let rail_change=self.rail.linear_velocity().subtract(before_rail).multiply(2.0)
+        let rail_expected=self.hinge.reaction_force().subtract(self.slider.reaction_force()).multiply(delta)
+            .add(Math.Vec3(0.0,-2.0*9.81*delta,0.0))
+        assert(rail_change.subtract(rail_expected).length()<0.00001)
+        assert(Math.abs(0.2*(self.cart.angular_velocity().z-before_spin)-self.slider.reaction_torque().z*delta)<0.00001)
+        assert(Math.abs(self.hinge.motor_torque())<=30.0001 && Math.abs(self.slider.motor_force())<=2.0001)
+        assert(self.hinge.anchor_error().length()<0.003 && self.hinge.axis_error()<0.003)
+        assert(self.slider.anchor_error().length()<0.003 && self.slider.angular_error().length()<0.003)
+        assert(Math.abs(self.hinge.angle())<0.02)
+        if wall { assert(self.direction*self.cart.position().x+0.25-1.4<0.003) }
+        else { assert(self.contacts.count()==0) }
+        self.maximum_radius=Math.max(self.maximum_radius,self.direction*self.slider.position())
+        self.minimum_speed=Math.min(self.minimum_speed,self.direction*self.slider.speed())
+    }
+}
+
+func exercise_loaded_rail(wall:bool) {
+    let rates:int[]=[60,120];let masses:float[]=[1.0,2.0];let directions:float[]=[1.0,-1.0]
+    for rate in rates { for mass in masses { for direction in directions {
+        var fixture=LoadedRailFixture(mass,direction,wall);var step=1
+        while step<=rate*2 {
+            if step==rate*2/3+1 { fixture.slider.set_motor(Physics.SliderMotor3D(-0.6*direction,2.0)) }
+            if step==rate*4/3+1 { fixture.slider.set_motor(Physics.SliderMotor3D(0.0,2.0)) }
+            fixture.step(1.0/rate as float,wall);step++
+        }
+        assert(fixture.maximum_radius>1.08 && fixture.minimum_speed< -0.01)
+        assert(Math.abs(fixture.slider.speed())<0.005)
+        assert(fixture.cart.linear_velocity().length()<0.005 && fixture.rail.linear_velocity().length()<0.005)
+        assert(fixture.cart.angular_velocity().length()<0.005 && fixture.rail.angular_velocity().length()<0.005)
+        assert(Math.abs(fixture.slider.reaction_force().y-mass*9.81)<0.05)
+        assert(Math.abs(fixture.hinge.reaction_force().y-(mass+2.0)*9.81)<0.05)
+        let expected=9.81*(mass*fixture.cart.position().x+2.0*fixture.rail.position().x)
+        assert(Math.abs(fixture.hinge.motor_torque()-expected)<0.05)
+        if wall {
+            assert(fixture.contact_seen && fixture.peak_contact_impulse>0.1)
+            assert(fixture.contacts.count()==0 && direction*fixture.cart.position().x<1.1)
+        }
+    } } }
+}
+
+test "held dynamic rail transfers carriage gravity through both joints and settles after reversal" {
+    exercise_loaded_rail(false)
+}
+
+test "held dynamic rail composes gravity with measured wall impulses and releases after reversal" {
+    exercise_loaded_rail(true)
+}
