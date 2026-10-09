@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Chaîne spatiale charnière/glissière verticale sous charge déportée : gravité, contact au plan, inversion, réactions vectorielles et budgets qualifiés à 60/120 Hz contre Jolt, sans changement de solveur.
+
 - Une chaîne de charnières motorisées conserve son bras retenu par un moteur de vitesse nulle pendant une poussée prolongée contre un plan : l’appui persistant participe au solveur avant intégration. Efforts conservés sans double application, téléportations invalidant le cache, recette et bilans à 60/120 Hz qualifiés contre Jolt.
 
 - Contact puis libération dans une chaîne à deux charnières perpendiculaires : bilans avec impulsions et points de contact, charges et inversion qualifiés à 60/120 Hz contre Jolt ; recette et limites documentées, solveur inchangé.

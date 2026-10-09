@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Spatial hinge and vertical slider chain with an offset load: gravity, floor contact, reversal, vector reactions and budgets qualified against Jolt at 60/120 Hz, without a solver change.
+
 - A motorized hinge chain retains an arm held by a zero velocity motor during sustained pressure against a floor: persistent support participates in the solve before integration. Efforts carry across phases without double application, teleportation invalidates the cache, and the recipe and balances are qualified against Jolt at 60/120 Hz.
 
 - Contact followed by release in a chain with two perpendicular hinges: balances with contact impulses and application points, loads and reversal qualified at 60/120 Hz against Jolt; recipe and limits documented, solver unchanged.
