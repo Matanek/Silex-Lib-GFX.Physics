@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Chaîne de deux charnières perpendiculaires sous charge : bilans de force, rotation propre et moment total, réactions et inversion qualifiés à 60/120 Hz contre Jolt ; recette spatiale sans contacts documentée, solveur inchangé.
+
 - Rail dynamique retenu sous gravité, avec impact axial et libération d’une paroi : bilans, réactions de poids, budgets et contact réel qualifiés à 60/120 Hz ; impulsions Silex mesurées et Jolt inférées distinguées, recette plane documentée sans changement du solveur.
 
 - Qualification d’un rail dynamique sur charnière portant un chariot motorisé : moment cinétique, réactions et budgets vérifiés avec deux masses à 60/120 Hz, en rotation libre ou entraînée ; recette plane et écarts transitoires explicités, solveur inchangé.

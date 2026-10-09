@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Loaded chain with two perpendicular hinges: force, spin and total angular momentum balances, reactions and reversal qualified at 60/120 Hz against Jolt; spatial recipe without contacts documented, solver unchanged.
+
 - Dynamic rail held under gravity, with axial impact and wall release: balances, weight reactions, budgets and real contact qualified at 60/120 Hz; measured Silex and inferred Jolt impulses distinguished, planar recipe documented without a solver change.
 
 - Qualified a dynamic hinged rail carrying a driven carriage: angular momentum, reactions and budgets checked with two masses at 60/120 Hz, with free or driven rotation; planar recipe and transient differences documented, solver unchanged.
