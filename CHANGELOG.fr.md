@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Rails fixes et tournants à ±0,2 rad/s : bilan d’impulsion mondial, freinage moteur et mouvement libre analytique qualifiés à 60/120 Hz ; repères d’application et d’observation distingués, écarts transitoires Jolt conservés sans modification du solveur.
+
 - Impacts des butées rigides de charnière : bilan d’impulsion, travail dissipatif et sortie de butée qualifiés à 60/120 Hz ; activation anticipée explicitée et écarts Jolt conservés, sans modification du solveur.
 
 - Qualification du servo de crémaillère avec deux butées et inversion : chemin angulaire court explicite, réactions statiques et repos comparés à Jolt à 60/120 Hz ; écarts transitoires conservés sans changement du solveur.

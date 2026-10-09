@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fixed rails and rotation at ±0.2 rad/s: world impulse balance, motor braking and analytical free motion qualified at 60/120 Hz; application/observation frames distinguished, with Jolt transient gaps retained and no solver change.
+
 - Rigid hinge stop impacts: impulse balance, dissipative work and stop release qualified at 60/120 Hz; anticipatory activation explained and Jolt differences retained, without a solver change.
 
 - Rack servo qualification with two stops and reversal: explicit short angular path, static reactions and rest compared with Jolt at 60/120 Hz; transient differences retained without a solver change.

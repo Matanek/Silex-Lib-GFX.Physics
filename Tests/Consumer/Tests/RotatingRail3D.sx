@@ -1,0 +1,75 @@
+use GFX.Physics
+use STD.Math
+
+class RailFixture {
+    var world:Physics.World3D
+    var rail:Physics.RigidBody3D
+    var body:Physics.RigidBody3D
+    var joint:Physics.SliderConstraint3D
+    var omega:float
+    init(omega:float) {
+        self.omega=omega
+        self.world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        self.rail=self.world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+            ..angular_velocity=Math.Vec3(0.0,0.0,omega) ..allow_sleep=false
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        self.body=self.world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..transform=Physics.Transform3D(Math.Vec3(1.0,0.0,0.0))
+            ..linear_velocity=Math.Vec3(0.0,omega,0.0) ..angular_velocity=Math.Vec3(0.0,0.0,omega)
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+        self.joint=self.world.create_slider_constraint(self.rail,self.body)
+    }
+    func step(delta:float,time:float) {
+        let before=copy self.body.linear_velocity()
+        self.world.step(delta)
+        let change=self.body.linear_velocity().subtract(before).multiply(2.0)
+        assert(change.subtract(self.joint.reaction_force().multiply(delta)).length()<0.000002)
+        assert(Math.abs(self.joint.motor_force())<=2.0001)
+        assert(self.joint.anchor_error().length()<0.001 && self.joint.angular_error().length()<0.001)
+        assert(Math.abs(self.body.angular_velocity().z-self.omega)<0.00001)
+        let axis=self.rail.transform().vector(Math.Vec3(1.0,0.0,0.0))
+        assert(axis.nearly_equal(Math.Vec3(Math.cos(self.omega*time),Math.sin(self.omega*time),0.0),0.00001))
+        assert(self.body.position().nearly_equal(axis.multiply(self.joint.position()),0.001))
+        assert(Math.abs(self.joint.speed()-self.body.linear_velocity().dot(axis))<0.00001)
+    }
+}
+
+test "free rotating slider follows the independent radial solution and world impulse at both rates and rotation signs" {
+    let rates:int[]=[60,120];let angular:float[]=[0.0,0.2,-0.2]
+    for rate in rates { for omega in angular {
+        var fixture=RailFixture(omega);var step=1
+        while step<=rate*2 {
+            let time=step as float/rate as float
+            fixture.step(1.0/rate as float,time)
+            assert(fixture.joint.motor_force()==0.0)
+            assert(Math.abs(fixture.joint.position()-Math.cosh(omega*time))<0.002)
+            assert(Math.abs(fixture.joint.speed()-omega*Math.sinh(omega*time))<0.002)
+            step++
+        }
+    } }
+}
+
+test "rotating rail drive inversion and braking retain world impulse motor budget and the fixed rail recurrence" {
+    let rates:int[]=[60,120];let angular:float[]=[0.0,0.2,-0.2]
+    for rate in rates { for omega in angular {
+        var fixture=RailFixture(omega);fixture.joint.set_motor(Physics.SliderMotor3D(0.6,2.0))
+        var expected_position=1.0;var expected_speed=0.0;var step=1
+        while step<=rate*2 {
+            if step==rate*2/3+1 { fixture.joint.set_motor(Physics.SliderMotor3D(-0.6,2.0)) }
+            if step==rate*4/3+1 { fixture.joint.set_motor(Physics.SliderMotor3D(0.0,2.0)) }
+            fixture.step(1.0/rate as float,step as float/rate as float)
+            if omega==0.0 {
+                var target=0.6
+                if step>rate*2/3 { target=-0.6 }
+                if step>rate*4/3 { target=0.0 }
+                let delta=1.0/rate as float
+                expected_speed+=Math.clamp(target-expected_speed,-delta,delta)
+                expected_position+=expected_speed*delta
+                assert(Math.abs(fixture.joint.speed()-expected_speed)<0.0001)
+                assert(Math.abs(fixture.joint.position()-expected_position)<0.0001)
+            }
+            step++
+        }
+    } }
+}

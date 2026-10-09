@@ -61,11 +61,37 @@ A nonzero target with positive capacity wakes the bodies; a zero target can
 let a stationary assembly sleep. Slider destruction and stale-reference
 rules also apply to its motor operations.
 
+## Measure forces on a rotating rail
+
+`reaction_force()` is a world-space vector: multiplied by the step duration,
+it gives the total impulse applied to the second body by this slider.
+For a carriage without other forces or damping, compare that impulse with
+`mass*(velocity_after-velocity_before)`. Copy velocity before `step`; read
+reactions and the next velocity after the step.
+
+On a rotating rail, `motor_force()` accumulates axial effort over the step.
+Axes can change between passes, so projecting the total vector onto the final
+axis need not reproduce that scalar motor effort. An external oracle must
+convert its multipliers in their application frame, distinct from the frame
+where it observes final poses and velocities.
+
+The [rotating rail consumer](../../Tests/Consumer/Tests/RotatingRail3D.sx)
+checks world impulse balance, budgets and geometry at 60/120 Hz, with a fixed
+rail or rotation at ±0.2 rad/s. Without a motor, initial radial position 1 m
+and zero radial speed give `r=cosh(omega*t)` and
+`speed=omega*sinh(omega*t)`. The kinematic support supplies work to the carriage;
+its energy alone is not conserved. This recipe is qualified over two seconds,
+without gravity, friction, collisions or stops.
+
+## Comparison and interactive scene
+
 The consumer and Jolt oracle qualify acceleration, reversal, braking,
 two free unequal masses, an offset anchor and loads above capacity.
 The rotating rail is compared at steady constant relative speed. Parity
 of force transitions while the rail rotates, impacts and general spatial
-chains remains open. Combined commands remain to be qualified.
+chains remains open. Impulse balance during those transitions is qualified
+separately, without claiming matching transient efforts.
+[Combined commands](SliderCombined3D.md) have their own qualification.
 
 `SliderMotorScene.sx` starts uphill at −1 m/s on an inclined rail. T cycles
 uphill, braking and downhill; F selects 30 or 6 N, with 6 N insufficient to

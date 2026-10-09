@@ -62,11 +62,38 @@ positif. Une cible non nulle avec capacité positive réveille les corps ;
 une cible nulle peut laisser une assemblée immobile dormir. Les règles
 de destruction et de références périmées sont celles de la glissière.
 
+## Mesurer les efforts d’un rail qui tourne
+
+`reaction_force()` est un vecteur mondial : multiplié par la durée du pas,
+il donne l’impulsion totale appliquée au second corps par cette glissière.
+Pour un chariot sans autres forces ni amortissement, comparer cette impulsion
+à `mass*(velocity_after-velocity_before)`. Copier la vitesse avant `step` ;
+les réactions et la vitesse suivante se relèvent après le pas.
+
+Sur un rail tournant, `motor_force()` cumule un effort axial au cours du pas.
+Les axes peuvent évoluer entre ses différentes passes : projeter le vecteur
+total avec l’axe final ne redonne pas nécessairement ce scalaire moteur.
+Un oracle externe doit convertir ses multiplicateurs dans leur repère
+d’application, distinct du repère où il observe les poses et vitesses finales.
+
+Le [consommateur de rail tournant](../../Tests/Consumer/Tests/RotatingRail3D.sx)
+vérifie le bilan mondial, les budgets et la géométrie à 60/120 Hz, sur rail
+fixe ou à ±0,2 rad/s. Sans moteur, une position radiale initiale de 1 m et
+une vitesse radiale nulle donnent `r=cosh(omega*t)` et
+`speed=omega*sinh(omega*t)`. Le support cinématique fournit du travail au
+chariot ; son énergie seule n’est pas conservée. Cette recette est qualifiée
+sur deux secondes, sans gravité, friction, collisions ni butées.
+
+## Comparaison et parcours
+
 Le consommateur et l'oracle Jolt qualifient accélération, inversion, freinage,
 deux masses libres, ancrage excentré et charge supérieure à la capacité.
 Le rail tournant est comparé en régime établi à vitesse relative constante.
 La parité des transitions d'effort pendant une rotation du rail, des impacts
-et des chaînes spatiales générales reste à établir. La commande combinée reste à qualifier.
+et des chaînes spatiales générales reste à établir. Le bilan d’impulsion
+pendant ces transitions est qualifié séparément, sans revendiquer des efforts
+transitoires identiques. La [commande combinée](SliderCombined3D.md) possède
+sa qualification propre.
 
 `SliderMotorScene.sx` commence en montée à −1 m/s sur un rail incliné.
 T alterne montée, freinage puis descente ; F choisit 30 ou 6 N, cette dernière
