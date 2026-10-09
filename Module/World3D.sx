@@ -1053,7 +1053,8 @@ public class World3D {
         }
         for slot in self.hinge_constraints.slots {
             if var constraint = slot {
-                constraint.prepare_warm_start(delta)
+                constraint.prepare_warm_start(delta,
+                    self.store.require(constraint.point.first_id).transform.rotation)
                 if constraint.limit_spring != null &&
                     (constraint.minimum_angle > -Math.pi() || constraint.maximum_angle < Math.pi())
                 {
@@ -4359,8 +4360,8 @@ func solve_hinge_velocity3d(first:&BodyState3D, second:&BodyState3D,
     state:HingeConstraintState3D, delta:float)
 {
     solve_point_velocity3d(first, second, state.point, delta)
-    let axis = first.transform.vector(state.first_local_axis)
-    let normal = first.transform.vector(state.first_local_normal)
+    let axis = state.solver_rotation.rotate(state.first_local_axis)
+    let normal = state.solver_rotation.rotate(state.first_local_normal)
     let tangent = axis.cross(normal)
     let error = hinge_axis_error3d(first, second, state)
     var row = 0

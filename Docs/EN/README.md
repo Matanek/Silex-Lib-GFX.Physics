@@ -305,3 +305,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Carry a load through two perpendicular hinges](SpatialHinges3D.md): weight, off-plane torques and reversal under load.
 
 [Bring a spatial chain into contact with a plane](SpatialContacts3D.md): contact, impulse moment and release.
+
+[Compose a motorized shoulder and elbow](ArticulatedPose3D.md): four servos, transmitted load and moving frames.

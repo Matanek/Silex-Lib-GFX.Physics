@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Hinges carried by a rotating body transport cached torque into the current frame and retain consistent axes throughout the step. A gravity-loaded swing/twist shoulder and motorized elbow are qualified against Jolt at 60/120 Hz with budgets, reactions and split-phase balances.
+
 - Simultaneous three-axis swing/twist servos under gravity: offset anchor, rotated frames, reversal and recentering, reactions and steady states qualified at 60/120 Hz against Jolt; lever timing documented without solver changes.
 
 - Spatial hinge and vertical slider chain with an offset load: gravity, floor contact, reversal, vector reactions and budgets qualified against Jolt at 60/120 Hz, without a solver change.

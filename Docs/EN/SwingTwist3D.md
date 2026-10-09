@@ -103,3 +103,5 @@ force cannot be reconstructed exactly with a single initial lever. An exact
 local spin balance must separate these phases; the public consumer checks total
 angular momentum and static reactions. General spatial chains and exact
 impact-step reaction equality remain unqualified.
+
+[Compose a motorized shoulder and elbow](ArticulatedPose3D.md): four servos, transmitted load and moving frames.

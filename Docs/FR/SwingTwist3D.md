@@ -110,3 +110,5 @@ bras de levier initial. Un bilan de rotation propre exact doit séparer ces
 phases ; le consommateur public vérifie le moment cinétique total et les
 réactions statiques. Les chaînes spatiales générales et l’égalité exacte des
 réactions au pas d’impact restent à qualifier.
+
+[Composer une épaule et un coude motorisés](ArticulatedPose3D.md) : quatre servos, charge transmise et repères mobiles.

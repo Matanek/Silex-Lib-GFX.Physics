@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les charnières portées par un corps tournant transportent leur couple mémorisé dans le repère courant et conservent des axes cohérents pendant le pas. Une épaule swing/twist et un coude motorisés sous gravité sont qualifiés à 60/120 Hz contre Jolt, avec budgets, réactions et bilans séparés par phase.
+
 - Trois servos swing/twist simultanés sous gravité : ancrage déporté, repères tournés, inversion et recentrage, réactions et régimes établis qualifiés à 60/120 Hz contre Jolt ; temporalité des bras de levier explicitée, sans changement du solveur.
 
 - Chaîne spatiale charnière/glissière verticale sous charge déportée : gravité, contact au plan, inversion, réactions vectorielles et budgets qualifiés à 60/120 Hz contre Jolt, sans changement de solveur.

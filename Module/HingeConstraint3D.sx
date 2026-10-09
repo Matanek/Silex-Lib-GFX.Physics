@@ -143,6 +143,7 @@ package class HingeConstraintState3D {
     var maximum_angle:float
     var warm_linear:Math.Vec3 = Math.Vec3()
     var warm_angular:Math.Vec3 = Math.Vec3()
+    var solver_rotation:Math.Quat = Math.Quat.identity()
     var warm_motor:float = 0.0
     var warm_friction:float = 0.0
     var warm_lower:float = 0.0
@@ -180,15 +181,17 @@ package class HingeConstraintState3D {
         self.maximum_friction_torque = settings.maximum_friction_torque
     }
 
-    func prepare_warm_start(delta:float) {
+    func prepare_warm_start(delta:float, rotation:Math.Quat) {
         let factor = delta * self.point.inverse_delta
         let linear = self.point.impulse.multiply(factor)
-        let angular = self.angular_impulse.multiply(factor)
+        let angular = rotation.multiply(self.solver_rotation.conjugated()).rotate(
+            self.angular_impulse.multiply(factor))
         let motor = self.motor_impulse * factor
         let friction = self.friction_impulse * factor
         let lower = self.lower_impulse * factor
         let upper = self.upper_impulse * factor
         self.reset()
+        self.solver_rotation = rotation
         self.warm_linear = linear
         self.warm_angular = angular
         self.warm_motor = motor

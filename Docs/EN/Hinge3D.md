@@ -189,3 +189,5 @@ Initial trajectories and contact phases differ; these proofs do not guarantee
 arbitrary chains, arbitrary loads, or identical correction from the first step.
 
 A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial load to a dynamic support, with free rotation or a bounded motor.
+
+[Compose a motorized shoulder and elbow](ArticulatedPose3D.md): four servos, transmitted load and moving frames.

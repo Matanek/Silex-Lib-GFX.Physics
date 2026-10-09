@@ -197,3 +197,5 @@ diffèrent ; ces preuves ne garantissent pas une chaîne quelconque, une
 charge arbitraire ou une correction identique dès le premier pas.
 
 Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge radiale au support dynamique, avec rotation libre ou moteur borné.
+
+[Composer une épaule et un coude motorisés](ArticulatedPose3D.md) : quatre servos, charge transmise et repères mobiles.

@@ -1,0 +1,88 @@
+use GFX.Physics
+use STD.Math
+
+func qualify_articulated_pose(mass:int, rate:int, side:int) {
+    var world=Physics.World3D()
+    let base=Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,-1.0).normalized())
+    let frame=Math.Quat.angle_axis(0.35,Math.Vec3(0.0,0.0,1.0))
+    let upper_lever=Math.Vec3(0.5,0.2,0.4*side as float)
+    let elbow_anchor=Math.Vec3(0.5,-0.2,0.15*side as float)
+    let lower_lever=Math.Vec3(0.35,0.1,-0.3*side as float)
+    var support=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..transform=Physics.Transform3D(rotation:base)
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var upper=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform=Physics.Transform3D(base.rotate(upper_lever),base)
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.4))
+        ..allow_sleep=false ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var lower=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..transform=Physics.Transform3D(base.rotate(upper_lever.add(elbow_anchor).add(lower_lever)),base)
+        ..mass_properties=Physics.MassProperties3D(mass as float,Math.Vec3(0.2))
+        ..allow_sleep=false ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    var shoulder=world.create_swing_twist_constraint(support,upper,Physics.SwingTwistConstraint3DSettings()
+        ..first_local_frame=Physics.Transform3D(rotation:frame)
+        ..second_local_frame=Physics.Transform3D(upper_lever.negated(),frame)
+        ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.8))
+        ..minimum_twist=-0.8 ..maximum_twist=0.8)
+    var elbow=world.create_hinge_constraint(upper,lower,Physics.HingeConstraint3DSettings()
+        ..first_local_anchor=elbow_anchor ..second_local_anchor=lower_lever.negated()
+        ..minimum_angle=-0.8 ..maximum_angle=0.8)
+    let dt=1.0/rate as float
+    var step=1
+    while step<=rate*12 {
+        if step==1 || step==rate*4+1 || step==rate*8+1 {
+            var direction=side as float
+            if step>rate*4 { direction=-direction }
+            if step>rate*8 { direction=0.0 }
+            shoulder.set_twist_motor(Physics.TwistMotor3D.position(0.25*direction,60.0,120.0,20.0))
+            shoulder.set_swing_motor(Physics.SwingMotor3D.position(Math.Vec2(0.2*direction,-0.15*direction),60.0,120.0,20.0))
+            elbow.set_motor(Physics.HingeMotor3D.position(0.35*direction,40.0,80.0,15.0))
+        }
+        let bp1=upper.transform().position;let bq1=upper.transform().rotation
+        let bv1=upper.linear_velocity();let bw1=upper.angular_velocity()
+        let bp2=lower.transform().position;let bq2=lower.transform().rotation
+        let bv2=lower.linear_velocity();let bw2=lower.angular_velocity()
+        world.step(dt)
+        let p1=upper.transform().position;let q1=upper.transform().rotation
+        let v1=upper.linear_velocity();let w1=upper.angular_velocity()
+        let p2=lower.transform().position;let q2=lower.transform().rotation
+        let v2=lower.linear_velocity();let w2=lower.angular_velocity()
+        let f1=shoulder.reaction_force();let t1=shoulder.reaction_torque()
+        let f2=elbow.reaction_force();let t2=elbow.reaction_torque()
+        let motor=shoulder.motor_torque();let orientation=shoulder.orientation();let speed=shoulder.angular_speed()
+        let e1=shoulder.anchor_error();let e2=elbow.anchor_error()
+        let angle=elbow.angle();let angular=elbow.angular_speed();let torque=elbow.motor_torque()
+        let g1=Math.Vec3(0.0,-19.62,0.0)
+        let g2=Math.Vec3(0.0,-9.81*mass as float,0.0)
+        assert(v1.subtract(bv1).multiply(2.0).subtract(f1.subtract(f2).add(g1).multiply(dt)).length()<0.00001)
+        assert(v2.subtract(bv2).multiply(mass as float).subtract(f2.add(g2).multiply(dt)).length()<0.00001)
+        let before=bp1.cross(bv1.multiply(2.0)).add(bw1.multiply(0.4))
+            .add(bp2.cross(bv2.multiply(mass as float))).add(bw2.multiply(0.2))
+        let after=p1.cross(v1.multiply(2.0)).add(w1.multiply(0.4))
+            .add(p2.cross(v2.multiply(mass as float))).add(w2.multiply(0.2))
+        assert(after.subtract(before).subtract(t1.add(bp1.cross(g1)).add(bp2.cross(g2)).multiply(dt)).length()<0.003)
+        assert(e1.length()<0.005 && e2.length()<0.005)
+        assert(Math.abs(motor.x)<=60.0001 && Math.abs(motor.y)<=60.0001 && Math.abs(motor.z)<=60.0001)
+        assert(Math.abs(torque)<=40.0001)
+        assert(t1.subtract(bq1.multiply(frame).rotate(motor)).length()<0.02)
+        assert(Math.abs(t2.dot(bq1.rotate(Math.Vec3(0.0,0.0,1.0)))-torque)<0.02)
+        assert(speed.subtract(q1.multiply(frame).conjugated().rotate(w1)).length()<0.00001)
+        assert(Math.abs(angular-q1.rotate(Math.Vec3(0.0,0.0,1.0)).dot(w2.subtract(w1)))<0.00001)
+        if step==rate*4 || step==rate*8 || step==rate*12 {
+            assert(v1.length()<0.003 && v2.length()<0.003 && w1.length()<0.003 && w2.length()<0.003)
+            assert(f1.add(g1).add(g2).length()<0.05 && f2.add(g2).length()<0.05)
+            assert(t1.add(p1.cross(g1)).add(p2.cross(g2)).length()<0.05)
+            assert(t2.add(q2.rotate(lower_lever.negated()).cross(f2)).length()<0.05)
+        }
+        step++
+    }
+    world.destroy_rigid_body(upper)
+    assert(!shoulder.is_valid() && !elbow.is_valid() && lower.is_valid())
+    world.step(dt)
+    world.destroy_rigid_body(lower)
+    world.destroy_rigid_body(support)
+}
+test "a moving swing twist shoulder carries a loaded hinge servo without stale world torque" {
+    let masses:int[]=[1,2];let rates:int[]=[60,120];let sides:int[]=[-1,1]
+    for mass in masses { for rate in rates { for side in sides { qualify_articulated_pose(mass,rate,side) } } }
+}
