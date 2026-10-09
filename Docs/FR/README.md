@@ -177,3 +177,5 @@ silex run Silex-Examples/Sources/Physics2D/RotatingPhysicsContainer/Main.sx --re
 [Poulie 3D](Pulley3D.md) : points fixes, longueur pondérée, mou et réactions aux ancrages.
 
 Le [guidage sur chemin 3D](Path3D.md) suit une courbe Hermite en mètres avec moteurs, friction et transport d’orientation.
+
+Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge radiale au support dynamique, avec rotation libre ou moteur borné.

@@ -109,3 +109,5 @@ Les [bornes de force signées](SliderForceBounds3D.md) règlent des efforts diff
 [Butées souples de glissière](SliderSoftLimits3D.md) : compression sous charge, ressort amorti, bornes égales et mutation.
 
 [Suivi de cible mobile par position et vitesse](SliderCombined3D.md).
+
+Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge radiale au support dynamique, avec rotation libre ou moteur borné.

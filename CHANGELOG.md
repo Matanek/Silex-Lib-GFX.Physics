@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Qualified a dynamic hinged rail carrying a driven carriage: angular momentum, reactions and budgets checked with two masses at 60/120 Hz, with free or driven rotation; planar recipe and transient differences documented, solver unchanged.
+
 - Fixed rails and rotation at ±0.2 rad/s: world impulse balance, motor braking and analytical free motion qualified at 60/120 Hz; application/observation frames distinguished, with Jolt transient gaps retained and no solver change.
 
 - Rigid hinge stop impacts: impulse balance, dissipative work and stop release qualified at 60/120 Hz; anticipatory activation explained and Jolt differences retained, without a solver change.

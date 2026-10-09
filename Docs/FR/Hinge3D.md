@@ -195,3 +195,5 @@ Les positions, vitesses et réactions sont comparées à Jolt après 2,5 s sur
 des parcours de 3 s. Les trajectoires initiales et les phases de contact
 diffèrent ; ces preuves ne garantissent pas une chaîne quelconque, une
 charge arbitraire ou une correction identique dès le premier pas.
+
+Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge radiale au support dynamique, avec rotation libre ou moteur borné.

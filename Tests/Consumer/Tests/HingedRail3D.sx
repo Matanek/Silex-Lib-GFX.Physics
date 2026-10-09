@@ -1,0 +1,91 @@
+use GFX.Physics
+use STD.Math
+
+class HingedRailFixture {
+    var world:Physics.World3D
+    var rail:Physics.RigidBody3D
+    var cart:Physics.RigidBody3D
+    var hinge:Physics.HingeConstraint3D
+    var slider:Physics.SliderConstraint3D
+    var mass:float
+    var initial_momentum:float
+    var integrated_torque:float=0.0
+    var maximum_radius:float=1.0
+    var omega_at_maximum:float
+    var minimum_speed:float=0.0
+
+    init(mass:float,omega:float,driven:bool) {
+        self.mass=mass;self.initial_momentum=(0.6+mass)*omega;self.omega_at_maximum=omega
+        self.world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        let filter=Physics.CollisionFilter3D(mask_bits:0)
+        var pivot=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type=Physics.BodyType3D.fixed ..collision_filter=filter)
+        self.rail=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.4))
+            ..angular_velocity=Math.Vec3(0.0,0.0,omega) ..allow_sleep=false ..collision_filter=filter)
+        self.cart=self.world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..transform=Physics.Transform3D(Math.Vec3(1.0,0.0,0.0))
+            ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(0.2))
+            ..linear_velocity=Math.Vec3(0.0,omega,0.0) ..angular_velocity=Math.Vec3(0.0,0.0,omega)
+            ..allow_sleep=false ..collision_filter=filter)
+        var settings=Physics.HingeConstraint3DSettings()
+        if driven { settings.motor=Physics.HingeMotor3D(omega,0.4) }
+        self.hinge=self.world.create_hinge_constraint(pivot,self.rail,settings)
+        self.slider=self.world.create_slider_constraint(self.rail,self.cart,
+            Physics.SliderConstraint3DSettings() ..motor=Physics.SliderMotor3D(0.6,2.0))
+    }
+
+    func momentum() float {
+        return 0.4*self.rail.angular_velocity().z+0.2*self.cart.angular_velocity().z+
+            self.mass*self.cart.position().cross(self.cart.linear_velocity()).z+
+            2.0*self.rail.position().cross(self.rail.linear_velocity()).z
+    }
+
+    func step(delta:float) {
+        let before=copy self.cart.linear_velocity();let before_rail=copy self.rail.linear_velocity()
+        let before_spin=self.cart.angular_velocity().z;let before_momentum=self.momentum()
+        self.world.step(delta)
+        let cart_impulse=self.cart.linear_velocity().subtract(before).multiply(self.mass)
+        let rail_impulse=self.rail.linear_velocity().subtract(before_rail).multiply(2.0)
+        assert(cart_impulse.subtract(self.slider.reaction_force().multiply(delta)).length()<0.000002)
+        assert(cart_impulse.add(rail_impulse).subtract(self.hinge.reaction_force().multiply(delta)).length()<0.000002)
+        assert(Math.abs(0.2*(self.cart.angular_velocity().z-before_spin)-self.slider.reaction_torque().z*delta)<0.000002)
+        let torque=self.hinge.motor_torque();self.integrated_torque+=torque*delta
+        assert(Math.abs(self.momentum()-before_momentum-torque*delta)<0.0001)
+        assert(Math.abs(self.momentum()-self.initial_momentum-self.integrated_torque)<0.002)
+        assert(Math.abs(torque)<=0.4001 && Math.abs(self.slider.motor_force())<=2.0001)
+        assert(self.hinge.anchor_error().length()<0.001 && self.hinge.axis_error()<0.001)
+        assert(self.slider.anchor_error().length()<0.001 && self.slider.angular_error().length()<0.001)
+        assert(Math.abs(self.cart.angular_velocity().z-self.rail.angular_velocity().z)<0.001)
+        if self.slider.position()>self.maximum_radius {
+            self.maximum_radius=self.slider.position();self.omega_at_maximum=self.rail.angular_velocity().z
+        }
+        self.minimum_speed=Math.min(self.minimum_speed,self.slider.speed())
+    }
+}
+
+func exercise_assembly(driven:bool) {
+    let rates:int[]=[60,120];let masses:float[]=[1.0,2.0];let directions:float[]=[1.0,-1.0]
+    for rate in rates { for mass in masses { for direction in directions {
+        var fixture=HingedRailFixture(mass,0.2*direction,driven);var step=1
+        while step<=rate*2 {
+            if step==rate*2/3+1 { fixture.slider.set_motor(Physics.SliderMotor3D(-0.6,2.0)) }
+            if step==rate*4/3+1 { fixture.slider.set_motor(Physics.SliderMotor3D(0.0,2.0)) }
+            fixture.step(1.0/rate as float)
+            if !driven { assert(fixture.hinge.motor_torque()==0.0) }
+            step++
+        }
+        assert(fixture.maximum_radius>1.08 && fixture.minimum_speed< -0.01)
+        assert(Math.abs(fixture.slider.speed())<0.005)
+        if driven { assert(Math.abs(fixture.rail.angular_velocity().z-0.2*direction)<0.001) }
+        else { assert(fixture.omega_at_maximum*direction<0.195) }
+    } } }
+}
+
+test "free hinged rail redistributes spin as a radial carriage moves without external angular impulse" {
+    exercise_assembly(false)
+}
+
+test "driven hinged rail transmits slider reactions and integrates only its bounded external motor torque" {
+    exercise_assembly(true)
+}

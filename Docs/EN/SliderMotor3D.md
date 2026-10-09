@@ -107,3 +107,5 @@ The [slider friction brake](SliderFriction3D.md) slows travel without a motor us
 [Soft slider stops](SliderSoftLimits3D.md): load compression, damped spring, equal bounds and mutation.
 
 [Follow a moving target with position and velocity](SliderCombined3D.md).
+
+A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial load to a dynamic support, with free rotation or a bounded motor.
