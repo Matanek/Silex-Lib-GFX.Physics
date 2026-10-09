@@ -65,3 +65,25 @@ contact moment. Bounds include integration and pose corrections, without
 exact discrete conservation or phase/cost parity. This recipe does not
 qualify friction, stops, sleep, large rotations, anisotropic inertia,
 multiple contacts or arbitrary chains.
+
+## Sustain pressure against the floor
+
+Keeping the secondary velocity command for three seconds stalls the payload
+near `asin(0.07/0.8)`, or 0.0876 rad, with a zero velocity root motor. Persistent
+contacts participate in the shared solve before joint pose integration; their
+accumulated effort carries across phases without being applied twice. Snapshots
+retain the point used during resolution, which may precede the final pose.
+Teleporting a body with `set_transform` invalidates remembered support and
+requires detection from the new pose.
+
+The consumer covers sustained pressure, changing delta, disabling bodies,
+filtering, shape revisions and recycled body slots. `set_shape` recomputes mass
+and inertia from density; call `set_mass_properties` afterwards to preserve the
+explicit properties used by this fixture.
+
+The public `SustainedSpatialContacts` recipe in Silex-Benchmarks retains the same
+masses, offsets, steps and balance bounds over 16 three-second runs. With the
+floor, the load stalls, motors respect 60/40 N·m and speeds converge below 0.005.
+An angle servo is a spring with finite capacity; pressure deformation does not
+make it a rigid attachment. These proofs remain limited to this sphere, this
+floor, small angles and isotropic inertia.

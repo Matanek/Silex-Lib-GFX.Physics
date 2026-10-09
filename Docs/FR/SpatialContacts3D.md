@@ -66,3 +66,25 @@ normal ou du moment de contact. Les bornes incluent intégration et corrections
 de pose, sans conservation discrète exacte ni parité de phase ou de coût.
 Cette recette ne qualifie pas friction, butées, sommeil, grandes rotations,
 inerties anisotropes, contacts multiples ou chaînes arbitraires.
+
+## Maintenir une poussée contre le plan
+
+Conserver la commande secondaire de vitesse pendant trois secondes bloque la
+charge près de `asin(0,07/0,8)`, soit 0,0876 rad, avec un moteur racine de
+vitesse nulle. Les contacts persistants participent au solveur commun avant
+l’intégration des articulations ; leur effort accumulé traverse les phases sans
+être appliqué deux fois. Les snapshots conservent le point utilisé lors de la
+résolution, qui peut précéder la pose finale. Une téléportation par `set_transform`
+invalide l’appui mémorisé et impose une détection depuis la nouvelle pose.
+
+Le consommateur inclut poussée prolongée, changement de pas, désactivation,
+filtrage, révision de forme et réutilisation d’un slot de corps. `set_shape`
+recalcule la masse et l’inertie depuis la densité ; pour conserver des propriétés
+explicites dans cette fixture, appeler ensuite `set_mass_properties`.
+
+La recette publique `SustainedSpatialContacts` dans Silex-Benchmarks conserve
+les mêmes masses, déports, pas et bornes de bilan sur 16 parcours de trois secondes.
+Avec le plan, la charge reste bloquée, les moteurs respectent 60/40 N·m et les
+vitesses convergent sous 0,005. Le servo d’angle est un ressort à capacité finie ;
+sa déformation sous pression n’est pas une fixation rigide. Ces preuves restent
+limitées à cette sphère, ce plan, petits angles et inerties isotropes.

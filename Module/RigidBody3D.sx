@@ -114,6 +114,7 @@ package class BodyState3D {
     var body_type:BodyType3D
     var shape:Shape3D
     var shape_revision:int
+    var pose_revision:int = 0
     var transform:Transform3D
     var linear_velocity:Math.Vec3
     var angular_velocity:Math.Vec3
@@ -459,6 +460,7 @@ public class RigidBody3D {
         self.store.require_mutable()
         var state = self.store.require(self.id)
         state.transform = Transform3D(transform.position, transform.rotation)
+        state.pose_revision++
         state.target = null
         state.target_remaining = 0.0
         self.store.wake_all()

@@ -19,6 +19,8 @@ public class Contact3D {
     private let second_identity:BodyId3D
     private let first_shape_revision:int
     private let second_shape_revision:int
+    private let first_pose_revision:int
+    private let second_pose_revision:int
     private var first:RigidBody3D
     private var second:RigidBody3D
     private var contact_normal:Math.Vec3
@@ -48,12 +50,16 @@ public class Contact3D {
         second_child_id:int,
         is_sensor:bool,
         first_revision:int,
-        second_revision:int
+        second_revision:int,
+        first_pose_revision:int,
+        second_pose_revision:int
     ) {
         self.first_identity = first.body_id()
         self.second_identity = second.body_id()
         self.first_shape_revision = first_revision
         self.second_shape_revision = second_revision
+        self.first_pose_revision = first_pose_revision
+        self.second_pose_revision = second_pose_revision
         self.first = first
         self.second = second
         self.contact_normal = normal
@@ -74,6 +80,8 @@ public class Contact3D {
     package func second_body_id() BodyId3D { return self.second_identity }
     package func first_revision() int { return self.first_shape_revision }
     package func second_revision() int { return self.second_shape_revision }
+    package func first_pose_version() int { return self.first_pose_revision }
+    package func second_pose_version() int { return self.second_pose_revision }
 
     package func manifold_point(index:int) ContactPoint3D { return self.manifold_points[index] }
 

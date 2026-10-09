@@ -6,6 +6,8 @@ first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- A motorized hinge chain retains an arm held by a zero velocity motor during sustained pressure against a floor: persistent support participates in the solve before integration. Efforts carry across phases without double application, teleportation invalidates the cache, and the recipe and balances are qualified against Jolt at 60/120 Hz.
+
 - Contact followed by release in a chain with two perpendicular hinges: balances with contact impulses and application points, loads and reversal qualified at 60/120 Hz against Jolt; recipe and limits documented, solver unchanged.
 - Loaded chain with two perpendicular hinges: force, spin and total angular momentum balances, reactions and reversal qualified at 60/120 Hz against Jolt; spatial recipe without contacts documented, solver unchanged.
 

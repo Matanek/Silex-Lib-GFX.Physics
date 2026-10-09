@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Une chaîne de charnières motorisées conserve son bras retenu par un moteur de vitesse nulle pendant une poussée prolongée contre un plan : l’appui persistant participe au solveur avant intégration. Efforts conservés sans double application, téléportations invalidant le cache, recette et bilans à 60/120 Hz qualifiés contre Jolt.
+
 - Contact puis libération dans une chaîne à deux charnières perpendiculaires : bilans avec impulsions et points de contact, charges et inversion qualifiés à 60/120 Hz contre Jolt ; recette et limites documentées, solveur inchangé.
 - Chaîne de deux charnières perpendiculaires sous charge : bilans de force, rotation propre et moment total, réactions et inversion qualifiés à 60/120 Hz contre Jolt ; recette spatiale sans contacts documentée, solveur inchangé.
 

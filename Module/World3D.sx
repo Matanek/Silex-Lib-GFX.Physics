@@ -772,11 +772,14 @@ public class World3D {
         }
         self.warm_start_fixed_constraints(delta)
         self.warm_start_hinge_constraints(delta)
+        var retained_contacts:ContactPairState3D[] = []
         // Rigid attachments and hinges act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
         if self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
+            retained_contacts = self.prepare_retained_contacts()
             var iteration = 0
             while iteration < 12 {
+                solve_contact_pairs_velocity3d(retained_contacts, iteration % 2 == 1)
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
                 iteration++
             }
@@ -805,7 +808,7 @@ public class World3D {
                 }
             }
         }
-        self.detect_and_resolve_contacts(delta)
+        self.detect_and_resolve_contacts(delta, retained_contacts)
         if has_continuous_body {
             self.emit_continuous_sensor_events(previous_poses, continuous_poses)
         }
@@ -937,7 +940,8 @@ public class World3D {
                                                 .multiply(0.5),
                                             0.0, Math.Vec3(), 0.0, 0.0, [],
                                             witness.first_child_id, witness.second_child_id,
-                                            true, first.shape_revision, second.shape_revision
+                                            true, first.shape_revision, second.shape_revision,
+                                            first.pose_revision, second.pose_revision
                                         )
                                         self.contact_begins.append(contact)
                                         self.contact_ends.append(contact)
@@ -1861,7 +1865,48 @@ public class World3D {
         }
     }
 
-    private func detect_and_resolve_contacts(delta:float) {
+    private func prepare_retained_contacts() ContactPairState3D[] {
+        var pairs:ContactPairState3D[] = []
+        for previous in self.contacts {
+            if previous.is_sensor() { continue }
+            let first_id = previous.first_body_id()
+            let second_id = previous.second_body_id()
+            if !self.store.contains(first_id) || !self.store.contains(second_id) { continue }
+            var first = self.store.require(first_id)
+            var second = self.store.require(second_id)
+            if !first.is_enabled || !second.is_enabled || (!first.awake && !second.awake) ||
+                first.is_sensor || second.is_sensor ||
+                (first.body_type != BodyType3D.dynamic && second.body_type != BodyType3D.dynamic) ||
+                first.shape_revision != previous.first_revision() ||
+                second.shape_revision != previous.second_revision() ||
+                first.pose_revision != previous.first_pose_version() ||
+                second.pose_revision != previous.second_pose_version() ||
+                !first.collision_filter.allows(second.collision_filter) { continue }
+            var first_placement = contact_placement3d(first, previous.first_child_id())
+            var second_placement = contact_placement3d(second, previous.second_child_id())
+            if supports_mesh_manifolds3d(first_placement.shape(), second_placement.shape()) {
+                first_placement = mesh_contact_face3d(first_placement, previous.first_child_id())
+                second_placement = mesh_contact_face3d(second_placement, previous.second_child_id())
+            }
+            if !front_triangle_contact3d(first_placement, second_placement) { continue }
+            let distance = contact_distance3d(first_placement, second_placement)
+            append_contact_pair3d(first, second, first_id, second_id,
+                DistanceResult3D(distance.first_point, distance.second_point, distance.normal,
+                    distance.separation, previous.first_child_id(), previous.second_child_id()),
+                primitive_sphere_radius3d(first.shape) > 0.0 && primitive_sphere_radius3d(second.shape) > 0.0,
+                self.contacts, pairs)
+        }
+        for var pair in pairs {
+            pair.retained = true
+            if pair.normal.dot(self.contacts[pair.previous_index].normal()) > 0.95 {
+                warm_contact_points3d(pair.first, pair.second, pair.normal, pair.friction,
+                    pair.constraints, self.contacts[pair.previous_index])
+            }
+        }
+        return pairs
+    }
+
+    private func detect_and_resolve_contacts(delta:float, retained_contacts:ContactPairState3D[]) {
         var previous_contacts:Contact3D[] = []
         for contact in self.contacts { previous_contacts.append(contact) }
         self.contacts.clear()
@@ -1934,8 +1979,9 @@ public class World3D {
                 }
             }
         }
+        if !retained_contacts.is_empty() { pairs = merge_retained_contacts3d(retained_contacts, pairs) }
         for var pair in pairs {
-            if !pair.active { continue }
+            if !pair.active || pair.retained { continue }
             let previous_index = pair.previous_index
             if previous_index >= 0 {
                 var previous = previous_contacts[previous_index]
@@ -1969,37 +2015,7 @@ public class World3D {
         }
         var iteration = 0
         while iteration < 12 {
-            var pair_index = 0
-            while pair_index < pairs.count() {
-                var selected_pair = pair_index
-                if iteration % 2 == 1 {
-                    selected_pair = pairs.count() - 1 - pair_index
-                }
-                var pair = pairs[selected_pair]
-                if !pair.active {
-                    pair_index++
-                    continue
-                }
-                if pair.direct_spheres {
-                    solve_sphere_point3d(pair.first, pair.second, pair.normal,
-                        pair.friction, pair.constraints[0])
-                    pair_index++
-                    continue
-                }
-                var point_index = 0
-                while point_index < pair.constraints.count() {
-                    var selected_point = point_index
-                    if iteration % 2 == 1 {
-                        selected_point = pair.constraints.count() - 1 - point_index
-                    }
-                    solve_contact_point3d(
-                        pair.first, pair.second, pair.normal, pair.friction,
-                        pair.constraints[selected_point]
-                    )
-                    point_index++
-                }
-                pair_index++
-            }
+            solve_contact_pairs_velocity3d(pairs, iteration % 2 == 1)
             self.solve_constraint_velocities(delta, iteration % 2 == 1)
             iteration++
         }
@@ -2022,7 +2038,8 @@ public class World3D {
                 normal_impulse, tangent_impulse,
                 pair.friction, pair.restitution, public_points,
                 pair.first_child_id, pair.second_child_id, pair.is_sensor,
-                pair.first.shape_revision, pair.second.shape_revision
+                pair.first.shape_revision, pair.second.shape_revision,
+                pair.first.pose_revision, pair.second.pose_revision
             ))
         }
         var position_iteration = 0
@@ -2676,7 +2693,9 @@ func append_contact_pair3d(
     if previous_index >= 0 {
         var previous = previous_contacts[previous_index]
         if previous.first_revision() != first.shape_revision ||
-            previous.second_revision() != second.shape_revision {
+            previous.second_revision() != second.shape_revision ||
+            previous.first_pose_version() != first.pose_revision ||
+            previous.second_pose_version() != second.pose_revision {
             previous_index = -1
         } else if previous.first_child_id() ==
             distance.first_child_id &&
@@ -2869,6 +2888,66 @@ func warm_contact_points3d(
     }
 }
 
+func solve_contact_pairs_velocity3d(pairs:ContactPairState3D[], reverse:bool) {
+    var pair_index = 0
+    while pair_index < pairs.count() {
+        var selected_pair = pair_index
+        if reverse {
+            selected_pair = pairs.count() - 1 - pair_index
+        }
+        var pair = pairs[selected_pair]
+        if !pair.active {
+            pair_index++
+            continue
+        }
+        if pair.direct_spheres {
+            solve_sphere_point3d(pair.first, pair.second, pair.normal,
+                        pair.friction, pair.constraints[0])
+            pair_index++
+            continue
+        }
+        var point_index = 0
+        while point_index < pair.constraints.count() {
+            var selected_point = point_index
+            if reverse {
+                selected_point = pair.constraints.count() - 1 - point_index
+            }
+            solve_contact_point3d(
+                pair.first, pair.second, pair.normal, pair.friction,
+                pair.constraints[selected_point]
+            )
+            point_index++
+        }
+        pair_index++
+    }
+}
+
+func contact_pair_before3d(first:@ContactPairState3D, second:@ContactPairState3D) bool {
+    return contact_key_before3d(first.first_id.slot, first.second_id.slot,
+        first.first_child_id, first.second_child_id, second.first_id.slot, second.second_id.slot,
+        second.first_child_id, second.second_child_id)
+}
+
+func merge_retained_contacts3d(retained:ContactPairState3D[], current:ContactPairState3D[]) ContactPairState3D[] {
+    var result:ContactPairState3D[] = []
+    var old_index = 0
+    var new_index = 0
+    while old_index < retained.count() || new_index < current.count() {
+        if new_index >= current.count() {
+            result.append(retained[old_index]); old_index++
+        } else if old_index >= retained.count() {
+            result.append(current[new_index]); new_index++
+        } else if contact_pair_before3d(retained[old_index], current[new_index]) {
+            result.append(retained[old_index]); old_index++
+        } else if contact_pair_before3d(current[new_index], retained[old_index]) {
+            result.append(current[new_index]); new_index++
+        } else {
+            result.append(retained[old_index]); old_index++; new_index++
+        }
+    }
+    return result
+}
+
 class ContactPairState3D {
     var first:BodyState3D
     var second:BodyState3D
@@ -2888,6 +2967,7 @@ class ContactPairState3D {
     let first_sphere_radius:float
     let second_sphere_radius:float
     let direct_spheres:bool
+    var retained:bool = false
 
     init(
         first:BodyState3D, second:BodyState3D,
