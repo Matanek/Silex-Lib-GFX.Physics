@@ -110,7 +110,30 @@ package struct BodyId3D {
     }
 }
 
+package class RagdollCollisionGroup3D {
+    private let parents:int[]
+    private let self_collision:bool
+    init(parents:int[], self_collision:bool) {
+        self.parents = parents
+        self.self_collision = self_collision
+    }
+    func allows(first:int, second:int) bool {
+        return self.self_collision && self.parents[first] != second && self.parents[second] != first
+    }
+}
+
+package func body_collision_allows3d(first:@BodyState3D, second:@BodyState3D) bool {
+    if let group = first.ragdoll_group {
+        if let other = second.ragdoll_group {
+            if group == other && !group.allows(first.ragdoll_part, second.ragdoll_part) { return false }
+        }
+    }
+    return first.collision_filter.allows(second.collision_filter)
+}
+
 package class BodyState3D {
+    var ragdoll_group:RagdollCollisionGroup3D? = null
+    var ragdoll_part:int = -1
     var body_type:BodyType3D
     var shape:Shape3D
     var shape_revision:int

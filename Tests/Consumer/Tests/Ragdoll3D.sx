@@ -1,0 +1,238 @@
+use GFX.Physics
+use STD.Math
+
+func body_settings(sensor:bool = false) Physics.RigidBody3DSettings {
+    return Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.3))
+        ..mass_properties = Physics.MassProperties3D(2.0, Math.Vec3(0.2), Math.Vec3(0.0, 0.0, 0.1))
+        ..allow_sleep = false ..is_sensor = sensor
+}
+func parts() Physics.RagdollPart3D[] {
+    return [
+        Physics.RagdollPart3D(-1, body_settings(), body_offset:Physics.Transform3D(
+            Math.Vec3(0.2, 0.0, 0.0), Math.Quat.angle_axis(0.3, Math.Vec3(1.0, 0.0, 0.0)))),
+        Physics.RagdollPart3D(0, body_settings(),
+            local_transform:Physics.Transform3D(Math.Vec3(1.0, 0.0, 0.0),
+                Math.Quat.angle_axis(Math.pi() / 2.0, Math.Vec3(0.0, 0.0, 1.0))),
+            body_offset:Physics.Transform3D(Math.Vec3(0.0, 0.3, 0.0),
+                Math.Quat.angle_axis(0.2, Math.Vec3(0.0, 1.0, 0.0)))),
+        Physics.RagdollPart3D(1, body_settings(),
+            local_transform:Physics.Transform3D(Math.Vec3(0.0, 2.0, 0.0),
+                Math.Quat.angle_axis(Math.pi() / 2.0, Math.Vec3(1.0, 0.0, 0.0))),
+            body_offset:Physics.Transform3D(Math.Vec3(0.0, 0.0, 0.4)))
+    ]
+}
+func near(first:Math.Vec3, second:Math.Vec3, tolerance:float = 0.00002) {
+    assert(first.subtract(second).length() < tolerance)
+}
+func same_pose(first:Physics.Transform3D, second:Physics.Transform3D) {
+    near(first.position, second.position)
+    near(first.rotation.rotate(Math.Vec3(1.0, 0.0, 0.0)), second.rotation.rotate(Math.Vec3(1.0, 0.0, 0.0)))
+    near(first.rotation.rotate(Math.Vec3(0.0, 1.0, 0.0)), second.rotation.rotate(Math.Vec3(0.0, 1.0, 0.0)))
+}
+func verify_anchors(ragdoll:Physics.Ragdoll3D) {
+    assert(ragdoll.joint(0) == null)
+    var index = 1
+    while index < ragdoll.part_count() {
+        assert(ragdoll.joint(index)!.anchor_error().length() < 0.0001)
+        index++
+    }
+}
+
+test "ragdoll rest hierarchy uses joint poses independently from shape origins and mass centers" {
+    var original = parts()
+    var settings = Physics.Ragdoll3DSettings(original)
+    original[1] = Physics.RagdollPart3D(0, body_settings(), local_transform:Physics.Transform3D(Math.Vec3(90.0)))
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let root = Physics.Transform3D(Math.Vec3(3.0, 4.0, 5.0),
+        Math.Quat.angle_axis(Math.pi() / 2.0, Math.Vec3(0.0, 1.0, 0.0)))
+    var ragdoll = world.create_ragdoll(settings, root)
+    var pose:Physics.Transform3D[] = []
+    ragdoll.write_pose(pose)
+    near(pose[0].position, Math.Vec3(3.0, 4.0, 5.0))
+    near(pose[1].position, Math.Vec3(3.0, 4.0, 4.0))
+    near(pose[2].position, Math.Vec3(3.0, 4.0, 6.0))
+    assert(world.body_count() == 3 && world.swing_twist_constraint_count() == 2)
+    var index = 0
+    while index < 3 {
+        var body = ragdoll.body(index)
+        near(body.position(), pose[index].point(settings.part(index).body_offset.position))
+        near(body.world_center_of_mass(), body.transform().point(Math.Vec3(0.0, 0.0, 0.1)))
+        index++
+    }
+    verify_anchors(ragdoll)
+    assert(ragdoll.joint(1)!.swing_angles().length() < 0.00001)
+    assert(Math.abs(ragdoll.joint(1)!.twist_angle()) < 0.00001)
+    ragdoll.write_local_pose(pose)
+    same_pose(pose[0], root)
+    same_pose(pose[1], settings.part(1).local_transform)
+    same_pose(pose[2], settings.part(2).local_transform)
+    pose[1] = Physics.Transform3D(Math.Vec3(50.0))
+    ragdoll.write_local_pose(pose)
+    same_pose(pose[1], settings.part(1).local_transform)
+}
+
+test "ragdoll whole pose updates preserve anchors and explicitly reset or keep velocities" {
+    var settings = Physics.Ragdoll3DSettings(parts())
+    var world = Physics.World3D()
+    var ragdoll = world.create_ragdoll(settings)
+    world.step(1.0 / 120.0)
+    var pose:Physics.Transform3D[] = []
+    ragdoll.write_local_pose(pose)
+    pose[0] = Physics.Transform3D(Math.Vec3(-2.0, 3.0, 1.0),
+        Math.Quat.angle_axis(0.8, Math.Vec3(1.0, 0.0, 0.0)))
+    pose[1] = settings.part(1).local_transform
+    pose[2] = settings.part(2).local_transform
+    var index = 0
+    while index < 3 { ragdoll.body(index).set_linear_velocity(Math.Vec3(1.0, 2.0, 3.0));index++ }
+    ragdoll.set_local_pose(pose, reset_velocity:false)
+    verify_anchors(ragdoll)
+    near(ragdoll.body(1).linear_velocity(), Math.Vec3(1.0, 2.0, 3.0))
+    var received:Physics.Transform3D[] = []
+    ragdoll.write_local_pose(received)
+    index = 0
+    while index < 3 { same_pose(received[index], pose[index]);index++ }
+    ragdoll.write_pose(received)
+    ragdoll.set_pose(received)
+    index = 0
+    while index < 3 {
+        near(ragdoll.body(index).linear_velocity(), Math.Vec3())
+        near(ragdoll.body(index).angular_velocity(), Math.Vec3())
+        index++
+    }
+    near(ragdoll.joint(1)!.reaction_force(), Math.Vec3())
+    near(ragdoll.joint(2)!.reaction_torque(), Math.Vec3())
+    verify_anchors(ragdoll)
+}
+
+func overlapping(self_collision:bool = true) Physics.Ragdoll3DSettings {
+    let body = body_settings(true)
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1, body),
+        Physics.RagdollPart3D(0, body),
+        Physics.RagdollPart3D(1, body)
+    ], self_collision:self_collision)
+}
+test "ragdoll collision groups suppress relatives without hiding different instances or distant members" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_ragdoll(overlapping())
+    world.step(0.01)
+    assert(world.contact_count() == 1)
+    var second = world.create_ragdoll(overlapping())
+    world.step(0.01)
+    assert(world.contact_count() == 11)
+    world.destroy_ragdoll(first)
+    world.step(0.01)
+    assert(world.contact_count() == 1 && second.is_valid())
+    world.destroy_ragdoll(second)
+    var hidden = world.create_ragdoll(overlapping(false))
+    world.step(0.01)
+    assert(world.contact_count() == 0)
+    var other = world.create_ragdoll(overlapping(false))
+    world.step(0.01)
+    assert(world.contact_count() == 9 && hidden.is_valid() && other.is_valid())
+}
+
+test "ragdoll filtering composes with ordinary collision filters and survives body mutation" {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_ragdoll(overlapping(false))
+    var second = world.create_ragdoll(overlapping(false))
+    var index = 0
+    while index < 3 {
+        first.body(index).set_collision_filter(Physics.CollisionFilter3D(group_index:17))
+        second.body(index).set_collision_filter(Physics.CollisionFilter3D(group_index:17))
+        index++
+    }
+    world.step(0.01)
+    assert(world.contact_count() == 9)
+    index = 0
+    while index < 3 {
+        second.body(index).set_collision_filter(Physics.CollisionFilter3D(category_bits:2, mask_bits:2))
+        first.body(index).set_collision_filter(Physics.CollisionFilter3D(category_bits:1, mask_bits:1))
+        index++
+    }
+    world.step(0.01)
+    assert(world.contact_count() == 0)
+}
+
+func orphan() Physics.Ragdoll3D {
+    var world = Physics.World3D()
+    return world.create_ragdoll(Physics.Ragdoll3DSettings(parts()))
+}
+test "ragdoll destruction recycles independent instances and world lifetime invalidates retained handles" {
+    var abandoned = orphan()
+    assert(!abandoned.is_valid())
+    var world = Physics.World3D()
+    var settings = Physics.Ragdoll3DSettings(parts())
+    var old = world.create_ragdoll(settings)
+    var handle = old.body(1)
+    var joint = old.joint(1)!
+    world.destroy_rigid_body(handle)
+    assert(!old.is_valid() && !joint.is_valid())
+    world.destroy_ragdoll(old)
+    assert(world.body_count() == 0 && world.swing_twist_constraint_count() == 0)
+    var index = 0
+    while index < 32 {
+        var first = world.create_ragdoll(settings)
+        var second = world.create_ragdoll(settings, Physics.Transform3D(Math.Vec3(10.0)))
+        assert(!handle.same_body(first.body(1)))
+        world.destroy_ragdoll(first)
+        assert(second.is_valid() && world.body_count() == 3 && world.swing_twist_constraint_count() == 2)
+        world.destroy_ragdoll(second)
+        assert(world.body_count() == 0 && world.swing_twist_constraint_count() == 0)
+        index++
+    }
+    assert(!handle.is_valid() && !old.is_valid() && !abandoned.is_valid())
+}
+
+test "ragdoll free fall preserves local hierarchy at both fixed rates" {
+    for rate in [60, 120] {
+        var world = Physics.World3D()
+        var settings = Physics.Ragdoll3DSettings(parts(), self_collision:false)
+        var ragdoll = world.create_ragdoll(settings, Physics.Transform3D(Math.Vec3(0.0, 10.0, 0.0)))
+        var before:Physics.Transform3D[] = []
+        ragdoll.write_local_pose(before)
+        var step = 0
+        while step < rate { world.step(1.0 / rate);step++ }
+        var after:Physics.Transform3D[] = []
+        ragdoll.write_local_pose(after)
+        near(after[0].position, Math.Vec3(0.0, 10.0 - 4.905 * (1.0 + 1.0 / rate), 0.0), 0.0001)
+        near(ragdoll.body(2).linear_velocity(), Math.Vec3(0.0, -9.81, 0.0), 0.0001)
+        same_pose(before[1], after[1]);same_pose(before[2], after[2])
+        verify_anchors(ragdoll)
+    }
+}
+
+test "ragdoll continuous crossings retain private filtering after joints are disabled" {
+    for sensor in [false, true] {
+        for related in [false, true] {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            var root = body_settings(sensor)
+            root.body_type = Physics.BodyType3D.fixed
+            root.mass_properties = null
+            var child = body_settings()
+            child.continuous_collision = true
+            var ragdoll = world.create_ragdoll(Physics.Ragdoll3DSettings([
+                Physics.RagdollPart3D(-1, root),
+                Physics.RagdollPart3D(0, child, local_transform:Physics.Transform3D(Math.Vec3(-1.0, 0.0, 0.0)))
+            ]))
+            ragdoll.joint(1)!.set_enabled(false)
+            if !related {
+                ragdoll.body(0).set_enabled(false)
+                world.create_rigid_body(root)
+            }
+            ragdoll.body(1).set_linear_velocity(Math.Vec3(120.0, 0.0, 0.0))
+            world.step(1.0 / 60.0)
+            var begins:Physics.Contact3D[] = []
+            world.write_contact_begin_events(begins)
+            if related {
+                assert(begins.count() == 0 && world.contact_count() == 0)
+                assert(ragdoll.body(1).position().x > 0.99)
+            } else {
+                assert(begins.count() == 1)
+                if sensor { assert(ragdoll.body(1).position().x > 0.99 && world.contact_count() == 0) }
+                else { assert(ragdoll.body(1).position().x < -0.5 && world.contact_count() == 1) }
+            }
+        }
+    }
+}

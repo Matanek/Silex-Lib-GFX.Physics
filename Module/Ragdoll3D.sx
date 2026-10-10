@@ -1,0 +1,248 @@
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.RagdollCollisionGroup3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintState3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintStore3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public struct RagdollPart3D {
+    let parent:int
+    let local_transform:Transform3D
+    let body_offset:Transform3D
+    let body:RigidBody3DSettings
+    let joint:SwingTwistConstraint3DSettings
+
+    init(parent:int, body:RigidBody3DSettings,
+        local_transform:Transform3D = Transform3D(),
+        body_offset:Transform3D = Transform3D(),
+        joint:SwingTwistConstraint3DSettings = SwingTwistConstraint3DSettings())
+    {
+        if body.transform != Transform3D() {
+            panic("GFX.Physics.RagdollPart3D places bodies through body_offset, not body.transform")
+        }
+        if joint.first_local_frame != Transform3D() || joint.second_local_frame != Transform3D() {
+            panic("GFX.Physics.RagdollPart3D derives joint frames from the rest pose")
+        }
+        self.parent = parent
+        self.local_transform = local_transform
+        self.body_offset = body_offset
+        self.body = body
+        self.joint = joint
+    }
+}
+
+public class Ragdoll3DSettings {
+    private var parts:RagdollPart3D[]
+    let self_collision:bool
+
+    init(parts:RagdollPart3D[], self_collision:bool = true) {
+        if parts.count() == 0 { panic("GFX.Physics.Ragdoll3DSettings requires at least one part") }
+        var retained:RagdollPart3D[] = []
+        var inverse_masses:float[] = []
+        var index = 0
+        for part in parts {
+            if (index == 0 && part.parent != -1) ||
+                (index > 0 && (part.parent < 0 || part.parent >= index))
+            {
+                panic("GFX.Physics.Ragdoll3DSettings requires one root followed by children after their parent")
+            }
+            var state = BodyState3D(part.body)
+            inverse_masses.append(state.inverse_mass)
+            if index > 0 {
+                if state.inverse_mass == 0.0 && inverse_masses[part.parent] == 0.0 {
+                    panic("GFX.Physics.Ragdoll3DSettings requires a dynamic body at every joint")
+                }
+                SwingTwistConstraintState3D(BodyId3D(0, 0), BodyId3D(1, 0), part.joint)
+            }
+            retained.append(part)
+            index++
+        }
+        self.parts = retained
+        self.self_collision = self_collision
+    }
+
+    func part_count() int { return self.parts.count() }
+    func part(index:int) RagdollPart3D {
+        if index < 0 || index >= self.parts.count() {
+            panic("GFX.Physics.Ragdoll3DSettings part index is out of range")
+        }
+        return self.parts[index]
+    }
+}
+
+public class Ragdoll3D {
+    private var store:BodyStore3D
+    private var constraints:SwingTwistConstraintStore3D
+    private var settings:Ragdoll3DSettings
+    private var bodies:RigidBody3D[]
+    private var joints:SwingTwistConstraint3D[]
+    private var alive:bool = true
+
+    package init(store:BodyStore3D, constraints:SwingTwistConstraintStore3D,
+        settings:Ragdoll3DSettings, transform:Transform3D)
+    {
+        store.require_mutable()
+        var rest:Transform3D[] = []
+        var parents:int[] = []
+        var placements:Transform3D[] = []
+        var index = 0
+        while index < settings.part_count() {
+            let part = settings.part(index)
+            var pose = part.local_transform
+            if index > 0 { pose = compose_ragdoll_pose3d(rest[part.parent], pose) }
+            rest.append(pose)
+            placements.append(compose_ragdoll_pose3d(transform,
+                compose_ragdoll_pose3d(pose, part.body_offset)))
+            parents.append(part.parent)
+            index++
+        }
+        var frames:SwingTwistConstraint3DSettings[] = []
+        index = 1
+        while index < settings.part_count() {
+            let part = settings.part(index)
+            let first = settings.part(part.parent)
+            let first_body = compose_ragdoll_pose3d(rest[part.parent], first.body_offset)
+            let second_body = compose_ragdoll_pose3d(rest[index], part.body_offset)
+            var joint = part.joint
+            joint.first_local_frame = relative_ragdoll_pose3d(first_body, rest[index])
+            joint.second_local_frame = relative_ragdoll_pose3d(second_body, rest[index])
+            frames.append(joint)
+            index++
+        }
+        var group = RagdollCollisionGroup3D(parents, settings.self_collision)
+        var bodies:RigidBody3D[] = []
+        var joints:SwingTwistConstraint3D[] = []
+        index = 0
+        while index < settings.part_count() {
+            var body = settings.part(index).body
+            body.transform = placements[index]
+            let id = store.append(body)
+            var state = store.require(id)
+            state.ragdoll_group = group
+            state.ragdoll_part = index
+            bodies.append(RigidBody3D(store, id))
+            index++
+        }
+        index = 1
+        while index < settings.part_count() {
+            let id = constraints.append(bodies[parents[index]], bodies[index], frames[index - 1])
+            joints.append(SwingTwistConstraint3D(constraints, id))
+            index++
+        }
+        self.store = store
+        self.constraints = constraints
+        self.settings = settings
+        self.bodies = bodies
+        self.joints = joints
+    }
+
+    func part_count() int { return self.settings.part_count() }
+    func is_valid() bool {
+        if !self.alive { return false }
+        for body in self.bodies { if !body.is_valid() { return false } }
+        for joint in self.joints { if !joint.is_valid() { return false } }
+        return true
+    }
+    private func require_valid() {
+        if !self.is_valid() { panic("GFX.Physics.Ragdoll3D no longer refers to a live assembly") }
+    }
+    func body(index:int) RigidBody3D {
+        self.require_valid()
+        self.settings.part(index)
+        return self.bodies[index]
+    }
+    func joint(index:int) SwingTwistConstraint3D? {
+        self.require_valid()
+        self.settings.part(index)
+        if index == 0 { return null }
+        return self.joints[index - 1]
+    }
+
+    func write_pose(output:&Transform3D[]) {
+        self.require_valid()
+        output.clear()
+        var index = 0
+        while index < self.part_count() {
+            output.append(compose_ragdoll_pose3d(self.bodies[index].transform(),
+                inverse_ragdoll_pose3d(self.settings.part(index).body_offset)))
+            index++
+        }
+    }
+    func write_local_pose(output:&Transform3D[]) {
+        self.write_pose(output)
+        var index = self.part_count() - 1
+        while index > 0 {
+            output[index] = relative_ragdoll_pose3d(output[self.settings.part(index).parent], output[index])
+            index--
+        }
+    }
+    func set_pose(pose:Transform3D[], reset_velocity:bool = true) {
+        self.require_valid()
+        self.store.require_mutable()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D pose requires one transform per part")
+        }
+        var placements:Transform3D[] = []
+        var index = 0
+        while index < self.part_count() {
+            placements.append(compose_ragdoll_pose3d(pose[index], self.settings.part(index).body_offset))
+            index++
+        }
+        index = 0
+        while index < self.part_count() {
+            var state = self.store.require(self.bodies[index].body_id())
+            state.transform = placements[index]
+            state.pose_revision++
+            state.target = null
+            state.target_remaining = 0.0
+            if reset_velocity {
+                state.linear_velocity = Math.Vec3()
+                state.angular_velocity = Math.Vec3()
+            }
+            index++
+        }
+        for joint in self.joints { self.constraints.require(joint.constraint_id()).reset() }
+        self.store.wake_all()
+    }
+    func set_local_pose(pose:Transform3D[], reset_velocity:bool = true) {
+        self.require_valid()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D pose requires one transform per part")
+        }
+        var world:Transform3D[] = []
+        var index = 0
+        while index < self.part_count() {
+            var transform = pose[index]
+            if index > 0 {
+                transform = compose_ragdoll_pose3d(world[self.settings.part(index).parent], transform)
+            }
+            world.append(transform)
+            index++
+        }
+        self.set_pose(world, reset_velocity)
+    }
+
+    package func belongs_to(store:BodyStore3D) bool { return self.store == store }
+    package func remaining_bodies() RigidBody3D[] {
+        if !self.alive { panic("GFX.Physics.Ragdoll3D was already destroyed") }
+        return self.bodies
+    }
+    package func invalidate() { self.alive = false }
+}
+
+func compose_ragdoll_pose3d(first:Transform3D, second:Transform3D) Transform3D {
+    return Transform3D(first.point(second.position), first.rotation.multiply(second.rotation))
+}
+func inverse_ragdoll_pose3d(transform:Transform3D) Transform3D {
+    let rotation = transform.rotation.conjugated()
+    return Transform3D(rotation.rotate(transform.position.multiply(-1.0)), rotation)
+}
+func relative_ragdoll_pose3d(parent:Transform3D, child:Transform3D) Transform3D {
+    return Transform3D(parent.inverse_point(child.position), parent.rotation.conjugated().multiply(child.rotation))
+}

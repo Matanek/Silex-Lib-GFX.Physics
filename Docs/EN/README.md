@@ -307,3 +307,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Bring a spatial chain into contact with a plane](SpatialContacts3D.md): contact, impulse moment and release.
 
 [Compose a motorized shoulder and elbow](ArticulatedPose3D.md): four servos, transmitted load and moving frames.
+
+[Create a ragdoll assembly and manipulate its pose](Ragdoll3D.md): hierarchy, body offsets, independent instances and parent/child filtering.

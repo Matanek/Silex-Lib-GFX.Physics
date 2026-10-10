@@ -1,17 +1,19 @@
 # Journal des versions de GFX.Physics
 
 Ce journal commence à 0.7.0 et couvre les changements depuis le tag 0.6.0.
-Les changements futurs sont consignés sous `## [Unreleased]
+Les changements futurs sont consignés sous `## [Unreleased]` avant publication,
+puis traduits dans `CHANGELOG.md`.
+
+## [Unreleased]
+
+- Hiérarchie ragdoll réutilisable : poses mondiales/locales, décalages de corps et centres de masse, instances indépendantes, filtrage parent/enfant et durée de vie sûre ; conventions de pose et paires autorisées comparées au ragdoll Jolt en Debug/Release.
 
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
   ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
   anciens appels stockant un résultat et propagations deviennent explicites.
   Cette révision requiert la toolchain de développement avec cette sémantique
   de `try` ; sa publication doit coordonner les versions du compilateur et des
-  packages.` avant publication,
-puis traduits dans `CHANGELOG.md`.
-
-## [Unreleased]
+  packages.
 
 - Les charnières portées par un corps tournant transportent leur couple mémorisé dans le repère courant et conservent des axes cohérents pendant le pas. Une épaule swing/twist et un coude motorisés sous gravité sont qualifiés à 60/120 Hz contre Jolt, avec budgets, réactions et bilans séparés par phase.
 

@@ -1,3 +1,6 @@
+use GFX.Physics.Ragdoll3D.Ragdoll3D
+use GFX.Physics.Ragdoll3D.Ragdoll3DSettings
+use GFX.Physics.RigidBody3D.body_collision_allows3d
 use GFX.Physics.PathConstraint3D.PathOrientation3D
 use GFX.Physics.PathConstraint3D.PathConstraint3D
 use GFX.Physics.PathConstraint3D.PathConstraint3DSettings
@@ -249,6 +252,21 @@ public class World3D {
     func write_contact_end_events(output:&Contact3D[]) {
         output.clear()
         for contact in self.contact_ends { output.append(contact) }
+    }
+
+    func create_ragdoll(settings:Ragdoll3DSettings, transform:Transform3D = Transform3D()) Ragdoll3D {
+        return Ragdoll3D(self.store, self.swing_twist_constraints, settings, transform)
+    }
+
+    func destroy_ragdoll(ragdoll:Ragdoll3D) {
+        self.store.require_mutable()
+        if !ragdoll.belongs_to(self.store) {
+            panic("GFX.Physics.World3D cannot destroy a ragdoll owned by another world")
+        }
+        for body in ragdoll.remaining_bodies() {
+            if body.is_valid() { self.destroy_rigid_body(body) }
+        }
+        ragdoll.invalidate()
     }
 
     func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
@@ -832,7 +850,7 @@ public class World3D {
                         if target_slot != moving_slot {
                             if var target = self.store.slots[target_slot] {
                                 if target.is_enabled && !target.is_sensor &&
-                                    moving.collision_filter.allows(target.collision_filter)
+                                    body_collision_allows3d(moving, target)
                                 {
                                     let fraction = continuous_fraction3d(
                                         moving.shape, previous_poses[moving_slot],
@@ -883,7 +901,7 @@ public class World3D {
                     while second_slot < self.store.slots.count() {
                         if var second = self.store.slots[second_slot] {
                             if second.is_enabled && (first.is_sensor || second.is_sensor) &&
-                                first.collision_filter.allows(second.collision_filter) &&
+                                body_collision_allows3d(first, second) &&
                                 ((first.body_type == BodyType3D.dynamic &&
                                     first.continuous_collision && first.awake) ||
                                     (second.body_type == BodyType3D.dynamic &&
@@ -1882,7 +1900,7 @@ public class World3D {
                 second.shape_revision != previous.second_revision() ||
                 first.pose_revision != previous.first_pose_version() ||
                 second.pose_revision != previous.second_pose_version() ||
-                !first.collision_filter.allows(second.collision_filter) { continue }
+                !body_collision_allows3d(first, second) { continue }
             var first_placement = contact_placement3d(first, previous.first_child_id())
             var second_placement = contact_placement3d(second, previous.second_child_id())
             if supports_mesh_manifolds3d(first_placement.shape(), second_placement.shape()) {
@@ -1926,7 +1944,7 @@ public class World3D {
                 if first.is_enabled {
                     if var second = self.store.slots[second_slot] {
                         if second.is_enabled &&
-                            first.collision_filter.allows(second.collision_filter) &&
+                            body_collision_allows3d(first, second) &&
                             (first.body_type == BodyType3D.dynamic ||
                                 second.body_type == BodyType3D.dynamic ||
                                 ((first.is_sensor || second.is_sensor) &&

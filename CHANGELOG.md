@@ -1,16 +1,17 @@
 # GFX.Physics release notes
 
-This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes
-are recorded under `## [Unreleased]
+This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes are recorded under `## [Unreleased]` before publication,
+with French authored first in `CHANGELOG.fr.md`.
+
+## [Unreleased]
+
+- Reusable ragdoll hierarchy: world/local poses, body and mass-center offsets, independent instances, parent/child filtering and safe lifetime; pose conventions and allowed pairs compared with Jolt ragdolls in Debug/Release.
 
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
   storing results and propagating failures are made explicit. This revision
   requires the development toolchain with these `try` semantics; publication
-  must coordinate compiler and package versions.` before publication, with French authored
-first in `CHANGELOG.fr.md`.
-
-## [Unreleased]
+  must coordinate compiler and package versions.
 
 - Hinges carried by a rotating body transport cached torque into the current frame and retain consistent axes throughout the step. A gravity-loaded swing/twist shoulder and motorized elbow are qualified against Jolt at 60/120 Hz with budgets, reactions and split-phase balances.
 

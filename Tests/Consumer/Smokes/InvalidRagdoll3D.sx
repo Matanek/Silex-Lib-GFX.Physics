@@ -1,0 +1,45 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(expected:str) bool {
+    var arguments = Process.arguments()
+    for argument in arguments { if argument == expected { return true } }
+    return false
+}
+func orphan() Physics.Ragdoll3D {
+    var world = Physics.World3D()
+    return world.create_ragdoll(Physics.Ragdoll3DSettings([Physics.RagdollPart3D(-1, Physics.RigidBody3DSettings())]))
+}
+func main() {
+    var body = Physics.RigidBody3DSettings()
+    var joint = Physics.SwingTwistConstraint3DSettings()
+    if selected("body-transform") { body.transform = Physics.Transform3D(Math.Vec3(1.0)) }
+    if selected("joint-frame") { joint.first_local_frame = Physics.Transform3D(Math.Vec3(1.0)) }
+    if selected("density") { body.density = -1.0 }
+    if selected("limits") { joint.minimum_twist = 0.5; joint.maximum_twist = -0.5 }
+    if selected("empty") { Physics.Ragdoll3DSettings([]) }
+    var parts:Physics.RagdollPart3D[] = [Physics.RagdollPart3D(-1, body), Physics.RagdollPart3D(0, body, joint:joint)]
+    if selected("root-parent") { parts[0] = Physics.RagdollPart3D(0, body) }
+    if selected("second-root") { parts[1] = Physics.RagdollPart3D(-1, body) }
+    if selected("future-parent") { parts[1] = Physics.RagdollPart3D(1, body) }
+    if selected("missing-parent") { parts[1] = Physics.RagdollPart3D(5, body) }
+    if selected("fixed-pair") {
+        body.body_type = Physics.BodyType3D.fixed
+        parts = [Physics.RagdollPart3D(-1, body), Physics.RagdollPart3D(0, body)]
+    }
+    var settings = Physics.Ragdoll3DSettings(parts)
+    var world = Physics.World3D()
+    var ragdoll = world.create_ragdoll(settings)
+    if selected("pose-count") { ragdoll.set_pose([]) }
+    if selected("local-count") { ragdoll.set_local_pose([Physics.Transform3D()]) }
+    if selected("body-index") { ragdoll.body(2) }
+    if selected("joint-index") { ragdoll.joint(-1) }
+    if selected("settings-index") { settings.part(2) }
+    if selected("foreign-destroy") { var other = Physics.World3D(); other.destroy_ragdoll(ragdoll) }
+    if selected("double-destroy") { world.destroy_ragdoll(ragdoll); world.destroy_ragdoll(ragdoll) }
+    if selected("stale-read") { world.destroy_rigid_body(ragdoll.body(1)); ragdoll.body(0) }
+    if selected("stale-pose") { world.destroy_swing_twist_constraint(ragdoll.joint(1)!); ragdoll.set_pose([]) }
+    if selected("orphan-read") { orphan().body(0) }
+    panic("invalid ragdoll operation was accepted")
+}

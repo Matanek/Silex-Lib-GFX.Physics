@@ -197,3 +197,7 @@ public use GFX.Physics.Path3D.PathKnot3D
 public use GFX.Physics.PathConstraint3D.PathConstraint3D
 public use GFX.Physics.PathConstraint3D.PathConstraint3DSettings
 public use GFX.Physics.PathConstraint3D.PathOrientation3D
+
+public use GFX.Physics.Ragdoll3D.RagdollPart3D
+public use GFX.Physics.Ragdoll3D.Ragdoll3DSettings
+public use GFX.Physics.Ragdoll3D.Ragdoll3D
