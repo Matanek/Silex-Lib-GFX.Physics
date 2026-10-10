@@ -138,7 +138,7 @@ func make_input(index:int, frame:int) Input {
 func main() {
     var check = false
     var full = false
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {

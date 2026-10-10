@@ -8,7 +8,7 @@ use STD.Math
 use STD.Process
 
 func selected(expected:str) bool {
-    match Process.arguments() {
+    match (try Process.arguments()) {
         success(arguments) => {
             for argument in arguments { if argument == expected { return true } }
         }

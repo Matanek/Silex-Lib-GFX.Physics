@@ -137,7 +137,7 @@ func run_kernel(states:&State[..], constraints:@Constraint[..], impulses:&Impuls
 
 func main() {
     var check = false
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {

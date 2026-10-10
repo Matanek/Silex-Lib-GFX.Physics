@@ -46,7 +46,7 @@ func run_case(family:int,gap_index:int,speed_index:int,substeps:int,timing:int,w
 }
 func main() {
     var warm_start = true
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {

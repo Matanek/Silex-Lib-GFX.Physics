@@ -2,7 +2,7 @@ use GFX.Physics
 use STD.Math
 use STD.Process
 func option(expected:str) bool {
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => { for argument in arguments { if argument==expected { return true } } }
     }

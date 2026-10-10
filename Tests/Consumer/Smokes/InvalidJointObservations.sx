@@ -47,7 +47,7 @@ use STD.Process
 func main() {
     var selected = "distance"
     var field = "linear"
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             if arguments.count() > 2 { selected = arguments[1]

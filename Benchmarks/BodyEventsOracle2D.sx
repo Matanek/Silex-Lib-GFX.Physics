@@ -48,7 +48,7 @@ func collider(world:Physics.World2D, body:Physics.RigidBody2D, x:float, id:uint6
 }
 func main() {
     var world = Physics.World2D(gravity:Math.Vec2(), hit_event_threshold:1.0)
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {

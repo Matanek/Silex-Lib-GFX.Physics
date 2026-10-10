@@ -39,7 +39,7 @@ func collider(world:Physics.World2D, body:Physics.RigidBody2D, x:float, id:uint6
     )
 }
 func configure(world:Physics.World2D) {
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => {
             for argument in arguments {

@@ -46,7 +46,7 @@ func orphan() Handles {
 use STD.Process
 func main() {
     var selected = "body"
-    match Process.arguments() {
+    match (try Process.arguments()) {
         failure(error) => { panic(error.detail) }
         success(arguments) => { if arguments.count() > 1 { selected = arguments[1] } }
     }

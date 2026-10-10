@@ -3,7 +3,7 @@ use STD.Math
 use STD.Process
 
 func main() {
-    match Process.arguments() {
+    match (try Process.arguments()) {
         success(arguments) => {
             for argument in arguments {
                 if argument == "radius" { Physics.Capsule3D(0.0, 0.5) }
