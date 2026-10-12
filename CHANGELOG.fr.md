@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Deux butées de torsion asymétriques dans un ragdoll passif sont qualifiées sous impulsions angulaires opposées face à Jolt : transmission aux parents, moment cinétique, énergie et états stabilisés, à 60/120 Hz dans deux orientations mondiales en Debug/Release. Aucun contact ni changement de solveur.
+
 - `Ragdoll3D.drive_to_pose` et `drive_to_local_pose` suivent les rotations cibles avec des couples bornés, sans téléportation ; `stop_motors` rend les articulations passives. Les poses stabilisées d’une chaîne décalée sous gravité sont comparées à Jolt à 60/120 Hz en Debug/Release.
 
 - `World3DSettings.position_iterations` permet de régler la correction des contacts et articulations à la création du monde, de 1 à 128 passes, avec la valeur par défaut de 4 conservée. Le parcours ragdoll avec impacts, limites anatomiques et collisions internes non voisines emploie 32 passes.

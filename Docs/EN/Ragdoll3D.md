@@ -117,3 +117,12 @@ to neutral and becomes passive under gravity, at 60/120 Hz in Debug/Release.
 Geometric conventions, bounded torques and settled poses are compared with
 Jolt `Ragdoll.DriveToPoseUsingMotors`. This contact-free recipe does not qualify
 arbitrary trajectories or motorized impacts.
+
+A [passive chain with stops](../../Tests/Consumer/Tests/RagdollLimits3D.sx)
+also transmits opposed angular impulses through two twist joints bounded at
+−0.2/+0.35 rad, with locked swing. At 60/120 Hz and in two world orientations,
+angular momentum is conserved and stops do not create kinetic energy. Anchors,
+transmission to parents and settled angles/velocities are qualified against
+the native Jolt ragdoll in Debug/Release. Observations immediately before/after
+an impulse verify that it changes velocity without placing bodies. This recipe
+has neither gravity nor contacts; it does not qualify combined swing impacts.

@@ -124,3 +124,13 @@ revient au neutre puis redevient passive sous gravité, à 60/120 Hz en
 Debug/Release. Les conventions géométriques, couples bornés et poses stabilisées
 sont comparés à `Ragdoll.DriveToPoseUsingMotors` de Jolt. Cette recette sans
 contact ne qualifie pas toutes les trajectoires ni les impacts motorisés.
+
+Une [chaîne passive à butées](../../Tests/Consumer/Tests/RagdollLimits3D.sx)
+transmet aussi deux impulsions angulaires opposées à travers deux articulations
+de torsion bornées à −0,2/+0,35 rad, avec swing verrouillé. À 60/120 Hz et
+dans deux orientations mondiales, le moment cinétique est conservé et les
+butées ne créent pas d’énergie cinétique. Les ancrages, la transmission aux
+parents et les angles/vitesses stabilisés sont qualifiés face au véritable
+ragdoll Jolt en Debug/Release. Les observations juste avant/après impulsion
+vérifient qu’elle change la vitesse sans placer les corps. Cette recette n’a
+ni gravité ni contacts ; elle ne qualifie pas les impacts avec swing combiné.
