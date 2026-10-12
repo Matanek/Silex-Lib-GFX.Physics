@@ -3,7 +3,8 @@
 Pour améliorer la tenue des ancrages dans un assemblage avec impacts, augmenter
 `World3DSettings.position_iterations` avant de créer le monde. La valeur par
 défaut est **4** ; les entiers de **1 à 128** sont acceptés. Le parcours
-`Physics3D/RagdollFall/Main.sx` utilise **8** passes pour ses vingt membres.
+`Physics3D/RagdollFall/Main.sx` utilise **32** passes pour ses vingt membres,
+leurs limites anatomiques et leurs collisions internes non voisines.
 Chaque passe supplémentaire augmente le travail de correction des contacts et
 articulations. Ce réglage ne change ni le pas de temps ni le nombre d’intégrations
 de vitesse ; il ne garantit pas une erreur maximale pour toute scène.

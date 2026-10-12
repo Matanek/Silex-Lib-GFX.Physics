@@ -3,7 +3,8 @@
 To improve anchor stability in an assembly with impacts, increase
 `World3DSettings.position_iterations` before creating the world. The default
 is **4**; integers from **1 to 128** are accepted. The
-`Physics3D/RagdollFall/Main.sx` example uses **8** passes for its twenty parts.
+`Physics3D/RagdollFall/Main.sx` example uses **32** passes for its twenty parts,
+their anatomical limits and nonadjacent internal collisions.
 Each additional pass increases contact and joint correction work. This setting
 changes neither the timestep nor the number of velocity integrations; it does
 not guarantee a maximum error for every scene. The world snapshots its settings
