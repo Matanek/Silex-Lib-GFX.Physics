@@ -1,5 +1,14 @@
 # Simuler des corps rigides en 3D
 
+Pour améliorer la tenue des ancrages dans un assemblage avec impacts, augmenter
+`World3DSettings.position_iterations` avant de créer le monde. La valeur par
+défaut est **4** ; les entiers de **1 à 128** sont acceptés. Le parcours
+`Physics3D/RagdollFall/Main.sx` utilise **8** passes pour ses vingt membres.
+Chaque passe supplémentaire augmente le travail de correction des contacts et
+articulations. Ce réglage ne change ni le pas de temps ni le nombre d’intégrations
+de vitesse ; il ne garantit pas une erreur maximale pour toute scène.
+Le monde conserve les réglages reçus à sa création.
+
 `World3D` simule des corps fixes, cinématiques et dynamiques sans fenêtre,
 scène, renderer ni ECS. Il accepte les sphères, boîtes, capsules, cylindres,
 solides effilés et enveloppes convexes de `Shape3D`, avec contacts entre ces

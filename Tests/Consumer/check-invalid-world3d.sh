@@ -21,6 +21,9 @@ check_failure() {
 }
 
 check_failure gravity "GFX.Physics.World3D requires finite gravity"
+check_failure iterations-zero "GFX.Physics.World3D requires position iterations between 1 and 128"
+check_failure iterations-negative "GFX.Physics.World3D requires position iterations between 1 and 128"
+check_failure iterations-large "GFX.Physics.World3D requires position iterations between 1 and 128"
 check_failure density "GFX.Physics.RigidBody3DSettings requires finite motion, density and damping"
 check_failure mass "GFX.Physics.RigidBody3D dynamic mass and principal inertia must be positive"
 check_failure fixed-velocity "GFX.Physics.RigidBody3DSettings fixed body requires zero velocity"

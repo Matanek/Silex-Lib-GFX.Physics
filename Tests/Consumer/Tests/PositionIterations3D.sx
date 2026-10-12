@@ -1,0 +1,33 @@
+use GFX.Physics
+use STD.Math
+
+func residual(iterations:int, change_after_creation:bool = false) float {
+    var settings=Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=iterations
+    var world=Physics.World3D(settings)
+    if change_after_creation { settings.position_iterations=1 }
+    let body=Physics.RigidBody3DSettings() ..is_sensor=true
+        ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.2)) ..allow_sleep=false
+    var members:Physics.RigidBody3D[]=[]
+    var joints:Physics.PointConstraint3D[]=[]
+    var support=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..is_sensor=true)
+    var previous=support
+    for index in [0,1,2,3,4] {
+        var member=world.create_rigid_body(body)
+        joints.append(world.create_point_constraint(previous,member))
+        members.append(member);previous=member
+    }
+    members[4].set_transform(Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)))
+    world.step(1.0/120.0)
+    var error=0.0
+    for joint in joints { error=Math.max(error,joint.anchor_error().length()) }
+    return error
+}
+test "world position iteration budget improves coupled correction and snapshots settings" {
+    let low=residual(1)
+    let medium=residual(4)
+    let high=residual(8)
+    let maximum=residual(128)
+    assert(low>medium && medium>high && high>maximum)
+    assert(maximum<0.0001)
+    assert(Math.abs(residual(8,true)-high)<0.0000001)
+}

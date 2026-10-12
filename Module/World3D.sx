@@ -136,7 +136,8 @@ use STD.Math
 
 public struct World3DSettings {
     var gravity:Math.Vec3
-    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0) }
+    var position_iterations:int
+    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0);self.position_iterations = 4 }
 }
 
 package struct CharacterShape3D {
@@ -164,6 +165,7 @@ public class World3D {
     private var cone_constraints:ConeConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
+    private let position_iterations:int
     private var contacts:Contact3D[]
     private var contact_begins:Contact3D[]
     private var contact_ends:Contact3D[]
@@ -189,6 +191,9 @@ public class World3D {
         if !finite_body3d_point(settings.gravity) {
             panic("GFX.Physics.World3D requires finite gravity")
         }
+        if settings.position_iterations < 1 || settings.position_iterations > 128 {
+            panic("GFX.Physics.World3D requires position iterations between 1 and 128")
+        }
         self.store = BodyStore3D()
         self.distance_constraints = DistanceConstraintStore3D(self.store)
         self.slider_constraints = SliderConstraintStore3D(self.store)
@@ -203,6 +208,7 @@ public class World3D {
         self.gear_constraints = GearConstraintStore3D(self.store)
         self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
+        self.position_iterations = settings.position_iterations
         self.contacts = []
         self.contact_begins = []
         self.contact_ends = []
@@ -2062,7 +2068,7 @@ public class World3D {
             ))
         }
         var position_iteration = 0
-        while position_iteration < 4 {
+        while position_iteration < self.position_iterations {
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {

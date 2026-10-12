@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `World3DSettings.position_iterations` permet de régler la correction des contacts et articulations à la création du monde, de 1 à 128 passes, avec la valeur par défaut de 4 conservée. Le parcours ragdoll avec impacts emploie 8 passes.
+
 - Ragdoll passif de trois sphères : impulsion excentrée, transmission, bilans de mouvement, ancrages et chute symétrique sur un sol qualifiés face à Jolt à 60/120 Hz en Debug/Release ; solveur inchangé.
 
 - Hiérarchie ragdoll réutilisable : poses mondiales/locales, décalages de corps et centres de masse, instances indépendantes, filtrage parent/enfant et durée de vie sûre ; conventions de pose et paires autorisées comparées au ragdoll Jolt en Debug/Release.

@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `World3DSettings.position_iterations` configures contact and joint position correction at world creation, from 1 to 128 passes, retaining the default of 4. The ragdoll impact example uses 8 passes.
+
 - Passive three-sphere ragdoll: off-center impulse, transmission, momentum balances, anchors and symmetric floor fall qualified against Jolt at 60/120 Hz in Debug/Release; solver unchanged.
 
 - Reusable ragdoll hierarchy: world/local poses, body and mass-center offsets, independent instances, parent/child filtering and safe lifetime; pose conventions and allowed pairs compared with Jolt ragdolls in Debug/Release.

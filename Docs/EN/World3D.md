@@ -1,5 +1,14 @@
 # Simulate rigid bodies in 3D
 
+To improve anchor stability in an assembly with impacts, increase
+`World3DSettings.position_iterations` before creating the world. The default
+is **4**; integers from **1 to 128** are accepted. The
+`Physics3D/RagdollFall/Main.sx` example uses **8** passes for its twenty parts.
+Each additional pass increases contact and joint correction work. This setting
+changes neither the timestep nor the number of velocity integrations; it does
+not guarantee a maximum error for every scene. The world snapshots its settings
+at creation.
+
 `World3D` simulates fixed, kinematic, and dynamic bodies without a window,
 scene, renderer, or ECS. It accepts `Shape3D` spheres, boxes, capsules,
 cylinders, tapered solids and convex hulls, with contacts between these shapes.
