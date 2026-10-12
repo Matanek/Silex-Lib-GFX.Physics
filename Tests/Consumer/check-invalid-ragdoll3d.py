@@ -15,6 +15,10 @@ CASES = {
     'fixed-pair': 'requires a dynamic body at every joint',
     **{name: 'pose requires one transform per part' for name in ('pose-count', 'local-count')},
     **{name: 'part index is out of range' for name in ('body-index', 'joint-index', 'settings-index')},
+    **{name: 'motor pose requires one transform per part' for name in ('drive-count', 'drive-local-count')},
+    **{name: 'positive finite stiffness and nonnegative finite damping' for name in
+       ('motor-torque', 'motor-stiffness', 'motor-damping', 'motor-torque-nan', 'motor-stiffness-nan', 'motor-damping-nan', 'motor-root-only')},
+    **{name: 'no longer refers to a live assembly' for name in ('stale-drive', 'stale-stop')},
     'foreign-destroy': 'cannot destroy a ragdoll owned by another world',
     'double-destroy': 'was already destroyed',
     **{name: 'no longer refers to a live assembly' for name in ('stale-read', 'stale-pose', 'orphan-read')},

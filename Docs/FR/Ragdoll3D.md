@@ -56,9 +56,38 @@ réveille le monde. Par défaut elle annule les vitesses linéaires et angulaire
 `reset_velocity:false` les conserve. Elle conserve les forces déjà appliquées.
 
 Une pose imposée est un placement immédiat. Pour suivre une cible avec des
-efforts physiques, configurer les moteurs des articulations. Une pose arbitraire
-peut dépasser leurs limites ou séparer leurs ancrages ; le solveur reprend
+efforts physiques, utiliser les commandes de pose motorisée ci-dessous. Une
+pose arbitraire peut dépasser leurs limites ou séparer leurs ancrages ; le solveur reprend
 leur résolution au prochain pas positif.
+
+## Suivre une pose avec des moteurs
+
+`drive_to_pose(pose, maximum_torque, stiffness, damping)` et
+`drive_to_local_pose(pose, maximum_torque, stiffness, damping)` reprennent les
+conventions de lecture mondiale et locale. Le tableau doit contenir un transform
+par membre. Seules les rotations relatives des enfants deviennent des cibles :
+la position et la rotation mondiales de la racine, ainsi que toutes les
+translations, ne commandent aucun déplacement. Les corps restent reliés par
+leurs ancrages physiques.
+
+L'appel remplace les moteurs de torsion et de swing de chaque articulation,
+réveille les corps et efface leurs réactions mémorisées. Il conserve leurs
+poses, vitesses, limites, friction et filtres de collision. Le solveur borne les
+cibles aux limites articulaires existantes. Les décalages de corps et les
+repères actuels des articulations participent à la conversion des rotations.
+Les valeurs sont copiées : modifier ensuite le tableau ne change pas la cible.
+
+`maximum_torque` est un couple fini, positif ou nul, en N·m **par axe** ;
+`stiffness` est une raideur finie strictement positive en N·m/rad et `damping`
+un amortissement fini positif ou nul en N·m·s/rad. Un ressort fini sous gravité
+peut conserver un écart avec la cible. Donner une nouvelle pose quand la cible
+change suffit ; aucun renouvellement à chaque image n'est nécessaire.
+
+`stop_motors()` retire les deux moteurs de toutes les articulations. Il conserve
+poses et vitesses et laisse gravité, limites, friction et collisions agir. Il ne
+restaure pas une configuration de moteurs antérieure à la commande de pose.
+Le [test public](../../Tests/Consumer/Tests/RagdollMotors3D.sx) exerce ces appels,
+les instances indépendantes, les repères modifiés et la saturation aux limites.
 
 ## Collisions et durée de vie
 
@@ -88,5 +117,10 @@ excentrée sur l’extrémité sans gravité, transmission au parent, bilans de
 mouvement et ancrages bornés ; puis chute symétrique sur un sol sans frottement
 jusqu’au repos, à 60/120 Hz en Debug/Release. La traversée transitoire du sol
 est bornée séparément de la hauteur finale. Ces recettes passives n’établissent
-pas encore une qualification générale des impacts, limites actives ou poses
-motorisées d’un ragdoll.
+pas encore une qualification générale des impacts ou limites actives.
+
+Une chaîne à racine fixe et deux sphères décalées suit aussi des cibles opposées,
+revient au neutre puis redevient passive sous gravité, à 60/120 Hz en
+Debug/Release. Les conventions géométriques, couples bornés et poses stabilisées
+sont comparés à `Ragdoll.DriveToPoseUsingMotors` de Jolt. Cette recette sans
+contact ne qualifie pas toutes les trajectoires ni les impacts motorisés.

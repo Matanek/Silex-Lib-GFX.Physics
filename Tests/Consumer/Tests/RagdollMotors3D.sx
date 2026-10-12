@@ -1,0 +1,96 @@
+use GFX.Physics
+use STD.Math
+
+func close(first:Math.Quat, second:Math.Quat) bool { return Math.abs(first.dot(second))>Math.cos(0.04) }
+func motor_settings() Physics.Ragdoll3DSettings {
+    let root=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    let body=Physics.RigidBody3DSettings() ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.2))
+        ..allow_sleep=false ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    let joint=Physics.SwingTwistConstraint3DSettings() ..minimum_twist=-0.8 ..maximum_twist=0.8
+        ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.8))
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1,root,body_offset:Physics.Transform3D(Math.Vec3(0.1),Math.Quat.angle_axis(0.2,Math.Vec3(0.0,1.0,0.0)))),
+        Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0),Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0))),
+            body_offset:Physics.Transform3D(Math.Vec3(0.0,-0.4,0.0),Math.Quat.angle_axis(0.3,Math.Vec3(1.0,0.0,0.0))),joint:joint),
+        Physics.RagdollPart3D(1,body,local_transform:Physics.Transform3D(Math.Vec3(0.0,-0.8,0.0),Math.Quat.angle_axis(-0.3,Math.Vec3(0.0,1.0,0.0))),
+            body_offset:Physics.Transform3D(Math.Vec3(0.0,-0.3,0.0),Math.Quat.angle_axis(-0.2,Math.Vec3(0.0,0.0,1.0))),joint:joint)
+    ],self_collision:false)
+}
+func target(settings:Physics.Ragdoll3DSettings,side:float) Physics.Transform3D[] {
+    let delta=Math.Quat.angle_axis(0.25*side,Math.Vec3(0.0,0.0,1.0)).multiply(Math.Quat.angle_axis(0.2*side,Math.Vec3(1.0,0.0,0.0)))
+    return [Physics.Transform3D(Math.Vec3(0.0,3.0,0.0),Math.Quat.angle_axis(0.6,Math.Vec3(1.0,2.0,-1.0).normalized())),
+        Physics.Transform3D(settings.part(1).local_transform.position,settings.part(1).local_transform.rotation.multiply(delta)),
+        Physics.Transform3D(settings.part(2).local_transform.position,settings.part(2).local_transform.rotation.multiply(delta.conjugated()))]
+}
+func run_motor_check(rate:int) {
+    var world=Physics.World3D(Physics.World3DSettings() ..position_iterations=16)
+    var settings=motor_settings()
+    var first=world.create_ragdoll(settings,Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)))
+    var second=world.create_ragdoll(settings,Physics.Transform3D(Math.Vec3(4.0,3.0,0.0)))
+    var desired=target(settings,1.0);var before:Physics.Transform3D[]=[];first.write_pose(before)
+    first.body(2).set_linear_velocity(Math.Vec3(0.1,0.0,0.0))
+    first.drive_to_local_pose(desired,120.0,400.0,40.0)
+    var after:Physics.Transform3D[]=[];first.write_pose(after)
+    for i in [0,1,2] { assert(before[i]==after[i]) }
+    assert(first.body(2).linear_velocity()==Math.Vec3(0.1,0.0,0.0))
+    assert(second.joint(1)!.twist_motor()==null && second.joint(2)!.swing_motor()==null)
+    desired[1]=Physics.Transform3D();assert(Math.abs(first.joint(1)!.twist_motor()!.target_angle!-0.2)<0.0001)
+    desired=target(settings,1.0)
+    var step=0
+    while step<rate*4 {
+        world.step(1.0/rate as float)
+        for i in [1,2] { assert(first.joint(i)!.anchor_error().length()<0.02) }
+        step++
+    }
+    for i in [1,2] {
+        let expected=settings.part(i).local_transform.rotation.conjugated().multiply(desired[i].rotation)
+        assert(close(first.joint(i)!.orientation(),expected))
+        assert(first.joint(i)!.angular_speed().length()<0.15)
+    }
+    first.write_pose(before);let velocity=first.body(2).linear_velocity();let angular=first.body(2).angular_velocity()
+    first.stop_motors();first.write_pose(after)
+    for i in [0,1,2] { assert(before[i]==after[i]) }
+    assert(first.body(2).linear_velocity()==velocity && first.body(2).angular_velocity()==angular)
+    for i in [1,2] { assert(first.joint(i)!.twist_motor()==null && first.joint(i)!.swing_motor()==null) }
+    world.step(1.0/rate as float);assert(first.body(2).angular_velocity()!=angular)
+    world.destroy_ragdoll(first);assert(!first.is_valid() && second.is_valid())
+    var recreated=world.create_ragdoll(settings);recreated.drive_to_local_pose(target(settings,-1.0),120.0,400.0,40.0)
+    assert(recreated.joint(1)!.twist_motor()!.target_angle!<0.0)
+}
+test "ragdoll pose motors preserve bodies, offsets, independent instances and passive release" { run_motor_check(60);run_motor_check(120) }
+
+test "world and local motor poses produce equivalent targets through rotated body offsets" {
+    var settings=motor_settings();var world=Physics.World3D();var first=world.create_ragdoll(settings);var second=world.create_ragdoll(settings)
+    var local_pose=target(settings,-1.0);var world_pose:Physics.Transform3D[]=[]
+    world_pose.append(local_pose[0])
+    for i in [1,2] { let parent=world_pose[i-1];world_pose.append(Physics.Transform3D(parent.point(local_pose[i].position),parent.rotation.multiply(local_pose[i].rotation))) }
+    first.drive_to_local_pose(local_pose,120.0,400.0,40.0);second.drive_to_pose(world_pose,120.0,400.0,40.0)
+    for i in [1,2] {
+        assert(Math.abs(first.joint(i)!.twist_motor()!.target_angle!-second.joint(i)!.twist_motor()!.target_angle!)<0.000001)
+        assert(first.joint(i)!.swing_motor()!.target_angles!.subtract(second.joint(i)!.swing_motor()!.target_angles!).length()<0.000001)
+    }
+}
+
+test "pose drive follows changed joint frames and preserves anatomical limits" {
+    var settings=motor_settings()
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=16)
+    var ragdoll=world.create_ragdoll(settings)
+    var joint=ragdoll.joint(1)!
+    let first=joint.first_local_frame();let second=joint.second_local_frame()
+    joint.set_frames(Physics.Transform3D(first.position,first.rotation.multiply(Math.Quat.angle_axis(0.1,Math.Vec3(1.0,0.0,0.0)))),
+        Physics.Transform3D(second.position,second.rotation.multiply(Math.Quat.angle_axis(-0.1,Math.Vec3(0.0,1.0,0.0)))))
+    var desired=target(settings,1.0)
+    ragdoll.drive_to_local_pose(desired,120.0,400.0,40.0)
+    var step=0
+    while step<480 { world.step(1.0/120.0);step++ }
+    var observed:Physics.Transform3D[]=[];ragdoll.write_local_pose(observed)
+    for i in [1,2] { assert(close(observed[i].rotation,desired[i].rotation)) }
+    joint.set_twist_limits(-0.2,0.2)
+    desired[1]=Physics.Transform3D(desired[1].position,settings.part(1).local_transform.rotation.multiply(Math.Quat.angle_axis(1.2,Math.Vec3(1.0,0.0,0.0))))
+    ragdoll.drive_to_local_pose(desired,120.0,400.0,40.0)
+    step=0
+    while step<480 { world.step(1.0/120.0);assert(Math.abs(joint.twist_angle())<0.28);step++ }
+    assert(joint.twist_angle()>0.15 && joint.twist_angle()<0.25)
+    assert(joint.minimum_twist()==-0.2 && joint.maximum_twist()==0.2)
+    assert(joint.anchor_error().length()<0.02)
+}

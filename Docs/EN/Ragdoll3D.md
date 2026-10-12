@@ -53,9 +53,36 @@ By default it zeros linear and angular velocities; `reset_velocity:false`
 preserves them. Already applied forces remain.
 
 An imposed pose is an immediate placement. To follow a target with physical
-efforts, configure the joint motors. An arbitrary pose can exceed their
+efforts, use the motorized pose commands below. An arbitrary pose can exceed their
 limits or separate their anchors; the solver resumes resolving them at the
 next positive step.
+
+## Follow a pose with motors
+
+`drive_to_pose(pose, maximum_torque, stiffness, damping)` and
+`drive_to_local_pose(pose, maximum_torque, stiffness, damping)` use the world and
+local reading conventions. The array must contain one transform per part.
+Only relative child rotations become targets: the root's world position and
+rotation, and all translations, command no displacement. Physical anchors keep
+the bodies connected.
+
+The call replaces each joint's twist and swing motors, wakes the bodies and
+clears stored reactions. It preserves their poses, velocities, limits, friction
+and collision filters. The solver clamps targets to the existing joint limits.
+Body offsets and the joints' current frames participate in rotation conversion.
+Values are copied: later changes to the array do not change the target.
+
+`maximum_torque` is a finite, nonnegative torque in N·m **per axis**;
+`stiffness` is finite, strictly positive stiffness in N·m/rad, and `damping`
+is finite, nonnegative damping in N·m·s/rad. A finite spring under gravity can
+retain an offset from the target. Supply a new pose when the target changes;
+no update on every frame is required.
+
+`stop_motors()` removes both motors from every joint. It preserves poses and
+velocities, leaving gravity, limits, friction and collisions active. It does
+not restore a motor configuration that preceded the pose command.
+The [public test](../../Tests/Consumer/Tests/RagdollMotors3D.sx) exercises these
+calls, independent instances, changed frames and saturation at joint limits.
 
 ## Collisions and lifetime
 
@@ -83,4 +110,10 @@ on the last member without gravity, transmission to the parent, bounded momentum
 balances and anchors; then symmetric fall onto a frictionless floor until rest,
 at 60/120 Hz in Debug/Release. Transient floor crossing is bounded separately
 from final height. These passive recipes do not yet establish general
-qualification for ragdoll impacts, active limits or motorized poses.
+qualification for ragdoll impacts or active limits.
+
+A fixed-root chain with two offset spheres also tracks opposing targets, returns
+to neutral and becomes passive under gravity, at 60/120 Hz in Debug/Release.
+Geometric conventions, bounded torques and settled poses are compared with
+Jolt `Ragdoll.DriveToPoseUsingMotors`. This contact-free recipe does not qualify
+arbitrary trajectories or motorized impacts.

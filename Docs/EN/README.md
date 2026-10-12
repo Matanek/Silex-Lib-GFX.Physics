@@ -308,4 +308,4 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 
 [Compose a motorized shoulder and elbow](ArticulatedPose3D.md): four servos, transmitted load and moving frames.
 
-[Create a ragdoll assembly and manipulate its pose](Ragdoll3D.md): hierarchy, body offsets, independent instances and parent/child filtering.
+[Create a ragdoll assembly and manipulate its pose](Ragdoll3D.md): hierarchy, body offsets, independent instances, parent/child filtering and motorized tracking.

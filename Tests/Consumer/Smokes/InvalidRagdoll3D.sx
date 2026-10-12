@@ -33,6 +33,25 @@ func main() {
     var ragdoll = world.create_ragdoll(settings)
     if selected("pose-count") { ragdoll.set_pose([]) }
     if selected("local-count") { ragdoll.set_local_pose([Physics.Transform3D()]) }
+    if selected("drive-count") { ragdoll.drive_to_pose([],120.0,400.0,40.0) }
+    if selected("drive-local-count") { ragdoll.drive_to_local_pose([],120.0,400.0,40.0) }
+    var motor_pose:Physics.Transform3D[]=[];ragdoll.write_local_pose(motor_pose)
+    var torque=120.0;var stiffness=400.0;var damping=40.0
+    if selected("motor-torque") { torque=-1.0 }
+    if selected("motor-stiffness") { stiffness=0.0 }
+    if selected("motor-damping") { damping=-1.0 }
+    if selected("motor-torque-nan") { torque=Math.sqrt(-1.0) }
+    if selected("motor-stiffness-nan") { stiffness=Math.sqrt(-1.0) }
+    if selected("motor-damping-nan") { damping=Math.sqrt(-1.0) }
+    if selected("motor-root-only") {
+        var root_only=world.create_ragdoll(Physics.Ragdoll3DSettings([Physics.RagdollPart3D(-1,body)]))
+        root_only.drive_to_local_pose([Physics.Transform3D()],-1.0,400.0,40.0)
+    }
+    if selected("motor-torque") || selected("motor-stiffness") || selected("motor-damping") || selected("motor-torque-nan") || selected("motor-stiffness-nan") || selected("motor-damping-nan") {
+        ragdoll.drive_to_local_pose(motor_pose,torque,stiffness,damping)
+    }
+    if selected("stale-drive") { world.destroy_ragdoll(ragdoll);ragdoll.drive_to_pose(motor_pose,120.0,400.0,40.0) }
+    if selected("stale-stop") { world.destroy_ragdoll(ragdoll);ragdoll.stop_motors() }
     if selected("body-index") { ragdoll.body(2) }
     if selected("joint-index") { ragdoll.joint(-1) }
     if selected("settings-index") { settings.part(2) }

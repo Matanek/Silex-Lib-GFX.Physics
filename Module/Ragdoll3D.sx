@@ -8,6 +8,10 @@ use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3D
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraint3DSettings
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintState3D
 use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintStore3D
+use GFX.Physics.SwingTwistConstraint3D.TwistMotor3D
+use GFX.Physics.SwingTwistConstraint3D.SwingMotor3D
+use GFX.Physics.SwingTwistConstraint3D.decompose_swing_twist3d
+use GFX.Physics.SwingTwistConstraint3D.swing_angles3d
 use GFX.Physics.Transform3D.Transform3D
 use STD.Math
 
@@ -226,6 +230,62 @@ public class Ragdoll3D {
             index++
         }
         self.set_pose(world, reset_velocity)
+    }
+
+    func drive_to_pose(pose:Transform3D[], maximum_torque:float, stiffness:float, damping:float) {
+        self.require_valid()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D motor pose requires one transform per part")
+        }
+        var local_pose:Transform3D[] = []
+        var index = 0
+        while index < self.part_count() {
+            var transform = pose[index]
+            if index > 0 {
+                transform = relative_ragdoll_pose3d(pose[self.settings.part(index).parent], transform)
+            }
+            local_pose.append(transform)
+            index++
+        }
+        self.drive_to_local_pose(local_pose, maximum_torque, stiffness, damping)
+    }
+    func drive_to_local_pose(pose:Transform3D[], maximum_torque:float, stiffness:float, damping:float) {
+        self.require_valid()
+        self.store.require_mutable()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D motor pose requires one transform per part")
+        }
+        let validated = TwistMotor3D.position(0.0, maximum_torque, stiffness, damping)
+        var twist:TwistMotor3D[] = []
+        var swing:SwingMotor3D[] = []
+        var index = 1
+        while index < self.part_count() {
+            let part = self.settings.part(index)
+            let parent = self.settings.part(part.parent)
+            var joint = self.joints[index - 1]
+            let relative_body = parent.body_offset.rotation.conjugated().multiply(
+                pose[index].rotation).multiply(part.body_offset.rotation)
+            let orientation = joint.first_local_frame().rotation.conjugated().multiply(
+                relative_body).multiply(joint.second_local_frame().rotation).normalized()
+            let rotation = decompose_swing_twist3d(orientation)
+            twist.append(TwistMotor3D.position(rotation.twist_angle, maximum_torque, stiffness, damping))
+            swing.append(SwingMotor3D.position(swing_angles3d(rotation.swing), maximum_torque, stiffness, damping))
+            index++
+        }
+        index = 0
+        while index < self.joints.count() {
+            self.joints[index].set_twist_motor(twist[index])
+            self.joints[index].set_swing_motor(swing[index])
+            index++
+        }
+    }
+    func stop_motors() {
+        self.require_valid()
+        self.store.require_mutable()
+        for joint in self.joints {
+            joint.set_twist_motor(null)
+            joint.set_swing_motor(null)
+        }
     }
 
     package func belongs_to(store:BodyStore3D) bool { return self.store == store }
