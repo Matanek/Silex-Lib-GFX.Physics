@@ -83,5 +83,10 @@ les poses, le filtrage, les handles périmés et une chute libre à 60/120 Hz.
 Le témoin Jolt épinglé compare `Ragdoll.GetPose/SetPose` après conversion
 explicite entre origines de corps et repères d’articulation, ainsi que les
 paires autorisées dans une instance et entre instances, en Debug/Release.
-Cette fondation n’établit pas encore une qualification générale des chutes
-avec contacts et poses motorisées d’un ragdoll.
+Une chaîne libre de trois sphères est aussi qualifiée face à Jolt : impulsion
+excentrée sur l’extrémité sans gravité, transmission au parent, bilans de
+mouvement et ancrages bornés ; puis chute symétrique sur un sol sans frottement
+jusqu’au repos, à 60/120 Hz en Debug/Release. La traversée transitoire du sol
+est bornée séparément de la hauteur finale. Ces recettes passives n’établissent
+pas encore une qualification générale des impacts, limites actives ou poses
+motorisées d’un ragdoll.

@@ -1,0 +1,69 @@
+use GFX.Physics
+use STD.Math
+
+func settings() Physics.Ragdoll3DSettings {
+    let body = Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..allow_sleep = false ..friction = 0.0
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1,body),
+        Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0))),
+        Physics.RagdollPart3D(1,body,local_transform:Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)))
+    ],self_collision:false)
+}
+test "ragdoll impulse transmits to parents with bounded anchors and conserved momentum" {
+    let sides:int[] = [-1,1]
+    for rate in [60,120] {
+        for side in sides {
+            var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+            var ragdoll = world.create_ragdoll(settings())
+            let impulse = Math.Vec3(0.0,0.0,3.0 * side as float)
+            ragdoll.body(2).apply_impulse(impulse,Math.Vec3(2.0,0.1,0.0))
+            var step = 0
+            while step < rate / 2 {
+                world.step(1.0 / rate);step++
+                var linear = Math.Vec3();var angular = Math.Vec3()
+                var index = 0
+                while index < 3 {
+                    var member = ragdoll.body(index)
+                    linear = linear.add(member.linear_velocity().multiply(2.0))
+                    angular = angular.add(member.world_center_of_mass().cross(member.linear_velocity().multiply(2.0)))
+                        .add(member.angular_velocity().multiply(0.2))
+                    if index > 0 { assert(ragdoll.joint(index)!.anchor_error().length() < 0.01) }
+                    index++
+                }
+                assert(linear.subtract(impulse).length() < 0.0001)
+                assert(angular.subtract(Math.Vec3(0.3 * side as float,-6.0 * side as float,0.0)).length() < 0.1)
+            }
+            assert(ragdoll.body(0).linear_velocity().length() > 0.01)
+        }
+    }
+}
+test "ragdoll symmetric floor impact reaches bounded rest and survives destruction and recreation" {
+    for rate in [60,120] {
+        var world = Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = Physics.Shape3D.plane(Physics.Plane3D()) ..friction = 0.0)
+        var ragdoll = world.create_ragdoll(settings(),Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)))
+        var step = 0
+        while step < rate * 2 {
+            world.step(1.0 / rate);step++
+            for index in [1,2] { assert(ragdoll.joint(index)!.anchor_error().length() < 0.01) }
+        }
+        assert(world.contact_count() == 3)
+        for index in [0,1,2] {
+            var member = ragdoll.body(index)
+            assert(member.position().y > 0.22 && member.position().y < 0.28)
+            assert(member.linear_velocity().length() < 0.05)
+        }
+        var old = ragdoll.body(1)
+        world.destroy_ragdoll(ragdoll)
+        assert(!old.is_valid() && world.body_count() == 1 && world.swing_twist_constraint_count() == 0)
+        var fresh = world.create_ragdoll(settings(),Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)))
+        assert(fresh.is_valid() && !old.same_body(fresh.body(1)))
+        world.destroy_ragdoll(fresh)
+    }
+}

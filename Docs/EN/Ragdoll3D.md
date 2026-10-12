@@ -78,5 +78,9 @@ Tests cover noncommuting rotations, mass offsets, poses, filtering, stale
 handles and free fall at 60/120 Hz. The pinned Jolt witness compares
 `Ragdoll.GetPose/SetPose` after explicit conversion between body origins and
 joint frames, plus allowed pairs within and across instances, in Debug/Release.
-This foundation does not yet establish general qualification for ragdoll
-falls with contacts or motorized poses.
+A free three-sphere chain is also qualified against Jolt: an off-center impulse
+on the last member without gravity, transmission to the parent, bounded momentum
+balances and anchors; then symmetric fall onto a frictionless floor until rest,
+at 60/120 Hz in Debug/Release. Transient floor crossing is bounded separately
+from final height. These passive recipes do not yet establish general
+qualification for ragdoll impacts, active limits or motorized poses.
