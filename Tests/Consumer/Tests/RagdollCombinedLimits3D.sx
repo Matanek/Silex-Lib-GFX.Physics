@@ -1,0 +1,68 @@
+use GFX.Physics
+use STD.Math
+
+func combined_limits_settings() Physics.Ragdoll3DSettings {
+    let body=Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..allow_sleep=false
+    let joint=Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.3,0.45))
+        ..minimum_twist=-0.2 ..maximum_twist=0.35
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1,body),
+        Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),joint:joint),
+        Physics.RagdollPart3D(1,body,local_transform:Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),joint:joint)
+    ],self_collision:false)
+}
+
+test "free ragdoll combined stops transmit oblique impulses with bounded momentum and energy" {
+    var sides:int[]=[-1,1]
+    for rate in [60,120] { for side in sides { for frame in [0,1] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=16)
+        var base=Math.Quat();if frame==1 { base=Math.Quat.angle_axis(0.6,Math.Vec3(1.0,2.0,-1.0).normalized()) }
+        let impulse=base.rotate(Math.Vec3(0.2,0.3,-0.2)).multiply(side as float)
+        let center=Math.Vec3(0.0,3.0,0.0).add(base.rotate(Math.Vec3(1.0,0.0,0.0)));var config=combined_limits_settings()
+        var ragdoll=world.create_ragdoll(config,Physics.Transform3D(Math.Vec3(0.0,3.0,0.0),base))
+        var separate=world.create_ragdoll(config,Physics.Transform3D(Math.Vec3(0.0,13.0,0.0),base))
+        var previous_energy=0.0;var phase_energy=0.0;var step=0
+        while step<=rate*4 {
+            if step==0 || step==rate*2 {
+                let pose=copy ragdoll.body(2).transform();let speed=copy ragdoll.body(2).angular_velocity()
+                var applied=impulse;if step>0 { applied=applied.negated() }
+                ragdoll.body(2).apply_angular_impulse(applied)
+                assert(ragdoll.body(2).transform()==pose)
+                assert(ragdoll.body(2).angular_velocity().subtract(speed).nearly_equal(applied.multiply(5.0),0.00002))
+            }
+            var linear=Math.Vec3();var angular=Math.Vec3();var centroid=Math.Vec3();var energy=0.0
+            for part in [0,1,2] {
+                var member=ragdoll.body(part);let p=member.position();let v=member.linear_velocity();let w=member.angular_velocity()
+                linear=linear.add(v.multiply(2.0));angular=angular.add(p.cross(v.multiply(2.0))).add(w.multiply(0.2))
+                centroid=centroid.add(p.divide(3.0));energy+=v.dot(v)+0.1*w.dot(w)
+                assert(v.length()<40.0 && w.length()<40.0)
+                assert(separate.body(part).linear_velocity().length()<0.00001 && separate.body(part).angular_velocity().length()<0.00001)
+                if part>0 {
+                    var joint=ragdoll.joint(part)!;let twist=joint.twist_angle()
+                    let swing=joint.orientation().multiply(Math.Quat.angle_axis(-twist,Math.Vec3(1.0,0.0,0.0)))
+                    let radius=Math.sqrt(swing.y*swing.y+swing.z*swing.z)
+                    if radius>0.000000001 {
+                        let ellipse=Math.sqrt(swing.y*swing.y/(Math.sin(0.15)*Math.sin(0.15))+swing.z*swing.z/(Math.sin(0.225)*Math.sin(0.225)))
+                        let excess=2.0*Math.asin(Math.min(1.0,radius))-2.0*Math.asin(Math.min(1.0,radius/ellipse))
+                        assert(excess<0.08)
+                    }
+                    assert(joint.anchor_error().length()<0.01 && twist> -0.28 && twist<0.43)
+                }
+            }
+            var expected=impulse;if step>=rate*2 { expected=Math.Vec3() }
+            assert(linear.length()<0.0001 && angular.subtract(expected).length()<0.02 && centroid.subtract(center).length()<0.001)
+            if step==0 || step==rate*2 { phase_energy=energy }
+            else { assert(energy<=previous_energy+0.001 && energy<=phase_energy+0.005) }
+            previous_energy=energy
+            if step<rate*4 { world.step(1.0/rate) }
+            step++
+        }
+        var stale=ragdoll.body(2);world.destroy_ragdoll(ragdoll);assert(!stale.is_valid() && separate.is_valid())
+        var fresh=world.create_ragdoll(config);assert(!stale.same_body(fresh.body(2)))
+        world.destroy_ragdoll(fresh);world.destroy_ragdoll(separate)
+        assert(world.body_count()==0 && world.swing_twist_constraint_count()==0)
+    } } }
+}

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Chaîne ragdoll libre à deux articulations swing/twist bornées : impulsions obliques opposées, butées exercées et bilans globaux de mouvement/énergie qualifiés face à Jolt à 60/120 Hz en Debug/Release. Les contacts et trajectoires d’impact générales restent ouverts ; solveur et API inchangés.
+
 - Un membre ragdoll déporté à racine fixe compose cibles swing/twist bornées, contact au sol, levée, retour et relâchement sous impulsion. Géométrie et équilibres moyennés sur fenêtres fixes sont qualifiés face à Jolt à 60/120 Hz en Debug/Release ; l’égalité instantanée des vitesses/efforts et les impacts généraux restent ouverts. Solveur et API inchangés.
 
 - Deux butées de torsion asymétriques dans un ragdoll passif sont qualifiées sous impulsions angulaires opposées face à Jolt : transmission aux parents, moment cinétique, énergie et états stabilisés, à 60/120 Hz dans deux orientations mondiales en Debug/Release. Aucun contact ni changement de solveur.

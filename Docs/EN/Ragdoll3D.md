@@ -142,3 +142,14 @@ while Silex exposes the measured impulse. Simultaneous stops produce stepwise
 velocity/force variations in Jolt: instantaneous equality is not qualified.
 Window-mean equilibria do not establish impact trajectories or general
 motorized chains with several free members.
+
+The [free chain with combined limits](../../Tests/Consumer/Tests/RagdollCombinedLimits3D.sx)
+exercises two joints with a 0.3/0.45 rad elliptical cone and −0.2/+0.35 rad
+twist stops. An oblique angular impulse followed by its opposite on the leaf
+reaches the stops and transmits motion to the parents. Without gravity or
+contact, global linear momentum, angular momentum, center of mass and energy
+remain within their numerical budgets. The native Jolt witness compares these
+balances and mean energy over two fixed windows at 60/120 Hz, in two world
+orientations and both signs, in Debug/Release. Commands do not place any member.
+This proves passive limits on a free chain, without establishing equal poses
+at every impact or general composition with a floor.

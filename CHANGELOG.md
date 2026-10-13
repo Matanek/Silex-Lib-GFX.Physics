@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Free ragdoll chain with two bounded swing/twist joints: opposed oblique impulses, exercised stops and global momentum/energy balances qualified against Jolt at 60/120 Hz in Debug/Release. General contacts and impact trajectories remain open; solver and API unchanged.
+
 - An offset ragdoll member with a fixed root combines bounded swing/twist targets, floor contact, lifting, return and passive release with an angular impulse. Geometry and window-mean equilibria are qualified against Jolt at 60/120 Hz in Debug/Release; instantaneous velocity/force equality and general impacts remain open. Solver and API unchanged.
 
 - Two asymmetric twist stops in a passive ragdoll are qualified under opposed angular impulses against Jolt: transmission to parents, angular momentum, energy and settled states at 60/120 Hz in two world orientations in Debug/Release. No contact or solver change.

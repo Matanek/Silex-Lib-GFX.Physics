@@ -151,3 +151,15 @@ Les butées simultanées produisent chez Jolt des variations de vitesse/effort
 à chaque pas : leur égalité instantanée n’est pas qualifiée. Les équilibres
 moyennés ne prouvent ni les trajectoires d’impact ni les chaînes motorisées
 générales à plusieurs membres libres.
+
+La [chaîne libre à limites combinées](../../Tests/Consumer/Tests/RagdollCombinedLimits3D.sx)
+exerce deux articulations au cône elliptique 0,3/0,45 rad et au twist
+−0,2/+0,35 rad. Une impulsion angulaire oblique puis son opposée sur
+l’extrémité atteignent les butées et transmettent le mouvement aux parents.
+Sans gravité ni contact, les bilans globaux de quantité de mouvement, moment
+cinétique, barycentre et énergie restent dans leurs budgets numériques.
+Le témoin Jolt compare ces bilans et l’énergie moyenne sur deux fenêtres
+fixées, à 60/120 Hz dans deux orientations mondiales et les deux signes,
+en Debug/Release. Les commandes ne placent aucun membre. Cette preuve
+porte sur les limites passives d’une chaîne libre ; elle n’établit pas
+l’égalité des poses à chaque impact ni la composition générale avec le sol.
