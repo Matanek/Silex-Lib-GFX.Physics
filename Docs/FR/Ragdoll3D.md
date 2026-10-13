@@ -134,3 +134,20 @@ parents et les angles/vitesses stabilisés sont qualifiés face au véritable
 ragdoll Jolt en Debug/Release. Les observations juste avant/après impulsion
 vérifient qu’elle change la vitesse sans placer les corps. Cette recette n’a
 ni gravité ni contacts ; elle ne qualifie pas les impacts avec swing combiné.
+
+Un [membre sphérique déporté à racine fixe](../../Tests/Consumer/Tests/RagdollContact3D.sx)
+compose ensuite des cibles de swing/twist hors limites avec un sol sans friction.
+Le membre appuie sur le sol, se soulève, revient puis redevient passif avec une
+impulsion angulaire. Le témoin sans sol sépare butées et contact, à 60/120 Hz,
+dans deux orientations horizontales et les deux signes latéraux. La géométrie,
+les couples, la pénétration et les bilans linéaires sont contrôlés à chaque pas.
+Dans les fenêtres de contact, le bilan angulaire projeté sur l’axe
+d’inclinaison du levier contrôle aussi la force verticale indépendamment.
+Les poses établies et les vitesses/forces moyennes sur des fenêtres de
+demi-seconde sont comparées au ragdoll Jolt en Debug/Release. La tolérance
+de pénétration de Jolt est explicitement réglée à 1e−6 m ; sa force normale
+est inférée du bilan linéaire, tandis que Silex expose l’impulsion mesurée.
+Les butées simultanées produisent chez Jolt des variations de vitesse/effort
+à chaque pas : leur égalité instantanée n’est pas qualifiée. Les équilibres
+moyennés ne prouvent ni les trajectoires d’impact ni les chaînes motorisées
+générales à plusieurs membres libres.

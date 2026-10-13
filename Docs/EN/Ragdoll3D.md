@@ -126,3 +126,19 @@ transmission to parents and settled angles/velocities are qualified against
 the native Jolt ragdoll in Debug/Release. Observations immediately before/after
 an impulse verify that it changes velocity without placing bodies. This recipe
 has neither gravity nor contacts; it does not qualify combined swing impacts.
+
+An [offset sphere member with a fixed root](../../Tests/Consumer/Tests/RagdollContact3D.sx)
+also combines swing/twist targets outside the limits with a frictionless floor.
+The member presses on the floor, lifts, returns, then becomes passive with an
+angular impulse. The witness without a floor separates stops from contact,
+at 60/120 Hz, in two horizontal orientations and both lateral signs. Geometry,
+torques, penetration and linear momentum balances are checked every step.
+In contact windows, an angular momentum balance projected onto the floor
+tilt axis also independently checks the vertical force.
+Established poses and mean velocities/forces over half-second windows are
+compared with native Jolt ragdolls in Debug/Release. Jolt penetration slop is
+explicitly set to 1e−6 m; its normal force is inferred from the linear balance,
+while Silex exposes the measured impulse. Simultaneous stops produce stepwise
+velocity/force variations in Jolt: instantaneous equality is not qualified.
+Window-mean equilibria do not establish impact trajectories or general
+motorized chains with several free members.
