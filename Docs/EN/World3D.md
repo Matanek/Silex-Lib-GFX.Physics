@@ -1,5 +1,18 @@
 # Simulate rigid bodies in 3D
 
+To improve effort convergence in a motorized chain with contacts, set
+`World3DSettings.velocity_iterations` when creating the world. The default
+budget is **12**, with integers from **1 to 128** accepted. It applies to
+each contact and joint velocity-solving stage without changing the timestep
+or advancing poses multiple times. More iterations increase solver work;
+this setting does not guarantee a maximum error for every scene. The world
+copies its settings at creation.
+
+The [mobile chain with two motors](../../Tests/Consumer/Tests/RagdollMobileContact3D.sx)
+uses **48** velocity iterations and **16** position passes: anchors, bounded
+efforts and momentum balances remain checked as floor contact is lost and
+regained. Other consumers retain their current budgets.
+
 To improve anchor stability in an assembly with impacts, increase
 `World3DSettings.position_iterations` before creating the world. The default
 is **4**; integers from **1 to 128** are accepted. The

@@ -21,6 +21,9 @@ func main() {
     if selected("iterations-zero") { Physics.World3D(Physics.World3DSettings() ..position_iterations = 0) }
     if selected("iterations-negative") { Physics.World3D(Physics.World3DSettings() ..position_iterations = -1) }
     if selected("iterations-large") { Physics.World3D(Physics.World3DSettings() ..position_iterations = 129) }
+    if selected("velocity-zero") { Physics.World3D(Physics.World3DSettings() ..velocity_iterations = 0) }
+    if selected("velocity-negative") { Physics.World3D(Physics.World3DSettings() ..velocity_iterations = -1) }
+    if selected("velocity-large") { Physics.World3D(Physics.World3DSettings() ..velocity_iterations = 129) }
     if selected("gravity") {
         Physics.World3D(Physics.World3DSettings()
             ..gravity = Math.Vec3(Math.sqrt(-1.0), 0.0, 0.0))

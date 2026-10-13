@@ -1,0 +1,102 @@
+use GFX.Physics
+use STD.Math
+
+func mobile_contact_settings() Physics.Ragdoll3DSettings {
+    let body=Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..allow_sleep=false ..friction=0.0 ..restitution=0.0
+    let joint=Physics.SwingTwistConstraint3DSettings() ..swing_limits=Physics.SwingLimits3D.cone(Math.Vec2(0.6))
+        ..minimum_twist=-0.2 ..maximum_twist=0.35
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1,body),
+        Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),joint:joint),
+        Physics.RagdollPart3D(1,body,local_transform:Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.5,0.0,0.0)),joint:joint)
+    ],self_collision:false)
+}
+test "mobile ragdoll motors preserve commands and momentum through floor departure and return" {
+    var sides:int[]=[-1,1]
+    for rate in [60,120] { for side in sides { for frame in [0,1] {
+        let delta=1.0/rate;let base=Math.Quat.angle_axis(0.7*frame as float,Math.Vec3(0.0,1.0,0.0))
+        var settings=Physics.World3DSettings() ..position_iterations=16 ..velocity_iterations=48
+        var world=Physics.World3D(settings)
+        settings.velocity_iterations=1
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=0.0 ..restitution=0.0)
+        var config=mobile_contact_settings();var ragdoll=world.create_ragdoll(config,Physics.Transform3D(Math.Vec3(0.0,1.0,0.0),base))
+        var separate=world.create_ragdoll(config,Physics.Transform3D(Math.Vec3(40.0,1.0,0.0),base))
+        let center=base.rotate(Math.Vec3(1.0,0.0,0.0));var step=0
+        while step<rate*12 {
+            if step==rate*2 || step==rate*4 || step==rate*7 || step==rate*10 {
+                var poses:Physics.Transform3D[]=[];var linear:Math.Vec3[]=[];var angular:Math.Vec3[]=[]
+                var other_poses:Physics.Transform3D[]=[];var other_speeds:Math.Vec3[]=[]
+                for part in [0,1,2] {
+                    poses.append(copy ragdoll.body(part).transform());linear.append(copy ragdoll.body(part).linear_velocity());angular.append(copy ragdoll.body(part).angular_velocity())
+                    other_poses.append(copy separate.body(part).transform());other_speeds.append(copy separate.body(part).linear_velocity())
+                }
+                if step==rate*10 {
+                    ragdoll.stop_motors();for part in [0,1,2] { ragdoll.body(part).apply_impulse(Math.Vec3(0.0,4.0,0.0)) }
+                } else {
+                    var angle=0.0
+                    if step==rate*4 { angle=0.8*side as float }
+                    if step==rate*7 { angle=-0.8*side as float }
+                    ragdoll.drive_to_local_pose([Physics.Transform3D(rotation:base),
+                        Physics.Transform3D(Math.Vec3(0.5,0.0,0.0),Math.Quat.angle_axis(angle,Math.Vec3(0.0,0.0,1.0))),
+                        Physics.Transform3D(Math.Vec3(1.0,0.0,0.0),Math.Quat.angle_axis(-angle,Math.Vec3(0.0,0.0,1.0)))],30.0,80.0,15.0)
+                }
+                for part in [0,1,2] {
+                    var expected=linear[part];if step==rate*10 { expected=expected.add(Math.Vec3(0.0,2.0,0.0)) }
+                    assert(ragdoll.body(part).transform()==poses[part] && ragdoll.body(part).angular_velocity()==angular[part])
+                    assert(ragdoll.body(part).linear_velocity().nearly_equal(expected,0.00001))
+                    assert(separate.body(part).transform()==other_poses[part] && separate.body(part).linear_velocity()==other_speeds[part])
+                }
+            }
+            var before_positions:Math.Vec3[]=[];var before_linear=Math.Vec3();var before_angular=Math.Vec3()
+            for part in [0,1,2] {
+                var body=ragdoll.body(part);let p=body.position();let v=body.linear_velocity();let w=body.angular_velocity()
+                before_positions.append(copy p);before_linear=before_linear.add(v.multiply(2.0))
+                before_angular=before_angular.add(p.cross(v.multiply(2.0))).add(w.multiply(0.2))
+            }
+            world.step(delta);step++
+            var contacts:Physics.Contact3D[]=[];world.write_contacts(contacts)
+            var impulses:float[]=[0.0,0.0,0.0];var touching=0
+            for contact in contacts { for part in [0,1,2] {
+                var body=ragdoll.body(part)
+                if contact.first_body().same_body(body) || contact.second_body().same_body(body) {
+                    var impulse=contact.normal().multiply(contact.normal_impulse()).add(contact.tangent_impulse())
+                    if contact.first_body().same_body(body) { impulse=impulse.negated() }
+                    assert(Math.abs(impulse.x)+Math.abs(impulse.z)<0.00001 && impulse.y>= -0.00001)
+                    impulses[part]+=impulse.y;touching++
+                }
+            } }
+            var linear=Math.Vec3();var angular=Math.Vec3();var centroid=Math.Vec3();var external=Math.Vec3();var normal=0.0
+            for part in [0,1,2] {
+                var body=ragdoll.body(part);let p=body.position();let v=body.linear_velocity();let w=body.angular_velocity()
+                assert(p.y>0.23 && v.length()<40.0 && w.length()<40.0)
+                linear=linear.add(v.multiply(2.0));angular=angular.add(p.cross(v.multiply(2.0))).add(w.multiply(0.2));centroid=centroid.add(p.divide(3.0))
+                normal+=impulses[part];external=external.add(before_positions[part].cross(Math.Vec3(0.0,impulses[part]-19.62*delta,0.0)))
+                assert(separate.body(part).angular_velocity().length()<0.0001)
+                if part>0 {
+                    var joint=ragdoll.joint(part)!;let q=joint.orientation();let twist=joint.twist_angle()
+                    let swing=q.multiply(Math.Quat.angle_axis(-twist,Math.Vec3(1.0,0.0,0.0)))
+                    assert(2.0*Math.asin(Math.min(1.0,Math.sqrt(swing.y*swing.y+swing.z*swing.z)))<0.68)
+                    assert(twist> -0.28 && twist<0.43 && joint.anchor_error().length()<0.02)
+                    let torque=joint.motor_torque();assert(Math.abs(torque.x)<30.001 && Math.abs(torque.y)<30.001 && Math.abs(torque.z)<30.001)
+                    if step>rate*10 { assert(torque.length()<0.00001) }
+                }
+            }
+            assert(Math.abs(linear.x)+Math.abs(linear.z)<0.0001 && Math.abs(angular.y)<0.02)
+            assert(Math.abs(centroid.x-center.x)+Math.abs(centroid.z-center.z)<0.001)
+            assert(linear.subtract(before_linear).subtract(Math.Vec3(0.0,normal-58.86*delta,0.0)).length()<0.0002)
+            assert(angular.subtract(before_angular).subtract(external).length()<0.02)
+            let time=step as float/rate
+            if time>=10.15 && time<=10.3 { assert(touching==0) }
+            if time>=11.5 { assert(touching>0) }
+        }
+        var stale=ragdoll.body(2);world.destroy_ragdoll(ragdoll);assert(!stale.is_valid() && separate.is_valid())
+        var fresh=world.create_ragdoll(config);assert(!stale.same_body(fresh.body(2)))
+        world.destroy_ragdoll(fresh);world.destroy_ragdoll(separate)
+        assert(world.body_count()==1 && world.swing_twist_constraint_count()==0)
+    } } }
+}

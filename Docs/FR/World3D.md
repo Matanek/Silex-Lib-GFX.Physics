@@ -1,5 +1,18 @@
 # Simuler des corps rigides en 3D
 
+Pour améliorer la convergence des efforts dans une chaîne motorisée avec
+contacts, régler `World3DSettings.velocity_iterations` à la création. Le
+budget par défaut est **12**, avec des entiers de **1 à 128**. Il s’applique
+à chaque phase de résolution des vitesses des contacts et articulations,
+sans changer le pas ni avancer les poses plusieurs fois. Plus de tours
+augmente le travail du solveur ; ce réglage ne garantit pas un écart maximal
+pour toute scène. Les réglages sont copiés à la création du monde.
+
+La [chaîne mobile à deux moteurs](../../Tests/Consumer/Tests/RagdollMobileContact3D.sx)
+emploie **48** tours de vitesse et **16** passes de position : ses ancrages,
+efforts bornés et bilans restent contrôlés pendant la perte et la reprise
+du contact au sol. Les autres consommateurs gardent leurs budgets actuels.
+
 Pour améliorer la tenue des ancrages dans un assemblage avec impacts, augmenter
 `World3DSettings.position_iterations` avant de créer le monde. La valeur par
 défaut est **4** ; les entiers de **1 à 128** sont acceptés. Le parcours

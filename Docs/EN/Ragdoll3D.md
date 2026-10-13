@@ -153,3 +153,21 @@ balances and mean energy over two fixed windows at 60/120 Hz, in two world
 orientations and both signs, in Debug/Release. Commands do not place any member.
 This proves passive limits on a free chain, without establishing equal poses
 at every impact or general composition with a floor.
+
+The [mobile two-motor chain on the floor](../../Tests/Consumer/Tests/RagdollMobileContact3D.sx)
+combines three free spheres, two opposing swing targets beyond their cone
+and a frictionless floor. A declared uniform vertical impulse makes the
+chain leave and return to the floor; commands preserve poses and velocities.
+Anchors, limits, motor budgets, linear balances and angular momentum are
+checked at every step. Established geometry and window-mean efforts and
+velocities are compared with the Jolt ragdoll at 60/120 Hz, two signs and
+two world orientations, in Debug/Release.
+
+This case selects `velocity_iterations = 48` and `position_iterations = 16`;
+the defaults remain 12 and 4. The default velocity budget does not meet the
+1 N mean reaction bound for this recipe even when positions are close.
+Jolt uses 24 velocity iterations, 16 position iterations and 1e−6 m
+penetration slop. These counts do not represent identical algorithmic work.
+Jolt's normal impulse is inferred from the linear balance; Silex exposes the
+measured impulse. Instantaneous force parity and arbitrary impact trajectories
+remain unqualified.

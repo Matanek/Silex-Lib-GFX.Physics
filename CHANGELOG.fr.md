@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `World3DSettings.velocity_iterations` règle la convergence des contacts et articulations, de 1 à 128 tours par phase, avec défaut 12 conservé. Une chaîne entièrement mobile à deux moteurs contre le sol utilise 48 tours pour qualifier ancrages, limites, réactions moyennes et perte/reprise du contact face à Jolt à 60/120 Hz en Debug/Release. Aucun gain de performance ni parité générale aux impacts revendiqué.
+
 - Chaîne ragdoll libre à deux articulations swing/twist bornées : impulsions obliques opposées, butées exercées et bilans globaux de mouvement/énergie qualifiés face à Jolt à 60/120 Hz en Debug/Release. Les contacts et trajectoires d’impact générales restent ouverts ; solveur et API inchangés.
 
 - Un membre ragdoll déporté à racine fixe compose cibles swing/twist bornées, contact au sol, levée, retour et relâchement sous impulsion. Géométrie et équilibres moyennés sur fenêtres fixes sont qualifiés face à Jolt à 60/120 Hz en Debug/Release ; l’égalité instantanée des vitesses/efforts et les impacts généraux restent ouverts. Solveur et API inchangés.

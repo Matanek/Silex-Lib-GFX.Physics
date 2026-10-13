@@ -163,3 +163,21 @@ fixées, à 60/120 Hz dans deux orientations mondiales et les deux signes,
 en Debug/Release. Les commandes ne placent aucun membre. Cette preuve
 porte sur les limites passives d’une chaîne libre ; elle n’établit pas
 l’égalité des poses à chaque impact ni la composition générale avec le sol.
+
+La [chaîne mobile à deux moteurs au sol](../../Tests/Consumer/Tests/RagdollMobileContact3D.sx)
+compose trois sphères libres, deux cibles swing opposées au-delà de leur cône
+et un sol sans friction. Une impulsion verticale uniforme déclarée fait
+quitter et retrouver le sol ; les commandes préservent poses et vitesses.
+Ancrages, limites, budgets moteurs, bilans linéaires et moment cinétique sont
+contrôlés à chaque pas. La géométrie établie et les efforts/vitesses moyens
+sur fenêtres fixes sont comparés au ragdoll Jolt à 60/120 Hz, deux signes et
+deux orientations mondiales, en Debug/Release.
+
+Ce cas choisit `velocity_iterations = 48` et `position_iterations = 16` ;
+les valeurs par défaut restent 12 et 4. Le budget de vitesse par défaut ne
+suffit pas à la borne de 1 N sur les réactions moyennes de cette recette,
+même lorsque les positions sont proches. Le témoin Jolt utilise 24 tours de
+vitesse, 16 de position et une tolérance de pénétration de 1e−6 m. Ces nombres
+ne représentent pas un travail algorithmique identique. La normale Jolt est
+inférée du bilan linéaire ; Silex expose l’impulsion mesurée. Aucune parité
+instantanée des forces ou trajectoires générales d’impact n’est établie.

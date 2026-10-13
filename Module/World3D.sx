@@ -137,7 +137,8 @@ use STD.Math
 public struct World3DSettings {
     var gravity:Math.Vec3
     var position_iterations:int
-    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0);self.position_iterations = 4 }
+    var velocity_iterations:int
+    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0);self.position_iterations = 4;self.velocity_iterations = 12 }
 }
 
 package struct CharacterShape3D {
@@ -166,6 +167,7 @@ public class World3D {
     private var hinge_constraints:HingeConstraintStore3D
     private var current_gravity:Math.Vec3
     private let position_iterations:int
+    private let velocity_iterations:int
     private var contacts:Contact3D[]
     private var contact_begins:Contact3D[]
     private var contact_ends:Contact3D[]
@@ -194,6 +196,9 @@ public class World3D {
         if settings.position_iterations < 1 || settings.position_iterations > 128 {
             panic("GFX.Physics.World3D requires position iterations between 1 and 128")
         }
+        if settings.velocity_iterations < 1 || settings.velocity_iterations > 128 {
+            panic("GFX.Physics.World3D requires velocity iterations between 1 and 128")
+        }
         self.store = BodyStore3D()
         self.distance_constraints = DistanceConstraintStore3D(self.store)
         self.slider_constraints = SliderConstraintStore3D(self.store)
@@ -209,6 +214,7 @@ public class World3D {
         self.six_dof_constraints = SixDOFConstraintStore3D(self.store)
         self.current_gravity = settings.gravity
         self.position_iterations = settings.position_iterations
+        self.velocity_iterations = settings.velocity_iterations
         self.contacts = []
         self.contact_begins = []
         self.contact_ends = []
@@ -802,7 +808,7 @@ public class World3D {
         if self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
             retained_contacts = self.prepare_retained_contacts()
             var iteration = 0
-            while iteration < 12 {
+            while iteration < self.velocity_iterations {
                 solve_contact_pairs_velocity3d(retained_contacts, iteration % 2 == 1)
                 self.solve_constraint_velocities(delta, iteration % 2 == 1)
                 iteration++
@@ -2039,7 +2045,7 @@ public class World3D {
             normal_iteration++
         }
         var iteration = 0
-        while iteration < 12 {
+        while iteration < self.velocity_iterations {
             solve_contact_pairs_velocity3d(pairs, iteration % 2 == 1)
             self.solve_constraint_velocities(delta, iteration % 2 == 1)
             iteration++
