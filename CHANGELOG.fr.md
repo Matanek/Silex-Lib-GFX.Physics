@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ragdoll motorisé spatial : repères non parallèles, cibles swing/twist combinées, appuis triangulaires et impulsion oblique qualifiés face à Jolt à 60/120 Hz en Debug/Release sur macOS ARM64. Géométrie et réactions moyennes sur fenêtres établies, bilans autour du barycentre et composante Y globale ; solveur et budgets existants conservés.
+
 - `World3DSettings.velocity_iterations` règle la convergence des contacts et articulations, de 1 à 128 tours par phase, avec défaut 12 conservé. Une chaîne entièrement mobile à deux moteurs contre le sol utilise 48 tours pour qualifier ancrages, limites, réactions moyennes et perte/reprise du contact face à Jolt à 60/120 Hz en Debug/Release. Aucun gain de performance ni parité générale aux impacts revendiqué.
 
 - Chaîne ragdoll libre à deux articulations swing/twist bornées : impulsions obliques opposées, butées exercées et bilans globaux de mouvement/énergie qualifiés face à Jolt à 60/120 Hz en Debug/Release. Les contacts et trajectoires d’impact générales restent ouverts ; solveur et API inchangés.

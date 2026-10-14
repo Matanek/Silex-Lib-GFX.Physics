@@ -181,3 +181,25 @@ vitesse, 16 de position et une tolérance de pénétration de 1e−6 m. Ces nomb
 ne représentent pas un travail algorithmique identique. La normale Jolt est
 inférée du bilan linéaire ; Silex expose l’impulsion mesurée. Aucune parité
 instantanée des forces ou trajectoires générales d’impact n’est établie.
+
+Une [chaîne spatiale à deux moteurs](../../Tests/Consumer/Tests/RagdollSpatialContact3D.sx)
+place trois sphères mobiles sur des appuis triangulaires, avec le second repère
+articulaire tourné de 0,6 rad. Les cibles combinent swing sur deux axes et
+torsion ; une impulsion oblique sur l’extrémité accompagne le départ puis le
+retour au sol. À 60/120 Hz, deux signes et deux orientations mondiales, les
+repères, ancrages, couples, limites, contacts et bilans sont contrôlés. Les
+orientations de contraintes, la géométrie centrée et les vecteurs moyens de
+vitesse/réaction exprimés dans le repère du corps racine sont comparés à Jolt
+en Debug/Release sur macOS ARM64. Les réglages restent 48/16 pour Silex et
+24/16 pour Jolt ; les mondes et démos existants conservent leurs budgets.
+
+Ce témoin vérifie le moment cinétique intrinsèque autour du barycentre, et
+la composante Y du moment global pendant tout le parcours. Une correction
+verticale de contact déplace aussi la part orbitale autour d’une origine
+fixe lorsqu’un groupe possède une quantité de mouvement horizontale : ce
+bilan orbital aux impacts n’est pas déclaré équivalent. Le test n’établit
+pas les trajectoires générales d’impact ni des performances comparables. Un
+support initial collinéaire présente dans les deux moteurs un mouvement lent
+qui invalide les fenêtres de repos ; la qualification publiée porte sur le
+support triangulaire annoncé. Le consommateur contrôle aussi une instance
+indépendante et la destruction/recréation.

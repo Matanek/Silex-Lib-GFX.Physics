@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Spatial motorized ragdoll: nonparallel frames, combined swing/twist targets, triangular supports and an oblique impulse qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64. Geometry and mean reactions over established windows, center-of-mass angular balances and the global Y component; existing solver and budgets retained.
+
 - `World3DSettings.velocity_iterations` controls contact and joint convergence from 1 to 128 iterations per stage, retaining the default of 12. A fully mobile two-motor chain against the floor uses 48 iterations to qualify anchors, limits, mean reactions and contact departure/return against Jolt at 60/120 Hz in Debug/Release. No performance gain or general impact parity is claimed.
 
 - Free ragdoll chain with two bounded swing/twist joints: opposed oblique impulses, exercised stops and global momentum/energy balances qualified against Jolt at 60/120 Hz in Debug/Release. General contacts and impact trajectories remain open; solver and API unchanged.

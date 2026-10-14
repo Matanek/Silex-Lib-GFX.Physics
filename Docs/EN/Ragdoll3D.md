@@ -171,3 +171,23 @@ penetration slop. These counts do not represent identical algorithmic work.
 Jolt's normal impulse is inferred from the linear balance; Silex exposes the
 measured impulse. Instantaneous force parity and arbitrary impact trajectories
 remain unqualified.
+
+A [spatial two-motor chain](../../Tests/Consumer/Tests/RagdollSpatialContact3D.sx)
+places three moving spheres on triangular supports, with the second constraint
+frame rotated by 0.6 rad. Targets combine swing on two axes and twist; an
+oblique impulse on the leaf accompanies floor departure and return. At 60/120 Hz,
+both signs and two world orientations, frames, anchors, torques, limits, contacts
+and balances are checked. Constraint orientations, centered geometry and mean
+angular velocity/reaction vectors expressed in the root body's frame are
+compared with Jolt in Debug/Release on macOS ARM64. Settings remain 48/16 for
+Silex and 24/16 for Jolt; existing worlds and demos retain their budgets.
+
+This witness checks intrinsic angular momentum around the center of mass and
+the global Y component throughout the run. Vertical contact projection also
+moves the orbital contribution about a fixed origin when the group has horizontal
+momentum: that orbital balance at impacts is not declared equivalent. The test
+does not establish general impact trajectories or comparable performance. An
+initially collinear support exhibits slow motion in both engines that invalidates
+the resting windows; the published qualification covers the declared triangular
+support. The public consumer also checks an independent instance and destruction/
+recreation.
