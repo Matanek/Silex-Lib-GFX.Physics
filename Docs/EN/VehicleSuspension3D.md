@@ -4,7 +4,7 @@
 finds supports by ray, solves springs and compression stops, and applies
 reactions to both bodies. The application only calls `world.step`. Without an optional tire, wheels only apply suspension.
 [Passive tires](PassiveTires3D.md) add rolling and grip; [controls](VehicleControls3D.md)
-add steering and braking. Propulsion remains future work.
+add steering and braking. The [powertrain](VehiclePowertrain3D.md) adds propulsion.
 
 The [complete headless example](../../Examples/VehicleSuspension.sx) supports
 100 kg on four suspensions. From the workspace root:

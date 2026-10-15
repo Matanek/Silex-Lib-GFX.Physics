@@ -47,7 +47,7 @@ world.step(1.0/120.0)
 vehicle.set_controls()
 ```
 
-`set_controls(steering:0, brake:0, handbrake:0)` remplace la commande complète.
+`set_controls(steering:0, brake:0, handbrake:0, throttle:0)` remplace la commande complète.
 Les paramètres omis reviennent à zéro. Direction finie dans [−1,1], freins finis
 dans [0,1] ; les valeurs invalides provoquent un panic. La commande persiste
 jusqu’au prochain appel et prend effet au prochain pas positif actif. Un pas
@@ -81,8 +81,8 @@ vitesses, forces et couples sont lus après résolution. La disparition d’un
 support efface ses observations de contact ; la commande reste mémorisée pour
 le prochain pas. La destruction du châssis invalide les commandes.
 
-Cette capacité ajoute direction et freins à un véhicule lancé ; le groupe
-moteur, la transmission et leurs commandes ne sont pas encore fournis.
+[Le groupe moteur et la transmission](VehiclePowertrain3D.md) permettent aussi
+d’accélérer ces roues avec `throttle`.
 
 ## Preuves de comportement
 
@@ -93,5 +93,4 @@ sert de référence en Debug/Release à 60/120 Hz sur macOS ARM64. Trajectoires,
 rotations et bilans restent contrôlés à chaque pas. Près de l’arrêt, les vitesses
 de glissement sont comparées ; les ratios restent vérifiés par leur formule
 mais leur égalité entre moteurs n’est pas revendiquée lorsque leur dénominateur
-tend vers zéro. Moteur, transmission et coût d’exécution ne sont pas qualifiés
-par ces parcours.
+tend vers zéro. Le coût d’exécution n’est pas qualifié par ces parcours.

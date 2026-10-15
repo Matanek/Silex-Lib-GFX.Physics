@@ -3,8 +3,7 @@
 A tire gives a wheel rotational inertia and motion. Longitudinal contact spins
 the wheel; lateral contact resists sideways drift. The world resolves reactions
 through `world.step` alone. [Steering and brakes](VehicleControls3D.md)
-are optional; this path shows rolling without controls. Engine and transmission
-remain future work.
+are optional; this path shows rolling without controls. An [engine and transmission](VehiclePowertrain3D.md) can drive the wheels.
 
 The [headless example](../../Examples/PassiveTires.sx) starts a 100 kg chassis
 at 3 m/s with four stationary wheels. From the workspace root:

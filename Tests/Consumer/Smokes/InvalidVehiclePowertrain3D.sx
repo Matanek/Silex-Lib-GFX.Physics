@@ -1,0 +1,84 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(value:str) bool { for arg in Process.arguments() { if arg==value { return true } }
+    return false }
+func make(world:Physics.World3D,automatic:bool=false) Physics.WheeledVehicle3D {
+    var mode=Physics.VehicleTransmissionMode3D.manual;if automatic { mode=Physics.VehicleTransmissionMode3D.automatic }
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),
+        [Physics.Wheel3DSettings(Math.Vec3(),tire:Physics.Tire3DSettings())],engine:Physics.VehicleEngine3DSettings(),
+        transmission:Physics.VehicleTransmission3DSettings(mode:mode),differentials:[Physics.VehicleDifferential3DSettings(0)]))
+}
+func orphan() Physics.WheeledVehicle3D { var world=Physics.World3D();return make(world) }
+func main() {
+    var world=Physics.World3D();var vehicle=make(world)
+    let engine=Physics.VehicleEngine3DSettings();let wheels:Physics.Wheel3DSettings[]=[Physics.Wheel3DSettings(Math.Vec3(),tire:Physics.Tire3DSettings())]
+    if selected("engine-maximum_torque-negative") { Physics.VehicleEngine3DSettings(maximum_torque:-1.0);return }
+    if selected("engine-minimum_rpm-negative") { Physics.VehicleEngine3DSettings(minimum_rpm:-1.0);return }
+    if selected("engine-angular_damping-negative") { Physics.VehicleEngine3DSettings(angular_damping:-1.0);return }
+    if selected("engine-maximum_torque-nan") { Physics.VehicleEngine3DSettings(maximum_torque:Math.sqrt(-1.0));return }
+    if selected("engine-minimum_rpm-nan") { Physics.VehicleEngine3DSettings(minimum_rpm:Math.sqrt(-1.0));return }
+    if selected("engine-angular_damping-nan") { Physics.VehicleEngine3DSettings(angular_damping:Math.sqrt(-1.0));return }
+    if selected("engine-maximum_torque-inf") { Physics.VehicleEngine3DSettings(maximum_torque:1.0/0.0);return }
+    if selected("engine-minimum_rpm-inf") { Physics.VehicleEngine3DSettings(minimum_rpm:1.0/0.0);return }
+    if selected("engine-angular_damping-inf") { Physics.VehicleEngine3DSettings(angular_damping:1.0/0.0);return }
+    if selected("engine-inertia-9") { Physics.VehicleEngine3DSettings(inertia:0.0);return }
+    if selected("engine-inertia-10") { Physics.VehicleEngine3DSettings(inertia:1.0e-40);return }
+    if selected("engine-maximum_rpm-11") { Physics.VehicleEngine3DSettings(maximum_rpm:1000.0);return }
+    if selected("engine-maximum_rpm-12") { Physics.VehicleEngine3DSettings(maximum_rpm:Math.sqrt(-1.0));return }
+    if selected("curve-empty") { Physics.VehicleEngine3DSettings(torque_curve:[]);return }
+    if selected("curve-order") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(0.5,0.5),Math.Vec2(0.5,1.0)]);return }
+    if selected("curve-x-low") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(-0.1,0.5)]);return }
+    if selected("curve-x-high") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(1.1,0.5)]);return }
+    if selected("curve-y-low") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(0.0,-0.1)]);return }
+    if selected("curve-y-high") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(0.0,1.1)]);return }
+    if selected("curve-nan") { Physics.VehicleEngine3DSettings(torque_curve:[Math.Vec2(0.0,Math.sqrt(-1.0))]);return }
+    if selected("trans-forward-empty") { Physics.VehicleTransmission3DSettings(gear_ratios:[]);return }
+    if selected("trans-reverse-empty") { Physics.VehicleTransmission3DSettings(reverse_gear_ratios:[]);return }
+    if selected("trans-forward-zero") { Physics.VehicleTransmission3DSettings(gear_ratios:[0.0]);return }
+    if selected("trans-forward-negative") { Physics.VehicleTransmission3DSettings(gear_ratios:[-1.0]);return }
+    if selected("trans-forward-inf") { Physics.VehicleTransmission3DSettings(gear_ratios:[1.0/0.0]);return }
+    if selected("trans-reverse-positive") { Physics.VehicleTransmission3DSettings(reverse_gear_ratios:[1.0]);return }
+    if selected("trans-reverse-nan") { Physics.VehicleTransmission3DSettings(reverse_gear_ratios:[Math.sqrt(-1.0)]);return }
+    if selected("trans-clutch_strength") { Physics.VehicleTransmission3DSettings(clutch_strength:-1.0);return }
+    if selected("trans-switch_time") { Physics.VehicleTransmission3DSettings(switch_time:-0.1);return }
+    if selected("trans-clutch_release_time") { Physics.VehicleTransmission3DSettings(clutch_release_time:Math.sqrt(-1.0));return }
+    if selected("trans-switch_latency") { Physics.VehicleTransmission3DSettings(switch_latency:1.0/0.0);return }
+    if selected("trans-shift_down_rpm") { Physics.VehicleTransmission3DSettings(shift_down_rpm:-1.0);return }
+    if selected("trans-shift_up_rpm") { Physics.VehicleTransmission3DSettings(shift_up_rpm:1000.0);return }
+    if selected("diff-none") { Physics.VehicleDifferential3DSettings(-1);return }
+    if selected("diff-duplicate") { Physics.VehicleDifferential3DSettings(0,0);return }
+    if selected("diff-index-low") { Physics.VehicleDifferential3DSettings(-2);return }
+    if selected("diff-ratio-36") { Physics.VehicleDifferential3DSettings(0,ratio:0.0);return }
+    if selected("diff-ratio-37") { Physics.VehicleDifferential3DSettings(0,ratio:Math.sqrt(-1.0));return }
+    if selected("diff-left_right_split-38") { Physics.VehicleDifferential3DSettings(0,left_right_split:-0.1);return }
+    if selected("diff-left_right_split-39") { Physics.VehicleDifferential3DSettings(0,left_right_split:1.1);return }
+    if selected("diff-engine_torque_ratio-40") { Physics.VehicleDifferential3DSettings(0,engine_torque_ratio:-1.0);return }
+    if selected("diff-limit-41") { Physics.VehicleDifferential3DSettings(0,limited_slip_ratio:1.0);return }
+    if selected("diff-limit-42") { Physics.VehicleDifferential3DSettings(0,limited_slip_ratio:Math.sqrt(-1.0));return }
+    if selected("diff-limit-43") { Physics.VehicleDifferential3DSettings(0,limited_slip_ratio:1.0/0.0);return }
+    if selected("engine-no-diff") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,engine:engine);return }
+    if selected("diff-no-engine") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,differentials:[Physics.VehicleDifferential3DSettings(0)]);return }
+    if selected("diff-out-of-range") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,engine:engine,differentials:[Physics.VehicleDifferential3DSettings(4)]);return }
+    if selected("diff-without-tire") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),[Physics.Wheel3DSettings(Math.Vec3())],engine:engine,differentials:[Physics.VehicleDifferential3DSettings(0)]);return }
+    if selected("diff-reused-wheel") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,engine:engine,differentials:[Physics.VehicleDifferential3DSettings(0),Physics.VehicleDifferential3DSettings(0)]);return }
+    if selected("diff-wrong-total") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,engine:engine,differentials:[Physics.VehicleDifferential3DSettings(0,engine_torque_ratio:0.5)]);return }
+    if selected("center-limit") { Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,engine:engine,differentials:[Physics.VehicleDifferential3DSettings(0)],differential_limited_slip_ratio:1.0);return }
+    if selected("throttle-low") { vehicle.set_controls(throttle:-1.1);return }
+    if selected("throttle-high") { vehicle.set_controls(throttle:1.1);return }
+    if selected("throttle-nan") { vehicle.set_controls(throttle:Math.sqrt(-1.0));return }
+    if selected("throttle-inf") { vehicle.set_controls(throttle:1.0/0.0);return }
+    if selected("throttle-no-engine") { var passive=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels));passive.set_controls(throttle:1.0);return }
+    if selected("automatic-manual-input") { make(world,true).set_transmission(1);return }
+    if selected("gear-100") { vehicle.set_transmission(100);return }
+    if selected("gear--100") { vehicle.set_transmission(-100);return }
+    if selected("clutch-low") { vehicle.set_transmission(1,clutch:-0.1);return }
+    if selected("clutch-high") { vehicle.set_transmission(1,clutch:1.1);return }
+    if selected("clutch-nan") { vehicle.set_transmission(1,clutch:Math.sqrt(-1.0));return }
+    if selected("stale-transmission") { world.destroy_wheeled_vehicle(vehicle);vehicle.set_transmission(0);return }
+    if selected("stale-state") { world.destroy_wheeled_vehicle(vehicle);vehicle.powertrain();return }
+    if selected("orphan-state") { orphan().powertrain();return }
+    if selected("no-engine-state") { var passive=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels));passive.powertrain();return }
+    if selected("no-engine-transmission") { var passive=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels));passive.set_transmission(0);return }
+    panic("invalid vehicle powertrain was accepted")
+}

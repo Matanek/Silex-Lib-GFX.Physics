@@ -6,7 +6,9 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
-- Commandes persistantes de braquage, frein et frein à main sur `WheeledVehicle3D`, réglages par roue et observations d’angle/couple. Le frein agit sur le rotor et le contact transmet l’effort dans la limite de l’adhérence ; pas de freinage artificiel du châssis. Propulsion et transmission restent à venir.
+- Moteur, embrayage, transmission automatique/manuelle et différentiels optionnels pour `WheeledVehicle3D`, avec accélérateur persistant, régime et couples de roue observables. Les contacts transmettent la propulsion ; point mort, freinage, sommeil et durée de vie restent intégrés au monde.
+
+- Commandes persistantes de braquage, frein et frein à main sur `WheeledVehicle3D`, réglages par roue et observations d’angle/couple. Le frein agit sur le rotor et le contact transmet l’effort dans la limite de l’adhérence ; pas de freinage artificiel du châssis.
 
 - Pneus passifs optionnels sur `Wheel3DSettings` : inertie, amortissement et rotation, courbes de friction longitudinale/latérale, efforts tangentiels et réactions sur les supports. Le monde possède leur pas et leur sommeil ; réglages et durée de vie validés.
 

@@ -1,0 +1,287 @@
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public enum VehicleTransmissionMode3D {
+    automatic
+    manual
+}
+
+public struct VehicleEngine3DSettings {
+    let maximum_torque:float
+    let minimum_rpm:float
+    let maximum_rpm:float
+    let inertia:float
+    let angular_damping:float
+    private var curve:Math.Vec2[]
+    init(maximum_torque:float=500.0, minimum_rpm:float=1000.0, maximum_rpm:float=6000.0,
+        inertia:float=0.5, angular_damping:float=0.2,
+        torque_curve:Math.Vec2[]=[Math.Vec2(0.0,0.8),Math.Vec2(0.66,1.0),Math.Vec2(1.0,0.8)]) {
+        if !finite_body3d_value(maximum_torque) || maximum_torque<0.0 ||
+            !finite_body3d_value(minimum_rpm) || minimum_rpm<0.0 ||
+            !finite_body3d_value(maximum_rpm) || maximum_rpm<=minimum_rpm ||
+            !finite_body3d_value(maximum_rpm*maximum_rpm) ||
+            !finite_body3d_value(inertia) || inertia<=0.0 || !finite_body3d_value(1.0/inertia) ||
+            !finite_body3d_value(maximum_torque/inertia) ||
+            !finite_body3d_value(angular_damping) || angular_damping<0.0 {
+            panic("GFX.Physics.VehicleEngine3DSettings requires finite ordered RPM bounds, nonnegative torque/damping and positive representable inertia")
+        }
+        if torque_curve.count()==0 { panic("GFX.Physics.VehicleEngine3DSettings requires a torque curve") }
+        var previous= -1.0;var retained:Math.Vec2[]=[]
+        for point in torque_curve {
+            if !finite_body3d_value(point.x) || !finite_body3d_value(point.y) || point.x<0.0 || point.x>1.0 ||
+                point.y<0.0 || point.y>1.0 || point.x<=previous {
+                panic("GFX.Physics.VehicleEngine3DSettings torque curve requires ordered RPM fractions and torque fractions in [0, 1]")
+            }
+            retained.append(point);previous=point.x
+        }
+        self.maximum_torque=maximum_torque;self.minimum_rpm=minimum_rpm;self.maximum_rpm=maximum_rpm
+        self.inertia=inertia;self.angular_damping=angular_damping;self.curve=retained
+    }
+    func torque(rpm:float, throttle:float=1.0) float {
+        if !finite_body3d_value(rpm) || rpm<0.0 || !finite_body3d_value(throttle) || throttle<0.0 || throttle>1.0 {
+            panic("GFX.Physics.VehicleEngine3DSettings torque requires finite nonnegative RPM and throttle in [0, 1]")
+        }
+        let fraction=rpm/self.maximum_rpm;var coefficient=self.curve[self.curve.count()-1].y
+        if fraction<=self.curve[0].x { coefficient=self.curve[0].y }
+        else {
+            var i=1
+            while i<self.curve.count() {
+                let a=self.curve[i-1];let b=self.curve[i]
+                if fraction<=b.x { coefficient=a.y+(b.y-a.y)*(fraction-a.x)/(b.x-a.x);break }
+                i++
+            }
+        }
+        return throttle*self.maximum_torque*coefficient
+    }
+}
+
+public struct VehicleTransmission3DSettings {
+    let mode:VehicleTransmissionMode3D
+    let clutch_strength:float
+    let switch_time:float
+    let clutch_release_time:float
+    let switch_latency:float
+    let shift_up_rpm:float
+    let shift_down_rpm:float
+    private var forward:float[]
+    private var reverse:float[]
+    init(mode:VehicleTransmissionMode3D=VehicleTransmissionMode3D.automatic,
+        gear_ratios:float[]=[2.66,1.78,1.3,1.0,0.74], reverse_gear_ratios:float[]=[-2.9],
+        clutch_strength:float=10.0, switch_time:float=0.5, clutch_release_time:float=0.3,
+        switch_latency:float=0.5, shift_up_rpm:float=4000.0, shift_down_rpm:float=2000.0) {
+        if gear_ratios.count()==0 || reverse_gear_ratios.count()==0 { panic("GFX.Physics.VehicleTransmission3DSettings requires forward and reverse ratios") }
+        var forward:float[]=[];var reverse:float[]=[]
+        for ratio in gear_ratios {
+            if !finite_body3d_value(ratio) || ratio<=0.0 || !finite_body3d_value(ratio*ratio) {
+                panic("GFX.Physics.VehicleTransmission3DSettings forward ratios must be positive and representable")
+            }
+            forward.append(ratio)
+        }
+        for ratio in reverse_gear_ratios {
+            if !finite_body3d_value(ratio) || ratio>=0.0 || !finite_body3d_value(ratio*ratio) {
+                panic("GFX.Physics.VehicleTransmission3DSettings reverse ratios must be negative and representable")
+            }
+            reverse.append(ratio)
+        }
+        if !finite_body3d_value(clutch_strength) || clutch_strength<0.0 ||
+            !finite_body3d_value(switch_time) || switch_time<0.0 ||
+            !finite_body3d_value(clutch_release_time) || clutch_release_time<0.0 ||
+            !finite_body3d_value(switch_latency) || switch_latency<0.0 ||
+            !finite_body3d_value(shift_down_rpm) || shift_down_rpm<0.0 ||
+            !finite_body3d_value(shift_up_rpm) || shift_up_rpm<=shift_down_rpm {
+            panic("GFX.Physics.VehicleTransmission3DSettings requires finite nonnegative clutch/times and ordered shift RPM")
+        }
+        self.mode=mode;self.forward=forward;self.reverse=reverse;self.clutch_strength=clutch_strength
+        self.switch_time=switch_time;self.clutch_release_time=clutch_release_time;self.switch_latency=switch_latency
+        self.shift_up_rpm=shift_up_rpm;self.shift_down_rpm=shift_down_rpm
+    }
+    func forward_gear_count() int { return self.forward.count() }
+    func reverse_gear_count() int { return self.reverse.count() }
+    func gear_ratio(gear:int) float {
+        if gear>self.forward.count() || gear< -self.reverse.count() { panic("GFX.Physics.VehicleTransmission3DSettings gear is out of range") }
+        if gear>0 { return self.forward[gear-1] }
+        if gear<0 { return self.reverse[-gear-1] }
+        return 0.0
+    }
+}
+
+public struct VehicleDifferential3DSettings {
+    let left_wheel:int
+    let right_wheel:int
+    let ratio:float
+    let left_right_split:float
+    let limited_slip_ratio:float?
+    let engine_torque_ratio:float
+    init(left_wheel:int, right_wheel:int= -1, ratio:float=3.42,
+        left_right_split:float=0.5, limited_slip_ratio:float?=1.4, engine_torque_ratio:float=1.0) {
+        if left_wheel< -1 || right_wheel< -1 || (left_wheel== -1 && right_wheel== -1) || left_wheel==right_wheel {
+            panic("GFX.Physics.VehicleDifferential3DSettings requires one or two distinct wheel indices")
+        }
+        if !finite_body3d_value(ratio) || ratio<=0.0 || !finite_body3d_value(ratio*ratio) ||
+            !finite_body3d_value(left_right_split) || left_right_split<0.0 || left_right_split>1.0 ||
+            !finite_body3d_value(engine_torque_ratio) || engine_torque_ratio<0.0 {
+            panic("GFX.Physics.VehicleDifferential3DSettings requires finite positive ratio, split in [0, 1] and nonnegative torque share")
+        }
+        validate_slip_ratio3d(limited_slip_ratio)
+        self.left_wheel=left_wheel;self.right_wheel=right_wheel;self.ratio=ratio
+        self.left_right_split=left_right_split;self.limited_slip_ratio=limited_slip_ratio;self.engine_torque_ratio=engine_torque_ratio
+    }
+    package func right_fraction(left:float,right:float) float {
+        var fraction=self.left_right_split
+        if let limit=self.limited_slip_ratio {
+            let a=Math.max(0.001,Math.abs(left));let b=Math.max(0.001,Math.abs(right))
+            let alpha=Math.min(1.0,(Math.max(a,b)/Math.min(a,b)-1.0)/(limit-1.0))
+            fraction*=1.0-alpha;if a>=b { fraction+=alpha }
+        }
+        return fraction
+    }
+}
+package func validate_slip_ratio3d(value:float?) {
+    if let ratio=value {
+        if !finite_body3d_value(ratio) || ratio<=1.0 { panic("GFX.Physics vehicle limited slip ratio must be finite and greater than one, or null for an open differential") }
+    }
+}
+
+public struct VehiclePowertrainState3D {
+    let engine_rpm:float
+    let gear:int
+    let clutch:float
+    let switching_gear:bool
+    let engine_torque:float
+    package init(rpm:float,gear:int,clutch:float,switching:bool,torque:float) {
+        self.engine_rpm=rpm;self.gear=gear;self.clutch=clutch;self.switching_gear=switching;self.engine_torque=torque
+    }
+}
+
+package class VehiclePowertrain3D {
+    let engine:VehicleEngine3DSettings
+    let transmission:VehicleTransmission3DSettings
+    var differentials:VehicleDifferential3DSettings[]
+    let center_limit:float?
+    var driven:int[]=[]
+    var inertias:float[]
+    var radii:float[]
+    var brake_limits:float[]
+    var handbrake_limits:float[]
+    var speeds:float[]=[]
+    var contacts:bool[]=[]
+    var slips:float[]=[]
+    var previous_impulses:float[]=[]
+    var previous_inverse_deltas:float[]=[]
+    var drive_torques:float[]=[]
+    var ratios:float[]=[]
+    var fractions:float[]=[]
+    var differential_speeds:float[]=[]
+    var rpm:float
+    var gear:int=0
+    var clutch:float=1.0
+    var engine_torque:float=0.0
+    private var switch_left:float=0.0
+    private var release_left:float=0.0
+    private var latency_left:float=0.0
+    init(engine:VehicleEngine3DSettings,transmission:VehicleTransmission3DSettings,
+        differentials:VehicleDifferential3DSettings[],center_limit:float?,inertias:float[],radii:float[],brakes:float[],hands:float[]) {
+        self.engine=engine;self.transmission=transmission;self.differentials=differentials;self.center_limit=center_limit
+        self.inertias=inertias;self.radii=radii;self.brake_limits=brakes;self.handbrake_limits=hands;self.rpm=engine.minimum_rpm
+        for inertia in inertias {
+            self.speeds.append(0.0);self.contacts.append(false);self.slips.append(0.0)
+            self.previous_impulses.append(0.0);self.previous_inverse_deltas.append(0.0)
+            self.drive_torques.append(0.0);self.ratios.append(0.0);self.fractions.append(0.0)
+        }
+        for d in differentials {
+            if d.left_wheel>=0 { self.driven.append(d.left_wheel) }
+            if d.right_wheel>=0 { self.driven.append(d.right_wheel) }
+            self.differential_speeds.append(0.0)
+        }
+    }
+    func state() VehiclePowertrainState3D { return VehiclePowertrainState3D(self.rpm,self.gear,self.clutch,self.switch_left>0.0,self.engine_torque) }
+    func allow_sleep(throttle:float) bool {
+        return throttle==0.0 && self.rpm<=1.01*self.engine.minimum_rpm && self.switch_left<=0.0 && self.release_left<=0.0 && self.latency_left<=0.0
+    }
+    func set_transmission(gear:int,clutch:float) bool {
+        if self.transmission.mode!=VehicleTransmissionMode3D.manual { panic("GFX.Physics.WheeledVehicle3D requires manual transmission for set_transmission") }
+        let ratio=self.transmission.gear_ratio(gear)
+        if !finite_body3d_value(clutch) || clutch<0.0 || clutch>1.0 { panic("GFX.Physics.WheeledVehicle3D clutch must be finite in [0, 1]") }
+        let changed=self.gear!=gear || self.clutch!=clutch;self.gear=gear;self.clutch=clutch;return changed
+    }
+    private func distribute() {
+        var low=0.0;var high=0.0;var index=0
+        for d in self.differentials {
+            var omega=0.0;var count=0
+            if d.left_wheel>=0 { omega+=self.speeds[d.left_wheel];count++ }
+            if d.right_wheel>=0 { omega+=self.speeds[d.right_wheel];count++ }
+            omega=Math.abs(omega*d.ratio/count as float);self.differential_speeds[index]=omega
+            if index==0 { low=omega;high=omega }
+            else { low=Math.min(low,omega);high=Math.max(high,omega) }
+            index++
+        }
+        var factor_sum=0.0;var alpha=0.0
+        if let limit=self.center_limit {
+            if high>low {
+                for omega in self.differential_speeds { factor_sum+=(high-omega)/(high-low) }
+                alpha=Math.min(1.0,(Math.max(0.001,high)/Math.max(0.001,low)-1.0)/(limit-1.0))
+            }
+        }
+        index=0;let ratio=self.transmission.gear_ratio(self.gear)
+        for d in self.differentials {
+            var share=d.engine_torque_ratio
+            if factor_sum>0.0 { share=share*(1.0-alpha)+alpha*(high-self.differential_speeds[index])/(high-low)/factor_sum }
+            var right=1.0
+            if d.left_wheel>=0 && d.right_wheel>=0 { right=d.right_fraction(self.speeds[d.left_wheel],self.speeds[d.right_wheel]) }
+            else if d.left_wheel>=0 { right=0.0 }
+            if d.left_wheel>=0 { self.ratios[d.left_wheel]=ratio*d.ratio;self.fractions[d.left_wheel]=share*(1.0-right) }
+            if d.right_wheel>=0 { self.ratios[d.right_wheel]=ratio*d.ratio;self.fractions[d.right_wheel]=share*right }
+            index++
+        }
+    }
+    func step(delta:float,throttle:float,brake:float,handbrake:float) {
+        let old_rpm=self.rpm;let conversion=60.0/Math.two_pi()
+        self.rpm=Math.clamp(self.rpm*Math.max(0.0,1.0-self.engine.angular_damping*delta),self.engine.minimum_rpm,self.engine.maximum_rpm)
+        var input=Math.abs(throttle);if self.transmission.mode==VehicleTransmissionMode3D.automatic { input*=self.clutch }
+        self.engine_torque=self.engine.torque(self.rpm,input);self.distribute()
+        let e0=self.rpm/conversion+delta*self.engine_torque/self.engine.inertia
+        var average=0.0;var compliance=0.0;let count=self.driven.count() as float
+        for i in self.driven {
+            let braking=brake*self.brake_limits[i]+handbrake*self.handbrake_limits[i]
+            var sign=1.0;if self.speeds[i]<0.0 || (self.speeds[i]==0.0 && self.gear<0) { sign= -1.0 }
+            var impulse=sign*braking*delta
+            if self.contacts[i] { impulse+=self.previous_impulses[i]*self.previous_inverse_deltas[i]*delta*self.radii[i] }
+            average+=self.ratios[i]*(self.speeds[i]-impulse/self.inertias[i])/count
+            compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count
+        }
+        var strength=0.0;if self.gear!=0 { strength=self.clutch*self.transmission.clutch_strength }
+        let torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
+        self.rpm=Math.clamp((e0-delta*torque/self.engine.inertia)*conversion,self.engine.minimum_rpm,self.engine.maximum_rpm)
+        var slipping=false
+        for i in self.driven {
+            self.drive_torques[i]=self.ratios[i]*self.fractions[i]*torque
+            self.speeds[i]+=delta*self.drive_torques[i]/self.inertias[i]
+            if self.fractions[i]>0.0 && (!self.contacts[i] || self.slips[i]>0.1) { slipping=true }
+        }
+        self.update_transmission(delta,throttle,!slipping && self.rpm>=old_rpm)
+    }
+    private func update_transmission(delta:float,input:float,can_shift_up:bool) {
+        if self.transmission.mode!=VehicleTransmissionMode3D.automatic { return }
+        let old=self.gear
+        if self.gear==0 || input*(self.gear as float)<0.0 {
+            self.gear=0;if input>0.0 { self.gear=1 } else if input<0.0 { self.gear= -1 }
+        } else if self.latency_left==0.0 {
+            if can_shift_up && self.rpm>self.transmission.shift_up_rpm {
+                if self.gear<0 { if self.gear> -self.transmission.reverse_gear_count() { self.gear-- } }
+                else if self.gear<self.transmission.forward_gear_count() { self.gear++ }
+            } else if self.rpm<self.transmission.shift_down_rpm {
+                if self.gear<0 { var maximum=0;if input!=0.0 { maximum= -1 }
+                if self.gear<maximum { self.gear++ } }
+                else { var minimum=0;if input!=0.0 { minimum=1 }
+                if self.gear>minimum { self.gear-- } }
+            }
+        }
+        if old!=self.gear {
+            self.switch_left=0.0;if old!=0 { self.switch_left=self.transmission.switch_time }
+            self.release_left=self.transmission.clutch_release_time;self.latency_left=self.transmission.switch_latency;self.clutch=0.0
+        } else if self.switch_left>0.0 { self.switch_left=Math.max(0.0,self.switch_left-delta);self.clutch=0.0 }
+        else if self.release_left>0.0 {
+            self.release_left=Math.max(0.0,self.release_left-delta);self.clutch=1.0-self.release_left/self.transmission.clutch_release_time
+        } else { self.clutch=1.0;self.latency_left=Math.max(0.0,self.latency_left-delta) }
+    }
+}

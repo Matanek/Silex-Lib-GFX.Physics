@@ -315,3 +315,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Roll tires and resist drift](PassiveTires3D.md): inertia, rotation, friction curves and support reactions.
 
 [Steer and brake a vehicle](VehicleControls3D.md): persistent controls, steering limits and service/hand brakes.
+
+[Power the wheels](VehiclePowertrain3D.md): engine, clutch, automatic/manual transmission and differentials.

@@ -5,7 +5,9 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
-- Persistent steering, service brake and handbrake inputs on `WheeledVehicle3D`, with per-wheel settings and angle/torque observations. Braking acts on the rotor and contact transfers force within tire grip; the chassis is never directly slowed. Propulsion and transmission remain future work.
+- Optional engine, clutch, automatic/manual transmission and differentials for `WheeledVehicle3D`, with persistent throttle, RPM and wheel torque observations. Contacts transfer propulsion; neutral, braking, sleep and lifetime remain integrated with the world.
+
+- Persistent steering, service brake and handbrake inputs on `WheeledVehicle3D`, with per-wheel settings and angle/torque observations. Braking acts on the rotor and contact transfers force within tire grip; the chassis is never directly slowed.
 
 - Optional passive tires on `Wheel3DSettings`: inertia, damping and rotation, longitudinal/lateral friction curves, tangential forces and support reactions. The world owns stepping and sleep; settings and lifetime are validated.
 

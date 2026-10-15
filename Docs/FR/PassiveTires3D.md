@@ -4,7 +4,7 @@ Un pneu donne une inertie et une rotation à la roue. Le contact longitudinal
 entraîne cette rotation ; le contact latéral résiste à la dérive. Le monde
 résout les réactions en appelant seulement `world.step`. Le
 [braquage et les freins](VehicleControls3D.md) sont optionnels ; ce parcours
-montre le roulement sans commande. Moteur et transmission restent à venir.
+montre le roulement sans commande. Un [moteur et une transmission](VehiclePowertrain3D.md) peuvent entraîner les roues.
 
 L’[exemple sans rendu](../../Examples/PassiveTires.sx) lance un châssis de
 100 kg à 3 m/s sur quatre roues immobiles. Depuis la racine du workspace :

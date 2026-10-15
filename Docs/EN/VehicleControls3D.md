@@ -47,7 +47,7 @@ world.step(1.0/120.0)
 vehicle.set_controls()
 ```
 
-`set_controls(steering:0, brake:0, handbrake:0)` replaces the complete command.
+`set_controls(steering:0, brake:0, handbrake:0, throttle:0)` replaces the complete command.
 Omitted inputs return to zero. Steering must be finite in [−1,1], brakes finite
 in [0,1]; invalid values panic. The command persists until the next call and
 takes effect on the next positive active step. A zero step preserves observations;
@@ -81,8 +81,8 @@ torques are read after solving. Losing a support clears its contact observations
 the command remains stored for the next step. Destroying the chassis invalidates
 controls.
 
-This capability adds steering and brakes to an already moving vehicle; the
-powertrain, transmission and their inputs remain future work.
+[The powertrain and transmission](VehiclePowertrain3D.md) also accelerate these
+wheels through `throttle`.
 
 ## Behavioral evidence
 
@@ -92,5 +92,4 @@ counter steering, supports, sleep and lifetime. Jolt’s actual wheeled controll
 is the reference in Debug/Release at 60/120 Hz on macOS ARM64. Trajectories,
 rotations and balances remain checked at every step. Near a stop, slip velocities
 are compared; ratios remain checked against their formulas but cross-engine
-equality is not claimed when their denominators approach zero. Powertrain,
-transmission and execution cost are not qualified by these paths.
+equality is not claimed when their denominators approach zero. Execution cost is not qualified by these paths.

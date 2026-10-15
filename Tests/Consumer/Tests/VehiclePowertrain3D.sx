@@ -1,0 +1,166 @@
+use GFX.Physics
+use STD.Math
+
+func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,allow_sleep:bool=false) Physics.WheeledVehicle3D {
+    var wheels:Physics.Wheel3DSettings[]=[]
+    let sides:int[]=[-1,1]
+    for x in sides { for z in sides {
+        wheels.append(Physics.Wheel3DSettings(Math.Vec3(0.6*x as float,0.0,z as float),tire:Physics.Tire3DSettings(angular_damping:0.0)))
+    } }
+    var mode=Physics.VehicleTransmissionMode3D.manual;if automatic { mode=Physics.VehicleTransmissionMode3D.automatic }
+    var height=0.875475;if air { height=3.0 }
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0)) ..allow_sleep=allow_sleep
+            ..linear_damping=0.0 ..angular_damping=0.0,wheels,
+        engine:Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:0.0,angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]),
+        transmission:Physics.VehicleTransmission3DSettings(mode:mode,gear_ratios:[1.0,0.5],reverse_gear_ratios:[-1.0],shift_up_rpm:100.0,shift_down_rpm:50.0),
+        differentials:[Physics.VehicleDifferential3DSettings(0,2,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5),
+            Physics.VehicleDifferential3DSettings(1,3,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5)],differential_limited_slip_ratio:null))
+}
+
+test "engine clutch and symmetric free rotors follow an independent implicit solution and momentum balance" {
+    for rate in [60,120] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var vehicle=powered_vehicle(world);vehicle.set_transmission(1);vehicle.set_controls(throttle:1.0)
+        let dt=1.0/rate as float;let a=1.0/0.5+9.0/(4.0*0.9);let q=1.0/(1.0+10.0*dt*a)
+        var decay=1.0;var step=0
+        while step<rate {
+            world.step(dt);decay*=q;step++
+            let difference=12.0/(0.5*10.0*a)*(1.0-decay)
+            let expected=(12.0*step as float*dt+4.0*0.9/9.0*difference)/(0.5+4.0*0.9/9.0)
+            let actual=vehicle.powertrain().engine_rpm*Math.two_pi()/60.0
+            assert(Math.abs(actual-expected)<0.0001)
+            var momentum=0.5*actual
+            for i in [0,1,2,3] {
+                var wheel=vehicle.wheel(i)
+                assert(Math.abs(wheel.angular_velocity-(expected-difference)/3.0)<0.0001)
+                assert(wheel.drive_torque>0.0 && wheel.brake_torque==0.0)
+                momentum+=0.9*wheel.angular_velocity/3.0
+            }
+            assert(Math.abs(momentum-12.0*step as float*dt)<0.0001)
+            assert(vehicle.chassis().linear_velocity()==Math.Vec3())
+        }
+    }
+}
+
+test "neutral and open clutch rev the engine without driving the wheels and zero steps preserve observations" {
+    for gear in [0,1] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var vehicle=powered_vehicle(world);var clutch=1.0;if gear==1 { clutch=0.0 }
+        vehicle.set_transmission(gear,clutch:clutch);vehicle.set_controls(throttle:0.5)
+        var step=0;while step<120 { world.step(1.0/120.0);step++ }
+        assert(Math.abs(vehicle.powertrain().engine_rpm-12.0/0.5*0.5*60.0/Math.two_pi())<0.001)
+        for i in [0,1,2,3] { assert(vehicle.wheel(i).angular_velocity==0.0 && vehicle.wheel(i).drive_torque==0.0) }
+        let rpm=vehicle.powertrain().engine_rpm;world.step(0.0);assert(vehicle.powertrain().engine_rpm==rpm)
+        vehicle.set_controls();world.destroy_wheeled_vehicle(vehicle);assert(!vehicle.is_valid())
+    }
+}
+
+test "engine driven tires accelerate in either direction and brakes stop through physical contacts" {
+    let gears:int[]=[-1,1]
+    for gear in gears { for rate in [60,120] {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+        var vehicle=powered_vehicle(world,air:false);vehicle.set_transmission(gear);vehicle.set_controls(throttle:1.0)
+        var step=0;var speeds:float[]=[0.0,0.0,0.0,0.0]
+        while step<rate*4 {
+            for i in [0,1,2,3] { speeds[i]=vehicle.wheel(i).angular_velocity }
+            world.step(1.0/rate as float)
+            for i in [0,1,2,3] {
+                var wheel=vehicle.wheel(i)
+                let balance=0.9*(wheel.angular_velocity-speeds[i])+(wheel.longitudinal_force*0.3-wheel.drive_torque-wheel.brake_torque)/rate as float
+                assert(Math.abs(balance)<0.0001)
+            }
+            step++
+        }
+        assert(gear as float*vehicle.chassis().position().z>0.1 && gear as float*vehicle.chassis().linear_velocity().z>0.1)
+        vehicle.set_controls(brake:1.0);step=0;while step<rate*3 { world.step(1.0/rate as float);step++ }
+        assert(vehicle.chassis().linear_velocity().length()<0.03)
+    } }
+}
+
+test "automatic transmission engages forward and reverse while slipping prevents an upshift in flight" {
+    let directions:float[]=[-1.0,1.0]
+    for input in directions {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());var vehicle=powered_vehicle(world,automatic:true)
+        assert(vehicle.powertrain().gear==0)
+        vehicle.set_controls(throttle:input);world.step(1.0/120.0)
+        assert(vehicle.powertrain().gear==input as int && vehicle.powertrain().clutch==0.0)
+        var step=0;while step<240 { world.step(1.0/120.0);step++ }
+        assert(vehicle.powertrain().gear==input as int && vehicle.powertrain().clutch==1.0)
+        assert(input*vehicle.wheel(0).angular_velocity>0.0)
+    }
+}
+
+
+test "engine calibration and transmission ratios retain caller arrays and clamp curve endpoints" {
+    var points:Math.Vec2[]=[Math.Vec2(0.0,0.2),Math.Vec2(1.0,1.0)]
+    var engine=Physics.VehicleEngine3DSettings(maximum_torque:100.0,torque_curve:points)
+    points[0]=Math.Vec2(0.0,1.0)
+    assert(Math.abs(engine.torque(3000.0,0.5)-30.0)<0.00001 && engine.torque(0.0)==20.0 && engine.torque(9000.0)==100.0)
+    var ratios:float[]=[2.0,1.0];var reverse:float[]=[-3.0]
+    var gearbox=Physics.VehicleTransmission3DSettings(gear_ratios:ratios,reverse_gear_ratios:reverse)
+    ratios[0]=8.0;reverse[0]= -9.0
+    assert(gearbox.gear_ratio(1)==2.0 && gearbox.gear_ratio(-1)== -3.0 && gearbox.gear_ratio(0)==0.0)
+}
+
+test "powertrain state respects disabled chassis sleep unchanged controls and instance ownership" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=powered_vehicle(world,allow_sleep:true);var second=powered_vehicle(world)
+    second.chassis().set_transform(Physics.Transform3D(Math.Vec3(20.0,3.0,0.0)))
+    var step=0;while step<240 { world.step(1.0/120.0);step++ }
+    assert(!vehicle.chassis().is_awake())
+    vehicle.set_controls();vehicle.set_transmission(0);assert(!vehicle.chassis().is_awake())
+    vehicle.set_transmission(1);assert(vehicle.chassis().is_awake())
+    vehicle.set_controls(throttle:1.0);vehicle.chassis().set_enabled(false)
+    let rpm=vehicle.powertrain().engine_rpm;world.step(1.0/120.0);assert(vehicle.powertrain().engine_rpm==rpm)
+    vehicle.chassis().set_enabled(true);world.step(1.0/120.0);assert(vehicle.powertrain().engine_rpm>rpm)
+    assert(second.powertrain().engine_rpm==0.0 && second.wheel(0).angular_velocity==0.0)
+    world.destroy_wheeled_vehicle(vehicle);assert(!vehicle.is_valid() && second.is_valid())
+}
+
+func single_drive(world:Physics.World3D,engine:Physics.VehicleEngine3DSettings) Physics.WheeledVehicle3D {
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..transform=Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)) ..allow_sleep=false,
+        [Physics.Wheel3DSettings(Math.Vec3(-0.6,0.0,0.0),tire:Physics.Tire3DSettings(angular_damping:0.0)),
+            Physics.Wheel3DSettings(Math.Vec3(0.6,0.0,0.0),tire:Physics.Tire3DSettings(angular_damping:0.0))],
+        engine:engine,transmission:Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0]),
+        differentials:[Physics.VehicleDifferential3DSettings(0,ratio:2.0)]))
+}
+test "a single driven wheel shares torque only with its engine and preserves geared rotor momentum" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=single_drive(world,Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:0.0,angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]))
+    vehicle.set_transmission(1);vehicle.set_controls(throttle:1.0)
+    var step=0;while step<120 {
+        world.step(1.0/120.0);step++
+        let momentum=0.5*vehicle.powertrain().engine_rpm*Math.two_pi()/60.0+0.9*vehicle.wheel(0).angular_velocity/2.0
+        assert(Math.abs(momentum-12.0*step as float/120.0)<0.0001)
+        assert(vehicle.wheel(1).angular_velocity==0.0 && vehicle.wheel(1).drive_torque==0.0)
+    }
+}
+test "engine governor and idle bounds contain neutral revving and damping without wheel propulsion" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=single_drive(world,Physics.VehicleEngine3DSettings(maximum_torque:100.0,minimum_rpm:100.0,maximum_rpm:500.0,angular_damping:1.0,torque_curve:[Math.Vec2(0.0,1.0)]))
+    assert(vehicle.powertrain().engine_rpm==100.0)
+    vehicle.set_controls(throttle:1.0);var step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(vehicle.powertrain().engine_rpm==500.0 && vehicle.wheel(0).angular_velocity==0.0)
+    vehicle.set_controls();step=0;while step<600 { world.step(1.0/120.0);step++ }
+    assert(vehicle.powertrain().engine_rpm==100.0 && vehicle.chassis().linear_velocity()==Math.Vec3())
+}
+test "powered contact transfers equal opposite chassis and dynamic support impulses" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var ground=world.create_rigid_body(Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(100.0,1.0,100.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0)) ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(10000.0))
+        ..allow_sleep=false ..friction=1.0 ..linear_damping=0.0 ..angular_damping=0.0)
+    var vehicle=powered_vehicle(world,air:false);vehicle.set_transmission(1);vehicle.set_controls(throttle:1.0)
+    var touched=false;var step=0
+    while step<120 {
+        world.step(1.0/120.0);step++
+        let momentum=vehicle.chassis().linear_velocity().multiply(100.0).add(ground.linear_velocity().multiply(200.0))
+        assert(momentum.length()<0.001)
+        if vehicle.wheel(0).support()!=null { touched=true }
+    }
+    assert(touched && vehicle.chassis().linear_velocity().z>0.001 && ground.linear_velocity().z<0.0)
+}

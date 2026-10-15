@@ -1,3 +1,10 @@
+use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
+use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrain3D
+use GFX.Physics.VehiclePowertrain3D.validate_slip_ratio3d
 use GFX.Physics.Tire3D.Tire3DSettings
 use GFX.Physics.RigidBody3D.RigidBody3D
 use GFX.Physics.RigidBody3D.RigidBody3DSettings
@@ -68,15 +75,63 @@ public struct Wheel3DSettings {
 public class WheeledVehicle3DSettings {
     let chassis:RigidBody3DSettings
     private var wheels:Wheel3DSettings[]
+    let engine:VehicleEngine3DSettings?
+    let transmission:VehicleTransmission3DSettings
+    let differential_limited_slip_ratio:float?
+    private var differentials:VehicleDifferential3DSettings[]
 
-    init(chassis:RigidBody3DSettings, wheels:Wheel3DSettings[]) {
+    init(chassis:RigidBody3DSettings, wheels:Wheel3DSettings[], engine:VehicleEngine3DSettings?=null,
+        transmission:VehicleTransmission3DSettings=VehicleTransmission3DSettings(),
+        differentials:VehicleDifferential3DSettings[]=[], differential_limited_slip_ratio:float?=1.4) {
         if chassis.body_type!=BodyType3D.dynamic { panic("GFX.Physics.WheeledVehicle3DSettings requires a dynamic chassis") }
         BodyState3D(chassis)
         if wheels.count()==0 { panic("GFX.Physics.WheeledVehicle3DSettings requires at least one wheel") }
         self.chassis=chassis
         var retained:Wheel3DSettings[]=[]
         for wheel in wheels { retained.append(wheel) }
-        self.wheels=retained
+        self.wheels=retained;self.engine=engine;self.transmission=transmission
+        validate_slip_ratio3d(differential_limited_slip_ratio);self.differential_limited_slip_ratio=differential_limited_slip_ratio
+        if engine==null && differentials.count()>0 { panic("GFX.Physics.WheeledVehicle3DSettings differentials require an engine") }
+        var saved:VehicleDifferential3DSettings[]=[];var driven:int[]=[];var shares=0.0
+        for d in differentials {
+            let indices:int[]=[d.left_wheel,d.right_wheel]
+            for i in indices {
+                if i>=0 {
+                    if i>=wheels.count() { panic("GFX.Physics.WheeledVehicle3DSettings differential wheel index is out of range") }
+                    if wheels[i].tire==null { panic("GFX.Physics.WheeledVehicle3DSettings driven wheels require tires") }
+                    for previous in driven { if i==previous { panic("GFX.Physics.WheeledVehicle3DSettings driven wheels must belong to one differential") } }
+                    driven.append(i)
+                    let directions:int[]=[1,-1]
+                    for gear in directions {
+                        var index=1;var count=transmission.forward_gear_count();if gear<0 { count=transmission.reverse_gear_count() }
+                        while index<=count {
+                            let ratio=transmission.gear_ratio(gear*index)*d.ratio
+                            if !finite_body3d_value(ratio*ratio/wheels[i].tire!.inertia) ||
+                                !finite_body3d_value(ratio*transmission.clutch_strength/wheels[i].tire!.inertia) {
+                                panic("GFX.Physics.WheeledVehicle3DSettings drive ratios and clutch must be representable for wheel inertia")
+                            }
+                            index++
+                        }
+                    }
+                }
+            }
+            saved.append(d);shares+=d.engine_torque_ratio
+        }
+        if let motor=engine {
+            if saved.count()==0 || Math.abs(shares-1.0)>0.000001 { panic("GFX.Physics.WheeledVehicle3DSettings engine requires differentials with total torque share one") }
+            if transmission.mode==VehicleTransmissionMode3D.automatic && transmission.shift_up_rpm>motor.maximum_rpm {
+                panic("GFX.Physics.WheeledVehicle3DSettings automatic shift RPM exceeds engine maximum")
+            }
+            if !finite_body3d_value(transmission.clutch_strength/motor.inertia) {
+                panic("GFX.Physics.WheeledVehicle3DSettings clutch must be representable for engine inertia")
+            }
+        }
+        self.differentials=saved
+    }
+    func differential_count() int { return self.differentials.count() }
+    func differential(index:int) VehicleDifferential3DSettings {
+        if index<0 || index>=self.differentials.count() { panic("GFX.Physics.WheeledVehicle3DSettings differential index is out of range") }
+        return self.differentials[index]
     }
     func wheel_count() int { return self.wheels.count() }
     func wheel(index:int) Wheel3DSettings {
@@ -94,6 +149,7 @@ public struct VehicleWheelState3D {
 
     let steering_angle:float
     let brake_torque:float
+    let drive_torque:float
     let rotation_angle:float
     let angular_velocity:float
     let longitudinal_slip:float
@@ -105,10 +161,10 @@ public struct VehicleWheelState3D {
 
     package init(length:float, normal_force:float, support:RigidBody3D?, point:Math.Vec3, normal:Math.Vec3,
         angle:float, speed:float, longitudinal_slip:float, lateral_slip:float,
-        longitudinal_force:float, lateral_force:float, longitudinal_direction:Math.Vec3, lateral_direction:Math.Vec3, steering_angle:float, brake_torque:float) {
+        longitudinal_force:float, lateral_force:float, longitudinal_direction:Math.Vec3, lateral_direction:Math.Vec3, steering_angle:float, brake_torque:float, drive_torque:float) {
         self.length=length;self.normal_force=normal_force;self.current_support=support
         self.contact_point=point;self.contact_normal=normal
-        self.steering_angle=steering_angle;self.brake_torque=brake_torque
+        self.steering_angle=steering_angle;self.brake_torque=brake_torque;self.drive_torque=drive_torque
         self.rotation_angle=angle;self.angular_velocity=speed
         self.longitudinal_slip=longitudinal_slip;self.lateral_slip=lateral_slip
         self.longitudinal_force=longitudinal_force;self.lateral_force=lateral_force
@@ -135,6 +191,8 @@ class WheelSuspensionState3D {
     var previous_lateral_impulse:float=0.0
     var previous_inverse_delta:float=0.0
     var steering_angle:float=0.0
+    var drive_torque:float=0.0
+    var previous_longitudinal_impulse:float=0.0
     var brake_torque:float=0.0
     var brake_impulse:float=0.0
     var rotation_angle:float=0.0
@@ -153,10 +211,11 @@ class WheelSuspensionState3D {
     var active:bool=false
     init(length:float) { self.length=length }
     func clear(length:float) {
+        self.previous_longitudinal_impulse=self.longitudinal_impulse
         self.previous_support=self.support;self.previous_lateral_impulse=self.lateral_impulse;self.previous_inverse_delta=self.inverse_delta
         self.support=null;self.length=length;self.point=Math.Vec3();self.normal=Math.Vec3()
         self.impulse=0.0;self.stop_impulse=0.0;self.inverse_delta=0.0;self.active=false
-        self.brake_torque=0.0;self.brake_impulse=0.0
+        self.drive_torque=0.0;self.brake_torque=0.0;self.brake_impulse=0.0
         self.longitudinal_impulse=0.0;self.lateral_impulse=0.0
         self.longitudinal_slip=0.0;self.lateral_slip=0.0
         self.longitudinal_direction=Math.Vec3();self.lateral_direction=Math.Vec3()
@@ -173,6 +232,8 @@ public class WheeledVehicle3D {
     private var steering_input:float=0.0
     private var brake_input:float=0.0
     private var handbrake_input:float=0.0
+    private var throttle_input:float=0.0
+    private var drivetrain:VehiclePowertrain3D?=null
 
     package init(store:BodyStore3D, id:BodyId3D, settings:WheeledVehicle3DSettings) {
         self.store=store;self.id=id;self.settings=settings
@@ -180,6 +241,28 @@ public class WheeledVehicle3D {
         var index=0
         while index<settings.wheel_count() { wheels.append(WheelSuspensionState3D(settings.wheel(index).maximum_length));index++ }
         self.wheels=wheels
+        if let engine=settings.engine {
+            var inertias:float[]=[];var radii:float[]=[];var brakes:float[]=[];var hands:float[]=[]
+            var differentials:VehicleDifferential3DSettings[]=[];var i=0
+            while i<settings.wheel_count() {
+                let wheel=settings.wheel(i);var inertia=0.0;if let tire=wheel.tire { inertia=tire.inertia }
+                inertias.append(inertia);radii.append(wheel.radius);brakes.append(wheel.maximum_brake_torque);hands.append(wheel.maximum_handbrake_torque);i++
+            }
+            i=0;while i<settings.differential_count() { differentials.append(settings.differential(i));i++ }
+            self.drivetrain=VehiclePowertrain3D(engine,settings.transmission,differentials,settings.differential_limited_slip_ratio,inertias,radii,brakes,hands)
+        }
+    }
+    func powertrain() VehiclePowertrainState3D {
+        self.require_valid();if let motor=self.drivetrain { return motor.state() }
+        panic("GFX.Physics.WheeledVehicle3D has no engine")
+    }
+    func set_transmission(gear:int,clutch:float=1.0) {
+        self.store.require_mutable();self.require_valid()
+        if let motor=self.drivetrain {
+            if motor.set_transmission(gear,clutch) { self.store.require(self.id).wake() }
+            return
+        }
+        panic("GFX.Physics.WheeledVehicle3D has no engine")
     }
     func is_valid() bool { return self.store.contains(self.id) }
     private func require_valid() {
@@ -197,16 +280,19 @@ public class WheeledVehicle3D {
         return VehicleWheelState3D(state.length,(state.impulse+state.stop_impulse)*state.inverse_delta,
             support,state.point,state.normal,state.rotation_angle,state.angular_velocity,
             state.longitudinal_slip,state.lateral_slip,state.longitudinal_impulse*state.inverse_delta,
-            state.lateral_impulse*state.inverse_delta,state.longitudinal_direction,state.lateral_direction,state.steering_angle,state.brake_torque)
+            state.lateral_impulse*state.inverse_delta,state.longitudinal_direction,state.lateral_direction,state.steering_angle,state.brake_torque,state.drive_torque)
     }
-    func set_controls(steering:float=0.0, brake:float=0.0, handbrake:float=0.0) {
+    func set_controls(steering:float=0.0, brake:float=0.0, handbrake:float=0.0, throttle:float=0.0) {
         self.store.require_mutable();self.require_valid()
         if !finite_body3d_value(steering) || Math.abs(steering)>1.0 ||
             !finite_body3d_value(brake) || brake<0.0 || brake>1.0 ||
             !finite_body3d_value(handbrake) || handbrake<0.0 || handbrake>1.0 {
             panic("GFX.Physics.WheeledVehicle3D controls require finite steering in [-1, 1] and brakes in [0, 1]")
         }
-        if self.steering_input==steering && self.brake_input==brake && self.handbrake_input==handbrake { return }
+        if !finite_body3d_value(throttle) || Math.abs(throttle)>1.0 { panic("GFX.Physics.WheeledVehicle3D throttle must be finite in [-1, 1]") }
+        if self.drivetrain==null && throttle!=0.0 { panic("GFX.Physics.WheeledVehicle3D throttle requires an engine") }
+        if self.steering_input==steering && self.brake_input==brake && self.handbrake_input==handbrake && self.throttle_input==throttle { return }
+        self.throttle_input=throttle
         self.steering_input=steering;self.brake_input=brake;self.handbrake_input=handbrake
         self.store.require(self.id).wake()
     }
@@ -257,8 +343,26 @@ public class WheeledVehicle3D {
                         state.lateral_impulse=state.previous_lateral_impulse*state.previous_inverse_delta*delta
                     }
                 }
-                self.prepare_brake(state,wheel,tire,delta)
             }
+            index++
+        }
+        self.prepare_powertrain(delta)
+    }
+    private func prepare_powertrain(delta:float) {
+        if let motor=self.drivetrain {
+            for i in motor.driven {
+                var state=self.wheels[i]
+                motor.speeds[i]=state.angular_velocity;motor.contacts[i]=state.support!=null
+                motor.slips[i]=state.longitudinal_slip;motor.previous_impulses[i]=state.previous_longitudinal_impulse
+                motor.previous_inverse_deltas[i]=state.previous_inverse_delta
+            }
+            motor.step(delta,self.throttle_input,self.brake_input,self.handbrake_input)
+            for i in motor.driven { self.wheels[i].angular_velocity=motor.speeds[i];self.wheels[i].drive_torque=motor.drive_torques[i] }
+        }
+        var index=0
+        for state in self.wheels {
+            let wheel=self.settings.wheel(index)
+            if let tire=wheel.tire { self.prepare_brake(state,wheel,tire,delta) }
             index++
         }
     }
@@ -288,6 +392,7 @@ public class WheeledVehicle3D {
     }
     package func keep_awake_for_wheels() {
         var chassis=self.store.require(self.id)
+        if let motor=self.drivetrain { if !motor.allow_sleep(self.throttle_input) { chassis.sleep_time=0.0;return } }
         for state in self.wheels {
             if Math.abs(state.angular_velocity)>Math.radians(10.0) { chassis.sleep_time=0.0;return }
         }
