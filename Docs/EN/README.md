@@ -313,3 +313,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Rest a chassis on four wheel suspensions](VehicleSuspension3D.md): ray supports, springs, hard stops, jump and support reactions.
 
 [Roll tires and resist drift](PassiveTires3D.md): inertia, rotation, friction curves and support reactions.
+
+[Steer and brake a vehicle](VehicleControls3D.md): persistent controls, steering limits and service/hand brakes.

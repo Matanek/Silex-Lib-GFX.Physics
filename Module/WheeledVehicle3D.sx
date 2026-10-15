@@ -22,11 +22,17 @@ public struct Wheel3DSettings {
     let damping:float
     let maximum_slope_angle:float
     let tire:Tire3DSettings?
+    let maximum_steering_angle:float
+    let steering_axis:Math.Vec3
+    let maximum_brake_torque:float
+    let maximum_handbrake_torque:float
 
     init(position:Math.Vec3, radius:float = 0.3, minimum_length:float = 0.2,
         maximum_length:float = 0.6, stiffness:float = 10000.0, damping:float = 1000.0,
         direction:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0),
-        maximum_slope_angle:float = Math.pi()/3.0, tire:Tire3DSettings?=null)
+        maximum_slope_angle:float = Math.pi()/3.0, tire:Tire3DSettings?=null,
+        maximum_steering_angle:float=0.0, steering_axis:Math.Vec3=Math.Vec3.up(),
+        maximum_brake_torque:float=1500.0, maximum_handbrake_torque:float=0.0)
     {
         if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
             !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
@@ -42,6 +48,17 @@ public struct Wheel3DSettings {
         if !finite_body3d_value(maximum_slope_angle) || maximum_slope_angle<0.0 || maximum_slope_angle>=Math.half_pi() {
             panic("GFX.Physics.Wheel3DSettings slope angle must be finite in [0, pi/2)")
         }
+        if !finite_body3d_value(maximum_steering_angle) || Math.abs(maximum_steering_angle)>Math.half_pi() ||
+            !finite_body3d_value(maximum_brake_torque) || maximum_brake_torque<0.0 ||
+            !finite_body3d_value(maximum_handbrake_torque) || maximum_handbrake_torque<0.0 ||
+            !finite_body3d_value((maximum_brake_torque+maximum_handbrake_torque)/radius) {
+            panic("GFX.Physics.Wheel3DSettings requires finite steering angle in [-pi/2, pi/2] and nonnegative representable brake torques")
+        }
+        if !finite_body3d_point(steering_axis) || Math.abs(steering_axis.length_squared()-1.0)>0.0001 {
+            panic("GFX.Physics.Wheel3DSettings steering axis must be a finite unit vector")
+        }
+        self.maximum_steering_angle=maximum_steering_angle;self.steering_axis=steering_axis.normalized()
+        self.maximum_brake_torque=maximum_brake_torque;self.maximum_handbrake_torque=maximum_handbrake_torque
         self.position=position;self.direction=direction.normalized();self.radius=radius
         self.minimum_length=minimum_length;self.maximum_length=maximum_length
         self.stiffness=stiffness;self.damping=damping;self.maximum_slope_angle=maximum_slope_angle;self.tire=tire
@@ -75,6 +92,8 @@ public struct VehicleWheelState3D {
     let contact_point:Math.Vec3
     let contact_normal:Math.Vec3
 
+    let steering_angle:float
+    let brake_torque:float
     let rotation_angle:float
     let angular_velocity:float
     let longitudinal_slip:float
@@ -86,9 +105,10 @@ public struct VehicleWheelState3D {
 
     package init(length:float, normal_force:float, support:RigidBody3D?, point:Math.Vec3, normal:Math.Vec3,
         angle:float, speed:float, longitudinal_slip:float, lateral_slip:float,
-        longitudinal_force:float, lateral_force:float, longitudinal_direction:Math.Vec3, lateral_direction:Math.Vec3) {
+        longitudinal_force:float, lateral_force:float, longitudinal_direction:Math.Vec3, lateral_direction:Math.Vec3, steering_angle:float, brake_torque:float) {
         self.length=length;self.normal_force=normal_force;self.current_support=support
         self.contact_point=point;self.contact_normal=normal
+        self.steering_angle=steering_angle;self.brake_torque=brake_torque
         self.rotation_angle=angle;self.angular_velocity=speed
         self.longitudinal_slip=longitudinal_slip;self.lateral_slip=lateral_slip
         self.longitudinal_force=longitudinal_force;self.lateral_force=lateral_force
@@ -114,6 +134,9 @@ class WheelSuspensionState3D {
     var previous_support:BodyId3D?=null
     var previous_lateral_impulse:float=0.0
     var previous_inverse_delta:float=0.0
+    var steering_angle:float=0.0
+    var brake_torque:float=0.0
+    var brake_impulse:float=0.0
     var rotation_angle:float=0.0
     var angular_velocity:float=0.0
     var longitudinal_slip:float=0.0
@@ -133,6 +156,7 @@ class WheelSuspensionState3D {
         self.previous_support=self.support;self.previous_lateral_impulse=self.lateral_impulse;self.previous_inverse_delta=self.inverse_delta
         self.support=null;self.length=length;self.point=Math.Vec3();self.normal=Math.Vec3()
         self.impulse=0.0;self.stop_impulse=0.0;self.inverse_delta=0.0;self.active=false
+        self.brake_torque=0.0;self.brake_impulse=0.0
         self.longitudinal_impulse=0.0;self.lateral_impulse=0.0
         self.longitudinal_slip=0.0;self.lateral_slip=0.0
         self.longitudinal_direction=Math.Vec3();self.lateral_direction=Math.Vec3()
@@ -146,6 +170,9 @@ public class WheeledVehicle3D {
     private let id:BodyId3D
     private var settings:WheeledVehicle3DSettings
     private var wheels:WheelSuspensionState3D[]
+    private var steering_input:float=0.0
+    private var brake_input:float=0.0
+    private var handbrake_input:float=0.0
 
     package init(store:BodyStore3D, id:BodyId3D, settings:WheeledVehicle3DSettings) {
         self.store=store;self.id=id;self.settings=settings
@@ -170,7 +197,18 @@ public class WheeledVehicle3D {
         return VehicleWheelState3D(state.length,(state.impulse+state.stop_impulse)*state.inverse_delta,
             support,state.point,state.normal,state.rotation_angle,state.angular_velocity,
             state.longitudinal_slip,state.lateral_slip,state.longitudinal_impulse*state.inverse_delta,
-            state.lateral_impulse*state.inverse_delta,state.longitudinal_direction,state.lateral_direction)
+            state.lateral_impulse*state.inverse_delta,state.longitudinal_direction,state.lateral_direction,state.steering_angle,state.brake_torque)
+    }
+    func set_controls(steering:float=0.0, brake:float=0.0, handbrake:float=0.0) {
+        self.store.require_mutable();self.require_valid()
+        if !finite_body3d_value(steering) || Math.abs(steering)>1.0 ||
+            !finite_body3d_value(brake) || brake<0.0 || brake>1.0 ||
+            !finite_body3d_value(handbrake) || handbrake<0.0 || handbrake>1.0 {
+            panic("GFX.Physics.WheeledVehicle3D controls require finite steering in [-1, 1] and brakes in [0, 1]")
+        }
+        if self.steering_input==steering && self.brake_input==brake && self.handbrake_input==handbrake { return }
+        self.steering_input=steering;self.brake_input=brake;self.handbrake_input=handbrake
+        self.store.require(self.id).wake()
     }
     func set_wheel_angular_velocity(index:int, velocity:float) {
         self.store.require_mutable();self.require_valid()
@@ -188,13 +226,15 @@ public class WheeledVehicle3D {
         var index=0
         for state in self.wheels {
             let wheel=self.settings.wheel(index)
+            state.steering_angle= -self.steering_input*wheel.maximum_steering_angle
+            let steering=Math.Quat.angle_axis(state.steering_angle,wheel.steering_axis)
             if let tire=wheel.tire {
                 state.angular_velocity*=Math.max(0.0,1.0-tire.angular_damping*delta)
                 state.rotation_angle=Math.remainder(state.rotation_angle+state.angular_velocity*delta,Math.two_pi())
                 if let support=state.support {
                     var ground=self.store.require(support)
-                    let forward=chassis.transform.vector(tire.forward)
-                    let right=chassis.transform.vector(tire.forward.cross(tire.up).normalized())
+                    let forward=chassis.transform.vector(steering.rotate(tire.forward))
+                    let right=chassis.transform.vector(steering.rotate(tire.forward.cross(tire.up).normalized()))
                     var longitudinal=state.normal.cross(right)
                     if longitudinal.dot(forward)<0.0 { longitudinal=longitudinal.negated() }
                     if longitudinal.length_squared()<0.00000001 {
@@ -217,9 +257,25 @@ public class WheeledVehicle3D {
                         state.lateral_impulse=state.previous_lateral_impulse*state.previous_inverse_delta*delta
                     }
                 }
+                self.prepare_brake(state,wheel,tire,delta)
             }
             index++
         }
+    }
+    private func prepare_brake(state:WheelSuspensionState3D, wheel:Wheel3DSettings, tire:Tire3DSettings, delta:float) {
+        let torque=self.brake_input*wheel.maximum_brake_torque+self.handbrake_input*wheel.maximum_handbrake_torque
+        let before=state.angular_velocity
+        if torque>0.0 {
+            let stopping=Math.abs(before)*tire.inertia/delta
+            if torque>stopping {
+                state.angular_velocity=0.0;state.brake_impulse=(torque-stopping)*delta/wheel.radius
+            } else {
+                let change=torque*delta/tire.inertia
+                if before>0.0 { state.angular_velocity=Math.max(0.0,before-change) }
+                else if before<0.0 { state.angular_velocity=Math.min(0.0,before+change) }
+            }
+        }
+        state.brake_torque=(state.angular_velocity-before)*tire.inertia/delta
     }
     package func warm_start_tires() {
         var chassis=self.store.require(self.id)
@@ -245,12 +301,19 @@ public class WheeledVehicle3D {
                     var ground=self.store.require(state.support!)
                     let speed=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius)).dot(state.longitudinal_direction)
                     let capacity=state.longitudinal_friction*(state.impulse+state.stop_impulse)
-                    let change=(state.angular_velocity-speed/wheel.radius)*tire.inertia/wheel.radius
                     let previous=state.longitudinal_impulse
-                    state.longitudinal_impulse=Math.clamp(previous+change,-capacity,capacity)
-                    let impulse=state.longitudinal_impulse-previous
-                    apply_vehicle_pair_vector3d(chassis,ground,state,state.longitudinal_direction.multiply(impulse))
-                    state.angular_velocity-=impulse*wheel.radius/tire.inertia
+                    if state.brake_impulse>0.0 && state.longitudinal_inverse_mass>0.0 {
+                        let limit=Math.min(state.brake_impulse,capacity)
+                        var lower= -limit;var upper=0.0
+                        if speed<0.0 { lower=0.0;upper=limit }
+                        state.longitudinal_impulse=Math.clamp(previous-speed/state.longitudinal_inverse_mass,lower,upper)
+                        state.brake_torque+=(state.longitudinal_impulse-previous)*wheel.radius*state.inverse_delta
+                    } else {
+                        let change=(state.angular_velocity-speed/wheel.radius)*tire.inertia/wheel.radius
+                        state.longitudinal_impulse=Math.clamp(previous+change,-capacity,capacity)
+                        state.angular_velocity-=(state.longitudinal_impulse-previous)*wheel.radius/tire.inertia
+                    }
+                    apply_vehicle_pair_vector3d(chassis,ground,state,state.longitudinal_direction.multiply(state.longitudinal_impulse-previous))
                 }
             }
             index++

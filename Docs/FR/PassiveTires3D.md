@@ -2,8 +2,9 @@
 
 Un pneu donne une inertie et une rotation à la roue. Le contact longitudinal
 entraîne cette rotation ; le contact latéral résiste à la dérive. Le monde
-résout les réactions en appelant seulement `world.step`. Il n’y a encore ni
-moteur, transmission, direction commandée ni frein dans cette capacité.
+résout les réactions en appelant seulement `world.step`. Le
+[braquage et les freins](VehicleControls3D.md) sont optionnels ; ce parcours
+montre le roulement sans commande. Moteur et transmission restent à venir.
 
 L’[exemple sans rendu](../../Examples/PassiveTires.sx) lance un châssis de
 100 kg à 3 m/s sur quatre roues immobiles. Depuis la racine du workspace :
@@ -47,8 +48,8 @@ l’intervalle. `coefficient(slip)` évalue un glissement fini positif ou nul.
 
 - `longitudinal_friction` utilise le ratio absolu `abs(omega*r-v)/max(abs(v),0.001)`.
   Défaut : `(0,0)`, `(0.06,1.2)`, `(0.2,1)`.
-- `lateral_friction` utilise l’angle non signé de la vitesse tangentielle avec
-  le sens avant, **en radians**. Défaut : `(0,0)`, `(radians(3),1.2)`, `(radians(20),1)`.
+- `lateral_friction` utilise l’angle aigu de la vitesse tangentielle avec
+  l’axe avant/arrière, **en radians**, entre 0 et π/2. Défaut : `(0,0)`, `(radians(3),1.2)`, `(radians(20),1)`.
 
 Le coefficient effectif est la moyenne géométrique du coefficient du pneu et
 de la friction du **support**. La friction du collider de châssis ne règle pas

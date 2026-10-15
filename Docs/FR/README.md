@@ -193,3 +193,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Poser un châssis sur quatre suspensions](VehicleSuspension3D.md) : appuis par rayon, ressorts, butées, saut et réactions aux supports.
 
 [Faire rouler les pneus et résister à la dérive](PassiveTires3D.md) : inertie, rotation, courbes de friction et réactions sur les supports.
+
+[Braquer et freiner un véhicule](VehicleControls3D.md) : commandes persistantes, limites de braquage et freins normaux/à main.

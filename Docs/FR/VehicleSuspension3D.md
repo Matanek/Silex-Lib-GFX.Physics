@@ -4,8 +4,8 @@
 Le monde cherche leurs appuis par rayon, résout ressorts et butées et applique
 les réactions aux deux corps. L’application appelle seulement `world.step`.
 Sans pneu optionnel, les roues appliquent seulement la suspension. Les
-[pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; direction
-commandée, propulsion et freinage restent à venir.
+[pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; les [commandes](VehicleControls3D.md)
+ajoutent braquage et freinage. La propulsion reste à venir.
 
 L’[exemple complet sans rendu](../../Examples/VehicleSuspension.sx) pose
 100 kg sur quatre suspensions. Depuis la racine du workspace :

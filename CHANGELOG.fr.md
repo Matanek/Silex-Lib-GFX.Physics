@@ -6,9 +6,11 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
-- Pneus passifs optionnels sur `Wheel3DSettings` : inertie, amortissement et rotation, courbes de friction longitudinale/latérale, efforts tangentiels et réactions sur les supports. Le monde possède leur pas et leur sommeil ; réglages et durée de vie validés. Pas encore de propulsion, direction commandée ou freins.
+- Commandes persistantes de braquage, frein et frein à main sur `WheeledVehicle3D`, réglages par roue et observations d’angle/couple. Le frein agit sur le rotor et le contact transmet l’effort dans la limite de l’adhérence ; pas de freinage artificiel du châssis. Propulsion et transmission restent à venir.
 
-- `WheeledVehicle3D` associe un châssis dynamique et des suspensions de roue à contacts par rayon, ressorts unilatéraux et butées de compression. Appuis, longueurs et forces lisibles ; réaction sur les supports dynamiques, sommeil et durée de vie intégrés au monde. Premier socle de suspension qualifié face à Jolt à 60/120 Hz en Debug/Release sur macOS ARM64 ; adhérence et conduite restent à venir.
+- Pneus passifs optionnels sur `Wheel3DSettings` : inertie, amortissement et rotation, courbes de friction longitudinale/latérale, efforts tangentiels et réactions sur les supports. Le monde possède leur pas et leur sommeil ; réglages et durée de vie validés.
+
+- `WheeledVehicle3D` associe un châssis dynamique et des suspensions de roue à contacts par rayon, ressorts unilatéraux et butées de compression. Appuis, longueurs et forces lisibles ; réaction sur les supports dynamiques, sommeil et durée de vie intégrés au monde. Premier socle de suspension qualifié face à Jolt à 60/120 Hz en Debug/Release sur macOS ARM64.
 
 - `Ragdoll3D.move_to_pose` et `move_to_local_pose` déplacent une pose cinématique sur une durée ; `resume_simulation` reprend les membres dynamiques avec leurs masses et vitesses courantes. Repères tournés, centres décalés, contact extérieur et relâchement qualifiés face à Jolt à 60/120 Hz en Debug/Release sur macOS ARM64.
 

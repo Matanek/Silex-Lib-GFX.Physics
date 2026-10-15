@@ -1,0 +1,43 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(value:str) bool { for arg in Process.arguments() { if arg==value { return true } }
+    return false }
+func make(world:Physics.World3D) Physics.WheeledVehicle3D { return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),[Physics.Wheel3DSettings(Math.Vec3(),tire:Physics.Tire3DSettings())])) }
+func orphan() Physics.WheeledVehicle3D { var world=Physics.World3D();return make(world) }
+func main() {
+    var angle=0.5;var axis=Math.Vec3.up();var brake=1500.0;var hand=0.0
+    if selected("angle-low") { angle= -2.0 }
+    if selected("angle-high") { angle=2.0 }
+    if selected("angle-nan") { angle=Math.sqrt(-1.0) }
+    if selected("angle-inf") { angle=1.0/0.0 }
+    if selected("axis-zero") { axis=Math.Vec3() }
+    if selected("axis-nan") { axis=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("axis-inf") { axis=Math.Vec3(0.0,1.0/0.0,0.0) }
+    if selected("brake-negative") { brake= -1.0 }
+    if selected("brake-nan") { brake=Math.sqrt(-1.0) }
+    if selected("brake-inf") { brake=1.0/0.0 }
+    if selected("hand-negative") { hand= -1.0 }
+    if selected("hand-nan") { hand=Math.sqrt(-1.0) }
+    if selected("hand-inf") { hand=1.0/0.0 }
+    var radius=0.3;if selected("unrepresentable") { radius=1.0e-38 }
+    let wheel=Physics.Wheel3DSettings(Math.Vec3(),radius:radius,maximum_steering_angle:angle,steering_axis:axis,maximum_brake_torque:brake,maximum_handbrake_torque:hand)
+    var world=Physics.World3D();var vehicle=make(world)
+    var steering=0.0;var service=0.0;var parking=0.0
+    if selected("steering-low") { steering= -1.01 }
+    if selected("steering-high") { steering=1.01 }
+    if selected("steering-nan") { steering=Math.sqrt(-1.0) }
+    if selected("steering-inf") { steering=1.0/0.0 }
+    if selected("service-low") { service= -0.1 }
+    if selected("service-high") { service=1.1 }
+    if selected("service-nan") { service=Math.sqrt(-1.0) }
+    if selected("service-inf") { service=1.0/0.0 }
+    if selected("parking-low") { parking= -0.1 }
+    if selected("parking-high") { parking=1.1 }
+    if selected("parking-nan") { parking=Math.sqrt(-1.0) }
+    if selected("parking-inf") { parking=1.0/0.0 }
+    vehicle.set_controls(steering:steering,brake:service,handbrake:parking)
+    if selected("stale") { world.destroy_wheeled_vehicle(vehicle);vehicle.set_controls() }
+    if selected("orphan") { orphan().set_controls() }
+    panic("invalid wheel controls were accepted")
+}

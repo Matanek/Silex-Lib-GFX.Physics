@@ -5,9 +5,11 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
-- Optional passive tires on `Wheel3DSettings`: inertia, damping and rotation, longitudinal/lateral friction curves, tangential forces and support reactions. The world owns stepping and sleep; settings and lifetime are validated. Propulsion, steering input and brakes remain future work.
+- Persistent steering, service brake and handbrake inputs on `WheeledVehicle3D`, with per-wheel settings and angle/torque observations. Braking acts on the rotor and contact transfers force within tire grip; the chassis is never directly slowed. Propulsion and transmission remain future work.
 
-- `WheeledVehicle3D` combines a dynamic chassis with ray-supported wheel suspensions, unilateral springs and compression stops. Support, length and force observations, dynamic support reactions, sleep and lifetime integrate with the world. Initial suspension foundation qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64; tire traction and driving remain future work.
+- Optional passive tires on `Wheel3DSettings`: inertia, damping and rotation, longitudinal/lateral friction curves, tangential forces and support reactions. The world owns stepping and sleep; settings and lifetime are validated.
+
+- `WheeledVehicle3D` combines a dynamic chassis with ray-supported wheel suspensions, unilateral springs and compression stops. Support, length and force observations, dynamic support reactions, sleep and lifetime integrate with the world. Initial suspension foundation qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64.
 
 - `Ragdoll3D.move_to_pose` and `move_to_local_pose` drive a kinematic pose over a duration; `resume_simulation` restores dynamic members with their masses and current velocities. Rotated frames, offset centers, external contact and release are qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64.
 

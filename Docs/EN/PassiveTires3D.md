@@ -2,8 +2,9 @@
 
 A tire gives a wheel rotational inertia and motion. Longitudinal contact spins
 the wheel; lateral contact resists sideways drift. The world resolves reactions
-through `world.step` alone. This capability does not yet include an engine,
-transmission, steering input or brakes.
+through `world.step` alone. [Steering and brakes](VehicleControls3D.md)
+are optional; this path shows rolling without controls. Engine and transmission
+remain future work.
 
 The [headless example](../../Examples/PassiveTires.sx) starts a 100 kg chassis
 at 3 m/s with four stationary wheels. From the workspace root:
@@ -46,8 +47,8 @@ interpolates linearly and clamps to endpoint values outside its range.
 
 - `longitudinal_friction` uses the absolute ratio `abs(omega*r-v)/max(abs(v),0.001)`.
   Defaults: `(0,0)`, `(0.06,1.2)`, `(0.2,1)`.
-- `lateral_friction` uses the unsigned angle between tangential velocity and
-  forward, **in radians**. Defaults: `(0,0)`, `(radians(3),1.2)`, `(radians(20),1)`.
+- `lateral_friction` uses the acute angle between tangential velocity and
+  the forward/backward axis, **in radians**, between 0 and π/2. Defaults: `(0,0)`, `(radians(3),1.2)`, `(radians(20),1)`.
 
 Effective friction is the geometric mean of tire and **support** friction.
 Chassis collider friction does not tune tire grip. Each tangential force is
