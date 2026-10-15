@@ -3,8 +3,9 @@
 `WheeledVehicle3D` associe un châssis dynamique et des roues à suspension.
 Le monde cherche leurs appuis par rayon, résout ressorts et butées et applique
 les réactions aux deux corps. L’application appelle seulement `world.step`.
-Cette première capacité couvre la suspension ; les roues n’appliquent encore
-aucune traction, direction ou force de freinage.
+Sans pneu optionnel, les roues appliquent seulement la suspension. Les
+[pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; direction
+commandée, propulsion et freinage restent à venir.
 
 L’[exemple complet sans rendu](../../Examples/VehicleSuspension.sx) pose
 100 kg sur quatre suspensions. Depuis la racine du workspace :

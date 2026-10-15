@@ -1,0 +1,46 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(value:str) bool { for arg in Process.arguments() { if arg==value { return true } }
+    return false }
+func make(world:Physics.World3D, tires:bool=true) Physics.WheeledVehicle3D {
+    var tire:Physics.Tire3DSettings?=null;if tires { tire=Physics.Tire3DSettings() }
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),[Physics.Wheel3DSettings(Math.Vec3(),tire:tire)]))
+}
+func orphan() Physics.WheeledVehicle3D { var world=Physics.World3D();return make(world) }
+func main() {
+    var points:Math.Vec2[]=[Math.Vec2(0.0,0.0),Math.Vec2(1.0,1.0)]
+    if selected("empty") { points=[] }
+    if selected("negative-x") { points[0]=Math.Vec2(-1.0,0.0) }
+    if selected("negative-y") { points[1]=Math.Vec2(1.0,-1.0) }
+    if selected("duplicate") { points[1]=Math.Vec2(0.0,1.0) }
+    if selected("unordered") { points[0]=Math.Vec2(2.0,0.0) }
+    if selected("nan-point") { points[0]=Math.Vec2(Math.sqrt(-1.0),0.0) }
+    if selected("infinite-point") { points[1]=Math.Vec2(1.0,1.0/0.0) }
+    let curve=Physics.TireFrictionCurve3D(points)
+    if selected("negative-slip") { curve.coefficient(-1.0) }
+    if selected("nan-slip") { curve.coefficient(Math.sqrt(-1.0)) }
+    if selected("infinite-slip") { curve.coefficient(1.0/0.0) }
+    var inertia=0.9;var damping=0.2;var forward=Math.Vec3(0.0,0.0,1.0);var up=Math.Vec3.up()
+    if selected("inertia") { inertia=0.0 }
+    if selected("nan-inertia") { inertia=Math.sqrt(-1.0) }
+    if selected("infinite-inertia") { inertia=1.0/0.0 }
+    if selected("damping") { damping= -1.0 }
+    if selected("nan-damping") { damping=Math.sqrt(-1.0) }
+    if selected("infinite-damping") { damping=1.0/0.0 }
+    if selected("forward") { forward=Math.Vec3() }
+    if selected("nan-forward") { forward=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("parallel") { forward=Math.Vec3.up() }
+    if selected("up") { up=Math.Vec3() }
+    let tire=Physics.Tire3DSettings(inertia,damping,forward,up,curve,curve)
+    var world=Physics.World3D();var vehicle=make(world)
+    if selected("no-tire") { make(world,false).set_wheel_angular_velocity(0,1.0) }
+    if selected("index") { vehicle.set_wheel_angular_velocity(1,1.0) }
+    if selected("stale") { world.destroy_wheeled_vehicle(vehicle);vehicle.set_wheel_angular_velocity(0,1.0) }
+    if selected("orphan") { orphan().set_wheel_angular_velocity(0,1.0) }
+    if selected("nan-spin") { vehicle.set_wheel_angular_velocity(0,Math.sqrt(-1.0)) }
+    if selected("infinite-spin") { vehicle.set_wheel_angular_velocity(0,1.0/0.0) }
+    if selected("large-spin") { vehicle.set_wheel_angular_velocity(0,1.0e30) }
+    panic("invalid tire input was accepted")
+}

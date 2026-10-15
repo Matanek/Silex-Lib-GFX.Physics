@@ -1,0 +1,33 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    let positions:Math.Vec3[]=[Math.Vec3(-0.6,0.0,-1.0),Math.Vec3(-0.6,0.0,1.0),
+        Math.Vec3(0.6,0.0,-1.0),Math.Vec3(0.6,0.0,1.0)]
+    var wheels:Physics.Wheel3DSettings[]=[]
+    for position in positions { wheels.append(Physics.Wheel3DSettings(position,tire:Physics.Tire3DSettings(angular_damping:0.0))) }
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,0.875475,0.0))
+            ..linear_velocity=Math.Vec3(0.0,0.0,3.0) ..linear_damping=0.0 ..angular_damping=0.0
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0)) ..allow_sleep=false,wheels))
+    var step=0
+    while step<360 { world.step(1.0/120.0);step++ }
+    var force=0.0
+    for i in [0,1,2,3] {
+        var state=vehicle.wheel(i)
+        assert(state.support()!=null)
+        force+=state.normal_force
+    }
+    assert(Math.abs(vehicle.chassis().position().y-0.875475)<0.002)
+    assert(Math.abs(force-981.0)<1.0)
+    let speed=vehicle.chassis().linear_velocity().z
+    assert(Math.abs(speed-300.0/140.0)<0.01)
+    for i in [0,1,2,3] { assert(Math.abs(vehicle.wheel(i).angular_velocity*0.3-speed)<0.01) }
+    print("Passive tires roll near 2.1429 m/s after sharing momentum with the chassis")
+    world.destroy_wheeled_vehicle(vehicle)
+    assert(!vehicle.is_valid() && world.body_count()==1)
+}

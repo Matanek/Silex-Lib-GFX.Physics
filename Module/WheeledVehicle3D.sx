@@ -1,3 +1,4 @@
+use GFX.Physics.Tire3D.Tire3DSettings
 use GFX.Physics.RigidBody3D.RigidBody3D
 use GFX.Physics.RigidBody3D.RigidBody3DSettings
 use GFX.Physics.RigidBody3D.BodyState3D
@@ -20,11 +21,12 @@ public struct Wheel3DSettings {
     let stiffness:float
     let damping:float
     let maximum_slope_angle:float
+    let tire:Tire3DSettings?
 
     init(position:Math.Vec3, radius:float = 0.3, minimum_length:float = 0.2,
         maximum_length:float = 0.6, stiffness:float = 10000.0, damping:float = 1000.0,
         direction:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0),
-        maximum_slope_angle:float = Math.pi()/3.0)
+        maximum_slope_angle:float = Math.pi()/3.0, tire:Tire3DSettings?=null)
     {
         if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
             !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
@@ -42,7 +44,7 @@ public struct Wheel3DSettings {
         }
         self.position=position;self.direction=direction.normalized();self.radius=radius
         self.minimum_length=minimum_length;self.maximum_length=maximum_length
-        self.stiffness=stiffness;self.damping=damping;self.maximum_slope_angle=maximum_slope_angle
+        self.stiffness=stiffness;self.damping=damping;self.maximum_slope_angle=maximum_slope_angle;self.tire=tire
     }
 }
 
@@ -73,9 +75,24 @@ public struct VehicleWheelState3D {
     let contact_point:Math.Vec3
     let contact_normal:Math.Vec3
 
-    package init(length:float, normal_force:float, support:RigidBody3D?, point:Math.Vec3, normal:Math.Vec3) {
+    let rotation_angle:float
+    let angular_velocity:float
+    let longitudinal_slip:float
+    let lateral_slip:float
+    let longitudinal_force:float
+    let lateral_force:float
+    let longitudinal_direction:Math.Vec3
+    let lateral_direction:Math.Vec3
+
+    package init(length:float, normal_force:float, support:RigidBody3D?, point:Math.Vec3, normal:Math.Vec3,
+        angle:float, speed:float, longitudinal_slip:float, lateral_slip:float,
+        longitudinal_force:float, lateral_force:float, longitudinal_direction:Math.Vec3, lateral_direction:Math.Vec3) {
         self.length=length;self.normal_force=normal_force;self.current_support=support
         self.contact_point=point;self.contact_normal=normal
+        self.rotation_angle=angle;self.angular_velocity=speed
+        self.longitudinal_slip=longitudinal_slip;self.lateral_slip=lateral_slip
+        self.longitudinal_force=longitudinal_force;self.lateral_force=lateral_force
+        self.longitudinal_direction=longitudinal_direction;self.lateral_direction=lateral_direction
     }
     func support() RigidBody3D? { return self.current_support }
 }
@@ -94,12 +111,33 @@ class WheelSuspensionState3D {
     var impulse:float=0.0
     var stop_impulse:float=0.0
     var inverse_delta:float=0.0
+    var previous_support:BodyId3D?=null
+    var previous_lateral_impulse:float=0.0
+    var previous_inverse_delta:float=0.0
+    var rotation_angle:float=0.0
+    var angular_velocity:float=0.0
+    var longitudinal_slip:float=0.0
+    var lateral_slip:float=0.0
+    var longitudinal_impulse:float=0.0
+    var lateral_impulse:float=0.0
+    var longitudinal_direction:Math.Vec3=Math.Vec3()
+    var lateral_direction:Math.Vec3=Math.Vec3()
+    var longitudinal_inverse_mass:float=0.0
+    var lateral_inverse_mass:float=0.0
+    var longitudinal_friction:float=0.0
+    var lateral_friction:float=0.0
     var spring:bool=false
     var active:bool=false
     init(length:float) { self.length=length }
     func clear(length:float) {
+        self.previous_support=self.support;self.previous_lateral_impulse=self.lateral_impulse;self.previous_inverse_delta=self.inverse_delta
         self.support=null;self.length=length;self.point=Math.Vec3();self.normal=Math.Vec3()
         self.impulse=0.0;self.stop_impulse=0.0;self.inverse_delta=0.0;self.active=false
+        self.longitudinal_impulse=0.0;self.lateral_impulse=0.0
+        self.longitudinal_slip=0.0;self.lateral_slip=0.0
+        self.longitudinal_direction=Math.Vec3();self.lateral_direction=Math.Vec3()
+        self.longitudinal_inverse_mass=0.0;self.lateral_inverse_mass=0.0
+        self.longitudinal_friction=0.0;self.lateral_friction=0.0
     }
 }
 
@@ -130,7 +168,103 @@ public class WheeledVehicle3D {
             if self.store.contains(id) { support=RigidBody3D(self.store,id) }
         }
         return VehicleWheelState3D(state.length,(state.impulse+state.stop_impulse)*state.inverse_delta,
-            support,state.point,state.normal)
+            support,state.point,state.normal,state.rotation_angle,state.angular_velocity,
+            state.longitudinal_slip,state.lateral_slip,state.longitudinal_impulse*state.inverse_delta,
+            state.lateral_impulse*state.inverse_delta,state.longitudinal_direction,state.lateral_direction)
+    }
+    func set_wheel_angular_velocity(index:int, velocity:float) {
+        self.store.require_mutable();self.require_valid()
+        let wheel=self.settings.wheel(index)
+        if wheel.tire==null { panic("GFX.Physics.WheeledVehicle3D wheel requires a tire to rotate") }
+        if !finite_body3d_value(velocity) || !finite_body3d_value(velocity*velocity) ||
+            !finite_body3d_value(velocity*wheel.radius*velocity*wheel.radius) {
+            panic("GFX.Physics.WheeledVehicle3D wheel angular velocity must be finite and representable")
+        }
+        self.wheels[index].angular_velocity=velocity;self.store.require(self.id).wake()
+    }
+    package func prepare_tires(delta:float) {
+        var chassis=self.store.require(self.id)
+        if !chassis.is_enabled || !chassis.awake { return }
+        var index=0
+        for state in self.wheels {
+            let wheel=self.settings.wheel(index)
+            if let tire=wheel.tire {
+                state.angular_velocity*=Math.max(0.0,1.0-tire.angular_damping*delta)
+                state.rotation_angle=Math.remainder(state.rotation_angle+state.angular_velocity*delta,Math.two_pi())
+                if let support=state.support {
+                    var ground=self.store.require(support)
+                    let forward=chassis.transform.vector(tire.forward)
+                    let right=chassis.transform.vector(tire.forward.cross(tire.up).normalized())
+                    var longitudinal=state.normal.cross(right)
+                    if longitudinal.dot(forward)<0.0 { longitudinal=longitudinal.negated() }
+                    if longitudinal.length_squared()<0.00000001 {
+                        // Keep the requested forward sign when a cambered axle meets the normal.
+                        longitudinal=forward.subtract(state.normal.multiply(forward.dot(state.normal)))
+                    }
+                    state.longitudinal_direction=longitudinal.normalized()
+                    state.lateral_direction=state.longitudinal_direction.cross(state.normal).normalized()
+                    let velocity=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius))
+                    let tangent=velocity.subtract(state.normal.multiply(velocity.dot(state.normal)))
+                    let speed=tangent.dot(state.longitudinal_direction)
+                    state.longitudinal_slip=Math.abs(state.angular_velocity*wheel.radius-speed)/Math.max(0.001,Math.abs(speed))
+                    let magnitude=tangent.length()
+                    if magnitude>=0.001 { state.lateral_slip=Math.acos(Math.clamp(Math.abs(speed)/magnitude,0.0,1.0)) }
+                    state.longitudinal_friction=Math.sqrt(tire.longitudinal_friction.coefficient(state.longitudinal_slip))*Math.sqrt(ground.friction)
+                    state.lateral_friction=Math.sqrt(tire.lateral_friction.coefficient(state.lateral_slip))*Math.sqrt(ground.friction)
+                    state.longitudinal_inverse_mass=vehicle_inverse_mass3d(chassis,ground,state.chassis_radius,state.support_radius,state.longitudinal_direction)
+                    state.lateral_inverse_mass=vehicle_inverse_mass3d(chassis,ground,state.chassis_radius,state.support_radius,state.lateral_direction)
+                    if state.previous_support!=null && state.previous_support! == support {
+                        state.lateral_impulse=state.previous_lateral_impulse*state.previous_inverse_delta*delta
+                    }
+                }
+            }
+            index++
+        }
+    }
+    package func warm_start_tires() {
+        var chassis=self.store.require(self.id)
+        for state in self.wheels {
+            if state.active && state.support!=null && state.lateral_impulse!=0.0 {
+                var ground=self.store.require(state.support!)
+                apply_vehicle_pair_vector3d(chassis,ground,state,state.lateral_direction.multiply(state.lateral_impulse))
+            }
+        }
+    }
+    package func keep_awake_for_wheels() {
+        var chassis=self.store.require(self.id)
+        for state in self.wheels {
+            if Math.abs(state.angular_velocity)>Math.radians(10.0) { chassis.sleep_time=0.0;return }
+        }
+    }
+    private func solve_tire_velocities() {
+        var chassis=self.store.require(self.id);var index=0
+        for state in self.wheels {
+            let wheel=self.settings.wheel(index)
+            if state.active && state.support!=null {
+                if let tire=wheel.tire {
+                    var ground=self.store.require(state.support!)
+                    let speed=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius)).dot(state.longitudinal_direction)
+                    let capacity=state.longitudinal_friction*(state.impulse+state.stop_impulse)
+                    let change=(state.angular_velocity-speed/wheel.radius)*tire.inertia/wheel.radius
+                    let previous=state.longitudinal_impulse
+                    state.longitudinal_impulse=Math.clamp(previous+change,-capacity,capacity)
+                    let impulse=state.longitudinal_impulse-previous
+                    apply_vehicle_pair_vector3d(chassis,ground,state,state.longitudinal_direction.multiply(impulse))
+                    state.angular_velocity-=impulse*wheel.radius/tire.inertia
+                }
+            }
+            index++
+        }
+        for state in self.wheels {
+            if state.active && state.support!=null && state.lateral_inverse_mass>0.0 {
+                var ground=self.store.require(state.support!)
+                let speed=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius)).dot(state.lateral_direction)
+                let capacity=state.lateral_friction*(state.impulse+state.stop_impulse)
+                let previous=state.lateral_impulse
+                state.lateral_impulse=Math.clamp(previous-speed/state.lateral_inverse_mass,-capacity,capacity)
+                apply_vehicle_pair_vector3d(chassis,ground,state,state.lateral_direction.multiply(state.lateral_impulse-previous))
+            }
+        }
     }
     package func belongs_to(store:BodyStore3D) bool { return self.store==store }
     package func chassis_id() BodyId3D { return self.id }
@@ -215,6 +349,7 @@ public class WheeledVehicle3D {
             }
             index++
         }
+        self.solve_tire_velocities()
     }
     package func solve_position() {
         var chassis=self.store.require(self.id);var index=0
@@ -247,8 +382,13 @@ func vehicle_relative_speed3d(chassis:BodyState3D, ground:BodyState3D, state:Whe
     return chassis.linear_velocity.add(chassis.angular_velocity.cross(state.chassis_radius))
         .subtract(ground.linear_velocity.add(ground.angular_velocity.cross(state.support_radius))).dot(state.normal)
 }
+func vehicle_point_velocity3d(body:BodyState3D, radius:Math.Vec3) Math.Vec3 {
+    return body.linear_velocity.add(body.angular_velocity.cross(radius))
+}
 func apply_vehicle_pair_impulse3d(chassis:BodyState3D, ground:BodyState3D, state:WheelSuspensionState3D, amount:float) {
-    let impulse=state.normal.multiply(amount)
+    apply_vehicle_pair_vector3d(chassis,ground,state,state.normal.multiply(amount))
+}
+func apply_vehicle_pair_vector3d(chassis:BodyState3D, ground:BodyState3D, state:WheelSuspensionState3D, impulse:Math.Vec3) {
     chassis.linear_velocity=chassis.linear_velocity.add(impulse.multiply(chassis.inverse_mass))
     chassis.angular_velocity=chassis.angular_velocity.add(chassis.inverse_inertia_times(state.chassis_radius.cross(impulse)))
     ground.linear_velocity=ground.linear_velocity.subtract(impulse.multiply(ground.inverse_mass))

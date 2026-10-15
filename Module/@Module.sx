@@ -206,3 +206,6 @@ public use GFX.Physics.WheeledVehicle3D.Wheel3DSettings
 public use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
 public use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
 public use GFX.Physics.WheeledVehicle3D.VehicleWheelState3D
+
+public use GFX.Physics.Tire3D.TireFrictionCurve3D
+public use GFX.Physics.Tire3D.Tire3DSettings

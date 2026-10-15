@@ -51,7 +51,7 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 
 [Ragdoll hierarchy and poses](Docs/EN/Ragdoll3D.md) · [Hiérarchie et poses ragdoll](Docs/FR/Ragdoll3D.md).
 
-[Wheel suspension](Docs/EN/VehicleSuspension3D.md) · [Suspensions de roue](Docs/FR/VehicleSuspension3D.md): a dynamic chassis rests, jumps and regains ray supports; driving and tire traction are not yet included.
+[Wheel suspension](Docs/EN/VehicleSuspension3D.md) · [Suspensions de roue](Docs/FR/VehicleSuspension3D.md): a dynamic chassis rests, jumps and regains ray supports; combine it with [passive tire rolling and grip](Docs/EN/PassiveTires3D.md). Steering input, propulsion and brakes remain future work.
 
 [Six degrees of freedom](Docs/EN/SixDOF3D.md) · [Six degrés de liberté](Docs/FR/SixDOF3D.md).
 

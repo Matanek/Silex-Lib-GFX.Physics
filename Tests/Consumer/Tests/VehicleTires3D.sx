@@ -1,0 +1,142 @@
+use GFX.Physics
+use STD.Math
+
+func config(velocity:Math.Vec3=Math.Vec3(), tire:Physics.Tire3DSettings?=Physics.Tire3DSettings(angular_damping:0.0)) Physics.WheeledVehicle3DSettings {
+    var wheels:Physics.Wheel3DSettings[]=[]
+    let sides:int[]=[-1,1]
+    for x in sides { for z in sides { wheels.append(Physics.Wheel3DSettings(Math.Vec3(0.6*x as float,0.0,z as float),tire:tire)) } }
+    return Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,0.875475,0.0)) ..linear_velocity=velocity
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0,wheels)
+}
+func ground(world:Physics.World3D, friction:float=1.0) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=friction)
+}
+
+test "passive tire contact spins wheels and conserves the longitudinal wheel coupling" {
+    for rate in [60,120] {
+        var world=Physics.World3D();ground(world);var vehicle=world.create_wheeled_vehicle(config(Math.Vec3(0.0,0.0,3.0)))
+        var step=0
+        while step<rate*4 {
+            let before=vehicle.chassis().linear_velocity();var old:float[]=[]
+            for i in [0,1,2,3] { old.append(vehicle.wheel(i).angular_velocity) }
+            world.step(1.0/rate as float)
+            var impulse=Math.Vec3()
+            for i in [0,1,2,3] {
+                var wheel=vehicle.wheel(i)
+                let force=wheel.contact_normal.multiply(wheel.normal_force).add(wheel.longitudinal_direction.multiply(wheel.longitudinal_force)).add(wheel.lateral_direction.multiply(wheel.lateral_force))
+                impulse=impulse.add(force.divide(rate as float))
+                assert(Math.abs(0.9*(wheel.angular_velocity-old[i])+wheel.longitudinal_force*0.3/rate as float)<0.0005)
+                assert(wheel.longitudinal_slip>=0.0 && wheel.lateral_slip>=0.0 && wheel.lateral_slip<=Math.half_pi()+0.00001)
+            }
+            let delta=vehicle.chassis().linear_velocity().subtract(before).multiply(100.0)
+            assert(delta.subtract(impulse).subtract(Math.Vec3(0.0,-981.0/rate as float,0.0)).length()<0.003)
+            step++
+        }
+        assert(Math.abs(vehicle.chassis().linear_velocity().z-300.0/140.0)<0.005)
+        for i in [0,1,2,3] { assert(Math.abs(vehicle.wheel(i).angular_velocity*0.3-vehicle.chassis().linear_velocity().z)<0.005) }
+    }
+}
+
+test "lateral grip stops sliding while a frictionless surface preserves it" {
+    let frictions:float[]=[0.0,1.0]
+    for friction in frictions {
+        var world=Physics.World3D();ground(world,friction);var vehicle=world.create_wheeled_vehicle(config(Math.Vec3(3.0,0.0,0.0)))
+        var step=0;while step<480 { world.step(1.0/120.0);step++ }
+        if friction==0.0 { assert(Math.abs(vehicle.chassis().linear_velocity().x-3.0)<0.001) }
+        else { assert(Math.abs(vehicle.chassis().linear_velocity().x)<0.005 && vehicle.chassis().position().x<1.0) }
+    }
+}
+
+test "wheel spin and damping advance once per positive enabled awake step and preserve zero step" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=world.create_wheeled_vehicle(config(tire:Physics.Tire3DSettings(angular_damping:0.2)))
+    vehicle.set_wheel_angular_velocity(0,10.0)
+    world.step(0.0);assert(vehicle.wheel(0).angular_velocity==10.0 && vehicle.wheel(0).rotation_angle==0.0)
+    world.step(0.1);assert(Math.abs(vehicle.wheel(0).angular_velocity-9.8)<0.00001 && Math.abs(vehicle.wheel(0).rotation_angle-0.98)<0.00001)
+    vehicle.chassis().set_enabled(false);world.step(0.1);assert(Math.abs(vehicle.wheel(0).rotation_angle-0.98)<0.00001)
+    vehicle.chassis().set_enabled(true);vehicle.chassis().set_sleep_enabled(true)
+    var step=0;while step<240 { world.step(1.0/120.0);step++ }
+    assert(vehicle.chassis().is_awake())
+    vehicle.set_wheel_angular_velocity(0,0.0);step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(!vehicle.chassis().is_awake())
+}
+
+test "friction curves copy points interpolate and clamp at their ends" {
+    var points:Math.Vec2[]=[Math.Vec2(0.0,0.0),Math.Vec2(0.1,1.0),Math.Vec2(0.2,0.8)]
+    let curve=Physics.TireFrictionCurve3D(points);points[1]=Math.Vec2(0.1,100.0)
+    assert(Math.abs(curve.coefficient(0.05)-0.5)<0.00001 && Math.abs(curve.coefficient(0.15)-0.9)<0.00001)
+    assert(curve.coefficient(1.0)==0.8 && curve.coefficient(0.0)==0.0)
+    let tire=Physics.Tire3DSettings(forward:Math.Vec3(0.0,0.6,0.8))
+    assert(tire.forward.nearly_equal(Math.Vec3(0.0,0.0,1.0),0.00001))
+}
+
+test "tire contact transfers equal opposite impulses to a dynamic support with offset COM" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var platform=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0,0.1,20.0)))
+        ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(500.0)) ..linear_velocity=Math.Vec3(2.0,0.0,0.0)
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=1.0)
+    var source=config();var body=source.chassis;body.transform=Physics.Transform3D(Math.Vec3(0.0,0.75,0.0))
+    body.mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0),Math.Vec3(0.1,0.0,0.1))
+    var wheels:Physics.Wheel3DSettings[]=[];for i in [0,1,2,3] { wheels.append(source.wheel(i)) }
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(body,wheels));var response=false
+    var step=0
+    while step<60 {
+        world.step(1.0/120.0)
+        let p_first=vehicle.chassis().linear_velocity().multiply(100.0);let p_second=platform.linear_velocity().multiply(200.0)
+        let momentum=p_first.add(p_second)
+        let angular=vehicle.chassis().angular_velocity().multiply(100.0).add(platform.angular_velocity().multiply(500.0))
+            .add(vehicle.chassis().world_center_of_mass().cross(p_first)).add(platform.world_center_of_mass().cross(p_second))
+        assert(momentum.subtract(Math.Vec3(400.0,0.0,0.0)).length()<0.005 && angular.length()<0.01)
+        if Math.abs(vehicle.wheel(0).lateral_force)>1.0 { response=true }
+        step++
+    }
+    assert(response)
+    var old=vehicle.wheel(0);world.destroy_rigid_body(platform)
+    assert(vehicle.wheel(0).support()==null && vehicle.wheel(0).longitudinal_force==0.0 && vehicle.wheel(0).lateral_force==0.0)
+    if var support=old.support() { assert(!support.is_valid()) }
+}
+
+test "a moving kinematic platform carries lateral grip and rotated tire frames choose rolling direction" {
+    var world=Physics.World3D()
+    var platform=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0,0.1,20.0)))
+        ..linear_velocity=Math.Vec3(2.0,0.0,0.0) ..friction=1.0)
+    var vehicle=world.create_wheeled_vehicle(config())
+    var step=0;while step<360 { world.step(1.0/120.0);step++ }
+    assert(Math.abs(vehicle.chassis().linear_velocity().x-2.0)<0.02 && vehicle.wheel(0).support()!.same_body(platform))
+    var rotated=Physics.World3D();ground(rotated)
+    var car=rotated.create_wheeled_vehicle(config(Math.Vec3(3.0,0.0,0.0),Physics.Tire3DSettings(angular_damping:0.0,forward:Math.Vec3.right())))
+    step=0;while step<360 { rotated.step(1.0/120.0);step++ }
+    assert(Math.abs(car.chassis().linear_velocity().x-300.0/140.0)<0.01 && car.wheel(0).angular_velocity>5.0)
+    var sibling=rotated.create_wheeled_vehicle(config(tire:null))
+    world.destroy_wheeled_vehicle(vehicle);assert(!vehicle.is_valid() && car.is_valid() && sibling.is_valid())
+    assert(sibling.wheel(0).angular_velocity==0.0 && sibling.wheel(0).rotation_angle==0.0)
+}
+
+
+test "a cambered axle parallel to the support normal retains the requested rolling direction" {
+    var world=Physics.World3D();ground(world)
+    var car=world.create_wheeled_vehicle(config(Math.Vec3(0.0,0.0,3.0),Physics.Tire3DSettings(angular_damping:0.0,up:Math.Vec3.right())))
+    world.step(1.0/120.0)
+    // The axle is exactly parallel only at the initial pose; later body tilt changes it.
+    assert(car.wheel(0).longitudinal_direction.z>0.99 && car.wheel(0).angular_velocity>0.0)
+    var step=1
+    while step<360 {
+        let forward=car.chassis().transform().vector(Math.Vec3(0.0,0.0,1.0))
+        world.step(1.0/120.0)
+        for i in [0,1,2,3] {
+            var wheel=car.wheel(i)
+            if wheel.support()!=null {
+                assert(Math.abs(wheel.longitudinal_direction.length()-1.0)<0.00001)
+                assert(Math.abs(wheel.longitudinal_direction.dot(wheel.contact_normal))<0.00001)
+                assert(wheel.longitudinal_direction.dot(forward)>= -0.00001)
+            }
+        }
+        step++
+    }
+}

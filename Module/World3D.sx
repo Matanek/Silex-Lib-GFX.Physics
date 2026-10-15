@@ -815,6 +815,7 @@ public class World3D {
         self.prepare_vehicle_suspensions(delta)
         self.wake_constraint_islands()
         self.wake_contact_islands()
+        for vehicle in self.wheeled_vehicles { vehicle.prepare_tires(delta) }
         var has_continuous_body = false
         for state in self.store.slots {
             if let body = state {
@@ -846,6 +847,7 @@ public class World3D {
                 state.torque = Math.Vec3()
             }
         }
+        for vehicle in self.wheeled_vehicles { vehicle.warm_start_tires() }
         self.warm_start_fixed_constraints(delta)
         self.warm_start_hinge_constraints(delta)
         var retained_contacts:ContactPairState3D[] = []
@@ -2369,6 +2371,7 @@ public class World3D {
     }
 
     private func update_sleep(delta:float) {
+        for vehicle in self.wheeled_vehicles { vehicle.keep_awake_for_wheels() }
         var sleep_candidate = false
         var slot = 0
         while slot < self.store.slots.count() {

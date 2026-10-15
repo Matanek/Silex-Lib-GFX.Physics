@@ -1,0 +1,56 @@
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use STD.Math
+
+public struct TireFrictionCurve3D {
+    private var points:Math.Vec2[]
+    init(points:Math.Vec2[]) {
+        if points.count()==0 { panic("GFX.Physics.TireFrictionCurve3D requires at least one point") }
+        var retained:Math.Vec2[]=[]
+        var previous= -1.0
+        for point in points {
+            if !finite_body3d_value(point.x) || !finite_body3d_value(point.y) || point.x<0.0 || point.y<0.0 || point.x<=previous {
+                panic("GFX.Physics.TireFrictionCurve3D requires ordered nonnegative finite slips and coefficients")
+            }
+            retained.append(point);previous=point.x
+        }
+        self.points=retained
+    }
+    func coefficient(slip:float) float {
+        if !finite_body3d_value(slip) || slip<0.0 { panic("GFX.Physics.TireFrictionCurve3D slip must be finite and nonnegative") }
+        if slip<=self.points[0].x { return self.points[0].y }
+        var index=1
+        while index<self.points.count() {
+            let left=self.points[index-1];let right=self.points[index]
+            if slip<=right.x { return left.y+(right.y-left.y)*((slip-left.x)/(right.x-left.x)) }
+            index++
+        }
+        return self.points[self.points.count()-1].y
+    }
+}
+
+public struct Tire3DSettings {
+    let inertia:float
+    let angular_damping:float
+    let forward:Math.Vec3
+    let up:Math.Vec3
+    let longitudinal_friction:TireFrictionCurve3D
+    let lateral_friction:TireFrictionCurve3D
+    init(inertia:float=0.9, angular_damping:float=0.2,
+        forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0), up:Math.Vec3=Math.Vec3(0.0,1.0,0.0),
+        longitudinal_friction:TireFrictionCurve3D=TireFrictionCurve3D([Math.Vec2(0.0,0.0),Math.Vec2(0.06,1.2),Math.Vec2(0.2,1.0)]),
+        lateral_friction:TireFrictionCurve3D=TireFrictionCurve3D([Math.Vec2(0.0,0.0),Math.Vec2(Math.radians(3.0),1.2),Math.Vec2(Math.radians(20.0),1.0)]))
+    {
+        if !finite_body3d_value(inertia) || inertia<=0.0 || !finite_body3d_value(1.0/inertia) || !finite_body3d_value(angular_damping) || angular_damping<0.0 {
+            panic("GFX.Physics.Tire3DSettings requires positive finite inertia and nonnegative finite angular damping")
+        }
+        if !finite_body3d_point(forward) || !finite_body3d_point(up) ||
+            Math.abs(forward.length_squared()-1.0)>0.0001 || Math.abs(up.length_squared()-1.0)>0.0001 ||
+            forward.cross(up).length_squared()<0.000001 {
+            panic("GFX.Physics.Tire3DSettings requires finite unit nonparallel forward and up vectors")
+        }
+        self.inertia=inertia;self.angular_damping=angular_damping
+        self.up=up.normalized();self.forward=self.up.cross(forward.cross(self.up)).normalized()
+        self.longitudinal_friction=longitudinal_friction;self.lateral_friction=lateral_friction
+    }
+}
