@@ -60,6 +60,48 @@ efforts physiques, utiliser les commandes de pose motorisée ci-dessous. Une
 pose arbitraire peut dépasser leurs limites ou séparer leurs ancrages ; le solveur reprend
 leur résolution au prochain pas positif.
 
+## Déplacer une pose puis reprendre la simulation
+
+`move_to_pose(pose, duration)` et `move_to_local_pose(pose, duration)`
+utilisent les mêmes repères que les lectures. Ils copient la cible et règlent
+les vitesses de chaque membre pour l’atteindre progressivement, sans placement
+immédiat. La durée doit être finie et strictement positive. Les membres
+dynamiques deviennent cinématiques : ils poussent les corps extérieurs par
+contact, sans recevoir leur recul ni subir la gravité. Un nouvel appel remplace
+le mouvement depuis la pose courante. Un seul appel suffit pour une cible.
+
+Dans ce fragment, `desired_pose` contient un transform articulaire mondial par
+membre ; les pas s’exécutent dans la boucle physique de l’application :
+
+```sx
+ragdoll.move_to_pose(desired_pose, 1.0)
+world.step(0.25)
+ragdoll.resume_simulation()
+```
+
+`resume_simulation()` rend les membres initialement dynamiques à la simulation
+avec leurs masses, inerties et vitesses courantes. Leurs poses et handles sont
+conservés ; la cible cinématique est annulée. Relâcher pendant le mouvement
+transmet sa vitesse. La cible atteinte est immobile : relâcher après l’arrêt
+part avec une vitesse nulle. Les membres initialement cinématiques conservent
+leur type et leur commande ; les corps fixes restent fixes et une cible qui
+voudrait les déplacer est refusée. Répéter le relâchement est sans effet.
+
+Les transitions conservent filtres, limites et moteurs configurés ; elles
+réinitialisent les réactions mémorisées. L’entrée efface aussi les forces et
+couples accumulés. Pour reprendre un suivi motorisé, appeler
+`resume_simulation()` puis `drive_to_pose` ou `drive_to_local_pose`.
+`set_pose` conserve le mode courant tout en annulant le déplacement prévu.
+
+Les vitesses sont calculées au centre de masse, avec les décalages et rotations
+de chaque corps. Le déplacement individuel ne remplace pas une interpolation
+de squelette : fournir des poses cohérentes pour conserver des ancrages et
+limites compatibles au relâchement. Les contraintes ne corrigent pas deux
+membres cinématiques l’un par rapport à l’autre.
+Le [consommateur public](../../Tests/Consumer/Tests/RagdollKinematic3D.sx)
+exerce repères tournés, centre décalé, remplacement de cible, racine fixe,
+contact extérieur, relâchement et instances indépendantes.
+
 ## Suivre une pose avec des moteurs
 
 `drive_to_pose(pose, maximum_torque, stiffness, damping)` et
@@ -203,3 +245,10 @@ support initial collinéaire présente dans les deux moteurs un mouvement lent
 qui invalide les fenêtres de repos ; la qualification publiée porte sur le
 support triangulaire annoncé. Le consommateur contrôle aussi une instance
 indépendante et la destruction/recréation.
+
+Le témoin `RagdollKinematic` compare le pilotage cinématique à Jolt, à 60/120 Hz
+en Debug/Release sur macOS ARM64 : trois membres décalés, rotation/translation,
+relâchement en mouvement et poussée d’une sphère extérieure. Centres, rotations
+et vitesses sont contrôlés analytiquement et comparés sur cinq instants fixes.
+L’arrêt programmé Silex est reproduit par un arrêt explicite du témoin Jolt.
+L’instant initial de contact et les impulsions instantanées ne sont pas comparés.

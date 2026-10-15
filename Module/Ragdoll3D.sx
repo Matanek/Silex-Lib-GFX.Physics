@@ -1,5 +1,8 @@
 use GFX.Physics.RigidBody3D.RigidBody3D
 use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.KinematicTarget3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
 use GFX.Physics.RigidBody3D.BodyState3D
 use GFX.Physics.RigidBody3D.BodyStore3D
 use GFX.Physics.RigidBody3D.BodyId3D
@@ -230,6 +233,96 @@ public class Ragdoll3D {
             index++
         }
         self.set_pose(world, reset_velocity)
+    }
+
+    func move_to_pose(pose:Transform3D[], duration:float) {
+        self.require_valid()
+        self.store.require_mutable()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D kinematic pose requires one transform per part")
+        }
+        if !finite_body3d_value(duration) || duration <= 0.0 {
+            panic("GFX.Physics.Ragdoll3D kinematic duration must be finite and positive")
+        }
+        var targets:KinematicTarget3D[] = []
+        var index = 0
+        while index < self.part_count() {
+            var state = self.store.require(self.bodies[index].body_id())
+            let target = compose_ragdoll_pose3d(pose[index], self.settings.part(index).body_offset)
+            if state.body_type == BodyType3D.fixed &&
+                (target.position.subtract(state.transform.position).length_squared() > 0.000000000001 ||
+                    Math.abs(target.rotation.dot(state.transform.rotation)) < 0.999999)
+            {
+                panic("GFX.Physics.Ragdoll3D kinematic pose cannot move a fixed part")
+            }
+            targets.append(KinematicTarget3D(state, target, duration))
+            index++
+        }
+        var changed = false
+        index = 0
+        while index < self.part_count() {
+            var state = self.store.require(self.bodies[index].body_id())
+            if state.body_type != BodyType3D.fixed {
+                if state.body_type == BodyType3D.dynamic {
+                    state.body_type = BodyType3D.kinematic
+                    state.pose_revision++
+                    state.inverse_mass = 0.0
+                    state.awake = false
+                    state.sleep_time = 0.0
+                    state.force = Math.Vec3()
+                    state.torque = Math.Vec3()
+                    changed = true
+                }
+                targets[index].apply(state)
+            }
+            index++
+        }
+        if changed {
+            for joint in self.joints { self.constraints.require(joint.constraint_id()).reset() }
+        }
+        self.store.wake_all()
+    }
+    func move_to_local_pose(pose:Transform3D[], duration:float) {
+        self.require_valid()
+        if pose.count() != self.part_count() {
+            panic("GFX.Physics.Ragdoll3D kinematic pose requires one transform per part")
+        }
+        var world:Transform3D[] = []
+        var index = 0
+        while index < self.part_count() {
+            var transform = pose[index]
+            if index > 0 {
+                transform = compose_ragdoll_pose3d(world[self.settings.part(index).parent], transform)
+            }
+            world.append(transform)
+            index++
+        }
+        self.move_to_pose(world, duration)
+    }
+    func resume_simulation() {
+        self.require_valid()
+        self.store.require_mutable()
+        var changed = false
+        var index = 0
+        while index < self.part_count() {
+            var state = self.store.require(self.bodies[index].body_id())
+            if self.settings.part(index).body.body_type == BodyType3D.dynamic &&
+                state.body_type == BodyType3D.kinematic
+            {
+                state.body_type = BodyType3D.dynamic
+                state.pose_revision++
+                state.inverse_mass = 1.0 / state.mass_properties.mass
+                state.target = null
+                state.target_remaining = 0.0
+                state.wake()
+                changed = true
+            }
+            index++
+        }
+        if changed {
+            for joint in self.joints { self.constraints.require(joint.constraint_id()).reset() }
+            self.store.wake_all()
+        }
     }
 
     func drive_to_pose(pose:Transform3D[], maximum_torque:float, stiffness:float, damping:float) {

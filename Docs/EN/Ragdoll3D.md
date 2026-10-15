@@ -57,6 +57,47 @@ efforts, use the motorized pose commands below. An arbitrary pose can exceed the
 limits or separate their anchors; the solver resumes resolving them at the
 next positive step.
 
+## Move a pose and resume simulation
+
+`move_to_pose(pose, duration)` and `move_to_local_pose(pose, duration)` use
+the same frames as the pose readers. They copy the target and set each member’s
+velocities to reach it progressively, without immediate placement. Duration
+must be finite and strictly positive. Dynamic members become kinematic: they
+push external bodies through contact, without receiving recoil or gravity.
+A new call replaces the movement from the current pose. One call per target
+is sufficient.
+
+In this fragment, `desired_pose` contains one world joint transform per member;
+steps run in the application’s physics loop:
+
+```sx
+ragdoll.move_to_pose(desired_pose, 1.0)
+world.step(0.25)
+ragdoll.resume_simulation()
+```
+
+`resume_simulation()` returns originally dynamic members to simulation with
+their masses, inertias and current velocities. Their poses and handles remain
+unchanged; their kinematic target is cancelled. Releasing during movement
+preserves its velocity. A reached target stands still: releasing after it has
+stopped starts with zero velocity. Originally kinematic members retain their
+type and command; fixed bodies remain fixed and a target attempting to move
+them is rejected. Repeating the release has no effect.
+
+Transitions preserve filters, limits and configured motors while resetting
+cached reactions. Entering kinematic motion also clears accumulated forces
+and torques. To resume motor tracking, call `resume_simulation()` followed by
+`drive_to_pose` or `drive_to_local_pose`. `set_pose` preserves the current mode
+while cancelling pending movement.
+
+Velocities are computed at each center of mass, including body offsets and
+rotations. Moving individual members does not replace skeleton interpolation:
+provide coherent poses so that anchors and limits remain compatible when
+released. Constraints do not correct two kinematic members relative to each
+other. The [public consumer](../../Tests/Consumer/Tests/RagdollKinematic3D.sx)
+exercises rotated frames, offset centers, replacement targets, fixed roots,
+external contact, release and independent instances.
+
 ## Follow a pose with motors
 
 `drive_to_pose(pose, maximum_torque, stiffness, damping)` and
@@ -191,3 +232,10 @@ initially collinear support exhibits slow motion in both engines that invalidate
 the resting windows; the published qualification covers the declared triangular
 support. The public consumer also checks an independent instance and destruction/
 recreation.
+
+The `RagdollKinematic` witness compares kinematic driving with Jolt at 60/120 Hz
+in Debug/Release on macOS ARM64: three offset members, rotation/translation,
+release during movement and pushing an external sphere. Centers, rotations and
+velocities are checked analytically and compared at five fixed times. Silex’s
+scheduled stop is reproduced by explicitly stopping the Jolt witness. Initial
+contact timing and instantaneous impulses are not compared.

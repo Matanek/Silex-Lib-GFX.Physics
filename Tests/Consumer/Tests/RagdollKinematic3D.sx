@@ -1,0 +1,135 @@
+use GFX.Physics
+use STD.Math
+
+func near(a:Math.Vec3,b:Math.Vec3) { assert(a.subtract(b).length()<0.0001) }
+func settings(fixed_root:bool=false) Physics.Ragdoll3DSettings {
+    var body=Physics.RigidBody3DSettings() ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+        ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.2,0.3,0.4),Math.Vec3(0.1,-0.2,0.3))
+    var root=body
+    if fixed_root { root=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..collision_filter=body.collision_filter }
+    return Physics.Ragdoll3DSettings([
+        Physics.RagdollPart3D(-1,root,body_offset:Physics.Transform3D(Math.Vec3(0.2,0.0,0.0),Math.Quat.angle_axis(0.3,Math.Vec3.up()))),
+        Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(0.0,1.0,0.0),Math.Quat.angle_axis(0.2,Math.Vec3(1.0,0.0,0.0))),body_offset:Physics.Transform3D(Math.Vec3(0.0,0.2,0.0))),
+        Physics.RagdollPart3D(1,body,local_transform:Physics.Transform3D(Math.Vec3(0.0,1.0,0.0)),body_offset:Physics.Transform3D(Math.Vec3(0.0,0.1,0.0)))
+    ],self_collision:false)
+}
+
+test "kinematic ragdoll rotates around retained centers and reaches a copied world target" {
+    for rate in [60,120] {
+        var world=Physics.World3D();var ragdoll=world.create_ragdoll(settings())
+        var pose:Physics.Transform3D[]=[];ragdoll.write_pose(pose)
+        let before=ragdoll.body(0).transform();let center=ragdoll.body(0).world_center_of_mass()
+        let rotation=Math.Quat.angle_axis(0.6,Math.Vec3.up())
+        for i in [0,1,2] { pose[i]=Physics.Transform3D(pose[i].position.add(Math.Vec3(1.0,0.0,0.5)),rotation.multiply(pose[i].rotation)) }
+        let offset=settings().part(0).body_offset
+        let desired=Physics.Transform3D(pose[0].point(offset.position),pose[0].rotation.multiply(offset.rotation))
+        let expected_velocity=desired.point(Math.Vec3(0.1,-0.2,0.3)).subtract(center)
+        ragdoll.move_to_pose(pose,1.0)
+        assert(ragdoll.body(0).transform()==before)
+        near(ragdoll.body(0).linear_velocity(),expected_velocity)
+        near(ragdoll.body(0).angular_velocity(),Math.Vec3(0.0,0.6,0.0))
+        pose[0]=Physics.Transform3D(Math.Vec3(100.0))
+        var step=0
+        while step<rate/2 { world.step(1.0/rate as float);step++ }
+        near(ragdoll.body(0).world_center_of_mass(),center.add(expected_velocity.multiply(0.5)))
+        near(ragdoll.body(0).rotation().rotate(Math.Vec3(1.0,0.0,0.0)),Math.Quat.angle_axis(0.3,Math.Vec3.up()).multiply(before.rotation).rotate(Math.Vec3(1.0,0.0,0.0)))
+        while step<rate+2 { world.step(1.0/rate as float);step++ }
+        near(ragdoll.body(0).position(),desired.position)
+        near(ragdoll.body(0).linear_velocity(),Math.Vec3());near(ragdoll.body(0).angular_velocity(),Math.Vec3())
+    }
+}
+
+test "kinematic release preserves momentum mass joints and independent instances" {
+    for rate in [60,120] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var first=world.create_ragdoll(settings());var other=world.create_ragdoll(settings(),Physics.Transform3D(Math.Vec3(10.0)))
+        var pose:Physics.Transform3D[]=[];first.write_pose(pose)
+        for i in [0,1,2] { pose[i]=Physics.Transform3D(pose[i].position.add(Math.Vec3(2.0,0.0,0.0)),pose[i].rotation) }
+        var retained=first.body(1);first.move_to_pose(pose,1.0)
+        world.step(0.25);var before:Physics.Transform3D[]=[];first.write_pose(before)
+        first.resume_simulation();first.resume_simulation()
+        for i in [0,1,2] {
+            assert(first.body(i).body_type()==Physics.BodyType3D.dynamic)
+            assert(first.body(i).mass_properties().mass==2.0)
+            near(first.body(i).linear_velocity(),Math.Vec3(2.0,0.0,0.0))
+            near(first.body(i).position(),before[i].point(settings().part(i).body_offset.position))
+            assert(other.body(i).body_type()==Physics.BodyType3D.dynamic)
+        }
+        assert(first.body(1).same_body(retained))
+        var step=0;while step<rate/4 { world.step(1.0/rate as float);step++ }
+        near(first.body(0).position(),before[0].point(settings().part(0).body_offset.position).add(Math.Vec3(0.5,0.0,0.0)))
+        for i in [1,2] { assert(first.joint(i)!.anchor_error().length()<0.001) }
+        first.body(0).apply_impulse(Math.Vec3(2.0,0.0,0.0));near(first.body(0).linear_velocity(),Math.Vec3(3.0,0.0,0.0))
+        let angular_impulse=first.body(0).rotation().rotate(Math.Vec3(0.2,0.0,0.0))
+        first.body(0).apply_angular_impulse(angular_impulse)
+        near(first.body(0).angular_velocity(),first.body(0).rotation().rotate(Math.Vec3(1.0,0.0,0.0)))
+        world.destroy_ragdoll(first);assert(!first.is_valid() && other.is_valid())
+        world.destroy_ragdoll(other);assert(world.body_count()==0 && world.swing_twist_constraint_count()==0)
+    }
+}
+
+test "local and world kinematic targets agree and fixed roots remain fixed" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var first=world.create_ragdoll(settings(true));var other=world.create_ragdoll(settings(true))
+    var local_pose:Physics.Transform3D[]=[];first.write_local_pose(local_pose)
+    local_pose[1]=Physics.Transform3D(local_pose[1].position,Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0)).multiply(local_pose[1].rotation))
+    var desired:Physics.Transform3D[]=[local_pose[0]]
+    for i in [1,2] { desired.append(Physics.Transform3D(desired[i-1].point(local_pose[i].position),desired[i-1].rotation.multiply(local_pose[i].rotation))) }
+    first.move_to_local_pose(local_pose,0.5);other.move_to_pose(desired,0.5)
+    world.step(0.25)
+    for i in [0,1,2] { near(first.body(i).position(),other.body(i).position());near(first.body(i).linear_velocity(),other.body(i).linear_velocity()) }
+    assert(first.body(0).body_type()==Physics.BodyType3D.fixed)
+    first.resume_simulation();assert(first.body(0).body_type()==Physics.BodyType3D.fixed && first.body(1).body_type()==Physics.BodyType3D.dynamic)
+}
+
+test "kinematic ragdoll transfers contact motion without receiving dynamic recoil" {
+    for rate in [60,120] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var body=Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.25))
+            ..mass_properties=Physics.MassProperties3D(2.0,Math.Vec3(0.05)) ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0 ..allow_sleep=false
+        var ragdoll=world.create_ragdoll(Physics.Ragdoll3DSettings([Physics.RagdollPart3D(-1,body)]))
+        var target=world.create_rigid_body(body ..transform=Physics.Transform3D(Math.Vec3(0.75,0.0,0.0)))
+        ragdoll.move_to_pose([Physics.Transform3D(Math.Vec3(1.0,0.0,0.0))],1.0)
+        var step=0;var contacted=false
+        while step<rate/2 { world.step(1.0/rate as float);if world.contact_count()>0 { contacted=true }
+step++ }
+        assert(contacted && target.position().x>0.95)
+        near(ragdoll.body(0).position(),Math.Vec3(0.5,0.0,0.0));near(ragdoll.body(0).linear_velocity(),Math.Vec3(1.0,0.0,0.0))
+        near(target.linear_velocity(),Math.Vec3(1.0,0.0,0.0))
+        ragdoll.resume_simulation();near(ragdoll.body(0).linear_velocity(),Math.Vec3(1.0,0.0,0.0))
+    }
+}
+
+test "replacement targets preserve motors and repeated release cancels pending motion" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var ragdoll=world.create_ragdoll(settings())
+    var pose:Physics.Transform3D[]=[];ragdoll.write_local_pose(pose)
+    ragdoll.drive_to_local_pose(pose,12.0,100.0,10.0)
+    let motor=ragdoll.joint(1)!.twist_motor()!
+    for cycle in [0,1,2] {
+        ragdoll.write_pose(pose)
+        for i in [0,1,2] { pose[i]=Physics.Transform3D(pose[i].position.add(Math.Vec3(1.0,0.0,0.0)),pose[i].rotation) }
+        ragdoll.move_to_pose(pose,1.0);world.step(0.25)
+        for i in [0,1,2] { pose[i]=Physics.Transform3D(pose[i].position.subtract(Math.Vec3(2.0,0.0,0.0)),pose[i].rotation) }
+        let before=ragdoll.body(0).position()
+        ragdoll.move_to_pose(pose,0.5)
+        near(ragdoll.body(0).linear_velocity(),Math.Vec3(-2.5,0.0,0.0))
+        assert(ragdoll.joint(1)!.twist_motor()!.target_angle==motor.target_angle)
+        world.step(0.25);ragdoll.resume_simulation()
+        world.step(0.75)
+        near(ragdoll.body(0).position(),before.add(Math.Vec3(-2.5,0.0,0.0)))
+    }
+}
+
+test "initial kinematic members retain their type when dynamic members resume" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    let root=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    let body=Physics.RigidBody3DSettings() ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)
+    var ragdoll=world.create_ragdoll(Physics.Ragdoll3DSettings([Physics.RagdollPart3D(-1,root),Physics.RagdollPart3D(0,body,local_transform:Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)))]))
+    ragdoll.move_to_pose([Physics.Transform3D(Math.Vec3(1.0,0.0,0.0)),Physics.Transform3D(Math.Vec3(2.0,0.0,0.0))],1.0)
+    world.step(0.25);ragdoll.resume_simulation()
+    assert(ragdoll.body(0).body_type()==Physics.BodyType3D.kinematic && ragdoll.body(1).body_type()==Physics.BodyType3D.dynamic)
+    near(ragdoll.body(0).linear_velocity(),Math.Vec3(1.0,0.0,0.0))
+    near(ragdoll.body(1).linear_velocity(),Math.Vec3(1.0,0.0,0.0))
+}

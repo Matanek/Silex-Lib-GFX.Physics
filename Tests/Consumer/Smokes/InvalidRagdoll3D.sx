@@ -52,6 +52,23 @@ func main() {
     }
     if selected("stale-drive") { world.destroy_ragdoll(ragdoll);ragdoll.drive_to_pose(motor_pose,120.0,400.0,40.0) }
     if selected("stale-stop") { world.destroy_ragdoll(ragdoll);ragdoll.stop_motors() }
+    if selected("move-count") { ragdoll.move_to_pose([],1.0) }
+    if selected("move-local-count") { ragdoll.move_to_local_pose([],1.0) }
+    if selected("move-zero") { ragdoll.move_to_pose(motor_pose,0.0) }
+    if selected("move-negative") { ragdoll.move_to_pose(motor_pose,-1.0) }
+    if selected("move-nan") { ragdoll.move_to_pose(motor_pose,Math.sqrt(-1.0)) }
+    if selected("move-infinite") { ragdoll.move_to_pose(motor_pose,1.0/0.0) }
+    if selected("move-overflow") {
+        motor_pose[1]=Physics.Transform3D(Math.Vec3(1.0e30,0.0,0.0))
+        ragdoll.move_to_pose(motor_pose,1.0e-30)
+    }
+    if selected("move-fixed") {
+        var fixed_body=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        var fixed_ragdoll=world.create_ragdoll(Physics.Ragdoll3DSettings([Physics.RagdollPart3D(-1,fixed_body)]))
+        fixed_ragdoll.move_to_pose([Physics.Transform3D(Math.Vec3(1.0,0.0,0.0))],1.0)
+    }
+    if selected("stale-move") { world.destroy_ragdoll(ragdoll);ragdoll.move_to_pose(motor_pose,1.0) }
+    if selected("stale-resume") { world.destroy_ragdoll(ragdoll);ragdoll.resume_simulation() }
     if selected("body-index") { ragdoll.body(2) }
     if selected("joint-index") { ragdoll.joint(-1) }
     if selected("settings-index") { settings.part(2) }

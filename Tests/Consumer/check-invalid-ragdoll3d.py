@@ -5,6 +5,11 @@ from pathlib import Path
 import subprocess
 
 CASES = {
+    **{name: 'kinematic pose requires one transform per part' for name in ('move-count', 'move-local-count')},
+    **{name: 'kinematic duration must be finite and positive' for name in ('move-zero','move-negative','move-nan','move-infinite')},
+    'move-overflow': 'kinematic target exceeds finite velocity',
+    'move-fixed': 'kinematic pose cannot move a fixed part',
+    **{name: 'no longer refers to a live assembly' for name in ('stale-move','stale-resume')},
     'empty': 'requires at least one part',
     **{name: 'requires one root followed by children after their parent'
        for name in ('root-parent', 'second-root', 'future-parent', 'missing-parent')},

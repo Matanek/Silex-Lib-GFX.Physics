@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `Ragdoll3D.move_to_pose` and `move_to_local_pose` drive a kinematic pose over a duration; `resume_simulation` restores dynamic members with their masses and current velocities. Rotated frames, offset centers, external contact and release are qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64.
+
 - Spatial motorized ragdoll: nonparallel frames, combined swing/twist targets, triangular supports and an oblique impulse qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64. Geometry and mean reactions over established windows, center-of-mass angular balances and the global Y component; existing solver and budgets retained.
 
 - `World3DSettings.velocity_iterations` controls contact and joint convergence from 1 to 128 iterations per stage, retaining the default of 12. A fully mobile two-motor chain against the floor uses 48 iterations to qualify anchors, limits, mean reactions and contact departure/return against Jolt at 60/120 Hz in Debug/Release. No performance gain or general impact parity is claimed.

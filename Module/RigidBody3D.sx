@@ -613,25 +613,8 @@ public class RigidBody3D {
         if state.body_type != BodyType3D.kinematic {
             panic("GFX.Physics.RigidBody3D kinematic target requires a kinematic body")
         }
-        let selected = Transform3D(target.position, target.rotation)
-        let linear_velocity = selected.position.subtract(state.transform.position).divide(duration)
-        var delta = selected.rotation.multiply(state.transform.rotation.conjugated())
-        if delta.w < 0.0 { delta = delta.multiply(-1.0) }
-        let imaginary = Math.Vec3(delta.x, delta.y, delta.z)
-        let sine = imaginary.length()
-        var angular_velocity = Math.Vec3()
-        if sine > 0.000001 {
-            angular_velocity = imaginary.multiply(
-                2.0 * Math.atan2(sine, delta.w) / (sine * duration)
-            )
-        }
-        if !finite_body3d_point(linear_velocity) || !finite_body3d_point(angular_velocity) {
-            panic("GFX.Physics.RigidBody3D kinematic target exceeds finite velocity")
-        }
-        state.linear_velocity = linear_velocity
-        state.angular_velocity = angular_velocity
-        state.target = selected
-        state.target_remaining = duration
+        let motion = KinematicTarget3D(state, target, duration)
+        motion.apply(state)
         self.store.wake_all()
     }
 }
@@ -903,4 +886,41 @@ func axial_solid_mass3d(half_height:float, top_radius:float, bottom_radius:float
     let transverse = inertia_scale * (moments.radial * 0.25 + moments.second - moments.first * moments.first / moments.area)
     return MassProperties3D(mass, diagonal_inertia3d(Math.Vec3(transverse, axial, transverse)),
         Math.Vec3(0.0, scale * moments.first / moments.area, 0.0))
+}
+
+// Prepared before a multi-body operation mutates any member.
+package struct KinematicTarget3D {
+    let transform:Transform3D
+    let duration:float
+    let linear:Math.Vec3
+    let angular:Math.Vec3
+
+    init(state:BodyState3D, target:Transform3D, duration:float) {
+        if !finite_body3d_value(duration) || duration <= 0.0 {
+            panic("GFX.Physics.RigidBody3D kinematic duration must be finite and positive")
+        }
+        self.transform = Transform3D(target.position, target.rotation)
+        self.duration = duration
+        self.linear = self.transform.point(state.mass_properties.local_center)
+            .subtract(state.world_center()).divide(duration)
+        var delta = self.transform.rotation.multiply(state.transform.rotation.conjugated())
+        if delta.w < 0.0 { delta = delta.multiply(-1.0) }
+        let imaginary = Math.Vec3(delta.x, delta.y, delta.z)
+        let sine = imaginary.length()
+        var angular = Math.Vec3()
+        if sine > 0.000001 {
+            angular = imaginary.multiply(2.0 * Math.atan2(sine, delta.w) / (sine * duration))
+        }
+        self.angular = angular
+        if !finite_body3d_point(self.linear) || !finite_body3d_point(self.angular) {
+            panic("GFX.Physics.RigidBody3D kinematic target exceeds finite velocity")
+        }
+    }
+
+    func apply(state:BodyState3D) {
+        state.linear_velocity = self.linear
+        state.angular_velocity = self.angular
+        state.target = self.transform
+        state.target_remaining = self.duration
+    }
 }
