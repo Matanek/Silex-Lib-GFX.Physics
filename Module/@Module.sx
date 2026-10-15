@@ -201,3 +201,8 @@ public use GFX.Physics.PathConstraint3D.PathOrientation3D
 public use GFX.Physics.Ragdoll3D.RagdollPart3D
 public use GFX.Physics.Ragdoll3D.Ragdoll3DSettings
 public use GFX.Physics.Ragdoll3D.Ragdoll3D
+
+public use GFX.Physics.WheeledVehicle3D.Wheel3DSettings
+public use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
+public use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
+public use GFX.Physics.WheeledVehicle3D.VehicleWheelState3D

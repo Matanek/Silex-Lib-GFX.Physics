@@ -1,0 +1,45 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(name:str) bool {
+    for argument in Process.arguments() { if argument==name { return true } }
+    return false
+}
+func orphan() Physics.WheeledVehicle3D {
+    var world=Physics.World3D()
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),[Physics.Wheel3DSettings(Math.Vec3())]))
+}
+func main() {
+    var position=Math.Vec3();var direction=Math.Vec3(0.0,-1.0,0.0)
+    var radius=0.3;var minimum=0.2;var maximum=0.6;var stiffness=10000.0;var damping=1000.0;var slope=Math.pi()/3.0
+    if selected("position") { position=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("direction") { direction=Math.Vec3() }
+    if selected("radius") { radius=0.0 }
+    if selected("radius-nan") { radius=Math.sqrt(-1.0) }
+    if selected("minimum") { minimum= -1.0 }
+    if selected("maximum") { maximum=0.1 }
+    if selected("length-infinite") { maximum=1.0/0.0 }
+    if selected("stiffness") { stiffness=0.0 }
+    if selected("damping") { damping= -1.0 }
+    if selected("stiffness-nan") { stiffness=Math.sqrt(-1.0) }
+    if selected("slope") { slope=Math.half_pi() }
+    if selected("slope-nan") { slope=Math.sqrt(-1.0) }
+    let wheel=Physics.Wheel3DSettings(position,radius,minimum,maximum,stiffness,damping,direction,slope)
+    var body=Physics.RigidBody3DSettings()
+    if selected("fixed") { body.body_type=Physics.BodyType3D.fixed }
+    if selected("kinematic") { body.body_type=Physics.BodyType3D.kinematic }
+    var wheels:Physics.Wheel3DSettings[]=[wheel]
+    if selected("empty") { wheels.clear() }
+    var config=Physics.WheeledVehicle3DSettings(body,wheels)
+    var world=Physics.World3D();var vehicle=world.create_wheeled_vehicle(config)
+    if selected("wheel-index") { vehicle.wheel(1) }
+    if selected("settings-index") { vehicle.wheel_settings(-1) }
+    if selected("config-index") { config.wheel(1) }
+    if selected("foreign") { var other=Physics.World3D();other.destroy_wheeled_vehicle(vehicle) }
+    if selected("stale-chassis") { world.destroy_wheeled_vehicle(vehicle);vehicle.chassis() }
+    if selected("stale-wheel") { world.destroy_rigid_body(vehicle.chassis());vehicle.wheel(0) }
+    if selected("double-destroy") { world.destroy_wheeled_vehicle(vehicle);world.destroy_wheeled_vehicle(vehicle) }
+    if selected("orphan") { orphan().wheel(0) }
+    panic("invalid vehicle operation was accepted")
+}

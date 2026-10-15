@@ -1,0 +1,166 @@
+use GFX.Physics
+use STD.Math
+
+func wheels() Physics.Wheel3DSettings[] {
+    var result:Physics.Wheel3DSettings[]=[]
+    let sides:float[]=[-1.0,1.0]
+    for x in sides { for z in sides {
+        result.append(Physics.Wheel3DSettings(Math.Vec3(x*0.6,0.0,z)))
+    } }
+    return result
+}
+func settings(height:float=1.4) Physics.WheeledVehicle3DSettings {
+    let body=Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0)) ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0
+    return Physics.WheeledVehicle3DSettings(body,wheels())
+}
+func floor(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=0.0)
+}
+func bounded(vehicle:Physics.WheeledVehicle3D) {
+    assert(vehicle.chassis().position().length()<10.0 && vehicle.chassis().linear_velocity().length()<15.0)
+    for i in [0,1,2,3] {
+        var wheel=vehicle.wheel(i)
+        assert(wheel.length>=0.0 && wheel.length<=0.60001 && wheel.normal_force>=0.0 && wheel.normal_force<100000.0)
+    }
+}
+
+test "four wheel suspensions support chassis weight and regain contact after an impulse" {
+    for rate in [60,120] {
+        var world=Physics.World3D();var ground=floor(world);var vehicle=world.create_wheeled_vehicle(settings())
+        assert(vehicle.wheel_count()==4 && vehicle.wheel(0).support()==null)
+        var step=0;while step<rate*3 { world.step(1.0/rate as float);bounded(vehicle);step++ }
+        let expected=0.9-981.0/40000.0
+        assert(Math.abs(vehicle.chassis().position().y-expected)<0.002)
+        var force=0.0
+        for i in [0,1,2,3] {
+            var wheel=vehicle.wheel(i);assert(wheel.support()!.same_body(ground))
+            assert(Math.abs(wheel.length-(expected-0.3))<0.002)
+            assert(wheel.contact_normal.nearly_equal(Math.Vec3.up(),0.0001));force+=wheel.normal_force
+        }
+        assert(Math.abs(force-981.0)<1.0)
+        vehicle.chassis().apply_impulse(Math.Vec3(0.0,500.0,0.0))
+        var lost=false;var returned=false;step=0
+        while step<rate*3 {
+            world.step(1.0/rate as float);bounded(vehicle)
+            if vehicle.wheel(0).support()==null { lost=true }
+            if lost && vehicle.wheel(0).support()!=null { returned=true }
+            step++
+        }
+        assert(lost && returned && Math.abs(vehicle.chassis().position().y-expected)<0.003)
+        world.destroy_wheeled_vehicle(vehicle);assert(!vehicle.is_valid() && world.body_count()==1)
+    }
+}
+
+test "suspension hard stop bounds compression under sustained excessive load" {
+    for rate in [60,120] {
+        var world=Physics.World3D();var ground=floor(world);var vehicle=world.create_wheeled_vehicle(settings(0.7))
+        var step=0;var force_sum=0.0;var samples=0
+        while step<rate*3 {
+            let before=vehicle.chassis().linear_velocity().y
+            vehicle.chassis().apply_force(Math.Vec3(0.0,-20000.0,0.0));world.step(1.0/rate as float)
+            bounded(vehicle);assert(vehicle.chassis().position().y>0.48)
+            var force=0.0;for i in [0,1,2,3] { force+=vehicle.wheel(i).normal_force }
+            assert(Math.abs(100.0*(vehicle.chassis().linear_velocity().y-before)-(force-20981.0)/rate as float)<0.05)
+            if step>=rate*2 { force_sum+=force;samples++ }
+            step++
+        }
+        assert(vehicle.chassis().position().y<0.51)
+        assert(Math.abs(force_sum/samples as float-20981.0)<20.0)
+    }
+}
+
+test "suspension reactions conserve momentum with a dynamic platform" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var platform=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0)))
+        ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0)
+    var config=settings(0.75);var chassis=config.chassis
+    chassis.mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0),Math.Vec3(0.2,0.0,0.1))
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(chassis,wheels()))
+    var step=0
+    while step<60 {
+        world.step(1.0/120.0)
+        let momentum=platform.linear_velocity().multiply(200.0).add(vehicle.chassis().linear_velocity().multiply(100.0))
+        let angular=platform.angular_velocity().multiply(100.0).add(vehicle.chassis().angular_velocity().multiply(100.0))
+            .add(platform.world_center_of_mass().cross(platform.linear_velocity().multiply(200.0)))
+            .add(vehicle.chassis().world_center_of_mass().cross(vehicle.chassis().linear_velocity().multiply(100.0)))
+        assert(momentum.length()<0.002 && angular.length()<0.002);bounded(vehicle);step++
+    }
+    assert(platform.position().y< -0.05 && vehicle.chassis().position().y>0.8)
+}
+
+test "wheel supports ignore sensors obey chassis filters and retain copied settings" {
+    var world=Physics.World3D();var ground=floor(world)
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..is_sensor=true
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0))) ..transform=Physics.Transform3D(Math.Vec3(0.0,0.2,0.0)))
+    var excluded=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(category_bits:2) ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,0.1,0.0)))
+    var original=wheels();var config=settings();var body=config.chassis;body.collision_filter=Physics.CollisionFilter3D(mask_bits:1)
+    var retained=Physics.WheeledVehicle3DSettings(body,original)
+    original[0]=Physics.Wheel3DSettings(Math.Vec3(100.0,0.0,0.0))
+    var vehicle=world.create_wheeled_vehicle(retained)
+    var step=0;while step<360 { world.step(1.0/120.0);step++ }
+    for i in [0,1,2,3] { assert(vehicle.wheel(i).support()!.same_body(ground)) }
+    assert(vehicle.wheel_settings(0).position.x== -0.6)
+    vehicle.chassis().set_collision_filter(Physics.CollisionFilter3D(mask_bits:2))
+    world.step(1.0/120.0);assert(vehicle.wheel(0).support()!.same_body(excluded))
+    vehicle.chassis().set_enabled(false);world.step(1.0/120.0)
+    assert(vehicle.wheel(0).support()==null && vehicle.wheel(0).normal_force==0.0)
+}
+
+func orphan_vehicle() Physics.WheeledVehicle3D {
+    var world=Physics.World3D();return world.create_wheeled_vehicle(settings())
+}
+test "vehicle lifetime and sleeping support removal remain safe across repeated instances" {
+    var old=orphan_vehicle();assert(!old.is_valid())
+    var world=Physics.World3D();var ground=floor(world)
+    var first=world.create_wheeled_vehicle(settings());var body=first.chassis()
+    body.set_sleep_enabled(true)
+    var step=0;while step<600 { world.step(1.0/120.0);step++ }
+    assert(!body.is_awake())
+    world.destroy_rigid_body(ground)
+    assert(body.is_awake() && first.wheel(0).support()==null && first.wheel(0).normal_force==0.0)
+    let before=body.position().y;world.step(0.1);assert(body.position().y<before)
+    world.destroy_rigid_body(body);assert(!first.is_valid() && world.body_count()==0)
+    var cycle=0
+    while cycle<32 {
+        var a=world.create_wheeled_vehicle(settings());var config=settings();var shifted=config.chassis
+        shifted.transform=Physics.Transform3D(Math.Vec3(4.0,1.4,0.0))
+        var b=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(shifted,wheels()))
+        assert(!a.chassis().same_body(body));world.destroy_wheeled_vehicle(a)
+        assert(!a.is_valid() && b.is_valid() && world.body_count()==1)
+        world.destroy_wheeled_vehicle(b);assert(world.body_count()==0);cycle++
+    }
+}
+
+test "moving kinematic support wakes the resting vehicle and carries suspension contact" {
+    var world=Physics.World3D()
+    var platform=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0))))
+    var vehicle=world.create_wheeled_vehicle(settings());vehicle.chassis().set_sleep_enabled(true)
+    var step=0;while step<600 { world.step(1.0/120.0);step++ }
+    assert(!vehicle.chassis().is_awake())
+    let before=vehicle.chassis().position().y
+    platform.move_kinematic(Physics.Transform3D(Math.Vec3(0.0,0.2,0.0)),0.5)
+    world.step(1.0/120.0);assert(vehicle.chassis().is_awake())
+    step=0;while step<180 { world.step(1.0/120.0);bounded(vehicle);step++ }
+    assert(Math.abs(vehicle.chassis().position().y-before-0.2)<0.003)
+    for i in [0,1,2,3] { assert(vehicle.wheel(i).support()!.same_body(platform)) }
+}
+
+test "equal suspension lengths produce a rigid compression stop" {
+    var world=Physics.World3D();var ground=floor(world);var config=settings()
+    var rigid:Physics.Wheel3DSettings[]=[]
+    for wheel in wheels() { rigid.append(Physics.Wheel3DSettings(wheel.position,minimum_length:0.6,maximum_length:0.6)) }
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(config.chassis,rigid))
+    var step=0
+    while step<360 { world.step(1.0/120.0);bounded(vehicle);step++ }
+    assert(Math.abs(vehicle.chassis().position().y-0.9)<0.002)
+    for i in [0,1,2,3] { assert(vehicle.wheel(i).support()!.same_body(ground)) }
+}

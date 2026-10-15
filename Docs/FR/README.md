@@ -189,3 +189,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Composer une épaule et un coude motorisés](ArticulatedPose3D.md) : quatre servos, charge transmise et repères mobiles.
 
 [Créer un assemblage ragdoll et manipuler sa pose](Ragdoll3D.md) : hiérarchie, décalages de corps, instances indépendantes, filtrage parent/enfant et suivi motorisé.
+
+[Poser un châssis sur quatre suspensions](VehicleSuspension3D.md) : appuis par rayon, ressorts, butées, saut et réactions aux supports.

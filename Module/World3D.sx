@@ -1,3 +1,5 @@
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
 use GFX.Physics.Ragdoll3D.Ragdoll3D
 use GFX.Physics.Ragdoll3D.Ragdoll3DSettings
 use GFX.Physics.RigidBody3D.body_collision_allows3d
@@ -165,6 +167,8 @@ public class World3D {
     private var swing_twist_constraints:SwingTwistConstraintStore3D
     private var cone_constraints:ConeConstraintStore3D
     private var hinge_constraints:HingeConstraintStore3D
+    private var wheeled_vehicles:WheeledVehicle3D[]=[]
+    private var vehicle_ray_hits:WorldRayHit3D[]=[]
     private var current_gravity:Math.Vec3
     private let position_iterations:int
     private let velocity_iterations:int
@@ -279,6 +283,42 @@ public class World3D {
             if body.is_valid() { self.destroy_rigid_body(body) }
         }
         ragdoll.invalidate()
+    }
+
+    func create_wheeled_vehicle(settings:WheeledVehicle3DSettings) WheeledVehicle3D {
+        self.store.require_mutable()
+        let id=self.store.append(settings.chassis)
+        var vehicle=WheeledVehicle3D(self.store,id,settings)
+        self.wheeled_vehicles.append(vehicle)
+        return vehicle
+    }
+    func destroy_wheeled_vehicle(vehicle:WheeledVehicle3D) {
+        self.store.require_mutable()
+        if !vehicle.belongs_to(self.store) { panic("GFX.Physics.World3D cannot destroy a vehicle owned by another world") }
+        self.destroy_rigid_body(vehicle.chassis())
+    }
+    private func prepare_vehicle_suspensions(delta:float) {
+        for vehicle in self.wheeled_vehicles {
+            vehicle.clear_contacts()
+            var chassis=vehicle.chassis()
+            if chassis.is_enabled() {
+                var index=0
+                while index<vehicle.wheel_count() {
+                    self.write_ray_hits(vehicle.ray(index),self.vehicle_ray_hits,chassis,
+                        QueryFilter3D(chassis.collision_filter().mask_bits,false))
+                    for hit in self.vehicle_ray_hits {
+                        if chassis.collision_filter().allows(hit.body().collision_filter()) &&
+                            vehicle.accept_contact(index,hit,delta) { break }
+                    }
+                    index++
+                }
+            }
+        }
+        self.vehicle_ray_hits.clear()
+    }
+    private func has_active_vehicle_suspension() bool {
+        for vehicle in self.wheeled_vehicles { if vehicle.has_active_contact() { return true } }
+        return false
     }
 
     func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
@@ -511,6 +551,11 @@ public class World3D {
         self.pulley_constraints.destroy_for_body(body.body_id())
         self.gear_constraints.destroy_for_body(body.body_id())
         self.six_dof_constraints.destroy_for_body(body.body_id())
+        var retained_vehicles:WheeledVehicle3D[]=[]
+        for vehicle in self.wheeled_vehicles {
+            if vehicle.chassis_id()!=body.body_id() { vehicle.forget_support(body.body_id());retained_vehicles.append(vehicle) }
+        }
+        self.wheeled_vehicles=retained_vehicles
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -767,6 +812,7 @@ public class World3D {
         self.store.require_mutable()
         if delta == 0.0 { return }
         self.store.locked = true
+        self.prepare_vehicle_suspensions(delta)
         self.wake_constraint_islands()
         self.wake_contact_islands()
         var has_continuous_body = false
@@ -805,7 +851,7 @@ public class World3D {
         var retained_contacts:ContactPairState3D[] = []
         // Rigid attachments and hinges act before pose integration.
         // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
+        if self.has_active_vehicle_suspension() || self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
             retained_contacts = self.prepare_retained_contacts()
             var iteration = 0
             while iteration < self.velocity_iterations {
@@ -1317,6 +1363,7 @@ public class World3D {
     }
 
     private func solve_constraint_velocities(delta:float, reverse:bool) {
+        for vehicle in self.wheeled_vehicles { vehicle.solve_velocity() }
         var constraint_index = 0
         while constraint_index < self.distance_constraints.slots.count() {
             var selected = constraint_index
@@ -1548,8 +1595,11 @@ public class World3D {
     }
 
     private func wake_constraint_islands() {
+        var vehicle_edges=0
+        for vehicle in self.wheeled_vehicles { vehicle_edges+=vehicle.wheel_count() }
         var pass = 0
-        while pass < self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.path_constraints.live_count + self.pulley_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
+        while pass < vehicle_edges + self.distance_constraints.live_count + self.point_constraints.live_count + self.hinge_constraints.live_count + self.fixed_constraints.live_count + self.slider_constraints.live_count + self.cone_constraints.live_count + self.swing_twist_constraints.live_count + self.six_dof_constraints.live_count + self.path_constraints.live_count + self.pulley_constraints.live_count + self.gear_constraints.live_count + self.rack_and_pinion_constraints.live_count {
+            for vehicle in self.wheeled_vehicles { vehicle.wake_connected_bodies() }
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -2075,6 +2125,7 @@ public class World3D {
         }
         var position_iteration = 0
         while position_iteration < self.position_iterations {
+            for vehicle in self.wheeled_vehicles { vehicle.solve_position() }
             for slot in self.distance_constraints.slots {
                 if var constraint = slot {
                     if constraint.is_enabled {
@@ -2339,6 +2390,15 @@ public class World3D {
         if !sleep_candidate { return }
         // Build connectivity once. Fixed supports do not join separate islands.
         var islands = SleepIslands3D(self.store)
+        for vehicle in self.wheeled_vehicles {
+            var index=0
+            while index<vehicle.wheel_count() {
+                if let support=vehicle.support_id(index) {
+                    islands.connect(vehicle.chassis_id().slot,support.slot,self.store)
+                }
+                index++
+            }
+        }
         for contact in self.contacts {
             if !contact.is_sensor() {
                 islands.connect(contact.first_body_id().slot,

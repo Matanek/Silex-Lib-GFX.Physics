@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `WheeledVehicle3D` combines a dynamic chassis with ray-supported wheel suspensions, unilateral springs and compression stops. Support, length and force observations, dynamic support reactions, sleep and lifetime integrate with the world. Initial suspension foundation qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64; tire traction and driving remain future work.
+
 - `Ragdoll3D.move_to_pose` and `move_to_local_pose` drive a kinematic pose over a duration; `resume_simulation` restores dynamic members with their masses and current velocities. Rotated frames, offset centers, external contact and release are qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64.
 
 - Spatial motorized ragdoll: nonparallel frames, combined swing/twist targets, triangular supports and an oblique impulse qualified against Jolt at 60/120 Hz in Debug/Release on macOS ARM64. Geometry and mean reactions over established windows, center-of-mass angular balances and the global Y component; existing solver and budgets retained.

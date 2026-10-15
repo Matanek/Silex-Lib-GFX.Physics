@@ -1,0 +1,264 @@
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Geometry3D.Ray3D
+use GFX.Physics.WorldQuery3D.WorldRayHit3D
+use STD.Math
+
+public struct Wheel3DSettings {
+    let position:Math.Vec3
+    let direction:Math.Vec3
+    let radius:float
+    let minimum_length:float
+    let maximum_length:float
+    let stiffness:float
+    let damping:float
+    let maximum_slope_angle:float
+
+    init(position:Math.Vec3, radius:float = 0.3, minimum_length:float = 0.2,
+        maximum_length:float = 0.6, stiffness:float = 10000.0, damping:float = 1000.0,
+        direction:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0),
+        maximum_slope_angle:float = Math.pi()/3.0)
+    {
+        if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
+            !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
+        { panic("GFX.Physics.Wheel3DSettings requires a finite position and unit suspension direction") }
+        if !finite_body3d_value(radius) || radius<=0.0 ||
+            !finite_body3d_value(minimum_length) || minimum_length<0.0 ||
+            !finite_body3d_value(maximum_length) || maximum_length<=0.0 || maximum_length<minimum_length ||
+            !finite_body3d_value((maximum_length+radius)*(maximum_length+radius))
+        { panic("GFX.Physics.Wheel3DSettings requires positive radius and ordered nonnegative finite suspension lengths") }
+        if !finite_body3d_value(stiffness) || stiffness<=0.0 || !finite_body3d_value(damping) || damping<0.0 {
+            panic("GFX.Physics.Wheel3DSettings requires positive finite stiffness and nonnegative finite damping")
+        }
+        if !finite_body3d_value(maximum_slope_angle) || maximum_slope_angle<0.0 || maximum_slope_angle>=Math.half_pi() {
+            panic("GFX.Physics.Wheel3DSettings slope angle must be finite in [0, pi/2)")
+        }
+        self.position=position;self.direction=direction.normalized();self.radius=radius
+        self.minimum_length=minimum_length;self.maximum_length=maximum_length
+        self.stiffness=stiffness;self.damping=damping;self.maximum_slope_angle=maximum_slope_angle
+    }
+}
+
+public class WheeledVehicle3DSettings {
+    let chassis:RigidBody3DSettings
+    private var wheels:Wheel3DSettings[]
+
+    init(chassis:RigidBody3DSettings, wheels:Wheel3DSettings[]) {
+        if chassis.body_type!=BodyType3D.dynamic { panic("GFX.Physics.WheeledVehicle3DSettings requires a dynamic chassis") }
+        BodyState3D(chassis)
+        if wheels.count()==0 { panic("GFX.Physics.WheeledVehicle3DSettings requires at least one wheel") }
+        self.chassis=chassis
+        var retained:Wheel3DSettings[]=[]
+        for wheel in wheels { retained.append(wheel) }
+        self.wheels=retained
+    }
+    func wheel_count() int { return self.wheels.count() }
+    func wheel(index:int) Wheel3DSettings {
+        if index<0 || index>=self.wheels.count() { panic("GFX.Physics.WheeledVehicle3D wheel index is out of range") }
+        return self.wheels[index]
+    }
+}
+
+public struct VehicleWheelState3D {
+    let length:float
+    let normal_force:float
+    private var current_support:RigidBody3D?
+    let contact_point:Math.Vec3
+    let contact_normal:Math.Vec3
+
+    package init(length:float, normal_force:float, support:RigidBody3D?, point:Math.Vec3, normal:Math.Vec3) {
+        self.length=length;self.normal_force=normal_force;self.current_support=support
+        self.contact_point=point;self.contact_normal=normal
+    }
+    func support() RigidBody3D? { return self.current_support }
+}
+
+class WheelSuspensionState3D {
+    var support:BodyId3D?=null
+    var length:float
+    var point:Math.Vec3=Math.Vec3()
+    var local_support_point:Math.Vec3=Math.Vec3()
+    var normal:Math.Vec3=Math.Vec3()
+    var chassis_radius:Math.Vec3=Math.Vec3()
+    var support_radius:Math.Vec3=Math.Vec3()
+    var inverse_mass:float=0.0
+    var softness:float=0.0
+    var bias:float=0.0
+    var impulse:float=0.0
+    var stop_impulse:float=0.0
+    var inverse_delta:float=0.0
+    var spring:bool=false
+    var active:bool=false
+    init(length:float) { self.length=length }
+    func clear(length:float) {
+        self.support=null;self.length=length;self.point=Math.Vec3();self.normal=Math.Vec3()
+        self.impulse=0.0;self.stop_impulse=0.0;self.inverse_delta=0.0;self.active=false
+    }
+}
+
+public class WheeledVehicle3D {
+    private var store:BodyStore3D
+    private let id:BodyId3D
+    private var settings:WheeledVehicle3DSettings
+    private var wheels:WheelSuspensionState3D[]
+
+    package init(store:BodyStore3D, id:BodyId3D, settings:WheeledVehicle3DSettings) {
+        self.store=store;self.id=id;self.settings=settings
+        var wheels:WheelSuspensionState3D[]=[]
+        var index=0
+        while index<settings.wheel_count() { wheels.append(WheelSuspensionState3D(settings.wheel(index).maximum_length));index++ }
+        self.wheels=wheels
+    }
+    func is_valid() bool { return self.store.contains(self.id) }
+    private func require_valid() {
+        if !self.is_valid() { panic("GFX.Physics.WheeledVehicle3D no longer refers to a live vehicle") }
+    }
+    func chassis() RigidBody3D { self.require_valid();return RigidBody3D(self.store,self.id) }
+    func wheel_count() int { return self.settings.wheel_count() }
+    func wheel_settings(index:int) Wheel3DSettings { self.require_valid();return self.settings.wheel(index) }
+    func wheel(index:int) VehicleWheelState3D {
+        self.require_valid();self.settings.wheel(index)
+        var state=self.wheels[index];var support:RigidBody3D?=null
+        if let id=state.support {
+            if self.store.contains(id) { support=RigidBody3D(self.store,id) }
+        }
+        return VehicleWheelState3D(state.length,(state.impulse+state.stop_impulse)*state.inverse_delta,
+            support,state.point,state.normal)
+    }
+    package func belongs_to(store:BodyStore3D) bool { return self.store==store }
+    package func chassis_id() BodyId3D { return self.id }
+    package func ray(index:int) Ray3D {
+        var body=self.store.require(self.id);let wheel=self.settings.wheel(index)
+        return Ray3D(body.transform.point(wheel.position),body.transform.vector(wheel.direction).multiply(wheel.maximum_length+wheel.radius))
+    }
+    package func clear_contacts() {
+        var index=0
+        while index<self.wheels.count() { self.wheels[index].clear(self.settings.wheel(index).maximum_length);index++ }
+    }
+    package func accept_contact(index:int, hit:WorldRayHit3D, delta:float) bool {
+        var chassis=self.store.require(self.id);var ground=self.store.require(hit.body().body_id())
+        let wheel=self.settings.wheel(index)
+        let alignment=hit.normal().dot(chassis.transform.vector(wheel.direction).negated())
+        if alignment<Math.cos(wheel.maximum_slope_angle) { return false }
+        var state=self.wheels[index]
+        state.support=hit.body().body_id();state.point=hit.point();state.normal=hit.normal()
+        state.local_support_point=ground.transform.inverse_point(state.point)
+        state.length=Math.max(0.0,(wheel.maximum_length+wheel.radius)*hit.fraction()-wheel.radius)
+        state.chassis_radius=state.point.subtract(chassis.world_center())
+        state.support_radius=state.point.subtract(ground.world_center())
+        state.inverse_mass=vehicle_inverse_mass3d(chassis,ground,state.chassis_radius,state.support_radius,state.normal)
+        state.spring=wheel.maximum_length> wheel.minimum_length
+        let stiffness=wheel.stiffness/Math.max(0.1,alignment)
+        let damping=wheel.damping/Math.max(0.1,alignment)
+        state.softness=1.0/(delta*(damping+delta*stiffness))
+        state.bias=(state.length-wheel.maximum_length)*delta*stiffness*state.softness
+        state.inverse_delta=1.0/delta
+        let moving_ground=ground.body_type==BodyType3D.kinematic &&
+            (ground.linear_velocity.length_squared()>0.0 || ground.angular_velocity.length_squared()>0.0)
+        if (ground.awake || moving_ground) && !chassis.awake { chassis.wake() }
+        if chassis.awake && !ground.awake { ground.wake() }
+        state.active=chassis.awake || ground.awake
+        return true
+    }
+    package func forget_support(id:BodyId3D) {
+        var index=0
+        for state in self.wheels {
+            if state.support!=null && state.support! == id {
+                state.clear(self.settings.wheel(index).maximum_length)
+                self.store.require(self.id).wake()
+            }
+            index++
+        }
+    }
+    package func support_id(index:int) BodyId3D? { return self.wheels[index].support }
+    package func wake_connected_bodies() {
+        var chassis=self.store.require(self.id)
+        if !chassis.is_enabled { return }
+        for state in self.wheels {
+            if let id=state.support {
+                var ground=self.store.require(id)
+                let moving=ground.body_type==BodyType3D.kinematic &&
+                    (ground.linear_velocity.length_squared()>0.0 || ground.angular_velocity.length_squared()>0.0)
+                if (ground.awake || moving) && !chassis.awake { chassis.wake() }
+                if chassis.awake && !ground.awake { ground.wake() }
+                state.active=chassis.awake || ground.awake
+            }
+        }
+    }
+    package func has_active_contact() bool {
+        for wheel in self.wheels { if wheel.active { return true } }
+        return false
+    }
+    package func solve_velocity() {
+        var chassis=self.store.require(self.id);var index=0
+        for state in self.wheels {
+            if state.active && state.support!=null && state.inverse_mass>0.0 {
+                var ground=self.store.require(state.support!)
+                if state.spring {
+                    let speed=vehicle_relative_speed3d(chassis,ground,state)
+                    let previous=state.impulse
+                    state.impulse=Math.max(0.0,previous-(speed+state.bias+state.softness*previous)/(state.inverse_mass+state.softness))
+                    apply_vehicle_pair_impulse3d(chassis,ground,state,state.impulse-previous)
+                }
+                if state.length<self.settings.wheel(index).minimum_length {
+                    let previous=state.stop_impulse
+                    state.stop_impulse=Math.max(0.0,previous-vehicle_relative_speed3d(chassis,ground,state)/state.inverse_mass)
+                    apply_vehicle_pair_impulse3d(chassis,ground,state,state.stop_impulse-previous)
+                }
+            }
+            index++
+        }
+    }
+    package func solve_position() {
+        var chassis=self.store.require(self.id);var index=0
+        for state in self.wheels {
+            if state.active && state.support!=null {
+                var ground=self.store.require(state.support!);let wheel=self.settings.wheel(index)
+                let point=ground.transform.point(state.local_support_point)
+                let limit=chassis.transform.point(wheel.position).add(chassis.transform.vector(wheel.direction).multiply(wheel.minimum_length+wheel.radius))
+                let error=limit.subtract(point).dot(state.normal)
+                if error<0.0 {
+                    let first=point.subtract(chassis.world_center());let second=point.subtract(ground.world_center())
+                    let inverse_mass=vehicle_inverse_mass3d(chassis,ground,first,second,state.normal)
+                    if inverse_mass>0.0 {
+                        let impulse=state.normal.multiply(Math.min(0.2,-0.2*error)/inverse_mass)
+                        shift_vehicle_body3d(chassis,impulse,first)
+                        shift_vehicle_body3d(ground,impulse.negated(),second)
+                    }
+                }
+            }
+            index++
+        }
+    }
+}
+
+func vehicle_inverse_mass3d(chassis:BodyState3D, ground:BodyState3D, first:Math.Vec3, second:Math.Vec3, normal:Math.Vec3) float {
+    let a=first.cross(normal);let b=second.cross(normal)
+    return chassis.inverse_mass+ground.inverse_mass+a.dot(chassis.inverse_inertia_times(a))+b.dot(ground.inverse_inertia_times(b))
+}
+func vehicle_relative_speed3d(chassis:BodyState3D, ground:BodyState3D, state:WheelSuspensionState3D) float {
+    return chassis.linear_velocity.add(chassis.angular_velocity.cross(state.chassis_radius))
+        .subtract(ground.linear_velocity.add(ground.angular_velocity.cross(state.support_radius))).dot(state.normal)
+}
+func apply_vehicle_pair_impulse3d(chassis:BodyState3D, ground:BodyState3D, state:WheelSuspensionState3D, amount:float) {
+    let impulse=state.normal.multiply(amount)
+    chassis.linear_velocity=chassis.linear_velocity.add(impulse.multiply(chassis.inverse_mass))
+    chassis.angular_velocity=chassis.angular_velocity.add(chassis.inverse_inertia_times(state.chassis_radius.cross(impulse)))
+    ground.linear_velocity=ground.linear_velocity.subtract(impulse.multiply(ground.inverse_mass))
+    ground.angular_velocity=ground.angular_velocity.subtract(ground.inverse_inertia_times(state.support_radius.cross(impulse)))
+}
+func shift_vehicle_body3d(body:BodyState3D, impulse:Math.Vec3, radius:Math.Vec3) {
+    if body.inverse_mass==0.0 { return }
+    let center=body.world_center().add(impulse.multiply(body.inverse_mass))
+    let turn=body.inverse_inertia_times(radius.cross(impulse));let angle=turn.length()
+    var rotation=body.transform.rotation
+    if angle>0.0 { rotation=Math.Quat.angle_axis(angle,turn.divide(angle)).multiply(rotation).normalized() }
+    body.transform=Transform3D(center.subtract(rotation.rotate(body.mass_properties.local_center)),rotation)
+}
