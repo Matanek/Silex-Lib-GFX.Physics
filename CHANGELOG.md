@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Optional per-wheel sphere contacts through `WheelContact3D.sphere(radius)`: edge reach, slope and initial-overlap selection, reactions and validated calibration. Sphere sweeps retain interior points on large faces without rejecting them due to rounded barycentric reconstruction; ray contacts remain the default.
+
 - Optional engine, clutch, automatic/manual transmission and differentials for `WheeledVehicle3D`, with persistent throttle, RPM and wheel torque observations. Contacts transfer propulsion; neutral, braking, sleep and lifetime remain integrated with the world.
 
 - Persistent steering, service brake and handbrake inputs on `WheeledVehicle3D`, with per-wheel settings and angle/torque observations. Braking acts on the rotor and contact transfers force within tire grip; the chassis is never directly slowed.

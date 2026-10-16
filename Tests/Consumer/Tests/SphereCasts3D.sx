@@ -14,7 +14,7 @@ func corner_case() {
     assert(!Physics.Geometry3D.sphere_cast(miss, box).hit)
 }
 test "sphere sweep reaches rounded box edge while its center ray misses" { corner_case() }
-func main() { corner_case(); primitive_cases(); corner_tangent_cases(); triangle_cases(); initial_cases(); transformed_cases(); world_cases(); world_child_cases(); print("Sphere casts: all cases passed") }
+func main() { large_face_cases(); corner_case(); primitive_cases(); corner_tangent_cases(); triangle_cases(); initial_cases(); transformed_cases(); world_cases(); world_child_cases(); print("Sphere casts: all cases passed") }
 
 func hull(scale:float = 1.0, offset:Math.Vec3 = Math.Vec3()) Physics.Shape3D {
     var points:Math.Vec3[] = []; var index = 0
@@ -194,3 +194,25 @@ func world_child_cases() {
     assert(!retained!.body().is_valid() && retained!.child_id() == 71)
 }
 test "sphere world query retains child identities across mutation and world destruction" { world_child_cases() }
+
+func large_face_cases() {
+    let scales:float[]=[1.0,10.0,1000.0];let sides:float[]=[-1.0,1.0]
+    for scale in scales {
+        var shapes:Physics.Shape3D[]=[Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0*scale,1.0,20.0*scale))),large_flat_hull(10.0*scale)]
+        for shape in shapes { for x in sides { for z in sides {
+            let cast=Physics.SphereCast3D(Physics.Sphere3D(0.3),Math.Vec3(x*0.6,0.88224953,z),Math.Vec3(0.0,-0.6,0.0))
+            var pose=Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0))
+            let hit=Physics.Geometry3D.sphere_cast(cast,Physics.ShapePlacement3D(shape,pose))
+            assert(hit.hit && Math.abs(hit.fraction-(0.88224953-0.3)/0.6)<0.00001)
+            assert(hit.point.nearly_equal(Math.Vec3(x*0.6,0.0,z),0.00001))
+            assert(hit.normal.nearly_equal(Math.Vec3.up(),0.00001))
+        } } }
+    }
+}
+test "small sphere sweeps retain mirrored interior contacts on large box and hull faces" { large_face_cases() }
+
+func large_flat_hull(half_size:float) Physics.Shape3D {
+    var points:Math.Vec3[]=[];let sides:float[]=[-1.0,1.0]
+    for x in sides { for y in sides { for z in sides { points.append(Math.Vec3(x*half_size,y*0.5,z*half_size)) } } }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}

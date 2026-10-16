@@ -63,9 +63,11 @@ func sphere_cast_triangle3d(cast:SphereCast3D, triangle:Triangle3D) CastResult3D
                 let normal = face.multiply(side)
                 let point = cast.origin.add(cast.translation.multiply(fraction))
                     .subtract(normal.multiply(cast.sphere.radius))
-                let closest = closest_triangle_point3d(point, triangle)
-                if point.subtract(closest).length() <= cast.sphere.radius * 0.000001 {
-                    result = nearest_sphere_cast3d(result, CastResult3D(closest, normal, fraction))
+                let first_side=triangle.second.subtract(triangle.first).cross(point.subtract(triangle.first)).dot(face)
+                let second_side=triangle.third.subtract(triangle.second).cross(point.subtract(triangle.second)).dot(face)
+                let third_side=triangle.first.subtract(triangle.third).cross(point.subtract(triangle.third)).dot(face)
+                if first_side>=0.0 && second_side>=0.0 && third_side>=0.0 {
+                    result = nearest_sphere_cast3d(result, CastResult3D(point, normal, fraction))
                 }
             }
             side += 2.0

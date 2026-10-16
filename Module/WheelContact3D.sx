@@ -1,0 +1,59 @@
+use GFX.Physics.Geometry3D
+use GFX.Physics.Geometry3D.compound_child_transform
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+public enum WheelContact3D {
+    ray
+    sphere(float)
+}
+
+package struct WheelSphereHit3D {
+    let hit:Geometry3D.CastResult3D
+    let priority:float
+
+    init(hit:Geometry3D.CastResult3D=Geometry3D.CastResult3D(), priority:float=0.0) {
+        self.hit=hit;self.priority=priority
+    }
+}
+
+func nearer_wheel_sphere3d(first:WheelSphereHit3D, second:WheelSphereHit3D) WheelSphereHit3D {
+    if second.hit.hit && (!first.hit.hit || second.priority<first.priority) { return second }
+    return first
+}
+
+package func cast_wheel_sphere3d(cast:Geometry3D.SphereCast3D, target:Geometry3D.ShapePlacement3D,
+    up:Math.Vec3, minimum_alignment:float) WheelSphereHit3D
+{
+    match target.shape() {
+        compound(compound) => {
+            var result=WheelSphereHit3D();var index=0
+            while index<compound.child_count() {
+                let child=compound.child(index)
+                result=nearer_wheel_sphere3d(result,cast_wheel_sphere3d(cast,
+                    Geometry3D.ShapePlacement3D(child.shape,compound_child_transform(target.transform(),child)),up,minimum_alignment))
+                index++
+            }
+            return result
+        }
+        mesh(mesh) => {
+            var result=WheelSphereHit3D();var index=0
+            while index<mesh.triangle_count() {
+                result=nearer_wheel_sphere3d(result,cast_wheel_sphere3d(cast,
+                    Geometry3D.ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)),target.transform()),up,minimum_alignment))
+                index++
+            }
+            return result
+        }
+        else => {}
+    }
+    let hit=Geometry3D.sphere_cast(cast,target)
+    if !hit.hit || hit.normal.dot(up)<minimum_alignment { return WheelSphereHit3D() }
+    var priority=hit.fraction
+    if hit.fraction==0.0 {
+        let query=Geometry3D.ShapePlacement3D(Shape3D.sphere(cast.sphere),Transform3D(cast.origin))
+        priority=Math.min(0.0,Geometry3D.distance(query,target).separation)
+    }
+    return WheelSphereHit3D(hit,priority)
+}

@@ -1,7 +1,7 @@
 # Poser un châssis sur des suspensions de roue
 
 `WheeledVehicle3D` associe un châssis dynamique et des roues à suspension.
-Le monde cherche leurs appuis par rayon, résout ressorts et butées et applique
+Le monde cherche leurs appuis par rayon ou sphère balayée, résout ressorts et butées et applique
 les réactions aux deux corps. L’application appelle seulement `world.step`.
 Sans pneu optionnel, les roues appliquent seulement la suspension. Les
 [pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; les [commandes](VehicleControls3D.md)
@@ -29,7 +29,8 @@ supplémentaires et n’ajoutent pas de masse au châssis.
 |---|---|
 | `position` | Ancrage en mètres, relatif à l’origine de la forme du châssis |
 | `direction` | Direction locale unitaire de détente, `(0,-1,0)` |
-| `radius` | Rayon en mètres, `0.3` |
+| `radius` | Rayon de roue en mètres, `0.3` |
+| `contact` | `WheelContact3D.ray` par défaut ; `WheelContact3D.sphere(rayon)` pour un contact volumique |
 | `minimum_length`, `maximum_length` | Longueurs de suspension en mètres, `0.2` et `0.6` ; elles excluent le rayon |
 | `stiffness` | Raideur par roue en N/m, `10000` |
 | `damping` | Amortissement par roue en N·s/m, `1000` |
@@ -50,6 +51,39 @@ maximal devient le support. Les corps fixes, cinématiques et dynamiques peuvent
 porter la suspension ; un support dynamique reçoit la réaction opposée au même
 point de contact. La recherche par rayon ne reproduit pas la largeur d’un pneu
 sur un bord étroit.
+
+## Atteindre une arête avec une sphère
+
+L’[exemple rayon/sphère](../../Examples/VehicleSphereContact.sx) place un ancrage
+à 20 cm au-delà d’une arête. Le rayon central manque le support ; une sphère
+balayée de 30 cm le trouve. Depuis la racine du workspace :
+
+```sh
+silex run Packages/GFX.Physics/Examples/VehicleSphereContact.sx --release
+```
+
+Le programme affiche `support=false` pour le rayon et `support=true` pour la
+sphère, avec environ `0.5263932` m de suspension. Le choix se fait dans le
+réglage de chaque roue. Fragment à utiliser lors de sa création :
+
+```sx
+Physics.Wheel3DSettings(Math.Vec3(), contact:Physics.WheelContact3D.sphere(0.3))
+```
+
+Le rayon de recherche sphérique reste distinct de `radius`, qui sert au
+roulement, aux freins et au moteur. La sphère part de l’ancrage et parcourt
+`maximum_length + radius - rayon_sphère`. La longueur observée vaut la
+fraction touchée multipliée par ce parcours, plus `rayon_sphère - radius`,
+bornée à zéro. Le rayon sphérique doit être strictement positif et inférieur
+à `maximum_length + radius` ; les échelles non représentables sont refusées.
+
+Point et normale décrivent la surface du support. Filtres, capteurs et pente
+maximale sont traités avant la sélection, y compris entre feuilles d’un
+composé ou d’un maillage. Le premier appui admissible est retenu ; si la sphère
+chevauche déjà plusieurs surfaces, la pénétration la plus profonde est retenue.
+Le monde applique les mêmes ressorts, réactions, pneus et commandes ensuite.
+Une sphère approxime le volume de contact ; elle ne reproduit pas la largeur
+ni la forme cylindrique d’un pneu.
 
 ## Lire les appuis et provoquer une réaction
 
@@ -96,3 +130,20 @@ vitesse et 4 de position pour les deux moteurs. Le ressort est comparé par
 trajectoire ; la surcharge par géométrie, bilans discrets et réactions moyennes
 sur fenêtres fixées. Aucune équivalence de toutes les réactions instantanées
 aux impacts ni comparaison de performance n’est annoncée.
+
+Le [consommateur sphérique](../../Tests/Consumer/Tests/VehicleSphereContact3D.sx)
+contrôle arête, portée, rejet de pente, contact initial, filtres, désactivation,
+création/destruction et conservation des moments avec un support dynamique.
+Le témoin `VehicleSphereContactsRun.py` confronte 19 configurations géométriques
+et quatre recettes dynamiques à Jolt à 60/120 Hz en Debug/Release. La trajectoire
+souple sur plan et celle des arêtes avec adhérence sont comparées ; les forces
+normales et latérales réellement lues ferment les bilans de chaque moteur.
+La surcharge conserve la qualification par géométrie et forces moyennes.
+
+Sans adhérence, un équilibre symétrique sur deux arêtes est instable : un
+écart initial Jolt de 1e-6 m suffit à faire basculer la caisse. La comparaison
+de trajectoire de cette recette s’arrête à 1,5 s ; les bilans gardent tous les
+échantillons. Enfin, le détecteur Jolt épinglé fournit un point hors surface
+sur un plan infini tourné : seules longueur et normale y sont comparées. Une
+boîte inclinée portant le même plan qualifie le point physique. Silex conserve
+le point sur le support ; aucune égalité avec ce point Jolt incorrect n’est annoncée.

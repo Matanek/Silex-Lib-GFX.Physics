@@ -1,3 +1,5 @@
+use GFX.Physics.WheelContact3D.cast_wheel_sphere3d
+use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
 use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
 use GFX.Physics.Ragdoll3D.Ragdoll3D
@@ -304,17 +306,47 @@ public class World3D {
             if chassis.is_enabled() {
                 var index=0
                 while index<vehicle.wheel_count() {
-                    self.write_ray_hits(vehicle.ray(index),self.vehicle_ray_hits,chassis,
-                        QueryFilter3D(chassis.collision_filter().mask_bits,false))
-                    for hit in self.vehicle_ray_hits {
-                        if chassis.collision_filter().allows(hit.body().collision_filter()) &&
-                            vehicle.accept_contact(index,hit,delta) { break }
+                    match vehicle.wheel_settings(index).contact {
+                        ray => {
+                            self.write_ray_hits(vehicle.ray(index),self.vehicle_ray_hits,chassis,
+                                QueryFilter3D(chassis.collision_filter().mask_bits,false))
+                            for hit in self.vehicle_ray_hits {
+                                if chassis.collision_filter().allows(hit.body().collision_filter()) &&
+                                    vehicle.accept_ray_contact(index,hit,delta) { break }
+                            }
+                        }
+                        sphere(radius) => { self.prepare_vehicle_sphere_contact(vehicle,index,radius,delta) }
                     }
                     index++
                 }
             }
         }
         self.vehicle_ray_hits.clear()
+    }
+    private func prepare_vehicle_sphere_contact(vehicle:WheeledVehicle3D, index:int, radius:float, delta:float) {
+        var chassis=vehicle.chassis();let wheel=vehicle.wheel_settings(index)
+        let travel=wheel.maximum_length+wheel.radius-radius
+        let ray=vehicle.ray(index);let direction=chassis.transform().vector(wheel.direction)
+        let cast=SphereCast3D(Sphere3D(radius),ray.origin,direction.multiply(travel))
+        let up=direction.negated();let alignment=Math.cos(wheel.maximum_slope_angle)
+        var nearest:RigidBody3D?=null;var point=Math.Vec3();var normal=Math.Vec3()
+        var priority=0.0;var length=0.0;var slot=0
+        while slot<self.store.slots.count() {
+            if slot!=chassis.body_id().slot {
+                if var state=self.store.slots[slot] {
+                    if state.is_enabled && !state.is_sensor && chassis.collision_filter().allows(state.collision_filter) {
+                        let candidate=cast_wheel_sphere3d(cast,ShapePlacement3D(state.shape,state.transform),up,alignment)
+                        if candidate.hit.hit && (nearest==null || candidate.priority<priority) {
+                            nearest=RigidBody3D(self.store,BodyId3D(slot,self.store.generations[slot]))
+                            point=candidate.hit.point;normal=candidate.hit.normal;priority=candidate.priority
+                            length=Math.max(0.0,travel*candidate.hit.fraction+radius-wheel.radius)
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+        if let support=nearest { vehicle.accept_contact(index,support,point,normal,length,delta) }
     }
     private func has_active_vehicle_suspension() bool {
         for vehicle in self.wheeled_vehicles { if vehicle.has_active_contact() { return true } }

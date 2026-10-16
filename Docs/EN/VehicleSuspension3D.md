@@ -1,7 +1,7 @@
 # Support a chassis with wheel suspensions
 
 `WheeledVehicle3D` combines a dynamic chassis with suspended wheels. The world
-finds supports by ray, solves springs and compression stops, and applies
+finds supports by ray or swept sphere, solves springs and compression stops, and applies
 reactions to both bodies. The application only calls `world.step`. Without an optional tire, wheels only apply suspension.
 [Passive tires](PassiveTires3D.md) add rolling and grip; [controls](VehicleControls3D.md)
 add steering and braking. The [powertrain](VehiclePowertrain3D.md) adds propulsion.
@@ -27,7 +27,8 @@ settings. Wheels create no additional rigid bodies and add no chassis mass.
 |---|---|
 | `position` | Attachment in meters, relative to the chassis shape origin |
 | `direction` | Unit local extension direction, `(0,-1,0)` |
-| `radius` | Radius in meters, `0.3` |
+| `radius` | Wheel radius in meters, `0.3` |
+| `contact` | `WheelContact3D.ray` by default; `WheelContact3D.sphere(radius)` for a volume contact |
 | `minimum_length`, `maximum_length` | Suspension lengths in meters, `0.2` and `0.6`; these exclude the radius |
 | `stiffness` | Per-wheel spring stiffness in N/m, `10000` |
 | `damping` | Per-wheel damping in N·s/m, `1000` |
@@ -47,6 +48,38 @@ The nearest surface whose normal satisfies the maximum angle becomes the
 support. Static, kinematic and dynamic bodies can support suspension; a dynamic
 support receives the opposite reaction at the same contact point. A ray does
 not reproduce tire width on a narrow edge.
+
+## Reach an edge with a sphere
+
+The [ray/sphere example](../../Examples/VehicleSphereContact.sx) places an anchor
+20 cm beyond an edge. Its center ray misses the support; a swept 30 cm sphere
+finds it. From the workspace root:
+
+```sh
+silex run Packages/GFX.Physics/Examples/VehicleSphereContact.sx --release
+```
+
+The program prints `support=false` for the ray and `support=true` for the
+sphere, with approximately `0.5263932` m of suspension. Choose the contact
+in each wheel's settings. Fragment to use when creating a wheel:
+
+```sx
+Physics.Wheel3DSettings(Math.Vec3(), contact:Physics.WheelContact3D.sphere(0.3))
+```
+
+The cast sphere radius is separate from `radius`, which serves rolling,
+brakes and propulsion. The sphere starts at the anchor and travels
+`maximum_length + radius - sphere_radius`. Observed length equals hit fraction
+times that travel, plus `sphere_radius - radius`, clamped at zero. The sphere
+radius must be positive and less than `maximum_length + radius`;
+unrepresentable scales are rejected.
+
+The point and normal describe the support surface. Filters, sensors and maximum
+slope are applied before selection, including between compound or mesh leaves.
+The nearest admissible support is retained; if several surfaces initially overlap
+the sphere, the deepest penetration is retained. The world then applies the same
+springs, reactions, tires and controls. A sphere approximates contact volume;
+it does not reproduce tire width or its cylindrical shape.
 
 ## Read supports and trigger a reaction
 
@@ -92,3 +125,20 @@ in both engines. Soft suspension uses trajectory comparisons; loaded stops use
 geometry, discrete balances and phase mean reactions over fixed windows.
 General instantaneous impact reaction parity and performance parity are not
 claimed.
+
+The [sphere consumer](../../Tests/Consumer/Tests/VehicleSphereContact3D.sx)
+checks edges, reach, slope rejection, initial contact, filters, disabling,
+creation/destruction and momentum conservation with a dynamic support.
+`VehicleSphereContactsRun.py` compares 19 geometric configurations and four
+dynamic recipes against Jolt at 60/120 Hz in Debug/Release. Soft suspension on
+a flat floor and gripped edge trajectories are compared; actual public normal
+and lateral force readings close each engine's impulse balances. Hard loading
+retains qualification through geometry and phase mean forces.
+
+Without grip, symmetric support on two edges is unstable: a 1e-6 m initial
+Jolt offset is enough to tip the chassis. Trajectory comparison for that recipe
+ends at 1.5 s; balances retain every sample. The pinned Jolt tester also returns
+an off-surface point on a rotated infinite plane: only length and normal are
+compared there. A tilted box carrying the same plane qualifies the physical
+point. Silex keeps its support point; no equality with that incorrect Jolt
+point is claimed.

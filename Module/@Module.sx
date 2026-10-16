@@ -215,3 +215,5 @@ public use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
 public use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
 public use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
 public use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+
+public use GFX.Physics.WheelContact3D.WheelContact3D

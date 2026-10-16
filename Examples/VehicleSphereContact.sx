@@ -1,0 +1,25 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0,0.1,2.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.05,0.0)))
+    let contacts:Physics.WheelContact3D[]=[Physics.WheelContact3D.ray,Physics.WheelContact3D.sphere(0.3)]
+    var index=0
+    for contact in contacts {
+        var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+            Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.01))
+                ..transform=Physics.Transform3D(Math.Vec3(0.7,0.75,0.0)) ..allow_sleep=false
+                ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0)),
+            [Physics.Wheel3DSettings(Math.Vec3(),contact:contact)]))
+        world.step(1.0/120.0)
+        let wheel=vehicle.wheel(0);let supported=wheel.support()!=null
+        var name="ray";if index==1 { name="sphere" }
+        print("$(name): support=$(supported), suspension length=$(wheel.length) m")
+        assert(supported==(index==1))
+        world.destroy_wheeled_vehicle(vehicle);index++
+    }
+    assert(world.body_count()==1)
+}

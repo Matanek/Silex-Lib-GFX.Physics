@@ -190,7 +190,7 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 
 [Créer un assemblage ragdoll et manipuler sa pose](Ragdoll3D.md) : hiérarchie, décalages de corps, instances indépendantes, filtrage parent/enfant et suivi motorisé.
 
-[Poser un châssis sur quatre suspensions](VehicleSuspension3D.md) : appuis par rayon, ressorts, butées, saut et réactions aux supports.
+[Poser un châssis sur quatre suspensions](VehicleSuspension3D.md) : appuis par rayon ou sphère balayée, ressorts, butées, saut et réactions aux supports.
 
 [Faire rouler les pneus et résister à la dérive](PassiveTires3D.md) : inertie, rotation, courbes de friction et réactions sur les supports.
 

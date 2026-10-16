@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Contacts sphériques optionnels par roue avec `WheelContact3D.sphere(rayon)` : portée autour des arêtes, sélection des pentes et chevauchements initiaux, réactions et réglages validés. Les sphères balayées conservent les points intérieurs des grandes faces sans les rejeter à cause d’une reconstruction barycentrique arrondie ; le contact par rayon reste le défaut.
+
 - Moteur, embrayage, transmission automatique/manuelle et différentiels optionnels pour `WheeledVehicle3D`, avec accélérateur persistant, régime et couples de roue observables. Les contacts transmettent la propulsion ; point mort, freinage, sommeil et durée de vie restent intégrés au monde.
 
 - Commandes persistantes de braquage, frein et frein à main sur `WheeledVehicle3D`, réglages par roue et observations d’angle/couple. Le frein agit sur le rotor et le contact transmet l’effort dans la limite de l’adhérence ; pas de freinage artificiel du châssis.

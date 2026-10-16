@@ -1,3 +1,4 @@
+use GFX.Physics.WheelContact3D.WheelContact3D
 use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
@@ -28,6 +29,7 @@ public struct Wheel3DSettings {
     let stiffness:float
     let damping:float
     let maximum_slope_angle:float
+    let contact:WheelContact3D
     let tire:Tire3DSettings?
     let maximum_steering_angle:float
     let steering_axis:Math.Vec3
@@ -39,7 +41,8 @@ public struct Wheel3DSettings {
         direction:Math.Vec3 = Math.Vec3(0.0,-1.0,0.0),
         maximum_slope_angle:float = Math.pi()/3.0, tire:Tire3DSettings?=null,
         maximum_steering_angle:float=0.0, steering_axis:Math.Vec3=Math.Vec3.up(),
-        maximum_brake_torque:float=1500.0, maximum_handbrake_torque:float=0.0)
+        maximum_brake_torque:float=1500.0, maximum_handbrake_torque:float=0.0,
+        contact:WheelContact3D=WheelContact3D.ray)
     {
         if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
             !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
@@ -64,6 +67,18 @@ public struct Wheel3DSettings {
         if !finite_body3d_point(steering_axis) || Math.abs(steering_axis.length_squared()-1.0)>0.0001 {
             panic("GFX.Physics.Wheel3DSettings steering axis must be a finite unit vector")
         }
+        match contact {
+            ray => {}
+            sphere(cast_radius) => {
+                let travel=maximum_length+radius-cast_radius
+                if !finite_body3d_value(cast_radius) || cast_radius<=0.0 ||
+                    !finite_body3d_value(cast_radius*cast_radius) || cast_radius*cast_radius==0.0 || travel<=0.0 ||
+                    !finite_body3d_value(travel*travel) || travel*travel==0.0 {
+                    panic("GFX.Physics.Wheel3DSettings sphere contact requires a positive finite radius and positive representable travel")
+                }
+            }
+        }
+        self.contact=contact
         self.maximum_steering_angle=maximum_steering_angle;self.steering_axis=steering_axis.normalized()
         self.maximum_brake_torque=maximum_brake_torque;self.maximum_handbrake_torque=maximum_handbrake_torque
         self.position=position;self.direction=direction.normalized();self.radius=radius
@@ -444,15 +459,20 @@ public class WheeledVehicle3D {
         var index=0
         while index<self.wheels.count() { self.wheels[index].clear(self.settings.wheel(index).maximum_length);index++ }
     }
-    package func accept_contact(index:int, hit:WorldRayHit3D, delta:float) bool {
-        var chassis=self.store.require(self.id);var ground=self.store.require(hit.body().body_id())
+    package func accept_ray_contact(index:int, hit:WorldRayHit3D, delta:float) bool {
         let wheel=self.settings.wheel(index)
-        let alignment=hit.normal().dot(chassis.transform.vector(wheel.direction).negated())
+        return self.accept_contact(index,hit.body(),hit.point(),hit.normal(),
+            Math.max(0.0,(wheel.maximum_length+wheel.radius)*hit.fraction()-wheel.radius),delta)
+    }
+    package func accept_contact(index:int, support:RigidBody3D, point:Math.Vec3, normal:Math.Vec3, length:float, delta:float) bool {
+        var chassis=self.store.require(self.id);var ground=self.store.require(support.body_id())
+        let wheel=self.settings.wheel(index)
+        let alignment=normal.dot(chassis.transform.vector(wheel.direction).negated())
         if alignment<Math.cos(wheel.maximum_slope_angle) { return false }
         var state=self.wheels[index]
-        state.support=hit.body().body_id();state.point=hit.point();state.normal=hit.normal()
+        state.support=support.body_id();state.point=point;state.normal=normal
         state.local_support_point=ground.transform.inverse_point(state.point)
-        state.length=Math.max(0.0,(wheel.maximum_length+wheel.radius)*hit.fraction()-wheel.radius)
+        state.length=length
         state.chassis_radius=state.point.subtract(chassis.world_center())
         state.support_radius=state.point.subtract(ground.world_center())
         state.inverse_mass=vehicle_inverse_mass3d(chassis,ground,state.chassis_radius,state.support_radius,state.normal)

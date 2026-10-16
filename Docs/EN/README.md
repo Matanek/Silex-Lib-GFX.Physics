@@ -310,7 +310,7 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 
 [Create a ragdoll assembly and manipulate its pose](Ragdoll3D.md): hierarchy, body offsets, independent instances, parent/child filtering and motorized tracking.
 
-[Rest a chassis on four wheel suspensions](VehicleSuspension3D.md): ray supports, springs, hard stops, jump and support reactions.
+[Rest a chassis on four wheel suspensions](VehicleSuspension3D.md): ray or swept-sphere supports, springs, stops, jumping and support reactions.
 
 [Roll tires and resist drift](PassiveTires3D.md): inertia, rotation, friction curves and support reactions.
 
