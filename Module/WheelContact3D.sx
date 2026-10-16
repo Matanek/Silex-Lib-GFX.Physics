@@ -1,3 +1,4 @@
+use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Geometry3D
 use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.Shape3D.Shape3D
@@ -7,9 +8,10 @@ use STD.Math
 public enum WheelContact3D {
     ray
     sphere(float)
+    cylinder(float)
 }
 
-package struct WheelSphereHit3D {
+package struct WheelCastHit3D {
     let hit:Geometry3D.CastResult3D
     let priority:float
 
@@ -18,29 +20,29 @@ package struct WheelSphereHit3D {
     }
 }
 
-func nearer_wheel_sphere3d(first:WheelSphereHit3D, second:WheelSphereHit3D) WheelSphereHit3D {
+func nearer_wheel_cast3d(first:WheelCastHit3D, second:WheelCastHit3D) WheelCastHit3D {
     if second.hit.hit && (!first.hit.hit || second.priority<first.priority) { return second }
     return first
 }
 
 package func cast_wheel_sphere3d(cast:Geometry3D.SphereCast3D, target:Geometry3D.ShapePlacement3D,
-    up:Math.Vec3, minimum_alignment:float) WheelSphereHit3D
+    up:Math.Vec3, minimum_alignment:float) WheelCastHit3D
 {
     match target.shape() {
         compound(compound) => {
-            var result=WheelSphereHit3D();var index=0
+            var result=WheelCastHit3D();var index=0
             while index<compound.child_count() {
                 let child=compound.child(index)
-                result=nearer_wheel_sphere3d(result,cast_wheel_sphere3d(cast,
+                result=nearer_wheel_cast3d(result,cast_wheel_sphere3d(cast,
                     Geometry3D.ShapePlacement3D(child.shape,compound_child_transform(target.transform(),child)),up,minimum_alignment))
                 index++
             }
             return result
         }
         mesh(mesh) => {
-            var result=WheelSphereHit3D();var index=0
+            var result=WheelCastHit3D();var index=0
             while index<mesh.triangle_count() {
-                result=nearer_wheel_sphere3d(result,cast_wheel_sphere3d(cast,
+                result=nearer_wheel_cast3d(result,cast_wheel_sphere3d(cast,
                     Geometry3D.ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)),target.transform()),up,minimum_alignment))
                 index++
             }
@@ -49,11 +51,65 @@ package func cast_wheel_sphere3d(cast:Geometry3D.SphereCast3D, target:Geometry3D
         else => {}
     }
     let hit=Geometry3D.sphere_cast(cast,target)
-    if !hit.hit || hit.normal.dot(up)<minimum_alignment { return WheelSphereHit3D() }
+    if !hit.hit || hit.normal.dot(up)<minimum_alignment { return WheelCastHit3D() }
     var priority=hit.fraction
     if hit.fraction==0.0 {
         let query=Geometry3D.ShapePlacement3D(Shape3D.sphere(cast.sphere),Transform3D(cast.origin))
         priority=Math.min(0.0,Geometry3D.distance(query,target).separation)
     }
-    return WheelSphereHit3D(hit,priority)
+    return WheelCastHit3D(hit,priority)
+}
+
+package func cast_wheel_cylinder3d(cast:Geometry3D.ShapeCast3D, target:Geometry3D.ShapePlacement3D) WheelCastHit3D {
+    match target.shape() {
+        compound(compound) => {
+            var result=WheelCastHit3D();var index=0
+            while index<compound.child_count() {
+                let child=compound.child(index)
+                result=nearer_wheel_cast3d(result,cast_wheel_cylinder3d(cast,
+                    Geometry3D.ShapePlacement3D(child.shape,compound_child_transform(target.transform(),child))))
+                index++
+            }
+            return result
+        }
+        mesh(mesh) => {
+            var result=WheelCastHit3D();var index=0
+            while index<mesh.triangle_count() {
+                result=nearer_wheel_cast3d(result,cast_wheel_cylinder3d(cast,
+                    Geometry3D.ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)),target.transform())))
+                index++
+            }
+            return result
+        }
+        else => {}
+    }
+    let hit=Geometry3D.shape_cast(cast,target)
+    if !hit.hit { return WheelCastHit3D() }
+    var priority=hit.fraction
+    if hit.fraction==0.0 { priority=Math.min(0.0,Geometry3D.distance(cast.placement,target).separation) }
+    if hit.fraction>0.0 {
+        let pose=cast.placement.transform()
+        let center=pose.position.add(cast.translation.multiply(hit.fraction))
+        match cast.placement.shape() {
+            cylinder(cylinder) => {
+                let axle=pose.vector(Math.Vec3.up())
+                // A tread/face contact may be a line. Prefer its centered point
+                // only when both actual boundaries accept that point.
+                if Math.abs(axle.dot(hit.normal))<0.000001 {
+                    let preferred=center.subtract(hit.normal.multiply(center.subtract(hit.point).dot(hit.normal)))
+                    let probe_radius=cylinder.radius*0.00001
+                    let probe=Geometry3D.ShapePlacement3D(Shape3D.sphere(Sphere3D(probe_radius)),Transform3D(preferred))
+                    let distance=Geometry3D.distance(probe,target)
+                    let moving=Geometry3D.ShapePlacement3D(cast.placement.shape(),Transform3D(center,pose.rotation))
+                    let on_wheel=Geometry3D.distance(probe,moving)
+                    if Math.abs(distance.separation+probe_radius)<cylinder.radius*0.0001 &&
+                        Math.abs(on_wheel.separation+probe_radius)<cylinder.radius*0.0001 {
+                        return WheelCastHit3D(Geometry3D.CastResult3D(preferred,hit.normal,hit.fraction),priority)
+                    }
+                }
+            }
+            else => {}
+        }
+    }
+    return WheelCastHit3D(hit,priority)
 }

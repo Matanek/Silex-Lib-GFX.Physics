@@ -1,0 +1,22 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func selected(name:str) bool {
+    for argument in Process.arguments() { if argument==name { return true } }
+    return false
+}
+func main() {
+    var width=0.4;var radius=0.3;var travel=0.6
+    if selected("zero") { width=0.0 }
+    if selected("negative") { width= -0.1 }
+    if selected("nan") { width=Math.sqrt(-1.0) }
+    if selected("infinite") { width=1.0/0.0 }
+    if selected("overflow") { width=1.0e30 }
+    if selected("underflow") { width=1.0e-30 }
+    if selected("radius-underflow") { radius=1.0e-30 }
+    if selected("travel-underflow") { travel=1.0e-30 }
+    Physics.Wheel3DSettings(Math.Vec3(),radius:radius,minimum_length:0.0,maximum_length:travel,
+        contact:Physics.WheelContact3D.cylinder(width))
+    panic("invalid cylinder contact was accepted")
+}

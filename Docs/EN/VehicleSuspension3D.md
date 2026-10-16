@@ -1,7 +1,7 @@
 # Support a chassis with wheel suspensions
 
 `WheeledVehicle3D` combines a dynamic chassis with suspended wheels. The world
-finds supports by ray or swept sphere, solves springs and compression stops, and applies
+finds supports by ray, swept sphere or cylinder, solves springs and compression stops, and applies
 reactions to both bodies. The application only calls `world.step`. Without an optional tire, wheels only apply suspension.
 [Passive tires](PassiveTires3D.md) add rolling and grip; [controls](VehicleControls3D.md)
 add steering and braking. The [powertrain](VehiclePowertrain3D.md) adds propulsion.
@@ -28,7 +28,7 @@ settings. Wheels create no additional rigid bodies and add no chassis mass.
 | `position` | Attachment in meters, relative to the chassis shape origin |
 | `direction` | Unit local extension direction, `(0,-1,0)` |
 | `radius` | Wheel radius in meters, `0.3` |
-| `contact` | `WheelContact3D.ray` by default; `WheelContact3D.sphere(radius)` for a volume contact |
+| `contact` | `WheelContact3D.ray` by default; `WheelContact3D.sphere(radius)` or `WheelContact3D.cylinder(width)` for volume contact |
 | `minimum_length`, `maximum_length` | Suspension lengths in meters, `0.2` and `0.6`; these exclude the radius |
 | `stiffness` | Per-wheel spring stiffness in N/m, `10000` |
 | `damping` | Per-wheel damping in N·s/m, `1000` |
@@ -80,6 +80,53 @@ The nearest admissible support is retained; if several surfaces initially overla
 the sphere, the deepest penetration is retained. The world then applies the same
 springs, reactions, tires and controls. A sphere approximates contact volume;
 it does not reproduce tire width or its cylindrical shape.
+
+## Include tire width in contacts
+
+The [width example](../../Examples/VehicleCylinderContact.sx) compares two
+wheels whose anchor extends 15 cm beyond an edge. A 10 cm width misses the
+support; a 40 cm width supports the wheel with 0.45 m suspension length:
+
+```sh
+silex run Packages/GFX.Physics/Examples/VehicleCylinderContact.sx --release
+```
+
+Choose `contact:Physics.WheelContact3D.cylinder(0.4)` when creating a wheel
+with a total width of 40 cm. The cylinder uses `Wheel3DSettings.radius`, starts
+at the anchor and travels `maximum_length` along the suspension direction.
+The observed length is the hit fraction multiplied by that travel.
+Its axle follows the chassis, current steering and the optional tire’s
+`forward`/`up` directions; without a tire these are `(0,0,1)` and `(0,1,0)`.
+Rolling rotation leaves this volume of revolution unchanged.
+
+The cylinder has sharp, unrounded rims. Width, radius and travel must be
+positive and representable; scales whose square becomes zero or non-finite
+are rejected. This mode ignores `maximum_slope_angle`, like Jolt’s cylinder
+tester: a wall or rim may therefore provide a contact. Bilateral filters,
+sensors, disabled bodies and chassis exclusion still apply. The earliest
+contact, or deepest initial penetration, becomes the support, including
+among compound/mesh leaves.
+
+A cylindrical tread can touch a face along a line. When the axle is tangent
+to the contact plane, the world prefers the wheel center’s projection if it
+belongs to both boundaries; otherwise it retains the point found on the
+support. Suspension and tires always react at that physical point. Different
+valid points on this line can produce different instantaneous impact moments.
+
+The [cylinder consumer](../../Tests/Consumer/Tests/VehicleCylinderContact3D.sx)
+covers width, first-step steering, camber, filters, pause, overlap and dynamic
+support reaction. `VehicleCylinderContactsRun.py` compares 21 configurations
+and two dynamic recipes at 60/120 Hz in Native Debug/Release on macOS ARM64:
+geometry, trajectory, rest/weight and per-step balances. Angular velocity uses
+quarter-second means; instantaneous landing parity is not claimed. Line-contact
+points are qualified by boundary membership, without arbitrary coordinate equality.
+
+Jolt’s corner normal differs from the analytic radial normal by about 0.011;
+only this equality is excluded, while boundaries and length remain checked.
+Silex retains the analytic normal. The Jolt rotated infinite-plane point limit
+described below is separate; a tilted box carrying that plane qualifies the
+physical point. These recipes qualify neither every driving scene nor
+performance parity.
 
 ## Read supports and trigger a reaction
 

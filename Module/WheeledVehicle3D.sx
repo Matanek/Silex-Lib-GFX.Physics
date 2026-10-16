@@ -1,3 +1,6 @@
+use GFX.Physics.Cylinder3D.Cylinder3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Geometry3D
 use GFX.Physics.WheelContact3D.WheelContact3D
 use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
@@ -69,6 +72,16 @@ public struct Wheel3DSettings {
         }
         match contact {
             ray => {}
+            cylinder(width) => {
+                let half=width*0.5
+                if !finite_body3d_value(width) || width<=0.0 ||
+                    !finite_body3d_value(half*half) || half*half==0.0 ||
+                    !finite_body3d_value(radius*radius) || radius*radius==0.0 ||
+                    !finite_body3d_value((half+radius)*(half+radius)) ||
+                    maximum_length*maximum_length==0.0 {
+                    panic("GFX.Physics.Wheel3DSettings cylinder contact requires positive representable width, radius and travel")
+                }
+            }
             sphere(cast_radius) => {
                 let travel=maximum_length+radius-cast_radius
                 if !finite_body3d_value(cast_radius) || cast_radius<=0.0 ||
@@ -455,6 +468,21 @@ public class WheeledVehicle3D {
         var body=self.store.require(self.id);let wheel=self.settings.wheel(index)
         return Ray3D(body.transform.point(wheel.position),body.transform.vector(wheel.direction).multiply(wheel.maximum_length+wheel.radius))
     }
+    package func cylinder_cast(index:int, width:float) Geometry3D.ShapeCast3D {
+        let wheel=self.settings.wheel(index);var body=self.store.require(self.id)
+        var forward=Math.Vec3(0.0,0.0,1.0);var up=Math.Vec3.up()
+        if let tire=wheel.tire { forward=tire.forward;up=tire.up }
+        let steering=Math.Quat.angle_axis(-self.steering_input*wheel.maximum_steering_angle,wheel.steering_axis)
+        let axle=steering.rotate(forward.cross(up).normalized())
+        var orientation=Math.Quat(Math.Vec3.up().cross(axle),1.0+axle.y).normalized()
+        if axle.y<0.0 {
+            let reverse=Math.Quat(Math.Vec3(0.0,-1.0,0.0).cross(axle),1.0-axle.y).normalized()
+            orientation=reverse.multiply(Math.Quat(1.0,0.0,0.0,0.0))
+        }
+        let pose=Transform3D(body.transform.point(wheel.position),body.transform.rotation.multiply(orientation).normalized())
+        return Geometry3D.ShapeCast3D(Geometry3D.ShapePlacement3D(Shape3D.cylinder(Cylinder3D(wheel.radius,width*0.5)),pose),
+            body.transform.vector(wheel.direction).multiply(wheel.maximum_length))
+    }
     package func clear_contacts() {
         var index=0
         while index<self.wheels.count() { self.wheels[index].clear(self.settings.wheel(index).maximum_length);index++ }
@@ -468,7 +496,10 @@ public class WheeledVehicle3D {
         var chassis=self.store.require(self.id);var ground=self.store.require(support.body_id())
         let wheel=self.settings.wheel(index)
         let alignment=normal.dot(chassis.transform.vector(wheel.direction).negated())
-        if alignment<Math.cos(wheel.maximum_slope_angle) { return false }
+        match wheel.contact {
+            cylinder(_) => {}
+            else => { if alignment<Math.cos(wheel.maximum_slope_angle) { return false } }
+        }
         var state=self.wheels[index]
         state.support=support.body_id();state.point=point;state.normal=normal
         state.local_support_point=ground.transform.inverse_point(state.point)

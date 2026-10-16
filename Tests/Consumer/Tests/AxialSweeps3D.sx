@@ -51,3 +51,28 @@ func report(name:str, mover:Physics.Shape3D, origin:Math.Vec3, translation:Math.
 }
 func main() { cast_cases(); print("Axial sweeps: 60 pinned oracle controls passed") }
 test "axial oblique sweeps preserve pinned Jolt fractions, analytic smooth normals and both boundary witnesses" { cast_cases() }
+
+
+test "cylinder sweeps retain inclined box faces at different target widths" {
+    let rotation=Math.Quat.angle_axis(Math.radians(20.0),Math.Vec3(0.0,0.0,1.0))
+    let sizes:float[]=[2.0,10.0,20.0]
+    for size in sizes {
+        let target=Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(size,1.0,size))),
+            Physics.Transform3D(rotation.rotate(Math.Vec3(0.0,-0.5,0.0)),rotation))
+        let mover=Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.3,0.2)),
+            Physics.Transform3D(Math.Vec3(0.0,0.8,0.0),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3(0.0,0.0,1.0))))
+        let result=Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(mover,Math.Vec3(0.0,-0.6,0.0)),target)
+        assert(result.hit)
+        assert(Math.abs(result.fraction*0.6-(0.5-0.2*Math.tan(Math.radians(20.0))))<0.0001)
+        assert(result.normal.nearly_equal(rotation.rotate(Math.Vec3.up()),0.0001))
+        assert(Math.abs(result.point.dot(rotation.rotate(Math.Vec3.up())))<0.0001)
+    }
+}
+
+test "cylinder smooth tread normal is analytic at a box corner" {
+    let mover=Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.3,0.2)),
+        Physics.Transform3D(Math.Vec3(0.65,0.75,0.65),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3(0.0,0.0,1.0))))
+    let target=Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0,0.1,1.0))),Physics.Transform3D(Math.Vec3(0.0,-0.05,0.0)))
+    let hit=Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(mover,Math.Vec3(0.0,-0.6,0.0)),target)
+    assert(hit.hit && hit.normal.nearly_equal(Math.Vec3(0.0,Math.sqrt(0.75),0.5),0.0001))
+}

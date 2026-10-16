@@ -76,12 +76,20 @@ func axial_support_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3
             index++
         }
         if repeated {
+            let previous_closest = closest
             closest = simplex.reduce()
-            if closest.length_squared() <= 0.000000000001 {
+            // A repeated support cannot refine the simplex further. Bound its
+            // reconstruction roundoff by sixteen single-precision ULPs in the
+            // normalized support frame, rather than declaring a near touch a miss.
+            if closest.length_squared() <= 0.000000000003637979 {
                 let witness = simplex.witness()
                 return axial_support_cast_result3d(cast, target, witness, scale, normal, fraction)
             }
-            return CastResult3D()
+            if closest.x==previous_closest.x && closest.y==previous_closest.y && closest.z==previous_closest.z { return CastResult3D() }
+            // Advancing translates the retained simplex. A repeated support
+            // still requires a new direction from its newly reduced position.
+            iteration++
+            continue
         }
         simplex.set_vertex(simplex.count, next); simplex.count++
         closest = simplex.reduce(); iteration++
@@ -94,13 +102,20 @@ func axial_support_cast_result3d(cast:ShapeCast3D, target:ShapePlacement3D,
     let origin = cast.placement.transform().position
     let point = origin.add(witness.second.multiply(scale))
     var outward = normal
-    // The tapered capsule is C1: its contact normal is unique even when the
-    // opposing cap or polygon has a normal cone. Recover it analytically from
-    // the smooth boundary instead of dividing a tiny Minkowski residue.
+    // Recover normals on smooth axial boundaries analytically instead of
+    // dividing a tiny Minkowski residue. Cylinder rims retain their normal cone.
     match target.shape() {
         tapered_capsule(_) => { outward = axial_point3d(point, target).normal }
         else => {
             match cast.placement.shape() {
+                cylinder(cylinder) => {
+                    let pose = cast.placement.transform()
+                    let moving = Transform3D(pose.position.add(cast.translation.multiply(fraction)), pose.rotation)
+                    let local_point = moving.inverse_point(point)
+                    if Math.abs(local_point.y)<cylinder.half_height-scale*0.000001 {
+                        outward=moving.vector(Math.Vec3(local_point.x,0.0,local_point.z).normalized()).negated()
+                    }
+                }
                 tapered_capsule(_) => {
                     let pose = cast.placement.transform()
                     let moving = ShapePlacement3D(cast.placement.shape(), Transform3D(pose.position.add(cast.translation.multiply(fraction)), pose.rotation))

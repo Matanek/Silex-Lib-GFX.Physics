@@ -1,7 +1,7 @@
 # Poser un châssis sur des suspensions de roue
 
 `WheeledVehicle3D` associe un châssis dynamique et des roues à suspension.
-Le monde cherche leurs appuis par rayon ou sphère balayée, résout ressorts et butées et applique
+Le monde cherche leurs appuis par rayon, sphère ou cylindre balayé, résout ressorts et butées et applique
 les réactions aux deux corps. L’application appelle seulement `world.step`.
 Sans pneu optionnel, les roues appliquent seulement la suspension. Les
 [pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; les [commandes](VehicleControls3D.md)
@@ -30,7 +30,7 @@ supplémentaires et n’ajoutent pas de masse au châssis.
 | `position` | Ancrage en mètres, relatif à l’origine de la forme du châssis |
 | `direction` | Direction locale unitaire de détente, `(0,-1,0)` |
 | `radius` | Rayon de roue en mètres, `0.3` |
-| `contact` | `WheelContact3D.ray` par défaut ; `WheelContact3D.sphere(rayon)` pour un contact volumique |
+| `contact` | `WheelContact3D.ray` par défaut ; `WheelContact3D.sphere(rayon)` ou `WheelContact3D.cylinder(largeur)` pour un contact volumique |
 | `minimum_length`, `maximum_length` | Longueurs de suspension en mètres, `0.2` et `0.6` ; elles excluent le rayon |
 | `stiffness` | Raideur par roue en N/m, `10000` |
 | `damping` | Amortissement par roue en N·s/m, `1000` |
@@ -84,6 +84,56 @@ chevauche déjà plusieurs surfaces, la pénétration la plus profonde est reten
 Le monde applique les mêmes ressorts, réactions, pneus et commandes ensuite.
 Une sphère approxime le volume de contact ; elle ne reproduit pas la largeur
 ni la forme cylindrique d’un pneu.
+
+## Faire compter la largeur du pneu
+
+L’[exemple de largeur](../../Examples/VehicleCylinderContact.sx) compare deux
+roues dont l’ancrage dépasse une arête de 15 cm. Une largeur de 10 cm manque
+le support ; une largeur de 40 cm prend appui, avec 0,45 m de suspension :
+
+```sh
+silex run Packages/GFX.Physics/Examples/VehicleCylinderContact.sx --release
+```
+
+À la création, choisir `contact:Physics.WheelContact3D.cylinder(0.4)` pour une
+largeur totale de 40 cm. Le cylindre utilise `Wheel3DSettings.radius` et part
+de l’ancrage, puis parcourt `maximum_length` dans la direction de suspension.
+La longueur observée est la fraction touchée multipliée par ce parcours.
+Son axe suit le châssis, le braquage courant et les directions `forward`/`up`
+du pneu optionnel ; sans pneu, ces directions sont `(0,0,1)` et `(0,1,0)`.
+La rotation de roulement ne change pas ce volume de révolution.
+
+Le cylindre est exact, sans arrondi des rebords. Largeur, rayon et parcours
+doivent être positifs et représentables ; les échelles dont le carré devient
+nul ou non fini sont refusées. Ce mode ignore `maximum_slope_angle`, comme le
+détecteur cylindrique Jolt : une paroi ou un rebord peut donc porter un contact.
+Les filtres bilatéraux, capteurs, corps désactivés et exclusion du châssis
+restent appliqués. Le premier contact, ou la pénétration initiale la plus
+profonde, devient le support, y compris entre feuilles d’un composé/maillage.
+
+Une bande cylindrique peut toucher une face selon une ligne. Lorsque l’axe
+est tangent au plan de contact, le monde préfère la projection du centre de
+roue si ce point appartient aux deux frontières ; sinon il conserve le point
+trouvé sur le support. Le ressort et les pneus réagissent toujours à ce point
+physique. Différents points valides de cette ligne peuvent produire des
+moments instantanés différents lors d’un choc.
+
+Le [consommateur cylindrique](../../Tests/Consumer/Tests/VehicleCylinderContact3D.sx)
+couvre largeur, braquage dès le premier pas, carrossage, filtres, pause,
+chevauchements et réaction à un support dynamique. Le témoin
+`VehicleCylinderContactsRun.py` compare 21 configurations et deux recettes
+dynamiques à 60/120 Hz en Native Debug/Release sur macOS ARM64 : géométrie,
+trajectoire, repos/poids et bilans par pas. La vitesse angulaire est comparée
+par moyennes de quarts de seconde ; sa parité instantanée aux réceptions n’est
+pas revendiquée. Les points de contact linéiques sont qualifiés par appartenance
+aux frontières, sans égalité arbitraire de leurs coordonnées.
+
+La normale Jolt au coin présente une erreur d’environ 0,011 par rapport à la
+normale radiale analytique ; seule cette égalité est exclue, les frontières
+et la longueur restant vérifiées. Silex conserve la normale analytique. La
+limite du point Jolt sur plan infini tourné décrite plus bas reste distincte ;
+une boîte inclinée portant ce plan valide le point physique. Ces recettes ne
+qualifient ni toutes les scènes de conduite ni une parité de performance.
 
 ## Lire les appuis et provoquer une réaction
 

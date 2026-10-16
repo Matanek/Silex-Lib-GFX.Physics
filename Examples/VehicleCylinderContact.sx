@@ -1,0 +1,20 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    let widths:float[]=[0.1,0.4]
+    for width in widths {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0,0.1,2.0)))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.05,0.0)))
+        var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+            Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.01))
+                ..transform=Physics.Transform3D(Math.Vec3(0.65,0.75,0.0)) ..allow_sleep=false,
+            [Physics.Wheel3DSettings(Math.Vec3(),contact:Physics.WheelContact3D.cylinder(width))]))
+        world.step(1.0/120.0)
+        let wheel=vehicle.wheel(0)
+        print("width=$(width) support=$(wheel.support()!=null) length=$(wheel.length)")
+        world.destroy_wheeled_vehicle(vehicle)
+    }
+}
