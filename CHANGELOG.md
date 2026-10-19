@@ -1,11 +1,13 @@
 # GFX.Physics release notes
 
-This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes are recorded under `## [Unreleased]
-
-- Optional per-wheel `WheelContact3D.cylinder(width)` contacts include tire width, steering, camber, filtering and reactions. Fix large inclined-face sweeps and radial tread normals. Sharp cylinders ignore the ray/sphere slope filter. Jolt qualification and line-contact limits are documented.` before publication,
+This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes are recorded under `## [Unreleased]` before publication,
 with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
+
+- Optional anti-roll bars between wheel pairs: spring transfer, missing support and dynamic reactions qualified against Jolt; copied settings, disjoint pairs and zero stiffness preserving prior behavior.
+
+- Optional per-wheel `WheelContact3D.cylinder(width)` contacts include tire width, steering, camber, filtering and reactions. Fix large inclined-face sweeps and radial tread normals. Sharp cylinders ignore the ray/sphere slope filter. Jolt qualification and line-contact limits are documented.
 
 - Optional per-wheel sphere contacts through `WheelContact3D.sphere(radius)`: edge reach, slope and initial-overlap selection, reactions and validated calibration. Sphere sweeps retain interior points on large faces without rejecting them due to rounded barycentric reconstruction; ray contacts remain the default.
 

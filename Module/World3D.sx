@@ -321,6 +321,7 @@ public class World3D {
                     }
                     index++
                 }
+                vehicle.prepare_anti_roll_bars(delta)
             }
         }
         self.vehicle_ray_hits.clear()

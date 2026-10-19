@@ -189,3 +189,5 @@ an off-surface point on a rotated infinite plane: only length and normal are
 compared there. A tilted box carrying the same plane qualifies the physical
 point. Silex keeps its support point; no equality with that incorrect Jolt
 point is claimed.
+
+[Reduce body roll with paired suspension bars](VehicleAntiRoll3D.md).

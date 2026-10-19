@@ -1,0 +1,126 @@
+use GFX.Physics
+use STD.Math
+
+func settings(stiffness:float=1000.0, bars:bool=true, tilt:float=0.0) Physics.WheeledVehicle3DSettings {
+    var wheels:Physics.Wheel3DSettings[]=[];let sides:float[]=[-1.0,1.0]
+    for x in sides { for z in sides { wheels.append(Physics.Wheel3DSettings(Math.Vec3(x*0.6,0.0,z),
+        maximum_length:0.77985,stiffness:1200.0,damping:160.0)) } }
+    var pairs:Physics.VehicleAntiRollBar3DSettings[]=[]
+    if bars { pairs=[Physics.VehicleAntiRollBar3DSettings(0,2,stiffness),Physics.VehicleAntiRollBar3DSettings(1,3,stiffness)] }
+    return Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,0.875475,0.0),Math.Quat.angle_axis(tilt,Math.Vec3(0.0,0.0,1.0)))
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0,wheels,anti_roll_bars:pairs)
+}
+func floor(world:Physics.World3D,half:bool=false) {
+    if half { world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(4.0,1.0,10.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(2.0,-0.5,0.0)) ..friction=0.0);return }
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=0.0)
+}
+func equivalent(a:Physics.WheeledVehicle3D,b:Physics.WheeledVehicle3D,normal_tolerance:float=0.000001) {
+    assert(a.chassis().position().nearly_equal(b.chassis().position(),0.000001))
+    assert(a.chassis().linear_velocity().nearly_equal(b.chassis().linear_velocity(),0.000001))
+    assert(a.chassis().angular_velocity().nearly_equal(b.chassis().angular_velocity(),0.000001))
+    for i in [0,1,2,3] {
+        assert(Math.abs(a.wheel(i).length-b.wheel(i).length)<0.000001)
+        assert(Math.abs(a.wheel(i).normal_force-b.wheel(i).normal_force)<normal_tolerance)
+    }
+}
+
+test "anti-roll settings retain copied wheel pairs without sharing live state" {
+    var wheels:Physics.Wheel3DSettings[]=[Physics.Wheel3DSettings(Math.Vec3(-0.6,0.0,0.0)),Physics.Wheel3DSettings(Math.Vec3(0.6,0.0,0.0))]
+    var bars:Physics.VehicleAntiRollBar3DSettings[]=[Physics.VehicleAntiRollBar3DSettings(0,1)]
+    var config=Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,anti_roll_bars:bars)
+    bars.clear();wheels.clear()
+    assert(config.anti_roll_bar_count()==1 && config.anti_roll_bar(0).left_wheel==0 && config.anti_roll_bar(0).right_wheel==1 && config.anti_roll_bar(0).stiffness==1000.0)
+    var world=Physics.World3D();var a=world.create_wheeled_vehicle(config);var b=world.create_wheeled_vehicle(config)
+    b.chassis().set_transform(Physics.Transform3D(Math.Vec3(5.0,2.0,0.0)))
+    a.chassis().apply_impulse(Math.Vec3(1.0,0.0,0.0));world.step(0.01)
+    assert(a.chassis().linear_velocity().x>0.0 && b.chassis().linear_velocity().x==0.0)
+    world.destroy_wheeled_vehicle(a);assert(!a.is_valid() && b.is_valid())
+}
+
+test "zero stiffness preserves inclined suspension and symmetric heave ignores anti-roll" {
+    for rate in [60,120] { for kind in [0,1] {
+        var first=Physics.World3D();var second=Physics.World3D();floor(first);floor(second)
+        var tilt=0.08;var stiffness=0.0;if kind==1 { tilt=0.0;stiffness=1000.0 }
+        var a=first.create_wheeled_vehicle(settings(stiffness,true,tilt));var b=second.create_wheeled_vehicle(settings(bars:false,tilt:tilt))
+        var normal_tolerance=0.000001;if kind==1 { normal_tolerance=0.001 }
+        var step=0;while step<rate*3 {
+            if step==rate { a.chassis().apply_impulse(Math.Vec3(0.0,500.0,0.0));b.chassis().apply_impulse(Math.Vec3(0.0,500.0,0.0)) }
+            first.step(1.0/rate as float);second.step(1.0/rate as float);equivalent(a,b,normal_tolerance);step++
+        }
+    } }
+}
+
+test "anti-roll reduces mirrored loaded roll through unilateral contact forces" {
+    let signs:float[]=[-1.0,1.0]
+    for rate in [60,120] { for sign in signs {
+        var first=Physics.World3D();var second=Physics.World3D();floor(first);floor(second)
+        var a=first.create_wheeled_vehicle(settings());var b=second.create_wheeled_vehicle(settings(bars:false))
+        var step=0;var stiff=0.0;var free=0.0;var samples=0
+        while step<rate*6 {
+            var torque=0.0;if step>=rate*2 && step<rate*4 { torque=40.0*sign }
+            let before=a.chassis().linear_velocity();let angular=a.chassis().angular_velocity();let center=a.chassis().world_center_of_mass()
+            a.chassis().apply_torque(Math.Vec3(0.0,0.0,torque));b.chassis().apply_torque(Math.Vec3(0.0,0.0,torque))
+            first.step(1.0/rate as float);second.step(1.0/rate as float)
+            var force=Math.Vec3();var moment=Math.Vec3()
+            for i in [0,1,2,3] {
+                var wheel=a.wheel(i);assert(wheel.normal_force>=0.0)
+                let f=wheel.contact_normal.multiply(wheel.normal_force);force=force.add(f)
+                moment=moment.add(wheel.contact_point.subtract(center).cross(f))
+            }
+            let dv=a.chassis().linear_velocity().subtract(before).multiply(100.0)
+            let dw=a.chassis().angular_velocity().subtract(angular).multiply(100.0)
+            assert(dv.subtract(force.add(Math.Vec3(0.0,-981.0,0.0)).divide(rate as float)).length()<0.05)
+            assert(dw.subtract(moment.add(Math.Vec3(0.0,0.0,torque)).divide(rate as float)).length()<0.05)
+            if step>=rate*3 && step<rate*4 {
+                let ra=Math.atan2(a.chassis().transform().vector(Math.Vec3.right()).y,a.chassis().transform().vector(Math.Vec3.up()).y)
+                let rb=Math.atan2(b.chassis().transform().vector(Math.Vec3.right()).y,b.chassis().transform().vector(Math.Vec3.up()).y)
+                assert(ra*sign>0.0 && rb*sign>0.0);stiff+=Math.abs(ra);free+=Math.abs(rb);samples++
+            }
+            step++
+        }
+        assert(samples==rate && stiff<free*0.8 && free>0.01*samples as float)
+        assert(Math.abs(a.chassis().position().y-0.875475)<0.003)
+    } }
+}
+
+test "one unsupported wheel disables its anti-roll pair and zero steps preserve observations" {
+    for rate in [60,120] {
+        var first=Physics.World3D();var second=Physics.World3D();floor(first,true);floor(second,true)
+        var a=first.create_wheeled_vehicle(settings(tilt:0.08));var b=second.create_wheeled_vehicle(settings(bars:false,tilt:0.08))
+        var step=0;while step<rate/4 {
+            first.step(1.0/rate as float);second.step(1.0/rate as float);equivalent(a,b)
+            assert(a.wheel(0).support()==null && a.wheel(1).support()==null)
+            let held=a.wheel(2).normal_force;first.step(0.0);assert(a.wheel(2).normal_force==held);step++
+        }
+        a.chassis().set_enabled(false);let held=a.chassis().position();first.step(0.1)
+        assert(a.chassis().position().nearly_equal(held,0.000001) && a.wheel(2).normal_force==0.0)
+    }
+}
+
+test "anti-roll reacts to a dynamic support at real points and conserves total momenta" {
+    for rate in [60,120] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var platform=world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0)))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.05,0.0))
+            ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(100.0))
+            ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0)
+        var vehicle=world.create_wheeled_vehicle(settings(tilt:0.08));var step=0;var reacted=false
+        while step<rate {
+            world.step(1.0/rate as float)
+            let p=platform.linear_velocity().multiply(200.0).add(vehicle.chassis().linear_velocity().multiply(100.0))
+            let l=platform.angular_velocity().multiply(100.0).add(vehicle.chassis().angular_velocity().multiply(100.0))
+                .add(platform.world_center_of_mass().cross(platform.linear_velocity().multiply(200.0)))
+                .add(vehicle.chassis().world_center_of_mass().cross(vehicle.chassis().linear_velocity().multiply(100.0)))
+            assert(p.length()<0.01 && l.length()<0.01)
+            if platform.angular_velocity().length()>0.001 { reacted=true }step++
+        }
+        assert(reacted && platform.position().y< -0.05)
+    }
+}

@@ -100,6 +100,22 @@ public struct Wheel3DSettings {
     }
 }
 
+public struct VehicleAntiRollBar3DSettings {
+    let left_wheel:int
+    let right_wheel:int
+    let stiffness:float
+
+    init(left_wheel:int, right_wheel:int, stiffness:float=1000.0) {
+        if left_wheel<0 || right_wheel<0 || left_wheel==right_wheel {
+            panic("GFX.Physics.VehicleAntiRollBar3DSettings requires distinct nonnegative wheel indices")
+        }
+        if !finite_body3d_value(stiffness) || stiffness<0.0 {
+            panic("GFX.Physics.VehicleAntiRollBar3DSettings requires nonnegative finite stiffness")
+        }
+        self.left_wheel=left_wheel;self.right_wheel=right_wheel;self.stiffness=stiffness
+    }
+}
+
 public class WheeledVehicle3DSettings {
     let chassis:RigidBody3DSettings
     private var wheels:Wheel3DSettings[]
@@ -107,10 +123,12 @@ public class WheeledVehicle3DSettings {
     let transmission:VehicleTransmission3DSettings
     let differential_limited_slip_ratio:float?
     private var differentials:VehicleDifferential3DSettings[]
+    private var anti_roll_bars:VehicleAntiRollBar3DSettings[]
 
     init(chassis:RigidBody3DSettings, wheels:Wheel3DSettings[], engine:VehicleEngine3DSettings?=null,
         transmission:VehicleTransmission3DSettings=VehicleTransmission3DSettings(),
-        differentials:VehicleDifferential3DSettings[]=[], differential_limited_slip_ratio:float?=1.4) {
+        differentials:VehicleDifferential3DSettings[]=[], differential_limited_slip_ratio:float?=1.4,
+        anti_roll_bars:VehicleAntiRollBar3DSettings[]=[]) {
         if chassis.body_type!=BodyType3D.dynamic { panic("GFX.Physics.WheeledVehicle3DSettings requires a dynamic chassis") }
         BodyState3D(chassis)
         if wheels.count()==0 { panic("GFX.Physics.WheeledVehicle3DSettings requires at least one wheel") }
@@ -155,6 +173,25 @@ public class WheeledVehicle3DSettings {
             }
         }
         self.differentials=saved
+        var bars:VehicleAntiRollBar3DSettings[]=[];var paired:int[]=[]
+        for bar in anti_roll_bars {
+            let indices:int[]=[bar.left_wheel,bar.right_wheel]
+            for i in indices {
+                if i>=wheels.count() { panic("GFX.Physics.WheeledVehicle3DSettings anti-roll wheel index is out of range") }
+                for previous in paired { if i==previous { panic("GFX.Physics.WheeledVehicle3DSettings anti-roll bars require disjoint wheel pairs") } }
+                if !finite_body3d_value(bar.stiffness*wheels[i].maximum_length) {
+                    panic("GFX.Physics.WheeledVehicle3DSettings anti-roll stiffness and travel must be representable")
+                }
+                paired.append(i)
+            }
+            bars.append(bar)
+        }
+        self.anti_roll_bars=bars
+    }
+    func anti_roll_bar_count() int { return self.anti_roll_bars.count() }
+    func anti_roll_bar(index:int) VehicleAntiRollBar3DSettings {
+        if index<0 || index>=self.anti_roll_bars.count() { panic("GFX.Physics.WheeledVehicle3DSettings anti-roll bar index is out of range") }
+        return self.anti_roll_bars[index]
     }
     func differential_count() int { return self.differentials.count() }
     func differential(index:int) VehicleDifferential3DSettings {
@@ -519,6 +556,18 @@ public class WheeledVehicle3D {
         if chassis.awake && !ground.awake { ground.wake() }
         state.active=chassis.awake || ground.awake
         return true
+    }
+    package func prepare_anti_roll_bars(delta:float) {
+        var index=0
+        while index<self.settings.anti_roll_bar_count() {
+            let bar=self.settings.anti_roll_bar(index)
+            var left=self.wheels[bar.left_wheel];var right=self.wheels[bar.right_wheel]
+            if left.support!=null && right.support!=null {
+                let bias=(right.length-left.length)*bar.stiffness*delta
+                left.bias-=bias;right.bias+=bias
+            }
+            index++
+        }
     }
     package func forget_support(id:BodyId3D) {
         var index=0

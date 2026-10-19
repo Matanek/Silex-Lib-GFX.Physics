@@ -62,3 +62,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [3D pulley](Docs/EN/Pulley3D.md): weighted cable lengths and anchor reactions.
 
 [Spatial hinge and vertical slider](Docs/EN/SpatialRail3D.md): offset loads, gravity, floor contact and reversal with vector reaction balances.
+
+[Anti-roll bars](Docs/EN/VehicleAntiRoll3D.md) couple wheel suspensions to reduce body roll while preserving common heave.

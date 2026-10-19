@@ -197,3 +197,5 @@ de trajectoire de cette recette s’arrête à 1,5 s ; les bilans gardent tous l
 sur un plan infini tourné : seules longueur et normale y sont comparées. Une
 boîte inclinée portant le même plan qualifie le point physique. Silex conserve
 le point sur le support ; aucune égalité avec ce point Jolt incorrect n’est annoncée.
+
+[Réduire le roulis avec les barres entre suspensions](VehicleAntiRoll3D.md).

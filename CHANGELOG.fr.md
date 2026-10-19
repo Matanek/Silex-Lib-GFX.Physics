@@ -1,12 +1,14 @@
 # Journal des versions de GFX.Physics
 
 Ce journal commence à 0.7.0 et couvre les changements depuis le tag 0.6.0.
-Les changements futurs sont consignés sous `## [Unreleased]
-
-- Contacts cylindriques optionnels par roue avec `WheelContact3D.cylinder(largeur)` : largeur réelle, braquage et carrossage, filtres et réactions ; balayages de grandes faces inclinées et normales radiales corrigés. La géométrie cylindrique exacte ignore le filtre de pente des rayons/sphères. Qualification Jolt et limites des contacts linéiques documentées.` avant publication,
+Les changements futurs sont consignés sous `## [Unreleased]` avant publication,
 puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
+
+- Barres anti-roulis optionnelles entre paires de roues : transfert dans les ressorts, perte d’appui et réactions dynamiques qualifiés face à Jolt ; réglages copiés, paires disjointes et raideur nulle sans effet.
+
+- Contacts cylindriques optionnels par roue avec `WheelContact3D.cylinder(largeur)` : largeur réelle, braquage et carrossage, filtres et réactions ; balayages de grandes faces inclinées et normales radiales corrigés. La géométrie cylindrique exacte ignore le filtre de pente des rayons/sphères. Qualification Jolt et limites des contacts linéiques documentées.
 
 - Contacts sphériques optionnels par roue avec `WheelContact3D.sphere(rayon)` : portée autour des arêtes, sélection des pentes et chevauchements initiaux, réactions et réglages validés. Les sphères balayées conservent les points intérieurs des grandes faces sans les rejeter à cause d’une reconstruction barycentrique arrondie ; le contact par rayon reste le défaut.
 
