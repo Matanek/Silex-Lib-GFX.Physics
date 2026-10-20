@@ -1,0 +1,21 @@
+use GFX.Physics
+use STD.Math
+
+func run_example(limited:bool) float {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var angle=Math.pi();if limited { angle=Math.pi()/6.0 }
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..transform=Physics.Transform3D(Math.Vec3(),
+            Math.Quat.angle_axis(Math.pi()/3.0,Math.Vec3(1.0,0.0,1.0).normalized()))
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0,
+        [Physics.Wheel3DSettings(Math.Vec3())],maximum_tilt_angle:angle))
+    var step=0;while step<120 { world.step(1.0/120.0);step++ }
+    let up=vehicle.chassis().transform().vector(Math.Vec3.up())
+    let result=Math.atan2(Math.Vec3.up().cross(up).length(),up.y)*180.0/Math.pi()
+    world.destroy_wheeled_vehicle(vehicle);return result
+}
+func main() {
+    print("Free tilt after one second: $(run_example(false)) degrees")
+    print("Limited tilt after one second: $(run_example(true)) degrees")
+}

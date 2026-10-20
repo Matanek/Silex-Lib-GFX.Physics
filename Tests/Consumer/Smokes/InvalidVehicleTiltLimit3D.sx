@@ -1,0 +1,24 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(value:str) bool { for arg in Process.arguments() { if arg==value { return true } }return false }
+func main() {
+    var angle=0.5;var up=Math.Vec3.up()
+    if selected("negative") || selected("live-negative") { angle= -0.1 }
+    if selected("high") || selected("live-high") { angle=4.0 }
+    if selected("nan") || selected("live-nan") { angle=Math.sqrt(-1.0) }
+    if selected("infinite") || selected("live-infinite") { angle=1.0/0.0 }
+    if selected("up-zero") { up=Math.Vec3() }
+    if selected("up-nonunit") { up=Math.Vec3(0.0,2.0,0.0) }
+    if selected("up-nan") { up=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("up-infinite") { up=Math.Vec3(1.0/0.0,0.0,0.0) }
+    var initial=angle
+    if selected("live-negative") || selected("live-high") || selected("live-nan") || selected("live-infinite") { initial=0.5 }
+    var settings=Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings(),
+        [Physics.Wheel3DSettings(Math.Vec3())],maximum_tilt_angle:initial,up:up)
+    var world=Physics.World3D();var vehicle=world.create_wheeled_vehicle(settings)
+    if selected("expired-read") { world.destroy_wheeled_vehicle(vehicle);vehicle.maximum_tilt_angle() }
+    if selected("expired-write") { world.destroy_wheeled_vehicle(vehicle);vehicle.set_maximum_tilt_angle(angle) }
+    vehicle.set_maximum_tilt_angle(angle)
+    panic("invalid vehicle tilt settings were accepted")
+}

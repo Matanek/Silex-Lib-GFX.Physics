@@ -199,3 +199,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Motoriser les roues](VehiclePowertrain3D.md) : moteur, embrayage, transmission automatique/manuelle et différentiels.
 
 [Réduire le roulis avec les barres entre suspensions](VehicleAntiRoll3D.md).
+
+[Borner l’inclinaison totale du châssis](VehicleTiltLimit3D.md).

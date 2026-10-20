@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Limite optionnelle d’inclinaison totale sur `WheeledVehicle3D` : cône relatif à la gravité, lacet libre, mutation de l’angle et haut local configurable ; correction progressive en vol ou avec appuis, défaut pi inchangé et singularité du retournement exact documentée.
+
 - Barres anti-roulis optionnelles entre paires de roues : transfert dans les ressorts, perte d’appui et réactions dynamiques qualifiés face à Jolt ; réglages copiés, paires disjointes et raideur nulle sans effet.
 
 - Contacts cylindriques optionnels par roue avec `WheelContact3D.cylinder(largeur)` : largeur réelle, braquage et carrossage, filtres et réactions ; balayages de grandes faces inclinées et normales radiales corrigés. La géométrie cylindrique exacte ignore le filtre de pente des rayons/sphères. Qualification Jolt et limites des contacts linéiques documentées.

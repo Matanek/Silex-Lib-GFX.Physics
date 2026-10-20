@@ -118,6 +118,8 @@ public struct VehicleAntiRollBar3DSettings {
 
 public class WheeledVehicle3DSettings {
     let chassis:RigidBody3DSettings
+    let maximum_tilt_angle:float
+    let up:Math.Vec3
     private var wheels:Wheel3DSettings[]
     let engine:VehicleEngine3DSettings?
     let transmission:VehicleTransmission3DSettings
@@ -128,10 +130,16 @@ public class WheeledVehicle3DSettings {
     init(chassis:RigidBody3DSettings, wheels:Wheel3DSettings[], engine:VehicleEngine3DSettings?=null,
         transmission:VehicleTransmission3DSettings=VehicleTransmission3DSettings(),
         differentials:VehicleDifferential3DSettings[]=[], differential_limited_slip_ratio:float?=1.4,
-        anti_roll_bars:VehicleAntiRollBar3DSettings[]=[]) {
+        anti_roll_bars:VehicleAntiRollBar3DSettings[]=[], maximum_tilt_angle:float=Math.pi(),
+        up:Math.Vec3=Math.Vec3.up()) {
         if chassis.body_type!=BodyType3D.dynamic { panic("GFX.Physics.WheeledVehicle3DSettings requires a dynamic chassis") }
         BodyState3D(chassis)
         if wheels.count()==0 { panic("GFX.Physics.WheeledVehicle3DSettings requires at least one wheel") }
+        validate_vehicle_tilt_angle3d(maximum_tilt_angle)
+        if !finite_body3d_point(up) || Math.abs(up.length_squared()-1.0)>0.0001 {
+            panic("GFX.Physics.WheeledVehicle3DSettings up must be a finite unit vector")
+        }
+        self.maximum_tilt_angle=maximum_tilt_angle;self.up=up.normalized()
         self.chassis=chassis
         var retained:Wheel3DSettings[]=[]
         for wheel in wheels { retained.append(wheel) }
@@ -299,9 +307,17 @@ public class WheeledVehicle3D {
     private var handbrake_input:float=0.0
     private var throttle_input:float=0.0
     private var drivetrain:VehiclePowertrain3D?=null
+    private var tilt_cos_limit:float
+    private var tilt_world_up:Math.Vec3
+    private var tilt_axis:Math.Vec3=Math.Vec3.up()
+    private var tilt_cos_angle:float=1.0
+    private var tilt_inverse_mass:float=0.0
+    private var tilt_impulse:float=0.0
+    private var tilt_previous_delta:float=0.0
+    private var tilt_delta:float=0.0
 
     package init(store:BodyStore3D, id:BodyId3D, settings:WheeledVehicle3DSettings) {
-        self.store=store;self.id=id;self.settings=settings
+        self.store=store;self.id=id;self.settings=settings;self.tilt_cos_limit=Math.cos(settings.maximum_tilt_angle);self.tilt_world_up=settings.up
         var wheels:WheelSuspensionState3D[]=[]
         var index=0
         while index<settings.wheel_count() { wheels.append(WheelSuspensionState3D(settings.wheel(index).maximum_length));index++ }
@@ -328,6 +344,12 @@ public class WheeledVehicle3D {
             return
         }
         panic("GFX.Physics.WheeledVehicle3D has no engine")
+    }
+    func maximum_tilt_angle() float { self.require_valid();return Math.acos(Math.clamp(self.tilt_cos_limit,-1.0,1.0)) }
+    func set_maximum_tilt_angle(angle:float) {
+        validate_vehicle_tilt_angle3d(angle);self.store.require_mutable();self.require_valid()
+        self.tilt_cos_limit=Math.cos(angle);self.tilt_impulse=0.0;self.tilt_previous_delta=0.0
+        self.store.require(self.id).wake()
     }
     func is_valid() bool { return self.store.contains(self.id) }
     private func require_valid() {
@@ -447,6 +469,7 @@ public class WheeledVehicle3D {
         state.brake_torque=(state.angular_velocity-before)*tire.inertia/delta
     }
     package func warm_start_tires() {
+        self.warm_start_tilt_limit()
         var chassis=self.store.require(self.id)
         for state in self.wheels {
             if state.active && state.support!=null && state.lateral_impulse!=0.0 {
@@ -557,6 +580,54 @@ public class WheeledVehicle3D {
         state.active=chassis.awake || ground.awake
         return true
     }
+    package func prepare_tilt_limit(gravity:Math.Vec3, delta:float) {
+        let length=gravity.length()
+        if length>0.0 && finite_body3d_value(length) { self.tilt_world_up=gravity.divide(-length) }
+        self.tilt_delta=delta
+        self.calculate_tilt_limit()
+    }
+    private func calculate_tilt_limit() {
+        var chassis=self.store.require(self.id)
+        self.tilt_inverse_mass=0.0
+        if self.tilt_cos_limit> -1.0 && chassis.is_enabled && chassis.awake {
+            let up=chassis.transform.vector(self.settings.up)
+            self.tilt_cos_angle=self.tilt_world_up.dot(up)
+            if self.tilt_cos_angle<self.tilt_cos_limit {
+                let axis=self.tilt_world_up.cross(up);let length=axis.length()
+                if length>0.0 { self.tilt_axis=axis.divide(length) }
+                self.tilt_inverse_mass=self.tilt_axis.dot(chassis.inverse_inertia_times(self.tilt_axis))
+            }
+        }
+        if self.tilt_inverse_mass<=0.0 { self.tilt_impulse=0.0 }
+    }
+    private func warm_start_tilt_limit() {
+        if self.tilt_inverse_mass>0.0 && self.tilt_previous_delta>0.0 {
+            self.tilt_impulse*=self.tilt_delta/self.tilt_previous_delta
+            var chassis=self.store.require(self.id)
+            chassis.angular_velocity=chassis.angular_velocity.subtract(chassis.inverse_inertia_times(self.tilt_axis.multiply(self.tilt_impulse)))
+        }
+        self.tilt_previous_delta=self.tilt_delta
+    }
+    private func solve_tilt_velocity() {
+        if self.tilt_inverse_mass>0.0 {
+            var chassis=self.store.require(self.id);let previous=self.tilt_impulse
+            self.tilt_impulse=Math.max(0.0,previous+self.tilt_axis.dot(chassis.angular_velocity)/self.tilt_inverse_mass)
+            chassis.angular_velocity=chassis.angular_velocity.subtract(chassis.inverse_inertia_times(self.tilt_axis.multiply(self.tilt_impulse-previous)))
+        }
+    }
+    private func solve_tilt_position() {
+        self.calculate_tilt_limit()
+        if self.tilt_inverse_mass>0.0 {
+            var chassis=self.store.require(self.id)
+            let impulse= -0.2*(self.tilt_cos_angle-self.tilt_cos_limit)/self.tilt_inverse_mass
+            let turn=chassis.inverse_inertia_times(self.tilt_axis.multiply(-impulse));let angle=turn.length()
+            if angle>0.000001 {
+                let center=chassis.world_center()
+                let rotation=Math.Quat.angle_axis(angle,turn.divide(angle)).multiply(chassis.transform.rotation).normalized()
+                chassis.transform=Transform3D(center.subtract(rotation.rotate(chassis.mass_properties.local_center)),rotation)
+            }
+        }
+    }
     package func prepare_anti_roll_bars(delta:float) {
         var index=0
         while index<self.settings.anti_roll_bar_count() {
@@ -595,6 +666,7 @@ public class WheeledVehicle3D {
         }
     }
     package func has_active_contact() bool {
+        if self.tilt_inverse_mass>0.0 { return true }
         for wheel in self.wheels { if wheel.active { return true } }
         return false
     }
@@ -618,6 +690,7 @@ public class WheeledVehicle3D {
             index++
         }
         self.solve_tire_velocities()
+        self.solve_tilt_velocity()
     }
     package func solve_position() {
         var chassis=self.store.require(self.id);var index=0
@@ -639,6 +712,13 @@ public class WheeledVehicle3D {
             }
             index++
         }
+        self.solve_tilt_position()
+    }
+}
+
+func validate_vehicle_tilt_angle3d(angle:float) {
+    if !finite_body3d_value(angle) || angle<0.0 || angle>Math.pi() {
+        panic("GFX.Physics.WheeledVehicle3D requires a finite maximum tilt angle in [0, pi]")
     }
 }
 

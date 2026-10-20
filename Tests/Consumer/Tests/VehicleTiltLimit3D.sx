@@ -1,0 +1,113 @@
+use GFX.Physics
+use STD.Math
+
+func make_settings(angle:float=Math.pi(), rotation:Math.Quat=Math.Quat(), up:Math.Vec3=Math.Vec3.up()) Physics.WheeledVehicle3DSettings {
+    return Physics.WheeledVehicle3DSettings(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,50.0,0.0),rotation)
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0,
+        [Physics.Wheel3DSettings(Math.Vec3())],maximum_tilt_angle:angle,up:up)
+}
+func tilt(vehicle:Physics.WheeledVehicle3D, up:Math.Vec3=Math.Vec3.up(), local_up:Math.Vec3=Math.Vec3.up()) float {
+    let actual=vehicle.chassis().transform().vector(local_up)
+    return Math.atan2(up.cross(actual).length(),up.dot(actual))
+}
+
+test "vehicle tilt limit is optional and instances retain independent mutable angles" {
+    var config=make_settings();assert(config.maximum_tilt_angle==Math.pi() && config.up==Math.Vec3.up())
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var a=world.create_wheeled_vehicle(config);var b=world.create_wheeled_vehicle(config)
+    a.set_maximum_tilt_angle(0.5);assert(Math.abs(a.maximum_tilt_angle()-0.5)<0.000001 && Math.abs(b.maximum_tilt_angle()-Math.pi())<0.000001)
+    world.destroy_wheeled_vehicle(a);assert(!a.is_valid() && b.is_valid());world.destroy_wheeled_vehicle(b);assert(world.body_count()==0)
+}
+
+test "vehicle cone corrects mirrored and diagonal tilt in flight without changing translation" {
+    let axes:Math.Vec3[]=[Math.Vec3.right(),Math.Vec3(0.0,0.0,1.0),Math.Vec3(1.0,0.0,1.0).normalized()]
+    for axis in axes {
+        let signs:float[]=[-1.0,1.0]
+        for sign in signs { for rate in [60,120] {
+            var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+            var vehicle=world.create_wheeled_vehicle(make_settings(0.5,Math.Quat.angle_axis(sign*0.9,axis)))
+            var body=vehicle.chassis();body.set_linear_velocity(Math.Vec3(1.0,0.0,0.0));body.set_angular_velocity(axis.multiply(sign))
+            let before=body.transform();world.step(0.0);assert(body.transform()==before)
+            var step=0;while step<rate { world.step(1.0/rate as float);step++ }
+            assert(tilt(vehicle)<=0.5001 && tilt(vehicle)>=0.499)
+            assert(body.position().nearly_equal(Math.Vec3(1.0,50.0,0.0),0.0001))
+            assert(body.linear_velocity()==Math.Vec3(1.0,0.0,0.0) && body.angular_velocity().length()<0.0001)
+        } }
+    }
+}
+
+test "vehicle yaw is free inside the tilt cone and pi preserves unconstrained spin" {
+    for rate in [60,120] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var vehicle=world.create_wheeled_vehicle(make_settings(0.4))
+        vehicle.chassis().set_angular_velocity(Math.Vec3(0.0,2.0,0.0))
+        var step=0;while step<rate { world.step(1.0/rate as float);step++ }
+        assert(vehicle.chassis().angular_velocity()==Math.Vec3(0.0,2.0,0.0) && tilt(vehicle)<0.000001)
+        vehicle.set_maximum_tilt_angle(Math.pi());vehicle.chassis().set_angular_velocity(Math.Vec3(1.0,0.0,0.0))
+        step=0;while step<rate { world.step(1.0/rate as float);step++ }
+        assert(vehicle.chassis().angular_velocity().nearly_equal(Math.Vec3(1.0,0.0,0.0),0.00001) && tilt(vehicle)>0.9)
+    }
+}
+
+test "vehicle tilt follows changed gravity and retains its last vertical at zero gravity" {
+    var world=Physics.World3D();var vehicle=world.create_wheeled_vehicle(make_settings(0.4))
+    world.step(0.01);world.set_gravity(Math.Vec3(-9.81,0.0,0.0))
+    var step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(tilt(vehicle,Math.Vec3.right())<0.401)
+    world.set_gravity(Math.Vec3());vehicle.chassis().set_transform(Physics.Transform3D(Math.Vec3(0.0,50.0,0.0)))
+    step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(tilt(vehicle,Math.Vec3.right())<0.401)
+}
+
+test "vehicle custom local up and disabled chassis respect the same physical cone" {
+    var world=Physics.World3D();let local_up=Math.Vec3(0.0,0.0,1.0)
+    var vehicle=world.create_wheeled_vehicle(make_settings(0.5,up:local_up));var body=vehicle.chassis()
+    body.set_enabled(false);let before=body.transform();world.step(0.1);assert(body.transform()==before)
+    body.set_enabled(true);var step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(tilt(vehicle,local_up:local_up)<0.501)
+    world.set_gravity(Math.Vec3());body.set_linear_velocity(Math.Vec3());body.set_sleep_enabled(true)
+    step=0;while step<240 { world.step(1.0/120.0);step++ }
+    assert(!body.is_awake());vehicle.set_maximum_tilt_angle(0.2);assert(body.is_awake())
+    step=0;while step<120 { world.step(1.0/120.0);step++ }
+    assert(tilt(vehicle,local_up:local_up)<0.201)
+}
+
+test "zero-angle cone recovers progressively and changing step sizes retains one-sided response" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=world.create_wheeled_vehicle(make_settings(0.0,Math.Quat.angle_axis(0.7,Math.Vec3.right())))
+    var body=vehicle.chassis();body.set_angular_velocity(Math.Vec3.right())
+    var previous=tilt(vehicle);var step=0
+    while step<240 {
+        var delta=1.0/60.0;if step%2==1 { delta=1.0/120.0 }
+        body.apply_torque(Math.Vec3(10.0,0.0,0.0));world.step(delta)
+        let angle=tilt(vehicle);assert(angle<=previous+0.000001);previous=angle
+        assert(body.angular_velocity().length()<0.00001);step++
+    }
+    assert(previous<0.02 && previous>0.0)
+    vehicle.set_maximum_tilt_angle(Math.pi());world.step(0.01)
+    assert(body.angular_velocity().length()<0.00001)
+}
+
+test "tilt correction uses rotated anisotropic inertia and preserves an offset center of mass" {
+    let rotation=Math.Quat.angle_axis(0.7,Math.Vec3.right()).multiply(Math.Quat.angle_axis(0.4,Math.Vec3(0.0,0.0,1.0)))
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=1)
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..transform=Physics.Transform3D(Math.Vec3(0.0,50.0,0.0),rotation)
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(50.0,100.0,150.0),Math.Vec3(0.2,0.1,-0.1))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0,
+        [Physics.Wheel3DSettings(Math.Vec3())],maximum_tilt_angle:0.3))
+    var body=vehicle.chassis();let center=body.world_center_of_mass()
+    let up=rotation.rotate(Math.Vec3.up());let axis=Math.Vec3.up().cross(up).normalized()
+    let local_axis=rotation.conjugated().rotate(axis)
+    let response=rotation.rotate(Math.Vec3(local_axis.x/50.0,local_axis.y/100.0,local_axis.z/150.0))
+    let impulse=0.2*(up.y-Math.cos(0.3))/axis.dot(response)
+    let turn=response.multiply(impulse)
+    let expected=Math.Quat.angle_axis(turn.length(),turn.normalized()).multiply(rotation).normalized()
+    world.step(0.01)
+    assert(Math.abs(Math.abs(body.rotation().dot(expected))-1.0)<0.000001)
+    assert(body.world_center_of_mass().nearly_equal(center,0.00001))
+    assert(body.linear_velocity()==Math.Vec3() && body.angular_velocity()==Math.Vec3())
+}

@@ -871,7 +871,10 @@ public class World3D {
         self.prepare_vehicle_suspensions(delta)
         self.wake_constraint_islands()
         self.wake_contact_islands()
-        for vehicle in self.wheeled_vehicles { vehicle.prepare_tires(delta) }
+        for vehicle in self.wheeled_vehicles {
+            vehicle.prepare_tilt_limit(self.current_gravity,delta)
+            vehicle.prepare_tires(delta)
+        }
         var has_continuous_body = false
         for state in self.store.slots {
             if let body = state {

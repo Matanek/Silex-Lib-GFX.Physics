@@ -64,3 +64,4 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Spatial hinge and vertical slider](Docs/EN/SpatialRail3D.md): offset loads, gravity, floor contact and reversal with vector reaction balances.
 
 [Anti-roll bars](Docs/EN/VehicleAntiRoll3D.md) couple wheel suspensions to reduce body roll while preserving common heave.
+[Vehicle tilt limits](Docs/EN/VehicleTiltLimit3D.md) bound total chassis inclination relative to gravity while leaving yaw free.

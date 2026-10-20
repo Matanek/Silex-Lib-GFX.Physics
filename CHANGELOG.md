@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Optional total inclination limit on `WheeledVehicle3D`: gravity-relative cone, free yaw, mutable angle and configurable local up; gradual correction in flight or with support, unchanged pi default and documented exact-inversion singularity.
+
 - Optional anti-roll bars between wheel pairs: spring transfer, missing support and dynamic reactions qualified against Jolt; copied settings, disjoint pairs and zero stiffness preserving prior behavior.
 
 - Optional per-wheel `WheelContact3D.cylinder(width)` contacts include tire width, steering, camber, filtering and reactions. Fix large inclined-face sweeps and radial tread normals. Sharp cylinders ignore the ray/sphere slope filter. Jolt qualification and line-contact limits are documented.
