@@ -65,3 +65,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 
 [Anti-roll bars](Docs/EN/VehicleAntiRoll3D.md) couple wheel suspensions to reduce body roll while preserving common heave.
 [Vehicle tilt limits](Docs/EN/VehicleTiltLimit3D.md) bound total chassis inclination relative to gravity while leaving yaw free.
+
+[Tracked vehicles](Docs/EN/TrackedVehicle3D.md) · [Véhicules à chenilles](Docs/FR/TrackedVehicle3D.md): drive, turn and pivot with two coupled tracks of suspended wheels.

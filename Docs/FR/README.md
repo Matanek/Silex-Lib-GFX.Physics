@@ -201,3 +201,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Réduire le roulis avec les barres entre suspensions](VehicleAntiRoll3D.md).
 
 [Borner l’inclinaison totale du châssis](VehicleTiltLimit3D.md).
+
+[Véhicule à deux chenilles : conduite, pivot et freinage](TrackedVehicle3D.md).

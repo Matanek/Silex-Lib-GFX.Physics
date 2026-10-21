@@ -1,0 +1,169 @@
+use GFX.Physics.VehicleTrack3D.VehicleTrack3DSettings
+use GFX.Physics.VehicleTrack3D.VehicleTrackState3D
+use GFX.Physics.VehicleGearbox3D.VehicleGearbox3D
+use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+package class VehicleTrackDrive3D {
+    let engine:VehicleEngine3DSettings
+    var gearbox:VehicleGearbox3D
+    private var tracks:VehicleTrack3DSettings[]
+    let radii:float[]
+    let wheel_tracks:int[]
+    var contacts:bool[]=[]
+    var brake_impulses:float[]=[]
+    var speeds:float[]=[0.0,0.0]
+    var drive_torques:float[]=[0.0,0.0]
+    var brake_torques:float[]=[0.0,0.0]
+    var ratios:float[]=[1.0,1.0]
+    var throttle:float=0.0
+    var brake:float=0.0
+    var rpm:float
+    var engine_torque:float=0.0
+    private let minimum_gear_ratio:float
+    init(engine:VehicleEngine3DSettings,transmission:VehicleTransmission3DSettings,
+        tracks:VehicleTrack3DSettings[],radii:float[],wheel_tracks:int[]) {
+        var minimum=Math.abs(transmission.gear_ratio(1))
+        for direction in [1,-1] {
+            var index=1;var count=transmission.forward_gear_count();if direction<0 { count=transmission.reverse_gear_count() }
+            while index<=count { minimum=Math.min(minimum,Math.abs(transmission.gear_ratio(direction*index)));index++ }
+        }
+        self.minimum_gear_ratio=minimum
+        self.engine=engine;self.gearbox=VehicleGearbox3D(transmission);self.rpm=engine.minimum_rpm
+        self.tracks=tracks;self.radii=radii;self.wheel_tracks=wheel_tracks
+        for radius in radii { self.contacts.append(false);self.brake_impulses.append(0.0) }
+    }
+    func controls(throttle:float,left:float,right:float,brake:float) bool {
+        if !finite_body3d_value(throttle) || Math.abs(throttle)>1.0 ||
+            !finite_body3d_value(brake) || brake<0.0 || brake>1.0 ||
+            !finite_body3d_value(left) || left==0.0 || Math.abs(left)>1.0 ||
+            !finite_body3d_value(right) || right==0.0 || Math.abs(right)>1.0 {
+            panic("GFX.Physics.TrackedVehicle3D requires throttle/track ratios in [-1, 1], nonzero track ratios and brake in [0, 1]")
+        }
+        if left*right==0.0 || left*self.tracks[1].inertia==0.0 || right*self.tracks[0].inertia==0.0 {
+            panic("GFX.Physics.TrackedVehicle3D track ratio products must be representable")
+        }
+        var index=0
+        while index<2 {
+            var requested=left;if index==1 { requested=right }
+            let divisor=self.minimum_gear_ratio*self.tracks[index].differential_ratio*requested*(60.0/Math.two_pi())
+            let maximum=self.engine.maximum_rpm/divisor
+            if !finite_body3d_value(maximum*maximum) { panic("GFX.Physics.TrackedVehicle3D track speed limits must be representable") }
+            index++
+        }
+        let denominator=Math.abs(left)*self.tracks[1].inertia+Math.abs(right)*self.tracks[0].inertia
+        if !finite_body3d_value(denominator) || denominator==0.0 || !finite_body3d_value(1.0/denominator) {
+            panic("GFX.Physics.TrackedVehicle3D track ratios and inertias must be representable")
+        }
+        let changed=self.throttle!=throttle || self.ratios[0]!=left || self.ratios[1]!=right || self.brake!=brake
+        self.throttle=throttle;self.ratios[0]=left;self.ratios[1]=right;self.brake=brake;return changed
+    }
+    func powertrain() VehiclePowertrainState3D {
+        return VehiclePowertrainState3D(self.rpm,self.gearbox.gear,self.gearbox.clutch,self.gearbox.switching(),self.engine_torque)
+    }
+    func track(index:int) VehicleTrackState3D {
+        return VehicleTrackState3D(self.speeds[index],self.speeds[index]*self.radii[self.tracks[index].driven_wheel],self.drive_torques[index],self.brake_torques[index])
+    }
+    func wheel_speed(index:int) float {
+        let track=self.wheel_tracks[index]
+        return self.speeds[track]*self.radii[self.tracks[track].driven_wheel]/self.radii[index]
+    }
+    func allow_sleep() bool { return self.throttle==0.0 && self.rpm<=1.01*self.engine.minimum_rpm && self.gearbox.allow_sleep() }
+    func pre_step(delta:float) {
+        var index=0
+        while index<2 {
+            self.speeds[index]*=Math.max(0.0,1.0-self.tracks[index].angular_damping*delta)
+            self.drive_torques[index]=0.0;self.brake_torques[index]=0.0;index++
+        }
+        index=0
+        while index<self.brake_impulses.count() { self.brake_impulses[index]=0.0;index++ }
+    }
+    func synchronize() {
+        let left=self.ratios[0];let right=self.ratios[1]
+        let a=self.tracks[0].inertia;let b=self.tracks[1].inertia
+        let difference=left*self.speeds[1]-right*self.speeds[0]
+        if left*right>0.0 {
+            let impulse=difference/(left*b+right*a)
+            self.speeds[0]+=impulse*a;self.speeds[1]-=impulse*b
+        } else {
+            let impulse=difference/(right*a-left*b)
+            self.speeds[0]+=impulse*a;self.speeds[1]+=impulse*b
+        }
+    }
+    func post_step(delta:float) {
+        let conversion=60.0/Math.two_pi();let old_ratio=self.gearbox.settings.gear_ratio(self.gearbox.gear)
+        var touching=false;for contact in self.contacts { if contact { touching=true } }
+        if self.gearbox.gear!=0 && self.gearbox.clutch>0.001 {
+            var fastest=self.speeds[0]*self.tracks[0].differential_ratio
+            let other=self.speeds[1]*self.tracks[1].differential_ratio
+            if old_ratio>=0.0 { fastest=Math.max(fastest,other) } else { fastest=Math.min(fastest,other) }
+            self.rpm=Math.clamp(fastest*old_ratio*conversion,self.engine.minimum_rpm,self.engine.maximum_rpm)
+        } else {
+            self.rpm=Math.clamp(self.rpm*Math.max(0.0,1.0-self.engine.angular_damping*delta),self.engine.minimum_rpm,self.engine.maximum_rpm)
+            var input=0.0;if self.gearbox.settings.mode==VehicleTransmissionMode3D.manual { input=Math.abs(self.throttle) }
+            self.rpm=Math.clamp(self.rpm+conversion*self.engine.torque(self.rpm,input)*delta/self.engine.inertia,self.engine.minimum_rpm,self.engine.maximum_rpm)
+        }
+        self.gearbox.update(delta,self.throttle,self.ratios[0]*self.ratios[1]>0.0 && touching,self.rpm)
+        let ratio=self.gearbox.settings.gear_ratio(self.gearbox.gear)
+        self.engine_torque=self.engine.torque(self.rpm,Math.abs(self.throttle))
+        let torque=self.gearbox.clutch*ratio*self.engine_torque
+        if torque!=0.0 {
+            var drive_index=0
+            while drive_index<2 {
+                var track=self.tracks[drive_index]
+                let maximum=self.rpm/(ratio*track.differential_ratio*self.ratios[drive_index]*conversion)*1.001
+                if self.speeds[drive_index]*maximum<0.0 || Math.abs(self.speeds[drive_index])<Math.abs(maximum) {
+                    self.drive_torques[drive_index]=track.differential_ratio*self.ratios[drive_index]*torque
+                    self.speeds[drive_index]+=self.drive_torques[drive_index]*delta/track.inertia
+                }
+                drive_index++
+            }
+        }
+        self.synchronize()
+        var brake_index=0
+        while brake_index<2 {
+            var track=self.tracks[brake_index];let before=self.speeds[brake_index];var brake=self.brake*track.maximum_brake_torque
+            if brake>0.0 {
+                let stopping=Math.abs(before)*track.inertia/delta
+                if brake>stopping { self.speeds[brake_index]=0.0;brake-=stopping }
+                else {
+                    let change=brake*delta/track.inertia
+                    if before>0.0 { self.speeds[brake_index]-=change } else if before<0.0 { self.speeds[brake_index]+=change }
+                }
+            }
+            self.brake_torques[brake_index]=(self.speeds[brake_index]-before)*track.inertia/delta
+            if brake>0.0 {
+                var total=0.0;var j=0
+                while j<track.wheel_count() {
+                    let wheel=track.wheel(j)
+                    if self.contacts[wheel] { total+=self.radii[wheel] }
+                    j++
+                }
+                if total>0.0 {
+                    j=0
+                    while j<track.wheel_count() {
+                        let wheel=track.wheel(j)
+                        if self.contacts[wheel] { self.brake_impulses[wheel]=brake/total*delta }
+                        j++
+                    }
+                }
+            }
+            brake_index++
+        }
+    }
+    func contact_change(index:int,speed:float) float {
+        let track=self.wheel_tracks[index]
+        return (self.speeds[track]-speed/self.radii[index])*self.tracks[track].inertia/self.radii[index]
+    }
+    func apply_contact(index:int,impulse:float) {
+        let track=self.wheel_tracks[index]
+        self.speeds[track]-=impulse*self.radii[index]/self.tracks[track].inertia;self.synchronize()
+    }
+    func record_brake_contact(index:int,impulse:float,inverse_delta:float) {
+        self.brake_torques[self.wheel_tracks[index]]+=impulse*self.radii[index]*inverse_delta
+    }
+}

@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Add `TrackedVehicle3D`: two tracks of suspended wheels, shared engine/transmission settings, relative speeds, counter-rotation and braking. Wheel/track states, lifetime and invalid inputs are checked; Jolt comparisons cover airborne and ray-contact plane cases in Native Debug/Release.
+
 - Optional total inclination limit on `WheeledVehicle3D`: gravity-relative cone, free yaw, mutable angle and configurable local up; gradual correction in flight or with support, unchanged pi default and documented exact-inversion singularity.
 
 - Optional anti-roll bars between wheel pairs: spring transfer, missing support and dynamic reactions qualified against Jolt; copied settings, disjoint pairs and zero stiffness preserving prior behavior.

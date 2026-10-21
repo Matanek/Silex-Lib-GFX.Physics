@@ -71,3 +71,35 @@ gates.
 Les résultats bruts sont datés sous `Benchmarks/Baselines/` avec les commits
 exacts. Remplacer une baseline exige corpus vert, variance admissible et revue
 explicite de chaque gate modifié.
+
+## Qualification des chenilles 3D
+
+Le runner `Silex-Benchmarks/Sources/Physics3D/TrackedGroundRun.py` compare Jolt
+5.6.0 épinglé et le SDK Silex Native Debug/Release sur macOS ARM64, un worker,
+un sous-pas et 12/4 itérations, à 60/120 Hz. Seize recettes en vol produisent
+5 792 états par moteur/mode ; six au sol en produisent 8 652. Chaque recette
+sol dure 2 s de réception freinée, 2 s de conduite puis 4 s de freinage.
+Une perturbation Jolt de hauteur initiale de 1 micromètre vérifie le conditionnement.
+
+Les bornes pointwise du châssis restent 0,05 m, 0,1 m/s, 0,02 rad et 0,15 rad/s.
+Les bilans par pas acceptent 0,1 N·s et 0,1 N·m·s ; angles de roue à
+0,0001 rad, vitesses angulaires à 0,0001 rad/s et régime à 0,02 RPM. Sur fenêtres de 1 s alignées avec les
+commandes, efforts résultants sont bornés à 20 N et 30 N·m, charges normales
+moyennes par roue à 20 N, incréments de rotation à 0,1 rad. La récupération
+exige six appuis de 163,5 N, 981 N au total, hauteur 0,88365 m et vitesse sous
+0,05 m/s. L’absence d’adhérence garde le châssis immobile malgré les bandes.
+
+Le partage des efforts tangentiels entre six contacts n’est pas unique : sa
+parité individuelle n’est pas revendiquée. Le miroir gauche/droite conserve
+poses pointwise, mais compare les vitesses moyennes sur 1 s aux mêmes bornes,
+car l’ordre des contacts Jolt dépasse 0,1 m/s ponctuellement. La comparaison
+principale Silex/Jolt reste entièrement pointwise. Jolt garde une ancienne
+vitesse de roue sans appui ; le SDK publie la vitesse finale de bande. Les
+vérifications respectent chacune de ces frontières et conservent les bruts.
+Les textes flottants des deux moteurs sont relus comme binary32.
+
+632 corruptions sont rejetées sur les deux modes et moteurs. Le rapport contient
+les hashes de sorties et les écarts ; Debug/Release sont bit-identiques dans
+ces recettes. La qualification porte sur les bandes idéales, contacts rayon
+et plan décrits. Les maillons articulés, les autres terrains et les budgets
+de FPS restent hors de cette campagne.

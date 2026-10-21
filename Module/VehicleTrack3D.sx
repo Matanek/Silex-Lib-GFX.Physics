@@ -1,0 +1,49 @@
+use GFX.Physics.RigidBody3D.finite_body3d_value
+
+public enum VehicleTrackSide3D { left; right }
+
+public class VehicleTrack3DSettings {
+    let driven_wheel:int
+    let inertia:float
+    let angular_damping:float
+    let maximum_brake_torque:float
+    let differential_ratio:float
+    private var wheels:int[]
+    init(driven_wheel:int,wheels:int[],inertia:float=10.0,angular_damping:float=0.5,
+        maximum_brake_torque:float=15000.0,differential_ratio:float=6.0) {
+        if driven_wheel<0 || wheels.count()==0 { panic("GFX.Physics.VehicleTrack3DSettings requires a driven wheel and nonempty wheel indices") }
+        if !finite_body3d_value(inertia) || inertia<=0.0 || !finite_body3d_value(1.0/inertia) ||
+            !finite_body3d_value(angular_damping) || angular_damping<0.0 ||
+            !finite_body3d_value(maximum_brake_torque) || maximum_brake_torque<0.0 ||
+            !finite_body3d_value(maximum_brake_torque/inertia) ||
+            !finite_body3d_value(differential_ratio) || differential_ratio<=0.0 ||
+            !finite_body3d_value(differential_ratio*differential_ratio) {
+            panic("GFX.Physics.VehicleTrack3DSettings requires positive representable inertia/ratio and nonnegative finite damping/brake torque")
+        }
+        var retained:int[]=[];var found=false
+        for index in wheels {
+            if index<0 { panic("GFX.Physics.VehicleTrack3DSettings wheel index must be nonnegative") }
+            for previous in retained { if index==previous { panic("GFX.Physics.VehicleTrack3DSettings wheel indices must be distinct") } }
+            if index==driven_wheel { found=true }
+            retained.append(index)
+        }
+        if !found { panic("GFX.Physics.VehicleTrack3DSettings driven wheel must belong to the track") }
+        self.driven_wheel=driven_wheel;self.wheels=retained;self.inertia=inertia
+        self.angular_damping=angular_damping;self.maximum_brake_torque=maximum_brake_torque;self.differential_ratio=differential_ratio
+    }
+    func wheel_count() int { return self.wheels.count() }
+    func wheel(index:int) int {
+        if index<0 || index>=self.wheels.count() { panic("GFX.Physics.VehicleTrack3DSettings wheel index is out of range") }
+        return self.wheels[index]
+    }
+}
+
+public struct VehicleTrackState3D {
+    let angular_velocity:float
+    let linear_speed:float
+    let drive_torque:float
+    let brake_torque:float
+    package init(velocity:float,speed:float,drive:float,brake:float) {
+        self.angular_velocity=velocity;self.linear_speed=speed;self.drive_torque=drive;self.brake_torque=brake
+    }
+}

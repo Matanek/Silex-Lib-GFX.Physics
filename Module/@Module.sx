@@ -218,3 +218,10 @@ public use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
 public use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
 
 public use GFX.Physics.WheelContact3D.WheelContact3D
+
+public use GFX.Physics.VehicleTrack3D.VehicleTrackSide3D
+public use GFX.Physics.VehicleTrack3D.VehicleTrack3DSettings
+public use GFX.Physics.VehicleTrack3D.VehicleTrackState3D
+public use GFX.Physics.TrackedVehicle3D.TrackedWheel3DSettings
+public use GFX.Physics.TrackedVehicle3D.TrackedVehicle3DSettings
+public use GFX.Physics.TrackedVehicle3D.TrackedVehicle3D

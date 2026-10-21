@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `TrackedVehicle3D` : deux bandes de roues suspendues, moteur et boîte partagés, vitesses relatives, contre-rotation et freinage. États par roue/bande, durée de vie et paramètres invalides contrôlés ; comparaison Jolt en vol et sur plan à contacts rayon, Native Debug/Release.
+
 - Limite optionnelle d’inclinaison totale sur `WheeledVehicle3D` : cône relatif à la gravité, lacet libre, mutation de l’angle et haut local configurable ; correction progressive en vol ou avec appuis, défaut pi inchangé et singularité du retournement exact documentée.
 
 - Barres anti-roulis optionnelles entre paires de roues : transfert dans les ressorts, perte d’appui et réactions dynamiques qualifiés face à Jolt ; réglages copiés, paires disjointes et raideur nulle sans effet.

@@ -1,0 +1,96 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(name:str) bool { for argument in Process.arguments() { if argument==name { return true } }
+    return false
+}
+func description(left:Physics.VehicleTrack3DSettings=Physics.VehicleTrack3DSettings(0,[0,1,2]),
+    right:Physics.VehicleTrack3DSettings=Physics.VehicleTrack3DSettings(3,[3,4,5]),
+    radius:float=0.3,fixed:bool=false,automatic:bool=false,shift:float=4000.0) Physics.TrackedVehicle3DSettings {
+    var wheels:Physics.TrackedWheel3DSettings[]=[];var i=0
+    while i<6 { wheels.append(Physics.TrackedWheel3DSettings(Math.Vec3(i as float,0.0,0.0),radius:radius));i++ }
+    var chassis=Physics.RigidBody3DSettings();if fixed { chassis.body_type=Physics.BodyType3D.fixed }
+    var mode=Physics.VehicleTransmissionMode3D.manual;if automatic { mode=Physics.VehicleTransmissionMode3D.automatic }
+    return Physics.TrackedVehicle3DSettings(chassis,wheels,left,right,engine:Physics.VehicleEngine3DSettings(),
+        transmission:Physics.VehicleTransmission3DSettings(mode:mode,shift_up_rpm:shift))
+}
+func orphan() Physics.TrackedVehicle3D { var world=Physics.World3D();return world.create_tracked_vehicle(description()) }
+func main() {
+    var world=Physics.World3D();var vehicle=world.create_tracked_vehicle(description())
+    if selected("band-inertia-0") { Physics.VehicleTrack3DSettings(0,[0],inertia:0.0);return }
+    if selected("band-inertia-1") { Physics.VehicleTrack3DSettings(0,[0],inertia:1.0e-40);return }
+    if selected("band-inertia-2") { Physics.VehicleTrack3DSettings(0,[0],inertia:Math.sqrt(-1.0));return }
+    if selected("band-inertia-3") { Physics.VehicleTrack3DSettings(0,[0],inertia:1.0/0.0);return }
+    if selected("band-angular_damping-4") { Physics.VehicleTrack3DSettings(0,[0],angular_damping:-1.0);return }
+    if selected("band-angular_damping-5") { Physics.VehicleTrack3DSettings(0,[0],angular_damping:1.0/0.0);return }
+    if selected("band-maximum_brake_torque-6") { Physics.VehicleTrack3DSettings(0,[0],maximum_brake_torque:-1.0);return }
+    if selected("band-maximum_brake_torque-7") { Physics.VehicleTrack3DSettings(0,[0],maximum_brake_torque:Math.sqrt(-1.0));return }
+    if selected("band-differential_ratio-8") { Physics.VehicleTrack3DSettings(0,[0],differential_ratio:0.0);return }
+    if selected("band-differential_ratio-9") { Physics.VehicleTrack3DSettings(0,[0],differential_ratio:1.0/0.0);return }
+    if selected("band-empty") { Physics.VehicleTrack3DSettings(0,[]);return }
+    if selected("band-negative") { Physics.VehicleTrack3DSettings(-1,[0]);return }
+    if selected("band-absent-driven") { Physics.VehicleTrack3DSettings(1,[0]);return }
+    if selected("band-duplicate") { Physics.VehicleTrack3DSettings(0,[0,0]);return }
+    if selected("band-negative-wheel") { Physics.VehicleTrack3DSettings(0,[0,-1]);return }
+    if selected("wheel-longitudinal_friction-15") { Physics.TrackedWheel3DSettings(Math.Vec3(),longitudinal_friction:-1.0);return }
+    if selected("wheel-lateral_friction-16") { Physics.TrackedWheel3DSettings(Math.Vec3(),lateral_friction:Math.sqrt(-1.0));return }
+    if selected("wheel-radius-17") { Physics.TrackedWheel3DSettings(Math.Vec3(),radius:0.0);return }
+    if selected("wheel-radius-18") { Physics.TrackedWheel3DSettings(Math.Vec3(),radius:1.0/0.0);return }
+    if selected("wheel-maximum_length-19") { Physics.TrackedWheel3DSettings(Math.Vec3(),maximum_length:0.1);return }
+    if selected("wheel-maximum_slope_angle-20") { Physics.TrackedWheel3DSettings(Math.Vec3(),maximum_slope_angle:Math.half_pi());return }
+    if selected("wheel-forward-21") { Physics.TrackedWheel3DSettings(Math.Vec3(),forward:Math.Vec3());return }
+    if selected("wheel-up-22") { Physics.TrackedWheel3DSettings(Math.Vec3(),up:Math.Vec3(0.0,0.0,1.0));return }
+    if selected("config-overlap") { description(right:Physics.VehicleTrack3DSettings(3,[2,3,4,5]));return }
+    if selected("config-hole") { description(left:Physics.VehicleTrack3DSettings(0,[0,1]));return }
+    if selected("config-high") { description(left:Physics.VehicleTrack3DSettings(0,[0,1,6]));return }
+    if selected("config-driven-high") { description(left:Physics.VehicleTrack3DSettings(7,[7]));return }
+    if selected("config-inertia-sum") { description(left:Physics.VehicleTrack3DSettings(0,[0,1,2],inertia:3.0e38),right:Physics.VehicleTrack3DSettings(3,[3,4,5],inertia:3.0e38));return }
+    if selected("config-ratio-underflow") { description(left:Physics.VehicleTrack3DSettings(0,[0,1,2],differential_ratio:1.0e-30));return }
+    if selected("config-radius-underflow") { description(radius:1.0e-30);return }
+    if selected("config-fixed") { description(fixed:true);return }
+    if selected("config-automatic-rpm") { description(automatic:true,shift:7000.0);return }
+    if selected("control-throttle-32") { vehicle.set_controls(throttle:2.0);return }
+    if selected("control-throttle-33") { vehicle.set_controls(throttle:Math.sqrt(-1.0));return }
+    if selected("control-left_ratio-34") { vehicle.set_controls(left_ratio:0.0);return }
+    if selected("control-right_ratio-35") { vehicle.set_controls(right_ratio:0.0);return }
+    if selected("control-left_ratio-36") { vehicle.set_controls(left_ratio:2.0);return }
+    if selected("control-right_ratio-37") { vehicle.set_controls(right_ratio:-2.0);return }
+    if selected("control-right_ratio-38") { vehicle.set_controls(right_ratio:1.0/0.0);return }
+    if selected("control-brake-39") { vehicle.set_controls(brake:-1.0);return }
+    if selected("control-brake-40") { vehicle.set_controls(brake:2.0);return }
+    if selected("control-brake-41") { vehicle.set_controls(brake:Math.sqrt(-1.0));return }
+    if selected("control-product-underflow") { vehicle.set_controls(left_ratio:1.0e-30,right_ratio:1.0e-30);return }
+    if selected("control-speed-overflow") { vehicle.set_controls(left_ratio:1.0e-25);return }
+    if selected("gear-high") { vehicle.set_transmission(100);return }
+    if selected("gear-low") { vehicle.set_transmission(-100);return }
+    if selected("clutch-low") { vehicle.set_transmission(1,clutch:-1.0);return }
+    if selected("clutch-high") { vehicle.set_transmission(1,clutch:2.0);return }
+    if selected("clutch-nan") { vehicle.set_transmission(1,clutch:Math.sqrt(-1.0));return }
+    if selected("automatic-manual") { var automatic=world.create_tracked_vehicle(description(automatic:true));automatic.set_transmission(1);return }
+    if selected("speed-nan") { vehicle.set_track_angular_velocity(Physics.VehicleTrackSide3D.left,Math.sqrt(-1.0));return }
+    if selected("speed-infinite") { vehicle.set_track_angular_velocity(Physics.VehicleTrackSide3D.left,1.0/0.0);return }
+    if selected("speed-overflow") { vehicle.set_track_angular_velocity(Physics.VehicleTrackSide3D.left,1.0e30);return }
+    if selected("wheel-negative") { vehicle.wheel(-1);return }
+    if selected("wheel-high") { vehicle.wheel(6);return }
+    if selected("wheel-settings") { vehicle.wheel_settings(6);return }
+    if selected("track-wheel-negative") { vehicle.track_settings(Physics.VehicleTrackSide3D.left).wheel(-1);return }
+    if selected("track-wheel-high") { vehicle.track_settings(Physics.VehicleTrackSide3D.left).wheel(3);return }
+    if selected("tilt-low") { vehicle.set_maximum_tilt_angle(-1.0);return }
+    if selected("tilt-nan") { vehicle.set_maximum_tilt_angle(Math.sqrt(-1.0));return }
+    if selected("expired-chassis") { world.destroy_tracked_vehicle(vehicle);vehicle.chassis();return }
+    if selected("expired-wheel") { world.destroy_tracked_vehicle(vehicle);vehicle.wheel(0);return }
+    if selected("expired-wheel-count") { world.destroy_tracked_vehicle(vehicle);vehicle.wheel_count();return }
+    if selected("expired-wheel-settings") { world.destroy_tracked_vehicle(vehicle);vehicle.wheel_settings(0);return }
+    if selected("expired-track") { world.destroy_tracked_vehicle(vehicle);vehicle.track(Physics.VehicleTrackSide3D.left);return }
+    if selected("expired-track-settings") { world.destroy_tracked_vehicle(vehicle);vehicle.track_settings(Physics.VehicleTrackSide3D.left);return }
+    if selected("expired-state") { world.destroy_tracked_vehicle(vehicle);vehicle.powertrain();return }
+    if selected("expired-controls") { world.destroy_tracked_vehicle(vehicle);vehicle.set_controls();return }
+    if selected("expired-transmission") { world.destroy_tracked_vehicle(vehicle);vehicle.set_transmission(1);return }
+    if selected("expired-speed") { world.destroy_tracked_vehicle(vehicle);vehicle.set_track_angular_velocity(Physics.VehicleTrackSide3D.left,1.0);return }
+    if selected("expired-tilt") { world.destroy_tracked_vehicle(vehicle);vehicle.maximum_tilt_angle();return }
+    if selected("expired-set-tilt") { world.destroy_tracked_vehicle(vehicle);vehicle.set_maximum_tilt_angle(1.0);return }
+    if selected("expired-double-destroy") { world.destroy_tracked_vehicle(vehicle);world.destroy_tracked_vehicle(vehicle);return }
+    if selected("orphan-state") { var expired=orphan();expired.powertrain();return }
+    if selected("foreign-world") { var foreign=Physics.World3D();foreign.destroy_tracked_vehicle(vehicle);return }
+    print("tracked-invalid-smoke: baseline valid")
+}

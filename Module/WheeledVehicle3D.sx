@@ -1,3 +1,4 @@
+use GFX.Physics.VehicleTrackDrive3D.VehicleTrackDrive3D
 use GFX.Physics.Cylinder3D.Cylinder3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Geometry3D
@@ -307,6 +308,7 @@ public class WheeledVehicle3D {
     private var handbrake_input:float=0.0
     private var throttle_input:float=0.0
     private var drivetrain:VehiclePowertrain3D?=null
+    private var trackdrive:VehicleTrackDrive3D?=null
     private var tilt_cos_limit:float
     private var tilt_world_up:Math.Vec3
     private var tilt_axis:Math.Vec3=Math.Vec3.up()
@@ -333,6 +335,7 @@ public class WheeledVehicle3D {
             self.drivetrain=VehiclePowertrain3D(engine,settings.transmission,differentials,settings.differential_limited_slip_ratio,inertias,radii,brakes,hands)
         }
     }
+    package func attach_tracks(drive:VehicleTrackDrive3D) { self.trackdrive=drive }
     func powertrain() VehiclePowertrainState3D {
         self.require_valid();if let motor=self.drivetrain { return motor.state() }
         panic("GFX.Physics.WheeledVehicle3D has no engine")
@@ -396,9 +399,11 @@ public class WheeledVehicle3D {
     package func prepare_tires(delta:float) {
         var chassis=self.store.require(self.id)
         if !chassis.is_enabled || !chassis.awake { return }
+        if let drive=self.trackdrive { drive.pre_step(delta) }
         var index=0
         for state in self.wheels {
             let wheel=self.settings.wheel(index)
+            if let drive=self.trackdrive { state.angular_velocity=drive.wheel_speed(index) }
             state.steering_angle= -self.steering_input*wheel.maximum_steering_angle
             let steering=Math.Quat.angle_axis(state.steering_angle,wheel.steering_axis)
             if let tire=wheel.tire {
@@ -436,6 +441,12 @@ public class WheeledVehicle3D {
         self.prepare_powertrain(delta)
     }
     private func prepare_powertrain(delta:float) {
+        if let drive=self.trackdrive {
+            var i=0;for state in self.wheels { drive.contacts[i]=state.support!=null;i++ }
+            drive.post_step(delta);i=0
+            for state in self.wheels { state.angular_velocity=drive.wheel_speed(i);state.brake_impulse=drive.brake_impulses[i];i++ }
+            return
+        }
         if let motor=self.drivetrain {
             for i in motor.driven {
                 var state=self.wheels[i]
@@ -480,6 +491,7 @@ public class WheeledVehicle3D {
     }
     package func keep_awake_for_wheels() {
         var chassis=self.store.require(self.id)
+        if let drive=self.trackdrive { if !drive.allow_sleep() { chassis.sleep_time=0.0;return } }
         if let motor=self.drivetrain { if !motor.allow_sleep(self.throttle_input) { chassis.sleep_time=0.0;return } }
         for state in self.wheels {
             if Math.abs(state.angular_velocity)>Math.radians(10.0) { chassis.sleep_time=0.0;return }
@@ -501,15 +513,21 @@ public class WheeledVehicle3D {
                         if speed<0.0 { lower=0.0;upper=limit }
                         state.longitudinal_impulse=Math.clamp(previous-speed/state.longitudinal_inverse_mass,lower,upper)
                         state.brake_torque+=(state.longitudinal_impulse-previous)*wheel.radius*state.inverse_delta
+                        if let drive=self.trackdrive { drive.record_brake_contact(index,state.longitudinal_impulse-previous,state.inverse_delta) }
                     } else {
-                        let change=(state.angular_velocity-speed/wheel.radius)*tire.inertia/wheel.radius
+                        var change=(state.angular_velocity-speed/wheel.radius)*tire.inertia/wheel.radius
+                        if let drive=self.trackdrive { change=drive.contact_change(index,speed) }
                         state.longitudinal_impulse=Math.clamp(previous+change,-capacity,capacity)
-                        state.angular_velocity-=(state.longitudinal_impulse-previous)*wheel.radius/tire.inertia
+                        if let drive=self.trackdrive { drive.apply_contact(index,state.longitudinal_impulse-previous) }
+                        else { state.angular_velocity-=(state.longitudinal_impulse-previous)*wheel.radius/tire.inertia }
                     }
                     apply_vehicle_pair_vector3d(chassis,ground,state,state.longitudinal_direction.multiply(state.longitudinal_impulse-previous))
                 }
             }
             index++
+        }
+        if let drive=self.trackdrive {
+            var i=0;for state in self.wheels { state.angular_velocity=drive.wheel_speed(i);i++ }
         }
         for state in self.wheels {
             if state.active && state.support!=null && state.lateral_inverse_mass>0.0 {

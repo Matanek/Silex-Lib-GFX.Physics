@@ -1,0 +1,191 @@
+use GFX.Physics.WheeledVehicle3D.Wheel3DSettings
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
+use GFX.Physics.WheeledVehicle3D.VehicleWheelState3D
+use GFX.Physics.WheeledVehicle3D.VehicleAntiRollBar3DSettings
+use GFX.Physics.VehicleTrack3D.VehicleTrackSide3D
+use GFX.Physics.VehicleTrack3D.VehicleTrack3DSettings
+use GFX.Physics.VehicleTrack3D.VehicleTrackState3D
+use GFX.Physics.VehicleTrackDrive3D.VehicleTrackDrive3D
+use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.Tire3D.Tire3DSettings
+use GFX.Physics.Tire3D.TireFrictionCurve3D
+use GFX.Physics.WheelContact3D.WheelContact3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public struct TrackedWheel3DSettings {
+    let position:Math.Vec3
+    let direction:Math.Vec3
+    let radius:float
+    let minimum_length:float
+    let maximum_length:float
+    let stiffness:float
+    let damping:float
+    let maximum_slope_angle:float
+    let contact:WheelContact3D
+    let forward:Math.Vec3
+    let up:Math.Vec3
+    let longitudinal_friction:float
+    let lateral_friction:float
+    private var common:Wheel3DSettings
+    init(position:Math.Vec3,radius:float=0.3,minimum_length:float=0.2,maximum_length:float=0.6,
+        stiffness:float=10000.0,damping:float=1000.0,direction:Math.Vec3=Math.Vec3(0.0,-1.0,0.0),
+        maximum_slope_angle:float=Math.pi()/3.0,contact:WheelContact3D=WheelContact3D.ray,
+        longitudinal_friction:float=4.0,lateral_friction:float=2.0,
+        forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0),up:Math.Vec3=Math.Vec3.up()) {
+        if !finite_body3d_value(longitudinal_friction) || longitudinal_friction<0.0 ||
+            !finite_body3d_value(lateral_friction) || lateral_friction<0.0 {
+            panic("GFX.Physics.TrackedWheel3DSettings requires nonnegative finite friction coefficients")
+        }
+        if !finite_body3d_point(forward) || !finite_body3d_point(up) ||
+            Math.abs(forward.length_squared()-1.0)>0.0001 || Math.abs(up.length_squared()-1.0)>0.0001 ||
+            forward.cross(up).length_squared()<0.000001 {
+            panic("GFX.Physics.TrackedWheel3DSettings requires finite unit nonparallel forward and up vectors")
+        }
+        let tire=Tire3DSettings(angular_damping:0.0,forward:forward,up:up,
+            longitudinal_friction:TireFrictionCurve3D([Math.Vec2(0.0,longitudinal_friction)]),
+            lateral_friction:TireFrictionCurve3D([Math.Vec2(0.0,lateral_friction)]))
+        let wheel=Wheel3DSettings(position,radius:radius,minimum_length:minimum_length,maximum_length:maximum_length,
+            stiffness:stiffness,damping:damping,direction:direction,maximum_slope_angle:maximum_slope_angle,contact:contact,
+            tire:tire,maximum_brake_torque:0.0)
+        self.common=wheel;self.position=wheel.position;self.direction=wheel.direction;self.radius=wheel.radius
+        self.minimum_length=wheel.minimum_length;self.maximum_length=wheel.maximum_length
+        self.stiffness=wheel.stiffness;self.damping=wheel.damping;self.maximum_slope_angle=wheel.maximum_slope_angle
+        self.contact=contact;self.forward=tire.forward;self.up=tire.up
+        self.longitudinal_friction=longitudinal_friction;self.lateral_friction=lateral_friction
+    }
+    package func suspension() Wheel3DSettings { return self.common }
+}
+
+public class TrackedVehicle3DSettings {
+    let chassis:RigidBody3DSettings
+    let engine:VehicleEngine3DSettings
+    let transmission:VehicleTransmission3DSettings
+    private var wheels:TrackedWheel3DSettings[]
+    private var tracks:VehicleTrack3DSettings[]
+    private var common:WheeledVehicle3DSettings
+    private var wheel_tracks:int[]
+    init(chassis:RigidBody3DSettings,wheels:TrackedWheel3DSettings[],left:VehicleTrack3DSettings,right:VehicleTrack3DSettings,
+        engine:VehicleEngine3DSettings=VehicleEngine3DSettings(minimum_rpm:500.0,maximum_rpm:4000.0),
+        transmission:VehicleTransmission3DSettings=VehicleTransmission3DSettings(gear_ratios:[4.0,3.0,2.0,1.0],reverse_gear_ratios:[-4.0,-3.0],shift_down_rpm:1000.0,shift_up_rpm:3500.0),
+        anti_roll_bars:VehicleAntiRollBar3DSettings[]=[],maximum_tilt_angle:float=Math.pi(),up:Math.Vec3=Math.Vec3.up()) {
+        if chassis.body_type!=BodyType3D.dynamic { panic("GFX.Physics.TrackedVehicle3DSettings requires a dynamic chassis") }
+        if wheels.count()<2 { panic("GFX.Physics.TrackedVehicle3DSettings requires wheels for two nonempty tracks") }
+        let combined_inertia=left.inertia+right.inertia
+        if !finite_body3d_value(combined_inertia) || !finite_body3d_value(1.0/combined_inertia) {
+            panic("GFX.Physics.TrackedVehicle3DSettings combined track inertia must be representable")
+        }
+        var retained:TrackedWheel3DSettings[]=[];var suspensions:Wheel3DSettings[]=[];var mapping:int[]=[]
+        for wheel in wheels { retained.append(wheel);suspensions.append(wheel.suspension());mapping.append(-1) }
+        var common=WheeledVehicle3DSettings(chassis,suspensions,anti_roll_bars:anti_roll_bars,maximum_tilt_angle:maximum_tilt_angle,up:up)
+        var tracks:VehicleTrack3DSettings[]=[left,right];var side=0
+        for track in tracks {
+            if track.driven_wheel>=wheels.count() { panic("GFX.Physics.TrackedVehicle3DSettings driven wheel index is out of range") }
+            var j=0
+            while j<track.wheel_count() {
+                let index=track.wheel(j)
+                if index>=wheels.count() { panic("GFX.Physics.TrackedVehicle3DSettings track wheel index is out of range") }
+                if mapping[index]!= -1 { panic("GFX.Physics.TrackedVehicle3DSettings each wheel must belong to exactly one track") }
+                let radius=wheels[index].radius;let driven_radius=wheels[track.driven_wheel].radius
+                let wheel_ratio=driven_radius/radius
+                if radius*radius==0.0 || !finite_body3d_value(track.inertia/(radius*radius)) ||
+                    !finite_body3d_value(wheel_ratio*wheel_ratio) || wheel_ratio*wheel_ratio==0.0 {
+                    panic("GFX.Physics.TrackedVehicle3DSettings wheel radii and track inertia must be representable")
+                }
+                mapping[index]=side;j++
+            }
+            for direction in [1,-1] {
+                var gear_index=1;var count=transmission.forward_gear_count();if direction<0 { count=transmission.reverse_gear_count() }
+                while gear_index<=count {
+                    let ratio=transmission.gear_ratio(direction*gear_index)*track.differential_ratio
+                    let maximum_speed=engine.maximum_rpm/(Math.abs(ratio)*(60.0/Math.two_pi()))
+                    if !finite_body3d_value(maximum_speed*maximum_speed) || !finite_body3d_value(ratio*ratio) || !finite_body3d_value(1.0/ratio) ||
+                        !finite_body3d_value(ratio*engine.maximum_torque/track.inertia) {
+                        panic("GFX.Physics.TrackedVehicle3DSettings track drive ratios and torques must be representable")
+                    }
+                    gear_index++
+                }
+            }
+            side++
+        }
+        for index in mapping { if index<0 { panic("GFX.Physics.TrackedVehicle3DSettings every wheel must belong to a track") } }
+        if transmission.mode==VehicleTransmissionMode3D.automatic && transmission.shift_up_rpm>engine.maximum_rpm {
+            panic("GFX.Physics.TrackedVehicle3DSettings automatic shift RPM exceeds engine maximum")
+        }
+        self.chassis=chassis;self.wheels=retained;self.tracks=tracks;self.common=common
+        self.engine=engine;self.transmission=transmission;self.wheel_tracks=mapping
+    }
+    func wheel_count() int { return self.wheels.count() }
+    func wheel(index:int) TrackedWheel3DSettings {
+        if index<0 || index>=self.wheels.count() { panic("GFX.Physics.TrackedVehicle3DSettings wheel index is out of range") }
+        return self.wheels[index]
+    }
+    func track(side:VehicleTrackSide3D) VehicleTrack3DSettings { return self.tracks[track_side_index3d(side)] }
+    package func suspensions() WheeledVehicle3DSettings { return self.common }
+    package func drivetrain() VehicleTrackDrive3D {
+        var radii:float[]=[];for wheel in self.wheels { radii.append(wheel.radius) }
+        return VehicleTrackDrive3D(self.engine,self.transmission,self.tracks,radii,self.wheel_tracks)
+    }
+}
+
+public class TrackedVehicle3D {
+    private var store:BodyStore3D
+    private var base:WheeledVehicle3D
+    private var settings:TrackedVehicle3DSettings
+    private var drive:VehicleTrackDrive3D
+    package init(store:BodyStore3D,id:BodyId3D,settings:TrackedVehicle3DSettings) {
+        self.store=store;self.settings=settings;self.drive=settings.drivetrain()
+        self.base=WheeledVehicle3D(store,id,settings.suspensions());self.base.attach_tracks(self.drive)
+    }
+    private func require_valid() {
+        if !self.base.is_valid() { panic("GFX.Physics.TrackedVehicle3D no longer refers to a live vehicle") }
+    }
+    private func require_mutable() { self.store.require_mutable();self.require_valid() }
+    private func wake() { self.store.require(self.base.chassis_id()).wake() }
+    func is_valid() bool { return self.base.is_valid() }
+    func chassis() RigidBody3D { self.require_valid();return self.base.chassis() }
+    func wheel_count() int { self.require_valid();return self.settings.wheel_count() }
+    func wheel_settings(index:int) TrackedWheel3DSettings { self.require_valid();return self.settings.wheel(index) }
+    func wheel(index:int) VehicleWheelState3D { self.require_valid();self.settings.wheel(index);return self.base.wheel(index) }
+    func track(side:VehicleTrackSide3D) VehicleTrackState3D { self.require_valid();return self.drive.track(track_side_index3d(side)) }
+    func track_settings(side:VehicleTrackSide3D) VehicleTrack3DSettings { self.require_valid();return self.settings.track(side) }
+    func powertrain() VehiclePowertrainState3D { self.require_valid();return self.drive.powertrain() }
+    func set_controls(throttle:float=0.0,left_ratio:float=1.0,right_ratio:float=1.0,brake:float=0.0) {
+        self.require_mutable();if self.drive.controls(throttle,left_ratio,right_ratio,brake) { self.wake() }
+    }
+    func set_transmission(gear:int,clutch:float=1.0) {
+        self.require_mutable();if self.drive.gearbox.set(gear,clutch) { self.wake() }
+    }
+    func set_track_angular_velocity(side:VehicleTrackSide3D,velocity:float) {
+        self.require_mutable();let index=track_side_index3d(side)
+        if !finite_body3d_value(velocity) || !finite_body3d_value(velocity*velocity) {
+            panic("GFX.Physics.TrackedVehicle3D track angular velocity must be finite and representable")
+        }
+        var track=self.settings.track(side);var i=0
+        while i<track.wheel_count() {
+            let speed=velocity*self.settings.wheel(track.driven_wheel).radius/self.settings.wheel(track.wheel(i)).radius
+            if !finite_body3d_value(speed*speed) || !finite_body3d_value(speed*self.settings.wheel(track.wheel(i)).radius*speed*self.settings.wheel(track.wheel(i)).radius) { panic("GFX.Physics.TrackedVehicle3D wheel angular velocity must be representable") }
+i++
+        }
+        if self.drive.speeds[index]!=velocity { self.drive.speeds[index]=velocity;self.wake() }
+    }
+    func maximum_tilt_angle() float { self.require_valid();return self.base.maximum_tilt_angle() }
+    func set_maximum_tilt_angle(angle:float) { self.require_mutable();self.base.set_maximum_tilt_angle(angle) }
+    package func suspensions() WheeledVehicle3D { return self.base }
+    package func belongs_to(store:BodyStore3D) bool { return self.store==store }
+}
+
+func track_side_index3d(side:VehicleTrackSide3D) int {
+    match side { left => { return 0 }
+        right => { return 1 } }
+}

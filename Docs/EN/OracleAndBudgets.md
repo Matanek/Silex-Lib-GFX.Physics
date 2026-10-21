@@ -70,3 +70,33 @@ requested visual acceptance. These gates do not take automated screenshots.
 Raw results are dated under `Benchmarks/Baselines/` and identify the exact
 commits. Replacing an accepted baseline requires a green correctness corpus,
 admissible variance and explicit review of every changed gate.
+
+## 3D tracked vehicle qualification
+
+`Silex-Benchmarks/Sources/Physics3D/TrackedGroundRun.py` compares pinned Jolt
+5.6.0 against the Silex Native Debug/Release SDK on macOS ARM64, one worker,
+one substep and 12/4 iterations, at 60/120 Hz. Sixteen airborne cases produce
+5,792 states per engine/mode; six ground cases produce 8,652. Each ground case
+has 2 s of braked landing, 2 s of driving and 4 s of braking. A Jolt initial
+height perturbation of 1 micrometer checks conditioning alongside parity.
+
+Pointwise chassis bounds remain 0.05 m, 0.1 m/s, 0.02 rad and 0.15 rad/s.
+Per-step balances allow 0.1 N·s and 0.1 N·m·s; wheel angles are checked to
+0.0001 rad, angular velocities to 0.0001 rad/s and RPM to 0.02. Over command-aligned 1 s windows, resultant
+forces are bounded by 20 N and 30 N·m, individual mean normal loads by 20 N,
+and rotation increments by 0.1 rad. Recovery requires six 163.5 N supports,
+981 N total load, 0.88365 m height and speed below 0.05 m/s. Zero grip keeps
+the chassis still despite spinning tracks.
+
+Tangential force sharing between six contacts is not unique: individual parity
+is not claimed. Left/right mirroring retains pointwise poses but compares 1 s
+mean velocities against the same bounds, because Jolt's contact order briefly
+exceeds 0.1 m/s. Main Silex/Jolt parity remains fully pointwise. Jolt retains
+an earlier unsupported-wheel velocity; the SDK publishes final track velocity.
+Checks respect each observation boundary and retain raw data. Both engines'
+floating text values are decoded as binary32.
+
+632 corruptions are rejected across both modes and engines. The report records
+output hashes and errors; Debug/Release are bit-identical for these cases.
+This qualifies the specified ideal tracks, ray contacts and plane, without
+claiming articulated links, all terrain coverage or an FPS budget.

@@ -1,0 +1,49 @@
+use GFX.Physics
+use STD.Math
+
+func main() {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+    var wheels:Physics.TrackedWheel3DSettings[]=[]
+    let sides:float[]=[-0.6,0.6]
+    let stations:float[]=[-1.0,0.0,1.0]
+    for x in sides { for z in stations {
+        wheels.append(Physics.TrackedWheel3DSettings(Math.Vec3(x,0.0,z),
+            longitudinal_friction:1.0,lateral_friction:0.15))
+    } }
+    var vehicle=world.create_tracked_vehicle(Physics.TrackedVehicle3DSettings(
+        Physics.RigidBody3DSettings()
+            ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,1.15,0.0))
+            ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0,
+        wheels,
+        Physics.VehicleTrack3DSettings(0,[0,1,2],inertia:2.0,angular_damping:0.0,
+            maximum_brake_torque:1500.0),
+        Physics.VehicleTrack3DSettings(3,[3,4,5],inertia:2.0,angular_damping:0.0,
+            maximum_brake_torque:1500.0),
+        engine:Physics.VehicleEngine3DSettings(maximum_torque:15.0,minimum_rpm:1000.0,
+            maximum_rpm:6000.0,inertia:0.5,angular_damping:0.0,
+            torque_curve:[Math.Vec2(0.0,1.0)]),
+        transmission:Physics.VehicleTransmission3DSettings(
+            mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0],
+            reverse_gear_ratios:[-1.0],shift_up_rpm:1200.0,shift_down_rpm:600.0)))
+    vehicle.set_transmission(1)
+    var step=0
+    while step<960 {
+        if step>=240 && step<480 { vehicle.set_controls(throttle:0.8) }
+        else { vehicle.set_controls(brake:1.0) }
+        world.step(1.0/120.0)
+        step++
+    }
+    var supports=0
+    for i in [0,1,2,3,4,5] { if vehicle.wheel(i).support()!=null { supports++ } }
+    let distance=vehicle.chassis().position().z
+    let speed=vehicle.chassis().linear_velocity().length()
+    print("Tracked vehicle: distance=$(distance) m, final speed=$(speed) m/s, supports=$(supports)/6")
+    assert(distance>1.0 && speed<0.05 && supports==6)
+    world.destroy_tracked_vehicle(vehicle)
+    assert(!vehicle.is_valid())
+}

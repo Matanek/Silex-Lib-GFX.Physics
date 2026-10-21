@@ -1,0 +1,139 @@
+use GFX.Physics
+use STD.Math
+
+func settings(ground:bool=false,grip:bool=true,allow_sleep:bool=false) Physics.TrackedVehicle3DSettings {
+    var wheels:Physics.TrackedWheel3DSettings[]=[]
+    var coefficient=1.0;var lateral=0.15;if !grip { coefficient=0.0;lateral=0.0 }
+    let sides:float[]=[-0.6,0.6];let positions:float[]=[-1.0,0.0,1.0]
+    for x in sides { for z in positions {
+        wheels.append(Physics.TrackedWheel3DSettings(Math.Vec3(x,0.0,z),longitudinal_friction:coefficient,lateral_friction:lateral))
+    } }
+    var height=3.0;if ground { height=1.15 }
+    return Physics.TrackedVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0)) ..allow_sleep=allow_sleep
+            ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0,wheels,
+        Physics.VehicleTrack3DSettings(0,[0,1,2],inertia:2.0,angular_damping:0.0,maximum_brake_torque:1500.0),
+        Physics.VehicleTrack3DSettings(3,[3,4,5],inertia:2.0,angular_damping:0.0,maximum_brake_torque:1500.0),
+        engine:Physics.VehicleEngine3DSettings(maximum_torque:15.0,minimum_rpm:1000.0,angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]),
+        transmission:Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0],reverse_gear_ratios:[-1.0]))
+}
+
+func tracked(world:Physics.World3D,ground:bool=false,grip:bool=true,allow_sleep:bool=false) Physics.TrackedVehicle3D {
+    return world.create_tracked_vehicle(settings(ground:ground,grip:grip,allow_sleep:allow_sleep))
+}
+func orphan() Physics.TrackedVehicle3D { var world=Physics.World3D();return tracked(world) }
+
+test "tracked vehicle owns one chassis and belt wheels rotate together without moving an airborne body" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());var vehicle=tracked(world)
+    vehicle.set_transmission(1);vehicle.set_controls(throttle:0.5,left_ratio:0.5)
+    for step in [0,1,2,3,4,5] { world.step(1.0/120.0) }
+    assert(world.body_count()==1 && vehicle.wheel_count()==6)
+    assert(vehicle.chassis().position()==Math.Vec3(0.0,3.0,0.0) && vehicle.chassis().linear_velocity()==Math.Vec3())
+    let left=vehicle.track(Physics.VehicleTrackSide3D.left);let right=vehicle.track(Physics.VehicleTrackSide3D.right)
+    assert(left.angular_velocity>0.0 && Math.abs(left.angular_velocity-right.angular_velocity*0.5)<0.00001)
+    assert(left.drive_torque==22.5 && right.drive_torque==45.0 && left.brake_torque==0.0 && right.brake_torque==0.0)
+    assert(Math.abs(left.linear_speed-0.16875)<0.000001 && Math.abs(right.linear_speed-0.3375)<0.000001)
+    for i in [0,1,2] { assert(vehicle.wheel(i).angular_velocity==left.angular_velocity && vehicle.wheel(i+3).angular_velocity==right.angular_velocity) }
+    let angle=vehicle.wheel(0).rotation_angle;let rpm=vehicle.powertrain().engine_rpm
+    world.step(0.0);assert(vehicle.wheel(0).rotation_angle==angle && vehicle.powertrain().engine_rpm==rpm)
+    vehicle.set_controls(brake:1.0);world.step(1.0/120.0)
+    let stopped_left=vehicle.track(Physics.VehicleTrackSide3D.left);let stopped_right=vehicle.track(Physics.VehicleTrackSide3D.right)
+    assert(stopped_left.angular_velocity==0.0 && stopped_right.angular_velocity==0.0)
+    assert(stopped_left.drive_torque==0.0 && stopped_right.drive_torque==0.0)
+    assert(stopped_left.brake_torque<0.0 && stopped_right.brake_torque<0.0)
+    assert(Math.abs(stopped_left.brake_torque)<=1500.0 && Math.abs(stopped_right.brake_torque)<=1500.0)
+    let balance=(left.angular_velocity+right.angular_velocity)*2.0+(stopped_left.brake_torque+stopped_right.brake_torque)/120.0
+    assert(Math.abs(balance)<0.0001)
+    world.destroy_tracked_vehicle(vehicle);assert(!vehicle.is_valid() && world.body_count()==0)
+}
+
+test "tracked contact accelerates forward and brakes back onto six real supports" {
+    for rate in [60,120] {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+        var vehicle=tracked(world,ground:true);vehicle.set_transmission(1);vehicle.set_controls(brake:1.0)
+        var step=0
+        while step<8*rate {
+            if step==2*rate { vehicle.set_controls(throttle:0.8) }
+            if step==4*rate { vehicle.set_controls(brake:1.0) }
+            world.step(1.0/rate as float);step++
+        }
+        assert(vehicle.chassis().position().z>1.0 && vehicle.chassis().linear_velocity().length()<0.05)
+        var total=0.0
+        for i in [0,1,2,3,4,5] { assert(vehicle.wheel(i).support()!=null);total+=vehicle.wheel(i).normal_force }
+        assert(Math.abs(total-981.0)<2.0)
+    }
+}
+
+test "track topology retains caller arrays and wheel settings" {
+    var indices:int[]=[0]
+    var left=Physics.VehicleTrack3DSettings(0,indices);indices[0]=5;indices.append(2)
+    assert(left.wheel_count()==1 && left.wheel(0)==0)
+    var wheels:Physics.TrackedWheel3DSettings[]=[Physics.TrackedWheel3DSettings(Math.Vec3(-0.6,0.0,0.0)),Physics.TrackedWheel3DSettings(Math.Vec3(0.6,0.0,0.0))]
+    var description=Physics.TrackedVehicle3DSettings(Physics.RigidBody3DSettings(),wheels,left,Physics.VehicleTrack3DSettings(1,[1]))
+    wheels[0]=Physics.TrackedWheel3DSettings(Math.Vec3(20.0,0.0,0.0));wheels.clear()
+    assert(description.wheel_count()==2 && description.wheel(0).position.x== -0.6)
+    assert(description.track(Physics.VehicleTrackSide3D.left).wheel(0)==0)
+}
+
+test "track lifetime follows its world chassis and independent instances" {
+    var first=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var second=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var a=tracked(first);var b=tracked(second);a.set_transmission(1);a.set_controls(throttle:0.5)
+    first.step(1.0/120.0)
+    assert(a.track(Physics.VehicleTrackSide3D.left).angular_velocity>0.0 && b.track(Physics.VehicleTrackSide3D.left).angular_velocity==0.0)
+    var chassis=a.chassis();first.destroy_rigid_body(chassis)
+    assert(!a.is_valid() && !chassis.is_valid() && first.body_count()==0 && b.is_valid() && second.body_count()==1)
+    var replacement=tracked(first);assert(replacement.is_valid() && !a.is_valid())
+    var expired=orphan();assert(!expired.is_valid())
+    second.destroy_tracked_vehicle(b);first.destroy_tracked_vehicle(replacement)
+}
+
+test "track observations freeze while disabled and unchanged controls preserve sleep" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=tracked(world,allow_sleep:true);var step=0
+    while step<240 { world.step(1.0/120.0);step++ }
+    assert(!vehicle.chassis().is_awake())
+    vehicle.set_controls();vehicle.set_transmission(0);assert(!vehicle.chassis().is_awake())
+    vehicle.set_transmission(1);assert(vehicle.chassis().is_awake())
+    vehicle.set_controls(throttle:0.5);world.step(1.0/120.0)
+    let speed=vehicle.track(Physics.VehicleTrackSide3D.left).angular_velocity
+    let angle=vehicle.wheel(0).rotation_angle;let rpm=vehicle.powertrain().engine_rpm
+    vehicle.chassis().set_enabled(false);world.step(1.0/60.0)
+    assert(vehicle.track(Physics.VehicleTrackSide3D.left).angular_velocity==speed && vehicle.wheel(0).rotation_angle==angle && vehicle.powertrain().engine_rpm==rpm)
+    vehicle.chassis().set_enabled(true);world.step(1.0/120.0)
+    assert(vehicle.track(Physics.VehicleTrackSide3D.left).angular_velocity>speed)
+}
+
+test "track speed mutation is applied to wheel observations at the next positive step" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());var vehicle=tracked(world)
+    vehicle.set_track_angular_velocity(Physics.VehicleTrackSide3D.left,20.0)
+    assert(vehicle.track(Physics.VehicleTrackSide3D.left).angular_velocity==20.0 && vehicle.wheel(0).angular_velocity==0.0)
+    world.step(0.0);assert(vehicle.wheel(0).angular_velocity==0.0 && vehicle.wheel(0).rotation_angle==0.0)
+    world.step(1.0/120.0)
+    assert(Math.abs(vehicle.track(Physics.VehicleTrackSide3D.left).angular_velocity-10.0)<0.00001)
+    assert(Math.abs(vehicle.wheel(0).angular_velocity-10.0)<0.00001)
+    assert(Math.abs(vehicle.wheel(0).rotation_angle-20.0/120.0)<0.00001)
+}
+
+test "tracked contacts transfer opposite impulses to a dynamic support and forget destroyed supports" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var ground=world.create_rigid_body(Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(100.0,1.0,100.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.5,0.0)) ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(10000.0))
+        ..allow_sleep=false ..friction=1.0 ..linear_damping=0.0 ..angular_damping=0.0)
+    var vehicle=tracked(world);vehicle.chassis().set_transform(Physics.Transform3D(Math.Vec3(0.0,0.88365,0.0)))
+    vehicle.set_transmission(1);vehicle.set_controls(throttle:0.5)
+    var touched=false;var step=0
+    while step<120 {
+        world.step(1.0/120.0);step++
+        let momentum=vehicle.chassis().linear_velocity().multiply(100.0).add(ground.linear_velocity().multiply(200.0))
+        assert(momentum.length()<0.002)
+        if vehicle.wheel(0).support()!=null { touched=true }
+    }
+    assert(touched && vehicle.chassis().linear_velocity().z>0.001 && ground.linear_velocity().z<0.0)
+    world.destroy_rigid_body(ground)
+    for i in [0,1,2,3,4,5] { assert(vehicle.wheel(i).support()==null) }
+    assert(vehicle.is_valid() && world.body_count()==1)
+}

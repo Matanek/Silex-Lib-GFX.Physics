@@ -1,0 +1,46 @@
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmissionMode3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+package class VehicleGearbox3D {
+    let settings:VehicleTransmission3DSettings
+    var gear:int=0
+    var clutch:float=1.0
+    private var switch_left:float=0.0
+    private var release_left:float=0.0
+    private var latency_left:float=0.0
+    init(settings:VehicleTransmission3DSettings) { self.settings=settings }
+    func allow_sleep() bool { return self.switch_left<=0.0 && self.release_left<=0.0 && self.latency_left<=0.0 }
+    func switching() bool { return self.switch_left>0.0 }
+    func set(gear:int,clutch:float) bool {
+        if self.settings.mode!=VehicleTransmissionMode3D.manual { panic("GFX.Physics vehicle requires manual transmission for set_transmission") }
+        let ratio=self.settings.gear_ratio(gear)
+        if !finite_body3d_value(clutch) || clutch<0.0 || clutch>1.0 { panic("GFX.Physics vehicle clutch must be finite in [0, 1]") }
+        let changed=self.gear!=gear || self.clutch!=clutch;self.gear=gear;self.clutch=clutch;return changed
+    }
+    func update(delta:float,input:float,can_shift_up:bool,rpm:float) {
+        if self.settings.mode!=VehicleTransmissionMode3D.automatic { return }
+        let old=self.gear
+        if self.gear==0 || input*(self.gear as float)<0.0 {
+            self.gear=0;if input>0.0 { self.gear=1 } else if input<0.0 { self.gear= -1 }
+        } else if self.latency_left==0.0 {
+            if can_shift_up && rpm>self.settings.shift_up_rpm {
+                if self.gear<0 { if self.gear> -self.settings.reverse_gear_count() { self.gear-- } }
+                else if self.gear<self.settings.forward_gear_count() { self.gear++ }
+            } else if rpm<self.settings.shift_down_rpm {
+                if self.gear<0 { var maximum=0;if input!=0.0 { maximum= -1 }
+                if self.gear<maximum { self.gear++ } }
+                else { var minimum=0;if input!=0.0 { minimum=1 }
+                if self.gear>minimum { self.gear-- } }
+            }
+        }
+        if old!=self.gear {
+            self.switch_left=0.0;if old!=0 { self.switch_left=self.settings.switch_time }
+            self.release_left=self.settings.clutch_release_time;self.latency_left=self.settings.switch_latency;self.clutch=0.0
+        } else if self.switch_left>0.0 { self.switch_left=Math.max(0.0,self.switch_left-delta);self.clutch=0.0 }
+        else if self.release_left>0.0 {
+            self.release_left=Math.max(0.0,self.release_left-delta);self.clutch=1.0-self.release_left/self.settings.clutch_release_time
+        } else { self.clutch=1.0;self.latency_left=Math.max(0.0,self.latency_left-delta) }
+    }
+}

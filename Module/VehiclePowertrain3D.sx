@@ -1,3 +1,4 @@
+use GFX.Physics.VehicleGearbox3D.VehicleGearbox3D
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use STD.Math
 
@@ -173,14 +174,11 @@ package class VehiclePowertrain3D {
     var fractions:float[]=[]
     var differential_speeds:float[]=[]
     var rpm:float
-    var gear:int=0
-    var clutch:float=1.0
     var engine_torque:float=0.0
-    private var switch_left:float=0.0
-    private var release_left:float=0.0
-    private var latency_left:float=0.0
+    private var gearbox:VehicleGearbox3D
     init(engine:VehicleEngine3DSettings,transmission:VehicleTransmission3DSettings,
         differentials:VehicleDifferential3DSettings[],center_limit:float?,inertias:float[],radii:float[],brakes:float[],hands:float[]) {
+        self.gearbox=VehicleGearbox3D(transmission)
         self.engine=engine;self.transmission=transmission;self.differentials=differentials;self.center_limit=center_limit
         self.inertias=inertias;self.radii=radii;self.brake_limits=brakes;self.handbrake_limits=hands;self.rpm=engine.minimum_rpm
         for inertia in inertias {
@@ -194,16 +192,11 @@ package class VehiclePowertrain3D {
             self.differential_speeds.append(0.0)
         }
     }
-    func state() VehiclePowertrainState3D { return VehiclePowertrainState3D(self.rpm,self.gear,self.clutch,self.switch_left>0.0,self.engine_torque) }
+    func state() VehiclePowertrainState3D { return VehiclePowertrainState3D(self.rpm,self.gearbox.gear,self.gearbox.clutch,self.gearbox.switching(),self.engine_torque) }
     func allow_sleep(throttle:float) bool {
-        return throttle==0.0 && self.rpm<=1.01*self.engine.minimum_rpm && self.switch_left<=0.0 && self.release_left<=0.0 && self.latency_left<=0.0
+        return throttle==0.0 && self.rpm<=1.01*self.engine.minimum_rpm && self.gearbox.allow_sleep()
     }
-    func set_transmission(gear:int,clutch:float) bool {
-        if self.transmission.mode!=VehicleTransmissionMode3D.manual { panic("GFX.Physics.WheeledVehicle3D requires manual transmission for set_transmission") }
-        let ratio=self.transmission.gear_ratio(gear)
-        if !finite_body3d_value(clutch) || clutch<0.0 || clutch>1.0 { panic("GFX.Physics.WheeledVehicle3D clutch must be finite in [0, 1]") }
-        let changed=self.gear!=gear || self.clutch!=clutch;self.gear=gear;self.clutch=clutch;return changed
-    }
+    func set_transmission(gear:int,clutch:float) bool { return self.gearbox.set(gear,clutch) }
     private func distribute() {
         var low=0.0;var high=0.0;var index=0
         for d in self.differentials {
@@ -222,7 +215,7 @@ package class VehiclePowertrain3D {
                 alpha=Math.min(1.0,(Math.max(0.001,high)/Math.max(0.001,low)-1.0)/(limit-1.0))
             }
         }
-        index=0;let ratio=self.transmission.gear_ratio(self.gear)
+        index=0;let ratio=self.transmission.gear_ratio(self.gearbox.gear)
         for d in self.differentials {
             var share=d.engine_torque_ratio
             if factor_sum>0.0 { share=share*(1.0-alpha)+alpha*(high-self.differential_speeds[index])/(high-low)/factor_sum }
@@ -237,19 +230,19 @@ package class VehiclePowertrain3D {
     func step(delta:float,throttle:float,brake:float,handbrake:float) {
         let old_rpm=self.rpm;let conversion=60.0/Math.two_pi()
         self.rpm=Math.clamp(self.rpm*Math.max(0.0,1.0-self.engine.angular_damping*delta),self.engine.minimum_rpm,self.engine.maximum_rpm)
-        var input=Math.abs(throttle);if self.transmission.mode==VehicleTransmissionMode3D.automatic { input*=self.clutch }
+        var input=Math.abs(throttle);if self.transmission.mode==VehicleTransmissionMode3D.automatic { input*=self.gearbox.clutch }
         self.engine_torque=self.engine.torque(self.rpm,input);self.distribute()
         let e0=self.rpm/conversion+delta*self.engine_torque/self.engine.inertia
         var average=0.0;var compliance=0.0;let count=self.driven.count() as float
         for i in self.driven {
             let braking=brake*self.brake_limits[i]+handbrake*self.handbrake_limits[i]
-            var sign=1.0;if self.speeds[i]<0.0 || (self.speeds[i]==0.0 && self.gear<0) { sign= -1.0 }
+            var sign=1.0;if self.speeds[i]<0.0 || (self.speeds[i]==0.0 && self.gearbox.gear<0) { sign= -1.0 }
             var impulse=sign*braking*delta
             if self.contacts[i] { impulse+=self.previous_impulses[i]*self.previous_inverse_deltas[i]*delta*self.radii[i] }
             average+=self.ratios[i]*(self.speeds[i]-impulse/self.inertias[i])/count
             compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count
         }
-        var strength=0.0;if self.gear!=0 { strength=self.clutch*self.transmission.clutch_strength }
+        var strength=0.0;if self.gearbox.gear!=0 { strength=self.gearbox.clutch*self.transmission.clutch_strength }
         let torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
         self.rpm=Math.clamp((e0-delta*torque/self.engine.inertia)*conversion,self.engine.minimum_rpm,self.engine.maximum_rpm)
         var slipping=false
@@ -258,30 +251,6 @@ package class VehiclePowertrain3D {
             self.speeds[i]+=delta*self.drive_torques[i]/self.inertias[i]
             if self.fractions[i]>0.0 && (!self.contacts[i] || self.slips[i]>0.1) { slipping=true }
         }
-        self.update_transmission(delta,throttle,!slipping && self.rpm>=old_rpm)
-    }
-    private func update_transmission(delta:float,input:float,can_shift_up:bool) {
-        if self.transmission.mode!=VehicleTransmissionMode3D.automatic { return }
-        let old=self.gear
-        if self.gear==0 || input*(self.gear as float)<0.0 {
-            self.gear=0;if input>0.0 { self.gear=1 } else if input<0.0 { self.gear= -1 }
-        } else if self.latency_left==0.0 {
-            if can_shift_up && self.rpm>self.transmission.shift_up_rpm {
-                if self.gear<0 { if self.gear> -self.transmission.reverse_gear_count() { self.gear-- } }
-                else if self.gear<self.transmission.forward_gear_count() { self.gear++ }
-            } else if self.rpm<self.transmission.shift_down_rpm {
-                if self.gear<0 { var maximum=0;if input!=0.0 { maximum= -1 }
-                if self.gear<maximum { self.gear++ } }
-                else { var minimum=0;if input!=0.0 { minimum=1 }
-                if self.gear>minimum { self.gear-- } }
-            }
-        }
-        if old!=self.gear {
-            self.switch_left=0.0;if old!=0 { self.switch_left=self.transmission.switch_time }
-            self.release_left=self.transmission.clutch_release_time;self.latency_left=self.transmission.switch_latency;self.clutch=0.0
-        } else if self.switch_left>0.0 { self.switch_left=Math.max(0.0,self.switch_left-delta);self.clutch=0.0 }
-        else if self.release_left>0.0 {
-            self.release_left=Math.max(0.0,self.release_left-delta);self.clutch=1.0-self.release_left/self.transmission.clutch_release_time
-        } else { self.clutch=1.0;self.latency_left=Math.max(0.0,self.latency_left-delta) }
+        self.gearbox.update(delta,throttle,!slipping && self.rpm>=old_rpm,self.rpm)
     }
 }
