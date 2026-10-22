@@ -1,11 +1,11 @@
 use GFX.Physics
 use STD.Math
 
-func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,allow_sleep:bool=false) Physics.WheeledVehicle3D {
+func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,allow_sleep:bool=false,combined:bool=false) Physics.WheeledVehicle3D {
     var wheels:Physics.Wheel3DSettings[]=[]
     let sides:int[]=[-1,1]
     for x in sides { for z in sides {
-        wheels.append(Physics.Wheel3DSettings(Math.Vec3(0.6*x as float,0.0,z as float),tire:Physics.Tire3DSettings(angular_damping:0.0)))
+        wheels.append(Physics.Wheel3DSettings(Math.Vec3(0.6*x as float,0.0,z as float),tire:Physics.Tire3DSettings(angular_damping:0.0,combined_friction:combined)))
     } }
     var mode=Physics.VehicleTransmissionMode3D.manual;if automatic { mode=Physics.VehicleTransmissionMode3D.automatic }
     var height=0.875475;if air { height=3.0 }
@@ -163,4 +163,33 @@ test "powered contact transfers equal opposite chassis and dynamic support impul
         if vehicle.wheel(0).support()!=null { touched=true }
     }
     assert(touched && vehicle.chassis().linear_velocity().z>0.001 && ground.linear_velocity().z<0.0)
+}
+
+
+test "combined driven contacts retain rotor balance and adhesion while accelerating diagonally" {
+    for rate in [60,120] {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+        var vehicle=powered_vehicle(world,air:false,combined:true)
+        vehicle.chassis().set_linear_velocity(Math.Vec3(2.0,0.0,3.0))
+        for i in [0,1,2,3] { vehicle.set_wheel_angular_velocity(i,10.0) }
+        vehicle.set_transmission(1);vehicle.set_controls(throttle:1.0)
+        var step=0
+        while step<2*rate {
+            if step==rate { vehicle.set_transmission(0);vehicle.set_controls(brake:1.0) }
+            var old:float[]=[];for i in [0,1,2,3] { old.append(vehicle.wheel(i).angular_velocity) }
+            world.step(1.0/rate as float)
+            for i in [0,1,2,3] { var wheel=vehicle.wheel(i);let tire=vehicle.wheel_settings(i).tire!
+                assert(Math.abs(0.9*(wheel.angular_velocity-old[i])+(wheel.longitudinal_force*0.3-wheel.drive_torque-wheel.brake_torque)/rate as float)<0.001)
+                let longitudinal=Math.sqrt(tire.longitudinal_friction.coefficient(wheel.longitudinal_slip))*wheel.normal_force
+                let lateral=Math.sqrt(tire.lateral_friction.coefficient(wheel.lateral_slip))*wheel.normal_force
+                if longitudinal>0.001 && lateral>0.001 {
+                    let x=wheel.longitudinal_force/longitudinal;let y=wheel.lateral_force/lateral
+                    assert(x*x+y*y<=1.0001)
+                }
+            }
+            step++
+        }
+        assert(vehicle.chassis().linear_velocity().length()<0.03)
+    }
 }

@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Optional combined tire adhesion with `Tire3DSettings(combined_friction:true)`: traction/braking and cornering share a force ellipse; a locked wheel can slide. Rotor balances and support reactions are retained; the default independent model is unchanged.
+
 - Add `Motorcycle3D`: two suspended wheels, adjustable and switchable balance assistance, speed-dependent steering limits and shared engine/transmission driving the rear wheel. Initial balance and steering qualification on a plane with ray contacts and zero engine torque against Jolt at 60/120 Hz in Native Debug/Release; lifetime, settings and invalid inputs are checked.
 
 - Add `TrackedVehicle3D`: two tracks of suspended wheels, shared engine/transmission settings, relative speeds, counter-rotation and braking. Wheel/track states, lifetime and invalid inputs are checked; Jolt comparisons cover airborne and ray-contact plane cases in Native Debug/Release.

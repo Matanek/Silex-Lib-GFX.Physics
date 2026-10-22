@@ -50,10 +50,19 @@ interpolates linearly and clamps to endpoint values outside its range.
   the forward/backward axis, **in radians**, between 0 and π/2. Defaults: `(0,0)`, `(radians(3),1.2)`, `(radians(20),1)`.
 
 Effective friction is the geometric mean of tire and **support** friction.
-Chassis collider friction does not tune tire grip. Each tangential force is
-bounded separately by this coefficient times normal force; this model does
-not impose a combined friction circle. A zero-friction surface transmits no
-tangential force.
+Chassis collider friction does not tune tire grip. By default, each tangential
+force is bounded separately by this coefficient times normal force.
+
+To share adhesion between acceleration/braking and cornering, choose
+`Tire3DSettings(combined_friction:true)`. Requested forces are projected onto
+an ellipse: `(Fx/(mu_long*N))² + (Fy/(mu_lat*N))² <= 1`. A locked wheel opposes
+sliding in both tangent directions; it can slide instead of retaining the
+lateral grip of a rolling wheel. Longitudinal corrections retain rotor balances
+and support reactions. A zero-friction direction transmits no force; the other
+keeps its own limit. The option is per tire, disabled by default and shared by
+cars and motorcycles. This simplified model is neither a calibrated tire nor
+a new Jolt parity qualification.
+A zero-friction surface transmits no tangential force.
 
 ## Read rotation and forces
 

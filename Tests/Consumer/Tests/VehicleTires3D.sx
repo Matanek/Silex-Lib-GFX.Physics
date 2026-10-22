@@ -75,12 +75,14 @@ test "friction curves copy points interpolate and clamp at their ends" {
 }
 
 test "tire contact transfers equal opposite impulses to a dynamic support with offset COM" {
+    let flags:bool[]=[false,true]
+    for combined in flags {
     var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
     var platform=world.create_rigid_body(Physics.RigidBody3DSettings()
         ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0,0.1,20.0)))
         ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(500.0)) ..linear_velocity=Math.Vec3(2.0,0.0,0.0)
         ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=1.0)
-    var source=config();var body=source.chassis;body.transform=Physics.Transform3D(Math.Vec3(0.0,0.75,0.0))
+    var source=config(tire:Physics.Tire3DSettings(combined_friction:combined));var body=source.chassis;body.transform=Physics.Transform3D(Math.Vec3(0.0,0.75,0.0))
     body.mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0),Math.Vec3(0.1,0.0,0.1))
     var wheels:Physics.Wheel3DSettings[]=[];for i in [0,1,2,3] { wheels.append(source.wheel(i)) }
     var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(body,wheels));var response=false
@@ -99,6 +101,7 @@ test "tire contact transfers equal opposite impulses to a dynamic support with o
     var old=vehicle.wheel(0);world.destroy_rigid_body(platform)
     assert(vehicle.wheel(0).support()==null && vehicle.wheel(0).longitudinal_force==0.0 && vehicle.wheel(0).lateral_force==0.0)
     if var support=old.support() { assert(!support.is_valid()) }
+    }
 }
 
 test "a moving kinematic platform carries lateral grip and rotated tire frames choose rolling direction" {
@@ -139,4 +142,51 @@ test "a cambered axle parallel to the support normal retains the requested rolli
         }
         step++
     }
+}
+
+func combined_tire(braking:bool,combined:bool,rate:int,sign:float,friction:float=1.0) Math.Vec3 {
+    var world=Physics.World3D();ground(world,friction)
+    let rubber=Physics.Tire3DSettings(angular_damping:0.0,
+        longitudinal_friction:Physics.TireFrictionCurve3D([Math.Vec2(0.0,1.0)]),
+        lateral_friction:Physics.TireFrictionCurve3D([Math.Vec2(0.0,0.25)]),combined_friction:combined)
+    var vehicle=world.create_wheeled_vehicle(config(Math.Vec3(sign*3.0,0.0,6.0),rubber))
+    for i in [0,1,2,3] { vehicle.set_wheel_angular_velocity(i,20.0) }
+    if braking { vehicle.set_controls(brake:1.0) }
+    var step=0;var peak=0.0
+    while step<rate/2 {
+        let before=vehicle.chassis().linear_velocity();var impulse=Math.Vec3()
+        var old:float[]=[];for i in [0,1,2,3] { old.append(vehicle.wheel(i).angular_velocity) }
+        world.step(1.0/rate as float)
+        for i in [0,1,2,3] { var wheel=vehicle.wheel(i)
+            impulse=impulse.add(wheel.contact_normal.multiply(wheel.normal_force).add(wheel.longitudinal_direction.multiply(wheel.longitudinal_force)).add(wheel.lateral_direction.multiply(wheel.lateral_force)).divide(rate as float))
+            if combined && wheel.normal_force>0.001 && friction>0.0 {
+                let x=wheel.longitudinal_force/(Math.sqrt(friction)*wheel.normal_force)
+                let y=wheel.lateral_force/(0.5*Math.sqrt(friction)*wheel.normal_force)
+                assert(x*x+y*y<=1.0001);peak=Math.max(peak,x*x+y*y)
+            }
+            assert(Math.abs(wheel.brake_torque)<=1500.01)
+            assert(Math.abs(0.9*(wheel.angular_velocity-old[i])+(wheel.longitudinal_force*0.3-wheel.brake_torque)/rate as float)<0.001)
+        }
+        let delta=vehicle.chassis().linear_velocity().subtract(before).multiply(100.0)
+        assert(delta.subtract(impulse).subtract(Math.Vec3(0.0,-981.0/rate as float,0.0)).length()<0.005)
+        if friction==0.0 { assert(vehicle.chassis().linear_velocity().x==before.x && vehicle.chassis().linear_velocity().z==before.z) }
+        step++
+    }
+    if combined && braking && friction>0.0 { assert(peak>0.99) }
+    return vehicle.chassis().linear_velocity()
+}
+
+test "combined tire adhesion trades braking for lateral grip within an anisotropic ellipse" {
+    assert(!Physics.Tire3DSettings().combined_friction)
+    let signs:float[]=[-1.0,1.0]
+    for rate in [60,120] { for sign in signs {
+        let independent=combined_tire(true,false,rate,sign)
+        let shared=combined_tire(true,true,rate,sign)
+        let rolling=combined_tire(false,true,rate,sign)
+        print("Combined tire $(rate) $(sign): independent=$(independent.to_str()) shared=$(shared.to_str()) rolling=$(rolling.to_str())")
+        assert(sign*shared.x>sign*independent.x+0.1 && sign*shared.x>sign*rolling.x+0.1)
+        assert(shared.z>independent.z && shared.z<rolling.z)
+        let ice=combined_tire(true,true,rate,sign,0.0)
+        assert(Math.abs(ice.x-sign*3.0)<0.0001 && Math.abs(ice.z-6.0)<0.0001)
+    } }
 }

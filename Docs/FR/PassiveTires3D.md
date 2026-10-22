@@ -53,8 +53,19 @@ l’intervalle. `coefficient(slip)` évalue un glissement fini positif ou nul.
 
 Le coefficient effectif est la moyenne géométrique du coefficient du pneu et
 de la friction du **support**. La friction du collider de châssis ne règle pas
-celle du pneu. Chaque effort tangentiel est borné séparément par ce coefficient
-fois l’effort normal ; ce modèle n’impose pas un cercle d’adhérence combiné.
+celle du pneu. Par défaut, chaque effort tangentiel est borné séparément par ce
+coefficient fois l’effort normal.
+
+Pour partager l’adhérence entre accélération/freinage et virage, choisir
+`Tire3DSettings(combined_friction:true)`. Les efforts demandés sont projetés
+sur une ellipse : `(Fx/(mu_long*N))² + (Fy/(mu_lat*N))² <= 1`. Une roue bloquée
+résiste au glissement dans les deux directions tangentes ; elle peut dériver
+au lieu de conserver la tenue latérale d’une roue qui roule. La correction
+longitudinale conserve les bilans du rotor et les réactions sur le support.
+Une direction de friction nulle n’exerce aucun effort ; l’autre garde sa limite.
+L’option est propre à chaque pneu, désactivée par défaut et partagée par les
+voitures et motos. Ce modèle simplifié n’est pas un pneu calibré ni
+une nouvelle qualification de parité Jolt.
 Un sol de friction nulle ne transmet aucun effort tangentiel.
 
 ## Lire la rotation et les efforts

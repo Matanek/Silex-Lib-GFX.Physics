@@ -36,10 +36,12 @@ public struct Tire3DSettings {
     let up:Math.Vec3
     let longitudinal_friction:TireFrictionCurve3D
     let lateral_friction:TireFrictionCurve3D
+    let combined_friction:bool
     init(inertia:float=0.9, angular_damping:float=0.2,
         forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0), up:Math.Vec3=Math.Vec3(0.0,1.0,0.0),
         longitudinal_friction:TireFrictionCurve3D=TireFrictionCurve3D([Math.Vec2(0.0,0.0),Math.Vec2(0.06,1.2),Math.Vec2(0.2,1.0)]),
-        lateral_friction:TireFrictionCurve3D=TireFrictionCurve3D([Math.Vec2(0.0,0.0),Math.Vec2(Math.radians(3.0),1.2),Math.Vec2(Math.radians(20.0),1.0)]))
+        lateral_friction:TireFrictionCurve3D=TireFrictionCurve3D([Math.Vec2(0.0,0.0),Math.Vec2(Math.radians(3.0),1.2),Math.Vec2(Math.radians(20.0),1.0)]),
+        combined_friction:bool=false)
     {
         if !finite_body3d_value(inertia) || inertia<=0.0 || !finite_body3d_value(1.0/inertia) || !finite_body3d_value(angular_damping) || angular_damping<0.0 {
             panic("GFX.Physics.Tire3DSettings requires positive finite inertia and nonnegative finite angular damping")
@@ -52,5 +54,6 @@ public struct Tire3DSettings {
         self.inertia=inertia;self.angular_damping=angular_damping
         self.up=up.normalized();self.forward=self.up.cross(forward.cross(self.up)).normalized()
         self.longitudinal_friction=longitudinal_friction;self.lateral_friction=lateral_friction
+        self.combined_friction=combined_friction
     }
 }
