@@ -1,0 +1,83 @@
+use GFX.Physics.MotorcycleBalance3D.MotorcycleBalance3DSettings
+use GFX.Physics.WheeledVehicle3D.Wheel3DSettings
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
+use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
+use GFX.Physics.WheeledVehicle3D.VehicleWheelState3D
+use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.RigidBody3D.RigidBody3DSettings
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use STD.Math
+
+public class Motorcycle3DSettings {
+    let chassis:RigidBody3DSettings
+    let front:Wheel3DSettings
+    let rear:Wheel3DSettings
+    let balance:MotorcycleBalance3DSettings
+    let forward:Math.Vec3
+    let up:Math.Vec3
+    private var common:WheeledVehicle3DSettings
+    private let wheelbase:float
+    init(chassis:RigidBody3DSettings,front:Wheel3DSettings,rear:Wheel3DSettings,
+        balance:MotorcycleBalance3DSettings=MotorcycleBalance3DSettings(),engine:VehicleEngine3DSettings?=null,
+        transmission:VehicleTransmission3DSettings=VehicleTransmission3DSettings(),drive_ratio:float=3.42,
+        maximum_tilt_angle:float=Math.pi(),up:Math.Vec3=Math.Vec3.up(),forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0)) {
+        if front.tire==null || rear.tire==null { panic("GFX.Physics.Motorcycle3DSettings requires tires on both wheels") }
+        if !finite_body3d_point(up) || !finite_body3d_point(forward) ||
+            Math.abs(up.length_squared()-1.0)>0.0001 || Math.abs(forward.length_squared()-1.0)>0.0001 || Math.abs(up.dot(forward))>0.0001 {
+            panic("GFX.Physics.Motorcycle3DSettings requires finite orthogonal unit up and forward vectors")
+        }
+        if !finite_body3d_value(drive_ratio) || drive_ratio<=0.0 || !finite_body3d_value(drive_ratio*drive_ratio) {
+            panic("GFX.Physics.Motorcycle3DSettings requires a positive finite representable drive ratio")
+        }
+        let normalized_forward=forward.normalized()
+        let extent=front.position.add(front.direction.multiply(front.maximum_length)).subtract(rear.position.add(rear.direction.multiply(rear.maximum_length))).dot(normalized_forward)
+        if !finite_body3d_value(extent) || extent<=0.0 || !finite_body3d_value(extent*extent) || !finite_body3d_value(1.0/extent) {
+            panic("GFX.Physics.Motorcycle3DSettings requires a positive representable wheelbase with front ahead of rear")
+        }
+        var differentials:VehicleDifferential3DSettings[]=[]
+        if engine!=null { differentials.append(VehicleDifferential3DSettings(1,-1,ratio:drive_ratio,engine_torque_ratio:1.0)) }
+        self.common=WheeledVehicle3DSettings(chassis,[front,rear],engine:engine,transmission:transmission,
+            differentials:differentials,maximum_tilt_angle:maximum_tilt_angle,up:up)
+        self.chassis=chassis;self.front=front;self.rear=rear;self.balance=balance
+        self.forward=normalized_forward;self.up=up.normalized();self.wheelbase=extent
+    }
+    package func suspensions() WheeledVehicle3DSettings { return self.common }
+    package func span() float { return self.wheelbase }
+}
+
+public class Motorcycle3D {
+    private var base:WheeledVehicle3D
+    package init(store:BodyStore3D,id:BodyId3D,settings:Motorcycle3DSettings) {
+        self.base=WheeledVehicle3D(store,id,settings.suspensions())
+        self.base.attach_motorcycle(settings.balance,settings.forward,settings.up,settings.span())
+    }
+    func is_valid() bool { return self.base.is_valid() }
+    func chassis() RigidBody3D { return self.base.chassis() }
+    func wheel_count() int { self.base.chassis();return 2 }
+    func wheel_settings(index:int) Wheel3DSettings { return self.base.wheel_settings(index) }
+    func wheel(index:int) VehicleWheelState3D { return self.base.wheel(index) }
+    func powertrain() VehiclePowertrainState3D { return self.base.powertrain() }
+    func set_controls(steering:float=0.0,brake:float=0.0,handbrake:float=0.0,throttle:float=0.0) {
+        self.base.set_controls(steering,brake,handbrake,throttle)
+    }
+    func set_transmission(gear:int,clutch:float=1.0) { self.base.set_transmission(gear,clutch) }
+    func set_wheel_angular_velocity(index:int,velocity:float) { self.base.set_wheel_angular_velocity(index,velocity) }
+    func maximum_tilt_angle() float { return self.base.maximum_tilt_angle() }
+    func set_maximum_tilt_angle(angle:float) { self.base.set_maximum_tilt_angle(angle) }
+    func balance_settings() MotorcycleBalance3DSettings { return self.base.motorcycle_balance_settings() }
+    func set_balance_settings(settings:MotorcycleBalance3DSettings) { self.base.set_motorcycle_balance_settings(settings) }
+    func balance_enabled() bool { return self.base.motorcycle_balance_enabled() }
+    func set_balance_enabled(enabled:bool) { self.base.set_motorcycle_balance_enabled(enabled) }
+    func steering_limit_enabled() bool { return self.base.motorcycle_steering_limit_enabled() }
+    func set_steering_limit_enabled(enabled:bool) { self.base.set_motorcycle_steering_limit_enabled(enabled) }
+    func lean_target() Math.Vec3 { return self.base.motorcycle_lean_target() }
+    package func suspensions() WheeledVehicle3D { return self.base }
+    package func belongs_to(store:BodyStore3D) bool { return self.base.belongs_to(store) }
+}

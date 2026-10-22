@@ -1,5 +1,7 @@
 use GFX.Physics.TrackedVehicle3D.TrackedVehicle3D
 use GFX.Physics.TrackedVehicle3D.TrackedVehicle3DSettings
+use GFX.Physics.Motorcycle3D.Motorcycle3D
+use GFX.Physics.Motorcycle3D.Motorcycle3DSettings
 use GFX.Physics.WheelContact3D.cast_wheel_cylinder3d
 use GFX.Physics.WheelContact3D.cast_wheel_sphere3d
 use GFX.Physics.Sphere3D.Sphere3D
@@ -312,8 +314,19 @@ public class World3D {
         if !vehicle.belongs_to(self.store) { panic("GFX.Physics.World3D cannot destroy a tracked vehicle owned by another world") }
         self.destroy_rigid_body(vehicle.chassis())
     }
+    func create_motorcycle(settings:Motorcycle3DSettings) Motorcycle3D {
+        self.store.require_mutable();let id=self.store.append(settings.chassis)
+        var vehicle=Motorcycle3D(self.store,id,settings)
+        self.wheeled_vehicles.append(vehicle.suspensions());return vehicle
+    }
+    func destroy_motorcycle(vehicle:Motorcycle3D) {
+        self.store.require_mutable()
+        if !vehicle.belongs_to(self.store) { panic("GFX.Physics.World3D cannot destroy a motorcycle owned by another world") }
+        self.destroy_rigid_body(vehicle.chassis())
+    }
     private func prepare_vehicle_suspensions(delta:float) {
         for vehicle in self.wheeled_vehicles {
+            vehicle.prepare_motorcycle(self.current_gravity,delta)
             vehicle.clear_contacts()
             var chassis=vehicle.chassis()
             if chassis.is_enabled() {

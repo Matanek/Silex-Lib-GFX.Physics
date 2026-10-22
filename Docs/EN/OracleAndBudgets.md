@@ -100,3 +100,44 @@ floating text values are decoded as binary32.
 output hashes and errors; Debug/Release are bit-identical for these cases.
 This qualifies the specified ideal tracks, ray contacts and plane, without
 claiming articulated links, all terrain coverage or an FPS budget.
+
+## Motorcycle balance qualification
+
+`Silex-Benchmarks/Sources/Physics3D/MotorcycleReferenceRun.py` qualifies the
+pinned Jolt 5.6.0 reference; `MotorcycleRun.py` compares its public Silex
+consumer. Sixteen 4 s recipes at 60/120 Hz produce 11,552 states per engine/mode,
+with one worker, one substep and 12/4 configured iterations, Native Debug/Release
+on macOS ARM64. The 100 kg chassis has isotropic inertia 100 kg·m², two 0.3 m
+wheels at ±1 m, travel 0.2–0.6 m, springs 10000 N/m and damping 1000 N·s/m.
+Engine torque is zero. Turns start at 5 m/s, airborne steering at ±20 m/s.
+Turn grip is 1/0.15; the other recipes have no tangential grip.
+
+Pointwise chassis budgets are 0.05 m / 0.1 m/s / 0.02 rad / 0.15 rad/s.
+Unassisted fall parity stops pointwise when either center first drops below
+0.2 m, then requires the fall and bounded state; 11,009 states remain compared
+pointwise. Silex's slope filter is suspension-relative; `pi/2-1e-6` on this
+plane preserves the same contacts as Jolt's world-vertical filter. Other
+defaults remain unchanged.
+
+Independent checks reconstruct the target from previous forces, the steering
+limit, PID torque and wheel velocity compensation. Bounds are 3e-6 rad
+steering, 3e-4 target distance, 0.1 N·m·s PID impulse, 0.005 N·s linear balance
+and 3e-5 m position per step. The instrumented reference also checks 3e-6 m/s
+compensation and integral decay per solver call. Its 19 guards and the
+consumer's 16 guards reject corruptions per mode. Native Debug/Release outputs
+are identical.
+
+The spring's geometric coefficients remain fixed for the entire step,
+including solver visits after pose integration. Smoothing stays per step;
+integral decay follows actual solver calls, whose count may differ between
+Jolt and Silex. Parity covers physical observations without requiring identity
+of those private caches. Assistance is an external actuator with no opposite
+support reaction. This campaign covers ray contacts on a plane, balance and
+coasting turns; it does not yet qualify composed propulsion, every detector or
+terrain, or CPU/GPU cost. Report: `motorcycle-qualification.json` in the group
+or workspace's `.silex/physics3d-oracle/` cache.
+
+Silex retains the signed wheel convention: the limit bounds amplitude even
+with a negative maximum angle or reversed axis. These cases are checked
+analytically. The pinned Jolt controller lets these representations bypass
+its limit; parity recipes use Jolt's positive conventions.

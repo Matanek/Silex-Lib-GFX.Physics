@@ -1,0 +1,105 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+func selected(name:str) bool { for arg in Process.arguments() { if arg==name { return true } }
+    return false
+}
+func description(front:Math.Vec3=Math.Vec3(0.0,0.0,1.0),rear:Math.Vec3=Math.Vec3(0.0,0.0,-1.0),
+    front_tire:bool=true,rear_tire:bool=true,body_type:Physics.BodyType3D=Physics.BodyType3D.dynamic,
+    up:Math.Vec3=Math.Vec3.up(),forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0),drive_ratio:float=3.42) Physics.Motorcycle3DSettings {
+    var front_settings:Physics.Tire3DSettings?=null;var rear_settings:Physics.Tire3DSettings?=null
+    if front_tire { front_settings=Physics.Tire3DSettings() }
+    if rear_tire { rear_settings=Physics.Tire3DSettings() }
+    return Physics.Motorcycle3DSettings(Physics.RigidBody3DSettings() ..body_type=body_type,
+        Physics.Wheel3DSettings(front,tire:front_settings),Physics.Wheel3DSettings(rear,tire:rear_settings),
+        up:up,forward:forward,drive_ratio:drive_ratio)
+}
+func orphan() Physics.Motorcycle3D { var world=Physics.World3D();return world.create_motorcycle(description()) }
+func main() {
+    var world=Physics.World3D();var bike=world.create_motorcycle(description())
+    if selected("lean-negative") { Physics.MotorcycleBalance3DSettings(maximum_lean_angle:-0.1);return }
+    if selected("lean-half-pi") { Physics.MotorcycleBalance3DSettings(maximum_lean_angle:Math.half_pi());return }
+    if selected("lean-pi") { Physics.MotorcycleBalance3DSettings(maximum_lean_angle:Math.pi());return }
+    if selected("lean-nan") { Physics.MotorcycleBalance3DSettings(maximum_lean_angle:Math.sqrt(-1.0));return }
+    if selected("lean-infinite") { Physics.MotorcycleBalance3DSettings(maximum_lean_angle:1.0/0.0);return }
+    if selected("stiffness-negative") { Physics.MotorcycleBalance3DSettings(stiffness:-1.0);return }
+    if selected("stiffness-nan") { Physics.MotorcycleBalance3DSettings(stiffness:Math.sqrt(-1.0));return }
+    if selected("stiffness-infinite") { Physics.MotorcycleBalance3DSettings(stiffness:1.0/0.0);return }
+    if selected("stiffness-overflow") { Physics.MotorcycleBalance3DSettings(stiffness:1.0e30);return }
+    if selected("damping-negative") { Physics.MotorcycleBalance3DSettings(damping:-1.0);return }
+    if selected("damping-nan") { Physics.MotorcycleBalance3DSettings(damping:Math.sqrt(-1.0));return }
+    if selected("damping-infinite") { Physics.MotorcycleBalance3DSettings(damping:1.0/0.0);return }
+    if selected("damping-overflow") { Physics.MotorcycleBalance3DSettings(damping:1.0e30);return }
+    if selected("integral_gain-negative") { Physics.MotorcycleBalance3DSettings(integral_gain:-1.0);return }
+    if selected("integral_gain-nan") { Physics.MotorcycleBalance3DSettings(integral_gain:Math.sqrt(-1.0));return }
+    if selected("integral_gain-infinite") { Physics.MotorcycleBalance3DSettings(integral_gain:1.0/0.0);return }
+    if selected("integral_gain-overflow") { Physics.MotorcycleBalance3DSettings(integral_gain:1.0e30);return }
+    if selected("integral_decay-negative") { Physics.MotorcycleBalance3DSettings(integral_decay:-1.0);return }
+    if selected("integral_decay-nan") { Physics.MotorcycleBalance3DSettings(integral_decay:Math.sqrt(-1.0));return }
+    if selected("integral_decay-infinite") { Physics.MotorcycleBalance3DSettings(integral_decay:1.0/0.0);return }
+    if selected("integral_decay-overflow") { Physics.MotorcycleBalance3DSettings(integral_decay:1.0e30);return }
+    if selected("smoothing-negative") { Physics.MotorcycleBalance3DSettings(smoothing:-0.1);return }
+    if selected("smoothing-high") { Physics.MotorcycleBalance3DSettings(smoothing:1.1);return }
+    if selected("smoothing-nan") { Physics.MotorcycleBalance3DSettings(smoothing:Math.sqrt(-1.0));return }
+    if selected("smoothing-infinite") { Physics.MotorcycleBalance3DSettings(smoothing:1.0/0.0);return }
+    if selected("fixed") { description(body_type:Physics.BodyType3D.fixed);return }
+    if selected("kinematic") { description(body_type:Physics.BodyType3D.kinematic);return }
+    if selected("front-tire") { description(front_tire:false);return }
+    if selected("rear-tire") { description(rear_tire:false);return }
+    if selected("span-zero") { description(front:Math.Vec3(0.0,0.0,-1.0));return }
+    if selected("span-negative") { description(front:Math.Vec3(0.0,0.0,-2.0));return }
+    if selected("span-overflow") { description(front:Math.Vec3(0.0,0.0,1.0e19),rear:Math.Vec3(0.0,0.0,-1.0e19));return }
+    if selected("span-underflow") { description(front:Math.Vec3(0.0,0.0,1.0e-40),rear:Math.Vec3());return }
+    if selected("up-zero") { description(up:Math.Vec3());return }
+    if selected("up-length") { description(up:Math.Vec3(0.0,2.0,0.0));return }
+    if selected("up-nan") { description(up:Math.Vec3(Math.sqrt(-1.0),1.0,0.0));return }
+    if selected("forward-zero") { description(forward:Math.Vec3());return }
+    if selected("forward-length") { description(forward:Math.Vec3(0.0,0.0,2.0));return }
+    if selected("forward-parallel") { description(forward:Math.Vec3.up());return }
+    if selected("forward-nan") { description(forward:Math.Vec3(Math.sqrt(-1.0),0.0,1.0));return }
+    if selected("ratio-zero") { description(drive_ratio:0.0);return }
+    if selected("ratio-negative") { description(drive_ratio:-1.0);return }
+    if selected("ratio-nan") { description(drive_ratio:Math.sqrt(-1.0));return }
+    if selected("ratio-infinite") { description(drive_ratio:1.0/0.0);return }
+    if selected("ratio-overflow") { description(drive_ratio:1.0e30);return }
+    if selected("steering-high") { bike.set_controls(steering:2.0);return }
+    if selected("steering-nan") { bike.set_controls(steering:Math.sqrt(-1.0));return }
+    if selected("brake-low") { bike.set_controls(brake:-1.0);return }
+    if selected("brake-high") { bike.set_controls(brake:2.0);return }
+    if selected("handbrake-high") { bike.set_controls(handbrake:2.0);return }
+    if selected("throttle-high") { bike.set_controls(throttle:2.0);return }
+    if selected("throttle-nan") { bike.set_controls(throttle:Math.sqrt(-1.0));return }
+    if selected("throttle-unpowered") { bike.set_controls(throttle:0.5);return }
+    if selected("state-unpowered") { bike.powertrain();return }
+    if selected("gear-unpowered") { bike.set_transmission(1);return }
+    if selected("wheel-low") { bike.wheel(-1);return }
+    if selected("wheel-high") { bike.wheel(2);return }
+    if selected("wheel-settings-high") { bike.wheel_settings(2);return }
+    if selected("wheel-speed-nan") { bike.set_wheel_angular_velocity(0,Math.sqrt(-1.0));return }
+    if selected("wheel-speed-infinite") { bike.set_wheel_angular_velocity(0,1.0/0.0);return }
+    if selected("wheel-speed-overflow") { bike.set_wheel_angular_velocity(0,1.0e30);return }
+    if selected("tilt-negative") { bike.set_maximum_tilt_angle(-0.1);return }
+    if selected("tilt-nan") { bike.set_maximum_tilt_angle(Math.sqrt(-1.0));return }
+    if selected("expired-chassis") { world.destroy_motorcycle(bike);bike.chassis();return }
+    if selected("expired-wheel") { world.destroy_motorcycle(bike);bike.wheel(0);return }
+    if selected("expired-wheel-count") { world.destroy_motorcycle(bike);bike.wheel_count();return }
+    if selected("expired-wheel-settings") { world.destroy_motorcycle(bike);bike.wheel_settings(0);return }
+    if selected("expired-powertrain") { world.destroy_motorcycle(bike);bike.powertrain();return }
+    if selected("expired-controls") { world.destroy_motorcycle(bike);bike.set_controls();return }
+    if selected("expired-transmission") { world.destroy_motorcycle(bike);bike.set_transmission(1);return }
+    if selected("expired-speed") { world.destroy_motorcycle(bike);bike.set_wheel_angular_velocity(0,1.0);return }
+    if selected("expired-tilt") { world.destroy_motorcycle(bike);bike.maximum_tilt_angle();return }
+    if selected("expired-set-tilt") { world.destroy_motorcycle(bike);bike.set_maximum_tilt_angle(0.5);return }
+    if selected("expired-balance") { world.destroy_motorcycle(bike);bike.balance_settings();return }
+    if selected("expired-set-balance") { world.destroy_motorcycle(bike);bike.set_balance_settings(Physics.MotorcycleBalance3DSettings());return }
+    if selected("expired-balance-enabled") { world.destroy_motorcycle(bike);bike.balance_enabled();return }
+    if selected("expired-set-balance-enabled") { world.destroy_motorcycle(bike);bike.set_balance_enabled(false);return }
+    if selected("expired-steering-limit") { world.destroy_motorcycle(bike);bike.steering_limit_enabled();return }
+    if selected("expired-set-steering-limit") { world.destroy_motorcycle(bike);bike.set_steering_limit_enabled(false);return }
+    if selected("expired-target") { world.destroy_motorcycle(bike);bike.lean_target();return }
+    if selected("expired-double-destroy") { world.destroy_motorcycle(bike);world.destroy_motorcycle(bike);return }
+    if selected("orphan") { var expired=orphan();expired.balance_settings();return }
+    if selected("foreign") { var other=Physics.World3D();other.destroy_motorcycle(bike);return }
+    if Process.arguments().count()>1 { panic("unknown invalid motorcycle case") }
+    print("motorcycle-invalid-smoke: baseline valid")
+}

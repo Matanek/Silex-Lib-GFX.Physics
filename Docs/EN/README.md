@@ -323,3 +323,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Limit total chassis inclination](VehicleTiltLimit3D.md).
 
 [Two-track vehicle: driving, pivoting and braking](TrackedVehicle3D.md).
+
+[Balance and steer a motorcycle](Motorcycle3D.md).

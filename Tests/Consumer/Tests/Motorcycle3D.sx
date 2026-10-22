@@ -1,0 +1,200 @@
+use GFX.Physics
+use STD.Math
+
+func config(roll:float=0.2,height:float=0.85095,balance:Physics.MotorcycleBalance3DSettings=Physics.MotorcycleBalance3DSettings(),
+    engine:Physics.VehicleEngine3DSettings?=null,transmission:Physics.VehicleTransmission3DSettings=Physics.VehicleTransmission3DSettings(),front_angle:float=0.6,
+    steering_axis:Math.Vec3=Math.Vec3.up()) Physics.Motorcycle3DSettings {
+    let friction=Physics.TireFrictionCurve3D([Math.Vec2(0.0,0.0)])
+    let tire=Physics.Tire3DSettings(longitudinal_friction:friction,lateral_friction:friction)
+    return Physics.Motorcycle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.05))
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0),Math.Quat.angle_axis(roll,Math.Vec3(0.0,0.0,1.0)))
+            ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0,
+        Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,1.0),tire:tire,maximum_steering_angle:front_angle,steering_axis:steering_axis),
+        Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,-1.0),tire:tire),balance:balance,engine:engine,transmission:transmission)
+}
+func floor(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+}
+func advance(world:Physics.World3D,steps:int,delta:float=1.0/120.0) {
+    var step=0;while step<steps { world.step(delta);step++ }
+}
+
+test "motorcycle settings express two wheels and independent immutable balance gains" {
+    var settings=config();let balance=settings.balance
+    assert(balance.maximum_lean_angle==Math.pi()/4.0 && balance.stiffness==5000.0 && balance.damping==1000.0)
+    assert(balance.integral_gain==0.0 && balance.integral_decay==4.0 && balance.smoothing==0.8)
+    var world=Physics.World3D();var a=world.create_motorcycle(settings);var b=world.create_motorcycle(settings)
+    a.set_balance_settings(Physics.MotorcycleBalance3DSettings(stiffness:2500.0,damping:700.0))
+    assert(a.balance_settings().damping==700.0 && b.balance_settings().damping==1000.0)
+    assert(settings.balance.damping==1000.0 && a.wheel_count()==2 && a.wheel_settings(0).position.z==1.0 && a.wheel_settings(1).position.z== -1.0)
+    world.destroy_motorcycle(a);assert(!a.is_valid() && b.is_valid());world.destroy_motorcycle(b);assert(world.body_count()==0)
+}
+
+test "motorcycle recovers mirrored roll using loaded inline contacts at two fixed rates" {
+    for rate in [60,120] {
+        let signs:float[]=[-1.0,1.0]
+        for direction in signs {
+            var world=Physics.World3D();var ground=floor(world);var bike=world.create_motorcycle(config(roll:direction*0.2))
+            advance(world,4*rate,1.0/rate as float)
+            let up=bike.chassis().rotation().rotate(Math.Vec3.up())
+            assert(Math.abs(up.x)<0.001 && up.y>0.999)
+            assert(bike.wheel(0).support()!=null && bike.wheel(1).support()!=null)
+            assert(Math.abs(bike.wheel(0).normal_force+bike.wheel(1).normal_force-981.0)<0.1)
+            world.destroy_motorcycle(bike);assert(!bike.is_valid() && ground.is_valid() && world.body_count()==1)
+        }
+    }
+}
+
+test "motorcycle balance geometry is assembled once before pose integration" {
+    for rate in [60,120] {
+        var world=Physics.World3D();floor(world);var bike=world.create_motorcycle(config())
+        var body=bike.chassis();let before=body.position();let delta=1.0/rate as float
+        world.step(delta)
+        assert(body.position().subtract(before).subtract(body.linear_velocity().multiply(delta)).length()<0.000003)
+        let normal=bike.wheel(0).contact_normal.multiply(bike.wheel(0).normal_force*delta)
+        let rear=bike.wheel(1).contact_normal.multiply(bike.wheel(1).normal_force*delta)
+        let torque=bike.wheel(0).contact_point.subtract(before).cross(normal).add(bike.wheel(1).contact_point.subtract(before).cross(rear))
+        let actuator=body.angular_velocity().multiply(100.0).subtract(torque)
+        let target=bike.lean_target();let up=Math.Quat.angle_axis(0.2,Math.Vec3(0.0,0.0,1.0)).rotate(Math.Vec3.up())
+        let error= -Math.acos(Math.clamp(target.dot(up),-1.0,1.0))
+        let expected=(5000.0*error-1000.0*body.angular_velocity().z)*delta
+        assert(Math.abs(actuator.z-expected)<0.01 && Math.abs(actuator.x)<0.001 && Math.abs(actuator.y)<0.001)
+    }
+}
+
+test "motorcycle can disable and re-enable balance without changing the other instance" {
+    var world=Physics.World3D();floor(world);var a=world.create_motorcycle(config());var b=world.create_motorcycle(config())
+    a.chassis().set_transform(Physics.Transform3D(Math.Vec3(10.0,0.85095,0.0),Math.Quat.angle_axis(0.2,Math.Vec3(0.0,0.0,1.0))))
+    a.set_balance_enabled(false);assert(!a.balance_enabled() && b.balance_enabled())
+    advance(world,60)
+    let fallen=a.chassis().rotation().rotate(Math.Vec3.up());assert(Math.abs(fallen.x)>0.2)
+    a.set_balance_enabled(true);advance(world,360)
+    assert(Math.abs(a.chassis().rotation().rotate(Math.Vec3.up()).x)<0.01)
+    assert(Math.abs(b.chassis().rotation().rotate(Math.Vec3.up()).x)<0.01)
+}
+
+test "motorcycle high-speed steering limit is independent of balance and forward speed sign" {
+    let directions:int[]=[-1,1]
+    for direction in directions {
+        var world=Physics.World3D();var bike=world.create_motorcycle(config(roll:0.0,height:100.0))
+        bike.chassis().set_linear_velocity(Math.Vec3(0.0,0.0,20.0*direction as float));bike.set_controls(steering:0.75)
+        bike.set_balance_enabled(false);world.step(1.0/120.0)
+        let expected= -Math.asin(2.0*9.81/400.0)
+        assert(Math.abs(bike.wheel(0).steering_angle-expected)<0.000003 && bike.wheel(1).steering_angle==0.0)
+        bike.set_steering_limit_enabled(false);world.step(1.0/120.0)
+        assert(Math.abs(bike.wheel(0).steering_angle+0.45)<0.000001)
+        assert(bike.chassis().angular_velocity().length()<0.000001)
+    }
+}
+
+test "motorcycle has no balancing actuator without wheel support and a zero step freezes observations" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var bike=world.create_motorcycle(config(height:100.0));var body=bike.chassis()
+    body.set_angular_velocity(Math.Vec3(0.0,0.0,1.0));let before=body.transform();let target=bike.lean_target()
+    bike.set_controls(steering:0.5);world.step(0.0)
+    assert(body.transform()==before && bike.lean_target()==target && bike.wheel(0).steering_angle==0.0)
+    advance(world,120)
+    assert(body.angular_velocity()==Math.Vec3(0.0,0.0,1.0) && body.linear_velocity()==Math.Vec3())
+    assert(bike.wheel(0).support()==null && bike.wheel(1).support()==null)
+}
+
+test "motorcycle jump loses and recovers both supports without fictitious midair balance" {
+    var world=Physics.World3D();floor(world);var bike=world.create_motorcycle(config())
+    advance(world,120);bike.chassis().apply_impulse(Math.Vec3(0.0,400.0,0.0))
+    var lost=false;var recovered=false;var step=0
+    while step<360 {
+        let old=bike.chassis().angular_velocity();world.step(1.0/120.0)
+        let contacts=bike.wheel(0).support()!=null || bike.wheel(1).support()!=null
+        if !contacts { lost=true;assert(bike.chassis().angular_velocity().nearly_equal(old,0.00001)) }
+        if lost && bike.wheel(0).normal_force>0.0 && bike.wheel(1).normal_force>0.0 { recovered=true }
+        step++
+    }
+    assert(lost && recovered && Math.abs(bike.chassis().rotation().rotate(Math.Vec3.up()).x)<0.01)
+}
+
+test "motorcycle disabling its body and destroying the world preserve handle lifetime" {
+    var retained:Physics.Motorcycle3D?=null
+    {
+        var world=Physics.World3D();floor(world);var bike=world.create_motorcycle(config());retained=bike
+        var body=bike.chassis();body.set_enabled(false);let before=body.transform();advance(world,60)
+        assert(body.transform()==before);body.set_enabled(true);advance(world,240)
+        assert(bike.is_valid() && Math.abs(body.rotation().rotate(Math.Vec3.up()).x)<0.01)
+    }
+    assert(!retained!.is_valid())
+}
+
+test "motorcycle balance mutations wake a sleeping body and retain all updated gains" {
+    var world=Physics.World3D();floor(world);var bike=world.create_motorcycle(config(roll:0.0));var body=bike.chassis()
+    body.set_sleep_enabled(true);advance(world,360);assert(!body.is_awake())
+    bike.set_balance_settings(Physics.MotorcycleBalance3DSettings(stiffness:3000.0,damping:600.0,integral_gain:10.0,integral_decay:2.0,smoothing:0.5))
+    assert(body.is_awake() && bike.balance_settings().damping==600.0 && bike.balance_settings().integral_gain==10.0)
+    advance(world,360);assert(!body.is_awake());bike.set_balance_enabled(false);assert(body.is_awake())
+}
+
+test "motorcycle local forward and up follow a rotated two-wheel configuration" {
+    for rate in [60,120] {
+        var world=Physics.World3D();floor(world)
+        let tire=Physics.Tire3DSettings(forward:Math.Vec3(0.0,1.0,0.0),up:Math.Vec3(0.0,0.0,1.0),
+            longitudinal_friction:Physics.TireFrictionCurve3D([Math.Vec2(0.0,0.0)]),
+            lateral_friction:Physics.TireFrictionCurve3D([Math.Vec2(0.0,0.0)]))
+        let rotation=Math.Quat.angle_axis(-Math.half_pi(),Math.Vec3.right()).multiply(Math.Quat.angle_axis(0.2,Math.Vec3.up()))
+        var bike=world.create_motorcycle(Physics.Motorcycle3DSettings(
+            Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.05))
+                ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+                ..transform=Physics.Transform3D(Math.Vec3(0.0,0.85095,0.0),rotation)
+                ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0,
+            Physics.Wheel3DSettings(Math.Vec3(0.0,1.0,0.0),tire:tire,direction:Math.Vec3(0.0,0.0,-1.0),steering_axis:Math.Vec3(0.0,0.0,1.0)),
+            Physics.Wheel3DSettings(Math.Vec3(0.0,-1.0,0.0),tire:tire,direction:Math.Vec3(0.0,0.0,-1.0),steering_axis:Math.Vec3(0.0,0.0,1.0)),
+            up:Math.Vec3(0.0,0.0,1.0),forward:Math.Vec3.up()))
+        advance(world,rate*4,1.0/rate as float)
+        assert(bike.chassis().rotation().rotate(Math.Vec3(0.0,0.0,1.0)).nearly_equal(Math.Vec3.up(),0.001))
+        assert(bike.wheel(0).support()!=null && bike.wheel(1).support()!=null)
+    }
+}
+
+test "motorcycle zero lean angle prevents steering and recreation invalidates every old handle" {
+    var world=Physics.World3D();var ground=floor(world);var old:Physics.Motorcycle3D?=null
+    var cycle=0
+    while cycle<20 {
+        var bike=world.create_motorcycle(config(roll:0.0,balance:Physics.MotorcycleBalance3DSettings(maximum_lean_angle:0.0)))
+        bike.chassis().set_linear_velocity(Math.Vec3(0.0,0.0,20.0));bike.set_controls(steering:1.0)
+        world.step(1.0/120.0);assert(bike.wheel(0).steering_angle==0.0)
+        if let previous=old { assert(!previous.is_valid()) }
+        var body=bike.chassis();world.destroy_rigid_body(body)
+        assert(!bike.is_valid() && !body.is_valid() && ground.is_valid() && world.body_count()==1)
+        old=bike;cycle++
+    }
+}
+
+test "motorcycle powertrain facade drives the rear rotor without applying fictitious airborne body forces" {
+    var world=Physics.World3D()
+    var bike=world.create_motorcycle(config(roll:0.0,height:100.0,
+        engine:Physics.VehicleEngine3DSettings(maximum_torque:100.0),
+        transmission:Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0],reverse_gear_ratios:[-1.0])))
+    bike.set_transmission(1);bike.set_controls(throttle:0.5);world.step(1.0/120.0)
+    assert(bike.powertrain().gear==1 && bike.powertrain().engine_rpm>0.0)
+    assert(bike.wheel(0).angular_velocity==0.0 && bike.wheel(1).angular_velocity>0.0)
+    assert(bike.chassis().angular_velocity()==Math.Vec3())
+    assert(bike.chassis().linear_velocity().nearly_equal(Math.Vec3(0.0,-9.81/120.0,0.0),0.000001))
+    world.destroy_motorcycle(bike);assert(!bike.is_valid())
+}
+
+test "motorcycle lean steering preserves signed wheel and steering-axis equivalence" {
+    let inputs:float[]=[-0.75,0.75]
+    for input in inputs { for reversed_axis in [false,true] {
+        var maximum= -0.6;var axis=Math.Vec3.up()
+        if reversed_axis { maximum=0.6;axis=axis.negated() }
+        var world=Physics.World3D();var bike=world.create_motorcycle(config(roll:0.0,height:100.0,front_angle:maximum,steering_axis:axis))
+        bike.chassis().set_linear_velocity(Math.Vec3(0.0,0.0,20.0));bike.set_controls(steering:input);world.step(1.0/120.0)
+        var direction=1.0;if input<0.0 { direction= -1.0 }
+        let expected=direction*Math.asin(2.0*9.81/400.0)
+        assert(Math.abs(bike.wheel(0).steering_angle*axis.y-expected)<0.000003)
+        bike.set_balance_settings(Physics.MotorcycleBalance3DSettings(maximum_lean_angle:0.0));world.step(1.0/120.0)
+        assert(bike.wheel(0).steering_angle==0.0)
+        bike.set_steering_limit_enabled(false);world.step(1.0/120.0)
+        assert(Math.abs(bike.wheel(0).steering_angle*axis.y-direction*0.45)<0.000001)
+    } }
+}

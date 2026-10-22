@@ -2,6 +2,9 @@ public use GFX.Physics.TileMapCollider2D.TileMapCollider2D
 public use GFX.Physics.TileMapCollider2D.TileCollisionRect2D
 public use GFX.Physics.Box2D.Box2D
 public use GFX.Physics.Box3D.Box3D
+public use GFX.Physics.Motorcycle3D.Motorcycle3D
+public use GFX.Physics.Motorcycle3D.Motorcycle3DSettings
+public use GFX.Physics.MotorcycleBalance3D.MotorcycleBalance3DSettings
 public use GFX.Physics.Capsule3D.Capsule3D
 public use GFX.Physics.Compound3D.Compound3D
 public use GFX.Physics.Compound3D.CompoundChild3D

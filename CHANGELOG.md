@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Add `Motorcycle3D`: two suspended wheels, adjustable and switchable balance assistance, speed-dependent steering limits and shared engine/transmission driving the rear wheel. Initial balance and steering qualification on a plane with ray contacts and zero engine torque against Jolt at 60/120 Hz in Native Debug/Release; lifetime, settings and invalid inputs are checked.
+
 - Add `TrackedVehicle3D`: two tracks of suspended wheels, shared engine/transmission settings, relative speeds, counter-rotation and braking. Wheel/track states, lifetime and invalid inputs are checked; Jolt comparisons cover airborne and ray-contact plane cases in Native Debug/Release.
 
 - Optional total inclination limit on `WheeledVehicle3D`: gravity-relative cone, free yaw, mutable angle and configurable local up; gradual correction in flight or with support, unchanged pi default and documented exact-inversion singularity.

@@ -1,4 +1,6 @@
 use GFX.Physics.VehicleTrackDrive3D.VehicleTrackDrive3D
+use GFX.Physics.MotorcycleBalance3D.MotorcycleBalance3DSettings
+use GFX.Physics.MotorcycleBalance3D.MotorcycleLean3D
 use GFX.Physics.Cylinder3D.Cylinder3D
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Geometry3D
@@ -309,6 +311,7 @@ public class WheeledVehicle3D {
     private var throttle_input:float=0.0
     private var drivetrain:VehiclePowertrain3D?=null
     private var trackdrive:VehicleTrackDrive3D?=null
+    private var motorcycle:MotorcycleLean3D?=null
     private var tilt_cos_limit:float
     private var tilt_world_up:Math.Vec3
     private var tilt_axis:Math.Vec3=Math.Vec3.up()
@@ -336,6 +339,46 @@ public class WheeledVehicle3D {
         }
     }
     package func attach_tracks(drive:VehicleTrackDrive3D) { self.trackdrive=drive }
+    package func attach_motorcycle(balance:MotorcycleBalance3DSettings,forward:Math.Vec3,up:Math.Vec3,wheelbase:float) {
+        self.motorcycle=MotorcycleLean3D(balance,forward,up,wheelbase)
+    }
+    private func require_motorcycle() MotorcycleLean3D {
+        self.require_valid()
+        if let balance=self.motorcycle { return balance }
+        panic("GFX.Physics.WheeledVehicle3D has no motorcycle balance assistance")
+    }
+    package func motorcycle_balance_settings() MotorcycleBalance3DSettings { return self.require_motorcycle().settings }
+    package func set_motorcycle_balance_settings(settings:MotorcycleBalance3DSettings) {
+        self.store.require_mutable();var balance=self.require_motorcycle();balance.settings=settings;self.store.require(self.id).wake()
+    }
+    package func motorcycle_balance_enabled() bool { return self.require_motorcycle().enabled }
+    package func set_motorcycle_balance_enabled(enabled:bool) {
+        self.store.require_mutable();var balance=self.require_motorcycle()
+        if balance.enabled!=enabled { balance.enabled=enabled;self.store.require(self.id).wake() }
+    }
+    package func motorcycle_steering_limit_enabled() bool { return self.require_motorcycle().steering_limit }
+    package func set_motorcycle_steering_limit_enabled(enabled:bool) {
+        self.store.require_mutable();var balance=self.require_motorcycle()
+        if balance.steering_limit!=enabled { balance.steering_limit=enabled;self.store.require(self.id).wake() }
+    }
+    package func motorcycle_lean_target() Math.Vec3 { return self.require_motorcycle().target }
+    package func prepare_motorcycle(gravity:Math.Vec3,delta:float) {
+        if let balance=self.motorcycle {
+            var body=self.store.require(self.id)
+            if !body.is_enabled { return }
+            var impulse=Math.Vec3()
+            for wheel in self.wheels {
+                if wheel.support!=null {
+                    impulse=impulse.add(wheel.normal.multiply(wheel.impulse+wheel.stop_impulse)).add(wheel.lateral_direction.multiply(wheel.lateral_impulse))
+                }
+            }
+            balance.prepare(body,impulse,gravity,delta)
+        }
+    }
+    private func requested_steering(maximum:float,axis:Math.Vec3) float {
+        if let balance=self.motorcycle { return balance.steering(self.steering_input,maximum,axis) }
+        return -self.steering_input*maximum
+    }
     func powertrain() VehiclePowertrainState3D {
         self.require_valid();if let motor=self.drivetrain { return motor.state() }
         panic("GFX.Physics.WheeledVehicle3D has no engine")
@@ -404,7 +447,7 @@ public class WheeledVehicle3D {
         for state in self.wheels {
             let wheel=self.settings.wheel(index)
             if let drive=self.trackdrive { state.angular_velocity=drive.wheel_speed(index) }
-            state.steering_angle= -self.steering_input*wheel.maximum_steering_angle
+            state.steering_angle=self.requested_steering(wheel.maximum_steering_angle,wheel.steering_axis)
             let steering=Math.Quat.angle_axis(state.steering_angle,wheel.steering_axis)
             if let tire=wheel.tire {
                 state.angular_velocity*=Math.max(0.0,1.0-tire.angular_damping*delta)
@@ -550,7 +593,7 @@ public class WheeledVehicle3D {
         let wheel=self.settings.wheel(index);var body=self.store.require(self.id)
         var forward=Math.Vec3(0.0,0.0,1.0);var up=Math.Vec3.up()
         if let tire=wheel.tire { forward=tire.forward;up=tire.up }
-        let steering=Math.Quat.angle_axis(-self.steering_input*wheel.maximum_steering_angle,wheel.steering_axis)
+        let steering=Math.Quat.angle_axis(self.requested_steering(wheel.maximum_steering_angle,wheel.steering_axis),wheel.steering_axis)
         let axle=steering.rotate(forward.cross(up).normalized())
         var orientation=Math.Quat(Math.Vec3.up().cross(axle),1.0+axle.y).normalized()
         if axle.y<0.0 {
@@ -684,6 +727,10 @@ public class WheeledVehicle3D {
         }
     }
     package func has_active_contact() bool {
+        if self.motorcycle!=null {
+            var body=self.store.require(self.id)
+            if body.is_enabled && body.awake { return true }
+        }
         if self.tilt_inverse_mass>0.0 { return true }
         for wheel in self.wheels { if wheel.active { return true } }
         return false
@@ -708,6 +755,15 @@ public class WheeledVehicle3D {
             index++
         }
         self.solve_tire_velocities()
+        if let balance=self.motorcycle {
+            var supported=true;var load=0.0;var arm=Math.Vec3()
+            for wheel in self.wheels {
+                let normal=wheel.impulse+wheel.stop_impulse
+                if wheel.support==null || normal<=0.0 { supported=false }
+                if wheel.support!=null { load+=normal;arm=arm.add(wheel.chassis_radius.multiply(normal)) }
+            }
+            balance.solve(chassis,supported,arm,load)
+        }
         self.solve_tilt_velocity()
     }
     package func solve_position() {

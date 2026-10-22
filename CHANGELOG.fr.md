@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajout de `Motorcycle3D` : deux roues suspendues, assistance d’équilibre réglable et désactivable, direction limitée selon la vitesse et réutilisation du moteur/transmission à roue arrière. Qualification initiale de l’équilibre et de la direction sur plan/rayon, à couple moteur nul, contre Jolt à 60/120 Hz en Native Debug/Release ; durée de vie, réglages et paramètres invalides contrôlés.
+
 - Ajout de `TrackedVehicle3D` : deux bandes de roues suspendues, moteur et boîte partagés, vitesses relatives, contre-rotation et freinage. États par roue/bande, durée de vie et paramètres invalides contrôlés ; comparaison Jolt en vol et sur plan à contacts rayon, Native Debug/Release.
 
 - Limite optionnelle d’inclinaison totale sur `WheeledVehicle3D` : cône relatif à la gravité, lacet libre, mutation de l’angle et haut local configurable ; correction progressive en vol ou avec appuis, défaut pi inchangé et singularité du retournement exact documentée.

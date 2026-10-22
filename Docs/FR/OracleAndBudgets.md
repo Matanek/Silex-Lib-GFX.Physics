@@ -103,3 +103,47 @@ les hashes de sorties et les écarts ; Debug/Release sont bit-identiques dans
 ces recettes. La qualification porte sur les bandes idéales, contacts rayon
 et plan décrits. Les maillons articulés, les autres terrains et les budgets
 de FPS restent hors de cette campagne.
+
+## Qualification de l’équilibre moto
+
+`Silex-Benchmarks/Sources/Physics3D/MotorcycleReferenceRun.py` qualifie la
+référence Jolt 5.6.0 épinglée ; `MotorcycleRun.py` compare son consommateur
+public Silex. Seize recettes de 4 s à 60/120 Hz produisent 11 552 états par
+moteur/mode, un worker, un sous-pas et 12/4 itérations configurées, Native
+Debug/Release sur macOS ARM64. Le châssis de 100 kg a une inertie isotrope de
+100 kg·m², deux roues de rayon 0,3 m à ±1 m, course 0,2–0,6 m, ressorts
+10000 N/m et amortissement 1000 N·s/m. Le couple moteur est nul. Les virages
+partent à 5 m/s, les directions en vol à ±20 m/s. L’adhérence des virages vaut
+1/0,15 ; les autres recettes n’ont pas d’adhérence tangentielle.
+
+Les budgets châssis pointwise sont 0,05 m / 0,1 m/s / 0,02 rad / 0,15 rad/s.
+La comparaison de chute sans assistance s’arrête pointwise au premier centre
+sous 0,2 m dans l’un des moteurs, puis exige la chute et un état borné ;
+11 009 états restent comparés pointwise. Le filtre de pente Silex est local à
+la suspension ; `pi/2-1e-6` sur ce plan conserve les mêmes contacts que le
+filtre Jolt relatif à la verticale monde. Les autres défauts restent inchangés.
+
+Les contrôles indépendants recomposent la cible depuis les efforts précédents,
+la limite de direction, le couple PID et la compensation de vitesse aux roues.
+Bornes : 3e-6 rad de direction, 3e-4 de distance de cible, 0,1 N·m·s d’impulsion
+PID, 0,005 N·s de bilan linéaire et 3e-5 m de position par pas. La référence
+instrumentée vérifie aussi 3e-6 m/s de compensation et la décroissance intégrale
+par appel solveur. Ses 19 gardes et les 16 gardes du consommateur rejettent les
+corruptions par mode. Les sorties Native Debug/Release sont identiques.
+
+Les coefficients géométriques du ressort restent fixés pour tout le pas,
+y compris les visites de résolution après intégration de pose. Le lissage
+reste par pas ; la décroissance intégrale suit les appels effectifs du
+solveur, dont le nombre peut différer entre Jolt et Silex. La parité porte sur
+les observations physiques, sans exiger l’identité de ces caches privés.
+L’assistance est un actuateur externe sans réaction opposée au support. Cette
+campagne couvre le plan à rayons, l’équilibre et les virages sur élan ; elle
+ne qualifie pas encore la propulsion composée, tous les détecteurs ou terrains,
+ni un coût CPU/GPU. Rapport : `motorcycle-qualification.json` dans le cache
+`.silex/physics3d-oracle/` du groupe ou workspace.
+
+La convention signée des roues Silex est conservée : la limite porte sur
+l’amplitude, même avec un angle maximal négatif ou un axe inversé. Ces cas sont
+vérifiés analytiquement. Le contrôleur Jolt épinglé laisse ces représentations
+contourner sa limite ; les recettes de parité emploient les conventions
+positives de Jolt.
