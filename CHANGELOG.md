@@ -5,6 +5,10 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Motorcycle balance preserves tiny signed lean angles: atan2 of the cross-product length and dot product avoids the float32 acos dead zone. An analytical response is checked against disabled assistance at ±1e−5/±1e−4 rad without changing gains.
+
+- Locked wheels preserve their static-friction effort when other contacts reverse a tiny residual velocity. Accumulated impulses retain the same friction and brake-torque limits; a rotating-support mirror test covers braking to rest without increasing the default iteration count. Combined adhesion applies both candidate components together, including inside the ellipse, preserving limits and rotor balance.
+
 - Flat box, convex and cylinder faces retain nearby plane candidates with their individual gaps: a loaded face remains supported while approaching corners stay free to close. Persistent plane contacts participate before integration even without a joint; regressions cover eccentric loading, impulses and reversed creation order. The default remains 12 velocity iterations.
 
 - Optional combined tire adhesion with `Tire3DSettings(combined_friction:true)`: traction/braking and cornering share a force ellipse; a locked wheel can slide. Rotor balances and support reactions are retained; the default independent model is unchanged.

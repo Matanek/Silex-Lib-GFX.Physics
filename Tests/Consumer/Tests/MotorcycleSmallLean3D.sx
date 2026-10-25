@@ -1,0 +1,29 @@
+use GFX.Physics
+use STD.Math
+
+func response(enabled:bool,angle:float,rate:int) float {
+    var world=Physics.World3D()
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=0.0)
+    let tire=Physics.Tire3DSettings(angular_damping:0.0)
+    var bike=world.create_motorcycle(Physics.Motorcycle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4,0.5,1.6)))
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,0.875475,0.0),Math.Quat.angle_axis(angle,Math.Vec3(0.0,0.0,1.0)))
+            ..linear_damping=0.0 ..angular_damping=0.0 ..allow_sleep=false,
+        Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,1.0),tire:tire),
+        Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,-1.0),tire:tire),
+        balance:Physics.MotorcycleBalance3DSettings(stiffness:5000.0,damping:0.0,smoothing:0.0)))
+    bike.set_balance_enabled(enabled);world.step(1.0/rate as float)
+    assert(bike.wheel(0).support()!=null && bike.wheel(1).support()!=null)
+    return bike.chassis().angular_velocity().z
+}
+
+test "motorcycle balance responds to tiny signed leans without an angular dead zone" {
+    let angles:float[]=[-0.0001,-0.00001,0.00001,0.0001]
+    for rate in [60,120] { for angle in angles {
+        let correction=(response(true,angle,rate)-response(false,angle,rate))*rate as float
+        let expected= -50.0*angle
+        assert(Math.abs(correction-expected)<Math.abs(expected)*0.05+0.0000001)
+    } }
+}

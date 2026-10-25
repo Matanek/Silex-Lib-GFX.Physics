@@ -6,6 +6,10 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- L’assistance d’équilibre moto conserve les très petits angles d’inclinaison : le calcul signé utilise atan2 de la norme du produit vectoriel et du produit scalaire, sans zone morte due à acos en simple précision. Réponse analytique comparée avec assistance coupée à ±1e−5/±1e−4 rad, sans changer les gains.
+
+- Les roues verrouillées conservent leur effort de friction statique lorsque les autres contacts changent le signe d’une très faible vitesse résiduelle. Les impulsions cumulées restent bornées par la même adhérence et le même couple de frein ; le test miroir sur support tournant couvre le freinage jusqu’au repos sans augmenter les itérations par défaut. L’adhérence combinée applique ensemble les deux composantes du candidat, même à l’intérieur de l’ellipse, pour conserver les limites et le bilan du rotor.
+
 - Les faces planes des boîtes, convexes et cylindres conservent des points candidats proches du plan avec leur écart individuel : une face chargée reste portante sans bloquer les coins encore en rapprochement. Les contacts de plan persistants participent avant l’intégration même sans articulation ; régression sous charge excentrée, impulsions et ordres de création opposés. Le défaut de 12 itérations reste inchangé.
 
 - Adhérence combinée optionnelle par pneu avec `Tire3DSettings(combined_friction:true)` : traction/freinage et virage partagent une ellipse d’efforts ; une roue bloquée peut dériver. Bilans des rotors et réactions conservés ; modèle indépendant par défaut inchangé.

@@ -552,9 +552,9 @@ public class WheeledVehicle3D {
                     let previous=state.longitudinal_impulse
                     if state.brake_impulse>0.0 && state.longitudinal_inverse_mass>0.0 {
                         let limit=Math.min(state.brake_impulse,capacity)
-                        var lower= -limit;var upper=0.0
-                        if speed<0.0 { lower=0.0;upper=limit }
-                        state.longitudinal_impulse=Math.clamp(previous-speed/state.longitudinal_inverse_mass,lower,upper)
+                        // Bound the accumulated static-friction impulse. Other wheel rows
+                        // may reverse the residual speed without reversing the required force.
+                        state.longitudinal_impulse=Math.clamp(previous-speed/state.longitudinal_inverse_mass,-limit,limit)
                         state.brake_torque+=(state.longitudinal_impulse-previous)*wheel.radius*state.inverse_delta
                         if let drive=self.trackdrive { drive.record_brake_contact(index,state.longitudinal_impulse-previous,state.inverse_delta) }
                     } else {
@@ -593,11 +593,15 @@ public class WheeledVehicle3D {
                         let y=requested/capacity
                         let magnitude=Math.sqrt(x*x+y*y)
                         if magnitude>1.0 {
-                            // Project both requested efforts onto the shared friction ellipse.
-                            let before=state.longitudinal_impulse
-                            state.longitudinal_impulse=longitudinal/magnitude;requested/=magnitude
-                            if state.brake_impulse>0.0 { state.longitudinal_impulse=Math.clamp(state.longitudinal_impulse,-state.brake_impulse,state.brake_impulse) }
-                            let change=state.longitudinal_impulse-before
+                            longitudinal/=magnitude;requested/=magnitude
+                        }
+                        // Apply the whole candidate, including points inside the ellipse.
+                        // Its longitudinal request may differ from the accumulated effort.
+                        let before=state.longitudinal_impulse
+                        state.longitudinal_impulse=longitudinal
+                        if state.brake_impulse>0.0 { state.longitudinal_impulse=Math.clamp(state.longitudinal_impulse,-state.brake_impulse,state.brake_impulse) }
+                        let change=state.longitudinal_impulse-before
+                        if change!=0.0 {
                             if state.brake_impulse>0.0 {
                                 state.brake_torque+=change*wheel.radius*state.inverse_delta
                                 if let drive=self.trackdrive { drive.record_brake_contact(lateral_index-1,change,state.inverse_delta) }

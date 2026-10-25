@@ -100,6 +100,8 @@ func lean_unit3d(value:Math.Vec3,fallback:Math.Vec3) Math.Vec3 {
     return fallback
 }
 func lean_angle3d(target:Math.Vec3,up:Math.Vec3,forward:Math.Vec3) float {
-    var direction= -1.0;if target.cross(up).dot(forward)<0.0 { direction=1.0 }
-    return direction*Math.acos(Math.clamp(target.dot(up),-1.0,1.0))
+    let perpendicular=target.cross(up)
+    var direction= -1.0;if perpendicular.dot(forward)<0.0 { direction=1.0 }
+    // atan2 retains tiny angles when the float32 dot product rounds to one.
+    return direction*Math.atan2(perpendicular.length(),target.dot(up))
 }
