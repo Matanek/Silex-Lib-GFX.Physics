@@ -588,5 +588,36 @@ package func plane_surface_contact_points(volume:ShapePlacement3D, surface:Shape
     var axis = Math.Vec3.right()
     if Math.abs(normal.x) > 0.8 { axis = Math.Vec3.up() }
     let tangent = normal.cross(axis).normalized()
-    return reduce_contact_points3d(plane_contact_points3d(volume,surface), tangent, normal.cross(tangent))
+    var incident:Math.Vec3[] = []
+    var outward = Math.Vec3()
+    var origin = Math.Vec3()
+    match surface.shape() {
+        plane(plane) => {
+            outward = surface.transform().vector(plane.normal).normalized()
+            origin = surface.transform().point(plane.normal.multiply(plane.offset))
+            match volume.shape() {
+                box(box) => { incident = box_face3d(box,volume.transform(),outward.negated()).corners }
+                convex(hull) => {
+                    let face = convex_face3d(hull,volume.transform(),outward.negated())
+                    for point in hull.face_polygon(face) { incident.append(volume.transform().point(point)) }
+                }
+                cylinder(_) => { incident = axial_contact_feature3d(volume,outward.negated()) }
+                tapered_cylinder(_) => { incident = axial_contact_feature3d(volume,outward.negated()) }
+                else => {}
+            }
+        }
+        else => {}
+    }
+    var points:Math.Vec3[] = []
+    if !incident.is_empty() {
+        // Match the pinned oracle's speculative distance plus manifold tolerance.
+        // The velocity rows retain each point's gap, so nearby corners may close.
+        let polygon = clip_contact_plane3d(incident,origin.add(outward.multiply(0.021)),outward)
+        for point in polygon {
+            let gap = point.subtract(origin).dot(outward)
+            append_unique_contact3d(points,point.subtract(outward.multiply(gap*0.5)))
+        }
+    }
+    if points.is_empty() { points = plane_contact_points3d(volume,surface) }
+    return reduce_contact_points3d(points, tangent, normal.cross(tangent))
 }

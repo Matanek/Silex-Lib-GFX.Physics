@@ -934,11 +934,12 @@ public class World3D {
         for vehicle in self.wheeled_vehicles { vehicle.warm_start_tires() }
         self.warm_start_fixed_constraints(delta)
         self.warm_start_hinge_constraints(delta)
+        let coupled_constraints = self.has_active_vehicle_suspension() || self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint()
         var retained_contacts:ContactPairState3D[] = []
-        // Rigid attachments and hinges act before pose integration.
-        // The contact sweep continues with the same accumulated impulses.
-        if self.has_active_vehicle_suspension() || self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint() {
-            retained_contacts = self.prepare_retained_contacts()
+        if !self.contacts.is_empty() { retained_contacts = self.prepare_retained_contacts(delta,!coupled_constraints) }
+        // Near-plane face candidates require support before pose integration.
+        // Other manifolds keep their established schedule without coupled joints.
+        if coupled_constraints || !retained_contacts.is_empty() {
             var iteration = 0
             while iteration < self.velocity_iterations {
                 solve_contact_pairs_velocity3d(retained_contacts, iteration % 2 == 1)
@@ -2032,7 +2033,7 @@ public class World3D {
         }
     }
 
-    private func prepare_retained_contacts() ContactPairState3D[] {
+    private func prepare_retained_contacts(delta:float, planes_only:bool=false) ContactPairState3D[] {
         var pairs:ContactPairState3D[] = []
         for previous in self.contacts {
             if previous.is_sensor() { continue }
@@ -2055,13 +2056,14 @@ public class World3D {
                 first_placement = mesh_contact_face3d(first_placement, previous.first_child_id())
                 second_placement = mesh_contact_face3d(second_placement, previous.second_child_id())
             }
+            if planes_only && !plane_shape3d(first_placement.shape()) && !plane_shape3d(second_placement.shape()) { continue }
             if !front_triangle_contact3d(first_placement, second_placement) { continue }
             let distance = contact_distance3d(first_placement, second_placement)
             append_contact_pair3d(first, second, first_id, second_id,
                 DistanceResult3D(distance.first_point, distance.second_point, distance.normal,
                     distance.separation, previous.first_child_id(), previous.second_child_id()),
                 primitive_sphere_radius3d(first.shape) > 0.0 && primitive_sphere_radius3d(second.shape) > 0.0,
-                self.contacts, pairs)
+                delta, self.contacts, pairs)
         }
         for var pair in pairs {
             pair.retained = true
@@ -2116,7 +2118,7 @@ public class World3D {
                                     &distances[0:distances.count()], leaf_contact_before3d)
                                 for distance in distances {
                                     append_contact_pair3d(first, second,
-                                        first_id, second_id, distance, false,
+                                        first_id, second_id, distance, false, delta,
                                         previous_contacts, pairs)
                                 }
                             } else {
@@ -2138,7 +2140,7 @@ public class World3D {
                                     distance = contact_distance3d(first_placement, second_placement)
                                 }
                                 append_contact_pair3d(first, second,
-                                    first_id, second_id, distance, sphere_pair,
+                                    first_id, second_id, distance, sphere_pair, delta,
                                     previous_contacts, pairs)
                             }
                         }
@@ -2816,7 +2818,7 @@ func contact_before3d(first:@Contact3D, second:@Contact3D) bool {
 func append_contact_pair3d(
     first:BodyState3D, second:BodyState3D,
     first_id:BodyId3D, second_id:BodyId3D,
-    distance:DistanceResult3D, sphere_pair:bool,
+    distance:DistanceResult3D, sphere_pair:bool, delta:float,
     previous_contacts:@Contact3D[], pairs:&ContactPairState3D[]
 ) {
     if distance.separation > 0.000001 { return }
@@ -2826,6 +2828,8 @@ func append_contact_pair3d(
     ).multiply(0.5)
     let sensor_pair = first.is_sensor || second.is_sensor
     var points:Math.Vec3[] = []
+    var plane_normal = Math.Vec3()
+    var plane_origin = Math.Vec3()
     if sphere_pair {
         if !sensor_pair { points.append(point) }
     } else {
@@ -2833,6 +2837,21 @@ func append_contact_pair3d(
             first, distance.first_child_id)
         let second_contact_shape = contact_placement3d(
             second, distance.second_child_id)
+        match first_contact_shape.shape() {
+            plane(plane) => {
+                plane_normal = first_contact_shape.transform().vector(plane.normal).normalized()
+                plane_origin = first_contact_shape.transform().point(plane.normal.multiply(plane.offset))
+            }
+            else => {
+                match second_contact_shape.shape() {
+                    plane(plane) => {
+                        plane_normal = second_contact_shape.transform().vector(plane.normal).normalized()
+                        plane_origin = second_contact_shape.transform().point(plane.normal.multiply(plane.offset))
+                    }
+                    else => {}
+                }
+            }
+        }
         normal = contact_normal3d(
             first_contact_shape, second_contact_shape, normal)
         if !sensor_pair {
@@ -2859,8 +2878,12 @@ func append_contact_pair3d(
     }
     var constraints:ContactPointState3D[] = []
     for candidate in points {
+        var separation = 0.0
+        if plane_normal.length_squared() > 0.0 {
+            separation = 2.0*candidate.subtract(plane_origin).dot(plane_normal)
+        }
         constraints.append(ContactPointState3D(
-            candidate, first, second, normal, restitution
+            candidate, first, second, normal, restitution, separation, delta
         ))
     }
     var had_previous = false
@@ -3465,7 +3488,7 @@ class ContactPointState3D {
     var point:Math.Vec3
     var normal_impulse:float
     var tangent_impulse:Math.Vec3
-    var bounce_speed:float
+    var normal_target_speed:float
     let first_radius:Math.Vec3
     let second_radius:Math.Vec3
     let normal_inverse_mass:float
@@ -3475,12 +3498,14 @@ class ContactPointState3D {
         first:BodyState3D,
         second:BodyState3D,
         normal:Math.Vec3,
-        restitution:float
+        restitution:float,
+        separation:float,
+        delta:float
     ) {
         self.point = point
         self.normal_impulse = 0.0
         self.tangent_impulse = Math.Vec3()
-        self.bounce_speed = 0.0
+        self.normal_target_speed = -Math.max(0.0,separation)/delta
         let first_radius = point.subtract(first.world_center())
         let second_radius = point.subtract(second.world_center())
         // Poses and inertia stay fixed throughout all velocity iterations.
@@ -3492,8 +3517,8 @@ class ContactPointState3D {
         let approach_speed = contact_relative_velocity3d(
             first, second, first_radius, second_radius
         ).dot(normal)
-        if approach_speed < -1.0 {
-            self.bounce_speed = -approach_speed * restitution
+        if separation <= 0.0 && approach_speed < -1.0 {
+            self.normal_target_speed = -approach_speed * restitution
         }
     }
 }
@@ -3755,7 +3780,7 @@ func solve_sphere_point3d(
     let approach = relative.dot(normal)
     let previous_normal = constraint.normal_impulse
     let normal_impulse = Math.max(0.0,
-        previous_normal + (constraint.bounce_speed - approach) / inverse_mass)
+        previous_normal + (constraint.normal_target_speed - approach) / inverse_mass)
     constraint.normal_impulse = normal_impulse
     let previous_tangent = constraint.tangent_impulse
     var tangent_impulse = previous_tangent
@@ -3805,7 +3830,7 @@ func solve_contact_point3d(
     constraint.normal_impulse = Math.max(
         0.0,
         previous_normal +
-            (constraint.bounce_speed - approach_speed) / inverse_effective_mass
+            (constraint.normal_target_speed - approach_speed) / inverse_effective_mass
     )
     let normal_delta = constraint.normal_impulse - previous_normal
     if normal_delta != 0.0 {

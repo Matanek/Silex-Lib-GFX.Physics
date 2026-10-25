@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Flat box, convex and cylinder faces retain nearby plane candidates with their individual gaps: a loaded face remains supported while approaching corners stay free to close. Persistent plane contacts participate before integration even without a joint; regressions cover eccentric loading, impulses and reversed creation order. The default remains 12 velocity iterations.
+
 - Optional combined tire adhesion with `Tire3DSettings(combined_friction:true)`: traction/braking and cornering share a force ellipse; a locked wheel can slide. Rotor balances and support reactions are retained; the default independent model is unchanged.
 
 - Add `Motorcycle3D`: two suspended wheels, adjustable and switchable balance assistance, speed-dependent steering limits and shared engine/transmission driving the rear wheel. Initial balance and steering qualification on a plane with ray contacts and zero engine torque against Jolt at 60/120 Hz in Native Debug/Release; lifetime, settings and invalid inputs are checked.

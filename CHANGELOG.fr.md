@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les faces planes des boîtes, convexes et cylindres conservent des points candidats proches du plan avec leur écart individuel : une face chargée reste portante sans bloquer les coins encore en rapprochement. Les contacts de plan persistants participent avant l’intégration même sans articulation ; régression sous charge excentrée, impulsions et ordres de création opposés. Le défaut de 12 itérations reste inchangé.
+
 - Adhérence combinée optionnelle par pneu avec `Tire3DSettings(combined_friction:true)` : traction/freinage et virage partagent une ellipse d’efforts ; une roue bloquée peut dériver. Bilans des rotors et réactions conservés ; modèle indépendant par défaut inchangé.
 
 - Ajout de `Motorcycle3D` : deux roues suspendues, assistance d’équilibre réglable et désactivable, direction limitée selon la vitesse et réutilisation du moteur/transmission à roue arrière. Qualification initiale de l’équilibre et de la direction sur plan/rayon, à couple moteur nul, contre Jolt à 60/120 Hz en Native Debug/Release ; durée de vie, réglages et paramètres invalides contrôlés.
