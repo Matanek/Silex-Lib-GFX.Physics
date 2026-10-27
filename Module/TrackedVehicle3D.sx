@@ -1,3 +1,4 @@
+use GFX.Physics.SuspensionSpring3D.SuspensionSpring3D
 use GFX.Physics.WheeledVehicle3D.Wheel3DSettings
 use GFX.Physics.WheeledVehicle3D.WheeledVehicle3DSettings
 use GFX.Physics.WheeledVehicle3D.WheeledVehicle3D
@@ -31,6 +32,9 @@ public struct TrackedWheel3DSettings {
     let maximum_length:float
     let stiffness:float
     let damping:float
+    let preload_length:float
+    let force_point:Math.Vec3?
+    let spring:SuspensionSpring3D?
     let maximum_slope_angle:float
     let contact:WheelContact3D
     let forward:Math.Vec3
@@ -42,7 +46,8 @@ public struct TrackedWheel3DSettings {
         stiffness:float=10000.0,damping:float=1000.0,direction:Math.Vec3=Math.Vec3(0.0,-1.0,0.0),
         maximum_slope_angle:float=Math.pi()/3.0,contact:WheelContact3D=WheelContact3D.ray,
         longitudinal_friction:float=4.0,lateral_friction:float=2.0,
-        forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0),up:Math.Vec3=Math.Vec3.up()) {
+        forward:Math.Vec3=Math.Vec3(0.0,0.0,1.0),up:Math.Vec3=Math.Vec3.up(),preload_length:float=0.0,
+        force_point:Math.Vec3?=null,spring:SuspensionSpring3D?=null) {
         if !finite_body3d_value(longitudinal_friction) || longitudinal_friction<0.0 ||
             !finite_body3d_value(lateral_friction) || lateral_friction<0.0 {
             panic("GFX.Physics.TrackedWheel3DSettings requires nonnegative finite friction coefficients")
@@ -57,11 +62,12 @@ public struct TrackedWheel3DSettings {
             lateral_friction:TireFrictionCurve3D([Math.Vec2(0.0,lateral_friction)]))
         let wheel=Wheel3DSettings(position,radius:radius,minimum_length:minimum_length,maximum_length:maximum_length,
             stiffness:stiffness,damping:damping,direction:direction,maximum_slope_angle:maximum_slope_angle,contact:contact,
-            tire:tire,maximum_brake_torque:0.0)
+            tire:tire,maximum_brake_torque:0.0,preload_length:preload_length,force_point:force_point,spring:spring)
         self.common=wheel;self.position=wheel.position;self.direction=wheel.direction;self.radius=wheel.radius
         self.minimum_length=wheel.minimum_length;self.maximum_length=wheel.maximum_length
         self.stiffness=wheel.stiffness;self.damping=wheel.damping;self.maximum_slope_angle=wheel.maximum_slope_angle
         self.contact=contact;self.forward=tire.forward;self.up=tire.up
+        self.preload_length=preload_length;self.force_point=force_point;self.spring=spring
         self.longitudinal_friction=longitudinal_friction;self.lateral_friction=lateral_friction
     }
     package func suspension() Wheel3DSettings { return self.common }

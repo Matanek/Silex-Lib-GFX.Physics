@@ -1,0 +1,23 @@
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+public enum SuspensionSpring3D {
+    frequency(float,float)
+    mass_normalized(float,float)
+}
+package func validate_suspension_spring3d(value:SuspensionSpring3D) {
+    match value {
+        frequency(hertz,ratio)=> {
+            let omega=Math.two_pi()*hertz
+            if !finite_body3d_value(hertz) || hertz<=0.0 || !finite_body3d_value(omega*omega) || omega*omega==0.0 ||
+                !finite_body3d_value(ratio) || ratio<0.0 || !finite_body3d_value(2.0*ratio*omega) {
+                panic("GFX.Physics.SuspensionSpring3D requires positive representable frequency and nonnegative finite damping ratio")
+            }
+        }
+        mass_normalized(stiffness,damping)=> {
+            if !finite_body3d_value(stiffness) || stiffness<=0.0 || !finite_body3d_value(damping) || damping<0.0 {
+                panic("GFX.Physics.SuspensionSpring3D requires positive finite normalized stiffness and nonnegative finite damping")
+            }
+        }
+    }
+}

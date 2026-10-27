@@ -5,6 +5,11 @@ import subprocess
 from pathlib import Path
 
 CASES={
+    **{name:'nonnegative representable preload length' for name in ('preload-negative','preload-infinite','preload-overflow')},
+    **{name:'finite representable local force point' for name in ('force-nan','force-overflow')},
+    **{name:'positive representable frequency and nonnegative finite damping ratio' for name in ('frequency-zero','frequency-infinite','frequency-underflow','frequency-overflow','ratio-negative','ratio-nan')},
+    **{name:'positive finite normalized stiffness and nonnegative finite damping' for name in ('normalized-zero','normalized-negative','normalized-infinite')},
+    'spring-conflict':'either physical stiffness/damping or an alternative spring mode',
     **{name:'finite position and unit suspension direction' for name in ('position','direction')},
     **{name:'positive radius and ordered nonnegative finite suspension lengths' for name in ('radius','radius-nan','minimum','maximum','length-infinite')},
     **{name:'positive finite stiffness and nonnegative finite damping' for name in ('stiffness','damping','stiffness-nan')},

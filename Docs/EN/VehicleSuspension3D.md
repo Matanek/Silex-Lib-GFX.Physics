@@ -32,9 +32,12 @@ settings. Wheels create no additional rigid bodies and add no chassis mass.
 | `minimum_length`, `maximum_length` | Suspension lengths in meters, `0.2` and `0.6`; these exclude the radius |
 | `stiffness` | Per-wheel spring stiffness in N/m, `10000` |
 | `damping` | Per-wheel damping in N·s/m, `1000` |
+| `preload_length` | Preload in meters, `0`; travel unchanged |
+| `spring` | Frequency/ratio or mass-normalized coefficients; `null` keeps SI coefficients |
+| `force_point` | Optional local force point; `null` uses the actual contact |
 | `maximum_slope_angle` | Maximum angle between the support normal and opposite suspension direction, `pi/3` rad |
 
-The spring’s natural length is `maximum_length`; it pushes when compressed
+The spring’s natural length is `maximum_length + preload_length`; it pushes when compressed
 and never pulls the support. `minimum_length` is a rigid compression stop.
 Equal lengths remove spring travel and retain that stop. Parameters must be
 finite: positive radius and stiffness, nonnegative damping and lengths, with a
@@ -48,6 +51,52 @@ The nearest surface whose normal satisfies the maximum angle becomes the
 support. Static, kinematic and dynamic bodies can support suspension; a dynamic
 support receives the opposite reaction at the same contact point. A ray does
 not reproduce tire width on a narrow edge.
+
+## Set preload and spring response
+
+`preload_length` adds a preload in meters, zero by default. The natural length
+becomes `maximum_length + preload_length`; search travel and both stops remain
+unchanged. A 1 cm preload therefore raises equilibrium by 1 cm while the wheels
+retain support without reaching a stop.
+
+The optional `spring` parameter sets response without choosing physical
+coefficients that depend on mass. Wheel construction fragment:
+
+```sx
+Physics.Wheel3DSettings(Math.Vec3(), preload_length:0.01,
+    spring:Physics.SuspensionSpring3D.frequency(3.0,0.8))
+```
+
+- `frequency(hertz, ratio)` selects a strictly positive frequency and a
+  nonnegative damping ratio; `1` means critical damping.
+- `mass_normalized(stiffness, damping)` selects coefficients in s⁻² and s⁻¹.
+  The first is strictly positive and the second nonnegative.
+
+The calculation accounts for chassis mass and inertia, the arm around its
+center of mass and the vehicle's local up axis. Support mass does not enter
+this conversion. With identical geometry and inertia distribution, doubling
+mass preserves frequency and static sag. Without `spring`, `stiffness` and
+`damping` retain their SI units and behavior. Combining an alternative mode
+with nondefault SI coefficients is rejected; leave those two arguments at
+their defaults. Values and their conversions must remain finite and representable.
+
+`force_point:Math.Vec3(...)` selects the local chassis point where suspension
+and tire forces act. Without it, forces act at the actual contact. A point near
+the center of mass reduces the force's roll moment; a point exactly at the
+center removes that moment. The opposite reaction on a dynamic support acts
+at the same world point, preserving the pair's balance. The `contact_point`
+and `contact_normal` snapshots still describe the actual collision. Choosing
+this point tunes vehicle behavior without changing its geometry.
+
+These settings also belong to `TrackedWheel3DSettings`; both `Motorcycle3D`
+wheels use `Wheel3DSettings` directly. The
+[settings consumer](../../Tests/Consumer/Tests/VehicleSuspensionSettings3D.sx)
+checks inheritance, equilibria, angular response and momentum conservation
+on a dynamic support. `VehicleSuspensionSettingsRun.py` compares nine 6 s
+recipes at 60/120 Hz with original Jolt and the center of mass at the origin,
+Native Debug/Release on macOS ARM64:
+preload, doubled mass, spring modes, roll, jump and overload. This proof does
+not qualify every possible setting.
 
 ## Reach an edge with a sphere
 

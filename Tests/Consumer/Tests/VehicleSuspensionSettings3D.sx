@@ -1,0 +1,102 @@
+use GFX.Physics
+use STD.Math
+
+func ground(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=0.0)
+}
+func body(mass:float=100.0,roll:float=0.0) Physics.RigidBody3DSettings {
+    return Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(mass)) ..allow_sleep=false
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,1.4,0.0),Math.Quat.angle_axis(roll,Math.Vec3(0.0,0.0,1.0)))
+        ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0
+}
+func wait(world:Physics.World3D) { var step=0;while step<720 { world.step(1.0/120.0);step++ } }
+func wheels(mode:Physics.SuspensionSpring3D?=null,preload:float=0.0,central:bool=false) Physics.Wheel3DSettings[] {
+    var result:Physics.Wheel3DSettings[]=[];let sides:float[]=[-0.6,0.6];let stations:float[]=[-1.0,1.0]
+    var force:Math.Vec3?=null;if central { force=Math.Vec3() }
+    for x in sides { for z in stations { result.append(Physics.Wheel3DSettings(Math.Vec3(x,0.0,z),spring:mode,preload_length:preload,force_point:force)) } }
+    return result
+}
+test "suspension preload raises equilibrium without extending travel" {
+    let preloads:float[]=[0.0,0.01]
+    for preload in preloads {
+        var world=Physics.World3D();var floor=ground(world)
+        var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(body(),wheels(preload:preload)));wait(world)
+        assert(Math.abs(vehicle.chassis().position().y-(0.9+preload-981.0/40000.0))<0.002)
+        assert(vehicle.wheel_settings(0).maximum_length==0.6 && vehicle.wheel_settings(0).preload_length==preload)
+        assert(vehicle.wheel(0).support()!.same_body(floor));world.destroy_wheeled_vehicle(vehicle);assert(!vehicle.is_valid())
+    }
+}
+test "suspension frequency scales with chassis mass and normalized coefficients" {
+    let masses:float[]=[100.0,200.0]
+    for mass in masses { for mode in [0,1] {
+        var spring=Physics.SuspensionSpring3D.frequency(3.0,0.8)
+        var coefficient=(Math.two_pi()*3.0)*(Math.two_pi()*3.0);if mode==1 { spring=Physics.SuspensionSpring3D.mass_normalized(400.0,40.0);coefficient=400.0 }
+        var world=Physics.World3D();ground(world);var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(body(mass),wheels(spring)))
+        wait(world);let expected=0.9-9.81*(1.0+0.36+1.0)/(4.0*coefficient)
+        assert(Math.abs(vehicle.chassis().position().y-expected)<0.002 && vehicle.chassis().linear_velocity().length()<0.02)
+        assert(vehicle.wheel_settings(0).spring!=null)
+    } }
+}
+test "a chosen force point controls the angular response independently of the published contact" {
+    for central in [false,true] {
+        var world=Physics.World3D();ground(world);var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(body(roll:0.12),wheels(central:central)))
+        wait(world);let up=vehicle.chassis().rotation().rotate(Math.Vec3.up())
+        if central { assert(Math.abs(up.x+Math.sin(0.12))<0.0001 && vehicle.chassis().angular_velocity().length()<0.0001) }
+        else { assert(Math.abs(up.x)<0.01) }
+        for i in [0,1,2,3] { let wheel=vehicle.wheel(i);if wheel.support()!=null { assert(Math.abs(wheel.contact_point.y)<0.0001) } }
+    }
+}
+test "tracked and motorcycle suspensions retain the shared preload and frequency settings" {
+    var world=Physics.World3D();ground(world)
+    var tracked_wheels:Physics.TrackedWheel3DSettings[]=[];let sides:float[]=[-0.6,0.6];let stations:float[]=[-1.0,1.0]
+    for x in sides { for z in stations { tracked_wheels.append(Physics.TrackedWheel3DSettings(Math.Vec3(x,0.0,z),spring:Physics.SuspensionSpring3D.frequency(3.0,0.8),preload_length:0.01,longitudinal_friction:0.0,lateral_friction:0.0)) } }
+    var tracked=world.create_tracked_vehicle(Physics.TrackedVehicle3DSettings(body(),tracked_wheels,Physics.VehicleTrack3DSettings(0,[0,1]),Physics.VehicleTrack3DSettings(2,[2,3])))
+    wait(world);let expected=0.91-9.81*2.36/(4.0*(Math.two_pi()*3.0)*(Math.two_pi()*3.0))
+    assert(Math.abs(tracked.chassis().position().y-expected)<0.002 && tracked.wheel_settings(0).preload_length==0.01)
+    world.destroy_tracked_vehicle(tracked)
+    let zero=Physics.TireFrictionCurve3D([Math.Vec2(0.0,0.0)]);let tire=Physics.Tire3DSettings(longitudinal_friction:zero,lateral_friction:zero)
+    let spring=Physics.SuspensionSpring3D.frequency(3.0,0.8)
+    let front=Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,1.0),tire:tire,spring:spring,preload_length:0.01)
+    let rear=Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,-1.0),tire:tire,spring:spring,preload_length:0.01)
+    var motorcycle=world.create_motorcycle(Physics.Motorcycle3DSettings(body(),front,rear));wait(world)
+    assert(Math.abs(motorcycle.chassis().position().y-(0.91-9.81/((Math.two_pi()*3.0)*(Math.two_pi()*3.0))))<0.002)
+    assert(motorcycle.wheel_settings(1).preload_length==0.01)
+}
+
+test "chosen force points conserve pair momentum on a finite dynamic support" {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var platform=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(5.0,0.1,5.0)))
+        ..mass_properties=Physics.MassProperties3D(200.0,Math.Vec3(100.0))
+        ..allow_sleep=false ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0)
+    var config=body();config.transform=Physics.Transform3D(Math.Vec3(0.0,0.75,0.0))
+    config.mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0),Math.Vec3(0.2,0.0,0.1))
+    var suspended:Physics.Wheel3DSettings[]=[]
+    for wheel in wheels() { suspended.append(Physics.Wheel3DSettings(wheel.position,force_point:Math.Vec3(0.0,0.1,0.0),preload_length:0.01)) }
+    var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(config,suspended))
+    var step=0;while step<60 {
+        world.step(1.0/120.0)
+        var chassis=vehicle.chassis()
+        let momentum=platform.linear_velocity().multiply(200.0).add(chassis.linear_velocity().multiply(100.0))
+        let angular=platform.angular_velocity().multiply(100.0).add(chassis.angular_velocity().multiply(100.0))
+            .add(platform.world_center_of_mass().cross(platform.linear_velocity().multiply(200.0)))
+            .add(chassis.world_center_of_mass().cross(chassis.linear_velocity().multiply(100.0)))
+        assert(momentum.length()<0.002 && angular.length()<0.002);step++
+    }
+    assert(platform.position().y< -0.01 && vehicle.chassis().position().y>0.8)
+}
+
+test "frequency at the chosen center of mass is independent of the shape origin" {
+    let centers:Math.Vec3[]=[Math.Vec3(),Math.Vec3(0.8,0.0,0.8)]
+    for center in centers {
+        var world=Physics.World3D();ground(world);var config=body()
+        config.mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0),center)
+        var suspended:Physics.Wheel3DSettings[]=[]
+        for wheel in wheels() { suspended.append(Physics.Wheel3DSettings(wheel.position,force_point:center,spring:Physics.SuspensionSpring3D.frequency(3.0,0.8))) }
+        var vehicle=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(config,suspended));wait(world)
+        let omega=Math.two_pi()*3.0
+        assert(Math.abs(vehicle.chassis().position().y-(0.9-9.81/(4.0*omega*omega)))<0.002)
+        assert(vehicle.chassis().angular_velocity().length()<0.0001)
+    }
+}

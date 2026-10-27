@@ -34,9 +34,12 @@ supplémentaires et n’ajoutent pas de masse au châssis.
 | `minimum_length`, `maximum_length` | Longueurs de suspension en mètres, `0.2` et `0.6` ; elles excluent le rayon |
 | `stiffness` | Raideur par roue en N/m, `10000` |
 | `damping` | Amortissement par roue en N·s/m, `1000` |
+| `preload_length` | Précharge en mètres, `0` ; course inchangée |
+| `spring` | Fréquence/ratio ou coefficients normalisés à la masse ; `null` conserve les coefficients SI |
+| `force_point` | Point local optionnel des forces ; `null` utilise le contact réel |
 | `maximum_slope_angle` | Angle maximal entre normale du support et direction opposée à la suspension, `pi/3` rad |
 
-Le ressort a pour longueur naturelle `maximum_length` ; il pousse lorsqu’il
+Le ressort a pour longueur naturelle `maximum_length + preload_length` ; il pousse lorsqu’il
 est comprimé et ne tire pas le support. `minimum_length` est une butée rigide
 de compression. Donner deux longueurs égales supprime la course du ressort et
 conserve cette butée. Les paramètres doivent être finis : rayon et raideur
@@ -51,6 +54,54 @@ maximal devient le support. Les corps fixes, cinématiques et dynamiques peuvent
 porter la suspension ; un support dynamique reçoit la réaction opposée au même
 point de contact. La recherche par rayon ne reproduit pas la largeur d’un pneu
 sur un bord étroit.
+
+## Régler la précharge et la réponse du ressort
+
+`preload_length` ajoute une précharge en mètres, nulle par défaut. La longueur
+naturelle devient `maximum_length + preload_length` ; la course de recherche
+et les deux butées restent inchangées. Une précharge de 1 cm relève ainsi
+l’équilibre de 1 cm tant que les roues gardent leur appui sans atteindre une butée.
+
+Le paramètre optionnel `spring` permet de régler la réponse sans choisir des
+coefficients physiques dépendant de la masse. Fragment de création de roue :
+
+```sx
+Physics.Wheel3DSettings(Math.Vec3(), preload_length:0.01,
+    spring:Physics.SuspensionSpring3D.frequency(3.0,0.8))
+```
+
+- `frequency(hertz, ratio)` choisit une fréquence strictement positive et un
+  amortissement relatif positif ou nul ; `1` correspond à l’amortissement critique.
+- `mass_normalized(stiffness, damping)` choisit des coefficients en s⁻² et s⁻¹.
+  Le premier est strictement positif, le second positif ou nul.
+
+Le calcul tient compte de la masse et de l’inertie du châssis, du bras autour
+de son centre de masse et du haut local du véhicule. La masse du support
+n’entre pas dans cette conversion. À géométrie et distribution d’inertie
+identiques, doubler la masse conserve la fréquence et l’enfoncement statique.
+Sans `spring`, `stiffness` et `damping` conservent leurs unités SI et leur
+comportement. Une combinaison du mode alternatif avec des coefficients SI
+non standards est refusée ; laisser ces deux arguments à leurs défauts.
+Les valeurs et leurs conversions doivent rester finies et représentables.
+
+`force_point:Math.Vec3(...)` choisit le point local du châssis où appliquer les
+forces de suspension et de pneu. Sans ce réglage, elles agissent au contact
+réel. Un point proche du centre de masse réduit le moment de roulis dû à la
+force ; un point exactement au centre supprime ce moment. La réaction opposée
+sur un support dynamique agit au même point mondial et conserve le bilan de
+la paire. Les snapshots `contact_point` et `contact_normal` décrivent toujours
+la collision réelle. Choisir ce point est un réglage de comportement du
+véhicule, pas une modification de sa géométrie.
+
+Ces réglages appartiennent aussi à `TrackedWheel3DSettings` ; les deux roues
+de `Motorcycle3D` utilisent directement `Wheel3DSettings`. Le
+[consommateur des réglages](../../Tests/Consumer/Tests/VehicleSuspensionSettings3D.sx)
+contrôle leur héritage, les équilibres, la réponse angulaire et la conservation
+des moments sur un support dynamique. Le témoin `VehicleSuspensionSettingsRun.py`
+compare neuf recettes de 6 s à 60/120 Hz, avec centre de masse à l’origine,
+avec Jolt original, Native Debug/Release
+sur macOS ARM64 : précharge, masse doublée, modes de ressort, roulis, saut et
+surcharge. Cette preuve ne qualifie pas tous les réglages possibles.
 
 ## Atteindre une arête avec une sphère
 

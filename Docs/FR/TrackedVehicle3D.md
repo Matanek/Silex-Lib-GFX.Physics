@@ -31,6 +31,9 @@ corps pour le véhicule ; les roues n’ajoutent pas de masse au châssis.
 | `radius` | Rayon, `0.3 m` |
 | `minimum_length`, `maximum_length` | Course hors rayon, `0.2` et `0.6 m` |
 | `stiffness`, `damping` | Ressort `10000 N/m`, amortisseur `1000 N·s/m` |
+| `preload_length` | Précharge en mètres, `0` ; course inchangée |
+| `spring` | Fréquence/ratio ou coefficients normalisés à la masse ; `null` conserve les coefficients SI |
+| `force_point` | Point local optionnel des forces ; `null` utilise le contact réel |
 | `contact` | Recherche par rayon ; sphère/cylindre disponibles dans le socle |
 | `maximum_slope_angle` | Filtre de pente des rayons/sphères, `pi/3 rad` |
 | `forward`, `up` | Axes locaux de la roue, `(0,0,1)` et `(0,1,0)` |

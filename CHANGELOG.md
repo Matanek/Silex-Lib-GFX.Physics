@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Wheel preload, frequency/damping-ratio and mass-normalized spring modes, and optional local force points. Settings are shared by cars, motorcycles and tracks; SI coefficients and actual contact forces remain the defaults. Equilibria, conservation on a dynamic support, invalid settings and nine Native Debug/Release Jolt recipes are checked.
+
 - Motorcycle balance preserves tiny signed lean angles: atan2 of the cross-product length and dot product avoids the float32 acos dead zone. An analytical response is checked against disabled assistance at ±1e−5/±1e−4 rad without changing gains.
 
 - Locked wheels preserve their static-friction effort when other contacts reverse a tiny residual velocity. Accumulated impulses retain the same friction and brake-torque limits; a rotating-support mirror test covers braking to rest without increasing the default iteration count. Combined adhesion applies both candidate components together, including inside the ellipse, preserving limits and rotor balance.

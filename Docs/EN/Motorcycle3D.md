@@ -13,6 +13,8 @@ workspace or Spec group root:
 silex run Packages/GFX.Physics/Examples/Motorcycle.sx
 ```
 
+Both wheels also accept [preload, spring modes and a local force point](VehicleSuspension3D.md#set-preload-and-spring-response).
+
 ## Describe the chassis and both wheels
 
 `Motorcycle3DSettings(chassis, front, rear)` reuses `RigidBody3DSettings` and

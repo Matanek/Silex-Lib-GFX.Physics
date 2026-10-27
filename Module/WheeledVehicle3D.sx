@@ -1,3 +1,5 @@
+use GFX.Physics.SuspensionSpring3D.SuspensionSpring3D
+use GFX.Physics.SuspensionSpring3D.validate_suspension_spring3d
 use GFX.Physics.VehicleTrackDrive3D.VehicleTrackDrive3D
 use GFX.Physics.MotorcycleBalance3D.MotorcycleBalance3DSettings
 use GFX.Physics.MotorcycleBalance3D.MotorcycleLean3D
@@ -34,6 +36,9 @@ public struct Wheel3DSettings {
     let maximum_length:float
     let stiffness:float
     let damping:float
+    let preload_length:float
+    let force_point:Math.Vec3?
+    let spring:SuspensionSpring3D?
     let maximum_slope_angle:float
     let contact:WheelContact3D
     let tire:Tire3DSettings?
@@ -48,7 +53,8 @@ public struct Wheel3DSettings {
         maximum_slope_angle:float = Math.pi()/3.0, tire:Tire3DSettings?=null,
         maximum_steering_angle:float=0.0, steering_axis:Math.Vec3=Math.Vec3.up(),
         maximum_brake_torque:float=1500.0, maximum_handbrake_torque:float=0.0,
-        contact:WheelContact3D=WheelContact3D.ray)
+        contact:WheelContact3D=WheelContact3D.ray,preload_length:float=0.0,
+        force_point:Math.Vec3?=null,spring:SuspensionSpring3D?=null)
     {
         if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
             !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
@@ -73,6 +79,22 @@ public struct Wheel3DSettings {
         if !finite_body3d_point(steering_axis) || Math.abs(steering_axis.length_squared()-1.0)>0.0001 {
             panic("GFX.Physics.Wheel3DSettings steering axis must be a finite unit vector")
         }
+        if !finite_body3d_value(preload_length) || preload_length<0.0 ||
+            !finite_body3d_value((maximum_length+preload_length)*(maximum_length+preload_length)) {
+            panic("GFX.Physics.Wheel3DSettings requires a nonnegative representable preload length")
+        }
+        if let point=force_point {
+            if !finite_body3d_point(point) || !finite_body3d_value(point.length_squared()) {
+                panic("GFX.Physics.Wheel3DSettings requires a finite representable local force point")
+            }
+        }
+        if let mode=spring {
+            validate_suspension_spring3d(mode)
+            if stiffness!=10000.0 || damping!=1000.0 {
+                panic("GFX.Physics.Wheel3DSettings requires either physical stiffness/damping or an alternative spring mode")
+            }
+        }
+        self.preload_length=preload_length;self.force_point=force_point;self.spring=spring
         match contact {
             ray => {}
             cylinder(width) => {
@@ -464,7 +486,8 @@ public class WheeledVehicle3D {
                     }
                     state.longitudinal_direction=longitudinal.normalized()
                     state.lateral_direction=state.longitudinal_direction.cross(state.normal).normalized()
-                    let velocity=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius))
+                    var velocity=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius))
+                    if wheel.force_point!=null { velocity=vehicle_contact_velocity3d(chassis,ground,state.point) }
                     let tangent=velocity.subtract(state.normal.multiply(velocity.dot(state.normal)))
                     let speed=tangent.dot(state.longitudinal_direction)
                     state.longitudinal_slip=Math.abs(state.angular_velocity*wheel.radius-speed)/Math.max(0.001,Math.abs(speed))
@@ -547,7 +570,8 @@ public class WheeledVehicle3D {
             if state.active && state.support!=null {
                 if let tire=wheel.tire {
                     var ground=self.store.require(state.support!)
-                    let speed=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius)).dot(state.longitudinal_direction)
+                    var speed=vehicle_point_velocity3d(chassis,state.chassis_radius).subtract(vehicle_point_velocity3d(ground,state.support_radius)).dot(state.longitudinal_direction)
+                    if wheel.force_point!=null && state.brake_impulse==0.0 { speed=vehicle_contact_velocity3d(chassis,ground,state.point).dot(state.longitudinal_direction) }
                     let capacity=state.longitudinal_friction*(state.impulse+state.stop_impulse)
                     let previous=state.longitudinal_impulse
                     if state.brake_impulse>0.0 && state.longitudinal_inverse_mass>0.0 {
@@ -663,14 +687,17 @@ public class WheeledVehicle3D {
         state.support=support.body_id();state.point=point;state.normal=normal
         state.local_support_point=ground.transform.inverse_point(state.point)
         state.length=length
-        state.chassis_radius=state.point.subtract(chassis.world_center())
-        state.support_radius=state.point.subtract(ground.world_center())
+        var force=state.point
+        if let local_point=wheel.force_point { force=chassis.transform.point(local_point) }
+        state.chassis_radius=force.subtract(chassis.world_center())
+        state.support_radius=force.subtract(ground.world_center())
         state.inverse_mass=vehicle_inverse_mass3d(chassis,ground,state.chassis_radius,state.support_radius,state.normal)
         state.spring=wheel.maximum_length> wheel.minimum_length
-        let stiffness=wheel.stiffness/Math.max(0.1,alignment)
-        let damping=wheel.damping/Math.max(0.1,alignment)
+        let response=vehicle_suspension_coefficients3d(wheel,chassis,self.settings.up)
+        let stiffness=response.x/Math.max(0.1,alignment)
+        let damping=response.y/Math.max(0.1,alignment)
         state.softness=1.0/(delta*(damping+delta*stiffness))
-        state.bias=(state.length-wheel.maximum_length)*delta*stiffness*state.softness
+        state.bias=(state.length-wheel.maximum_length-wheel.preload_length)*delta*stiffness*state.softness
         state.inverse_delta=1.0/delta
         let moving_ground=ground.body_type==BodyType3D.kinematic &&
             (ground.linear_velocity.length_squared()>0.0 || ground.angular_velocity.length_squared()>0.0)
@@ -813,7 +840,8 @@ public class WheeledVehicle3D {
                 let limit=chassis.transform.point(wheel.position).add(chassis.transform.vector(wheel.direction).multiply(wheel.minimum_length+wheel.radius))
                 let error=limit.subtract(point).dot(state.normal)
                 if error<0.0 {
-                    let first=point.subtract(chassis.world_center());let second=point.subtract(ground.world_center())
+                    var force=point;if let local_point=wheel.force_point { force=chassis.transform.point(local_point) }
+                    let first=force.subtract(chassis.world_center());let second=force.subtract(ground.world_center())
                     let inverse_mass=vehicle_inverse_mass3d(chassis,ground,first,second,state.normal)
                     if inverse_mass>0.0 {
                         let impulse=state.normal.multiply(Math.min(0.2,-0.2*error)/inverse_mass)
@@ -861,4 +889,27 @@ func shift_vehicle_body3d(body:BodyState3D, impulse:Math.Vec3, radius:Math.Vec3)
     var rotation=body.transform.rotation
     if angle>0.0 { rotation=Math.Quat.angle_axis(angle,turn.divide(angle)).multiply(rotation).normalized() }
     body.transform=Transform3D(center.subtract(rotation.rotate(body.mass_properties.local_center)),rotation)
+}
+
+func vehicle_contact_velocity3d(chassis:BodyState3D,ground:BodyState3D,point:Math.Vec3) Math.Vec3 {
+    return vehicle_point_velocity3d(chassis,point.subtract(chassis.world_center())).subtract(vehicle_point_velocity3d(ground,point.subtract(ground.world_center())))
+}
+func vehicle_suspension_coefficients3d(wheel:@Wheel3DSettings,chassis:BodyState3D,up:Math.Vec3) Math.Vec2 {
+    if let mode=wheel.spring {
+        var force=wheel.position.add(wheel.direction.multiply(0.5*(wheel.minimum_length+wheel.maximum_length)))
+        if let point=wheel.force_point { force=point }
+        let arm=force.subtract(chassis.mass_properties.local_center).cross(up.negated())
+        let axis=chassis.transform.vector(arm)
+        let mass=1.0/(chassis.inverse_mass+axis.dot(chassis.inverse_inertia_times(axis)))
+        var stiffness=0.0;var damping=0.0
+        match mode {
+            frequency(hertz,ratio)=> { let omega=Math.two_pi()*hertz;stiffness=mass*omega*omega;damping=2.0*mass*ratio*omega }
+            mass_normalized(k,d)=> { stiffness=mass*k;damping=mass*d }
+        }
+        if !finite_body3d_value(stiffness) || stiffness<=0.0 || !finite_body3d_value(damping) {
+            panic("GFX.Physics.Wheel3DSettings spring coefficients must remain finite for the vehicle mass")
+        }
+        return Math.Vec2(stiffness,damping)
+    }
+    return Math.Vec2(wheel.stiffness,wheel.damping)
 }

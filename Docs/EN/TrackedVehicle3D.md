@@ -31,6 +31,9 @@ vehicle; wheels do not add mass to the chassis.
 | `radius` | Wheel radius, `0.3 m` |
 | `minimum_length`, `maximum_length` | Suspension travel excluding radius, `0.2` and `0.6 m` |
 | `stiffness`, `damping` | Spring `10000 N/m`, damper `1000 N·s/m` |
+| `preload_length` | Preload in meters, `0`; travel unchanged |
+| `spring` | Frequency/ratio or mass-normalized coefficients; `null` keeps SI coefficients |
+| `force_point` | Optional local force point; `null` uses the actual contact |
 | `contact` | Ray search; sphere/cylinder searches are available through the shared foundation |
 | `maximum_slope_angle` | Ray/sphere slope filter, `pi/3 rad` |
 | `forward`, `up` | Local wheel axes, `(0,0,1)` and `(0,1,0)` |

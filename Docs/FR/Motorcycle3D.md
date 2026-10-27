@@ -13,6 +13,8 @@ Depuis la racine du workspace ou du groupe de Spec :
 silex run Packages/GFX.Physics/Examples/Motorcycle.sx
 ```
 
+Les deux roues acceptent aussi la [précharge, les modes de ressort et le point local de force](VehicleSuspension3D.md#régler-la-précharge-et-la-réponse-du-ressort).
+
 ## Décrire le châssis et les deux roues
 
 `Motorcycle3DSettings(chassis, front, rear)` réutilise `RigidBody3DSettings` et

@@ -221,6 +221,7 @@ public use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
 public use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
 
 public use GFX.Physics.WheelContact3D.WheelContact3D
+public use GFX.Physics.SuspensionSpring3D.SuspensionSpring3D
 
 public use GFX.Physics.VehicleTrack3D.VehicleTrackSide3D
 public use GFX.Physics.VehicleTrack3D.VehicleTrack3DSettings

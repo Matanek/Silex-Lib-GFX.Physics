@@ -25,7 +25,23 @@ func main() {
     if selected("stiffness-nan") { stiffness=Math.sqrt(-1.0) }
     if selected("slope") { slope=Math.half_pi() }
     if selected("slope-nan") { slope=Math.sqrt(-1.0) }
-    let wheel=Physics.Wheel3DSettings(position,radius,minimum,maximum,stiffness,damping,direction,slope)
+    var preload=0.0;var force:Math.Vec3?=null;var spring:Physics.SuspensionSpring3D?=null
+    if selected("preload-negative") { preload= -0.01 }
+    if selected("preload-infinite") { preload=1.0/0.0 }
+    if selected("preload-overflow") { preload=1e30 }
+    if selected("force-nan") { force=Math.Vec3(Math.sqrt(-1.0),0.0,0.0) }
+    if selected("force-overflow") { force=Math.Vec3(1e30,0.0,0.0) }
+    if selected("frequency-zero") { spring=Physics.SuspensionSpring3D.frequency(0.0,0.8) }
+    if selected("frequency-infinite") { spring=Physics.SuspensionSpring3D.frequency(1.0/0.0,0.8) }
+    if selected("frequency-underflow") { spring=Physics.SuspensionSpring3D.frequency(1e-30,0.8) }
+    if selected("frequency-overflow") { spring=Physics.SuspensionSpring3D.frequency(1e30,0.8) }
+    if selected("ratio-negative") { spring=Physics.SuspensionSpring3D.frequency(3.0,-0.1) }
+    if selected("ratio-nan") { spring=Physics.SuspensionSpring3D.frequency(3.0,Math.sqrt(-1.0)) }
+    if selected("normalized-zero") { spring=Physics.SuspensionSpring3D.mass_normalized(0.0,40.0) }
+    if selected("normalized-negative") { spring=Physics.SuspensionSpring3D.mass_normalized(400.0,-1.0) }
+    if selected("normalized-infinite") { spring=Physics.SuspensionSpring3D.mass_normalized(400.0,1.0/0.0) }
+    if selected("spring-conflict") { spring=Physics.SuspensionSpring3D.frequency(3.0,0.8);stiffness=20000.0 }
+    let wheel=Physics.Wheel3DSettings(position,radius,minimum,maximum,stiffness,damping,direction,slope,preload_length:preload,force_point:force,spring:spring)
     var body=Physics.RigidBody3DSettings()
     if selected("fixed") { body.body_type=Physics.BodyType3D.fixed }
     if selected("kinematic") { body.body_type=Physics.BodyType3D.kinematic }

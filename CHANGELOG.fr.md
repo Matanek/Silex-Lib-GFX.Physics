@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Précharge, modes fréquence/amortissement relatif et coefficients normalisés à la masse, et point local optionnel des forces de roue. Réglages communs aux voitures, motos et chenilles ; coefficients SI et contact réel conservés par défaut. Équilibres, conservation sur support dynamique, paramètres invalides et neuf recettes Jolt Native Debug/Release contrôlés.
+
 - L’assistance d’équilibre moto conserve les très petits angles d’inclinaison : le calcul signé utilise atan2 de la norme du produit vectoriel et du produit scalaire, sans zone morte due à acos en simple précision. Réponse analytique comparée avec assistance coupée à ±1e−5/±1e−4 rad, sans changer les gains.
 
 - Les roues verrouillées conservent leur effort de friction statique lorsque les autres contacts changent le signe d’une très faible vitesse résiduelle. Les impulsions cumulées restent bornées par la même adhérence et le même couple de frein ; le test miroir sur support tournant couvre le freinage jusqu’au repos sans augmenter les itérations par défaut. L’adhérence combinée applique ensemble les deux composantes du candidat, même à l’intérieur de l’ellipse, pour conserver les limites et le bilan du rotor.
