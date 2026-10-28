@@ -1,0 +1,33 @@
+use GFX.Physics
+use STD.Math
+
+func verify_mesh_wheel_cast(body:Physics.Transform3D, anchor:Math.Vec3) {
+    let a = Math.Vec3(-20.0,0.0,-20.0)
+    let b = Math.Vec3(-20.0,0.0,20.0)
+    let c = Math.Vec3(20.0,0.0,-20.0)
+    let d = Math.Vec3(20.0,0.0,20.0)
+    let surface = Physics.ShapePlacement3D(Physics.Shape3D.mesh(
+        Physics.TriangleMesh3D([Physics.Triangle3D(a,b,c),Physics.Triangle3D(c,b,d)])))
+    let axle = Math.Vec3(0.0,0.0,1.0).cross(Math.Vec3.up()).normalized()
+    let orientation = Math.Quat(Math.Vec3.up().cross(axle),1.0+axle.y).normalized()
+    let pose = Physics.Transform3D(body.point(anchor),body.rotation.multiply(orientation).normalized())
+    let shape = Physics.Shape3D.cylinder(Physics.Cylinder3D(0.3,0.2))
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(shape,pose),body.vector(Math.Vec3(0.0,-0.6,0.0)))
+    let hit = Physics.Geometry3D.shape_cast(cast,surface)
+    assert(hit.hit)
+    let moved = Physics.Transform3D(pose.position.add(cast.translation.multiply(hit.fraction)),pose.rotation)
+    let relative = moved.inverse_point(hit.point)
+    let axial = Math.abs(relative.y)
+    let radial = Math.sqrt(relative.x*relative.x+relative.z*relative.z)
+    assert(axial<=0.203 && radial<=0.303)
+    assert(Math.min(Math.abs(axial-0.2),Math.abs(radial-0.3))<=0.003)
+    assert(Math.abs(hit.point.y)<=0.003)
+}
+
+test "cylinder mesh sweep retains both boundaries for captured state 0" {
+    verify_mesh_wheel_cast(Physics.Transform3D(Math.Vec3(4.536084e-07,0.87462413,1.4001398),Math.Quat(-9.713508e-07,-3.8165865e-05,-4.9983322e-05,1.0)),Math.Vec3(-0.6,0.0,-1.0))
+}
+
+test "cylinder mesh sweep retains both boundaries for captured state 1" {
+    verify_mesh_wheel_cast(Physics.Transform3D(Math.Vec3(1.5826979e-06,0.84050804,1.2000927),Math.Quat(2.9200228e-07,-6.9545575e-07,0.00031093037,1.0)),Math.Vec3(0.0,0.0,-1.0))
+}

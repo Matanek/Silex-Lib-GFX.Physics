@@ -102,6 +102,17 @@ func axial_support_cast_result3d(cast:ShapeCast3D, target:ShapePlacement3D,
     let origin = cast.placement.transform().position
     let point = origin.add(witness.second.multiply(scale))
     var outward = normal
+    // A face supplies a true supporting plane even when the closest-point
+    // residue is almost zero. Accept it only if it also supports the moving
+    // shape at this fraction, using the cast's existing reconstruction bound.
+    if let plane = axial_target_face_normal3d(target, normal) {
+        let moving = SupportPlacement3D(support_volume3d(cast.placement.shape()),
+            cast.translation.multiply(fraction).divide(scale), cast.placement.transform().rotation, 1.0 / scale)
+        let placed = SupportPlacement3D(support_volume3d(target.shape()),
+            target.transform().position.subtract(origin).divide(scale), target.transform().rotation, 1.0 / scale)
+        let gap = support_support3d(moving, plane.negated()).subtract(support_support3d(placed, plane)).dot(plane)
+        if gap * gap <= 0.000000000003637979 { return CastResult3D(point, plane, fraction) }
+    }
     // Recover normals on smooth axial boundaries analytically instead of
     // dividing a tiny Minkowski residue. Cylinder rims retain their normal cone.
     match target.shape() {
@@ -126,4 +137,35 @@ func axial_support_cast_result3d(cast:ShapeCast3D, target:ShapePlacement3D,
         }
     }
     return CastResult3D(point, outward, fraction)
+}
+
+// Choose the face nearest the converged cast normal; an edge contact retains
+// its GJK direction unless this face is a common support of both shapes.
+func axial_target_face_normal3d(target:ShapePlacement3D, normal:Math.Vec3) Math.Vec3? {
+    let pose = target.transform()
+    match target.shape() {
+        box(_) => {
+            let axis = pose.inverse_vector(normal)
+            if Math.abs(axis.x) >= Math.abs(axis.y) && Math.abs(axis.x) >= Math.abs(axis.z) {
+                return pose.vector(Math.Vec3(Math.sign(axis.x),0.0,0.0))
+            }
+            if Math.abs(axis.y) >= Math.abs(axis.z) { return pose.vector(Math.Vec3(0.0,Math.sign(axis.y),0.0)) }
+            return pose.vector(Math.Vec3(0.0,0.0,Math.sign(axis.z)))
+        }
+        triangle(value) => {
+            let axis = pose.vector(value.normal())
+            if axis.dot(normal) < 0.0 { return axis.negated() }
+            return axis
+        }
+        convex(value) => {
+            var best = pose.vector(value.face_normal(0)); var index = 1
+            while index < value.face_count() {
+                let candidate = pose.vector(value.face_normal(index))
+                if candidate.dot(normal) > best.dot(normal) { best = candidate }
+                index++
+            }
+            return best
+        }
+        else => { return null }
+    }
 }

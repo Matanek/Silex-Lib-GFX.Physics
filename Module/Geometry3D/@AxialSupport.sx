@@ -90,33 +90,71 @@ struct SupportVertex3D {
 struct SupportClosest3D {
     let point:Math.Vec3
     let weights:Math.Vec3
-    init(point:Math.Vec3, weights:Math.Vec3) { self.point = point; self.weights = weights }
+    // Rank features before rounding their output point: a rounded edge can
+    // appear closer than its adjacent face and stall EPA on an existing support.
+    let distance_squared:float64
+    init(point:Math.Vec3, weights:Math.Vec3, distance_squared:float64) {
+        self.point = point; self.weights = weights; self.distance_squared = distance_squared
+    }
 }
 func support_segment3d(first:Math.Vec3, second:Math.Vec3) SupportClosest3D {
-    let edge = second.subtract(first)
-    var fraction = 0.0
-    if edge.length_squared() > 0.0 { fraction = Math.clamp(-first.dot(edge) / edge.length_squared(), 0.0, 1.0) }
-    return SupportClosest3D(first.add(edge.multiply(fraction)), Math.Vec3(1.0 - fraction, fraction, 0.0))
+    let ax = first.x as float64; let ay = first.y as float64; let az = first.z as float64
+    let dx = (second.x as float64) - ax
+    let dy = (second.y as float64) - ay
+    let dz = (second.z as float64) - az
+    let length_squared = dx * dx + dy * dy + dz * dz
+    var fraction:float64 = 0.0
+    if length_squared > 0.0 { fraction = Math.clamp(-(ax * dx + ay * dy + az * dz) / length_squared, 0.0, 1.0) }
+    let x = ax + dx * fraction; let y = ay + dy * fraction; let z = az + dz * fraction
+    let point = Math.Vec3(round_float<float32>(x), round_float<float32>(y), round_float<float32>(z))
+    let weights = Math.Vec3(round_float<float32>(1.0 - fraction), round_float<float32>(fraction), 0.0)
+    return SupportClosest3D(point, weights, x * x + y * y + z * z)
 }
 func support_triangle3d(a:Math.Vec3, b:Math.Vec3, c:Math.Vec3) SupportClosest3D {
-    let ab = b.subtract(a); let ac = c.subtract(a)
-    let normal = ab.cross(ac); let area = normal.length_squared()
+    // A thin support triangle needs accurate weights and a perpendicular
+    // projection from the same wide calculation. Reconstructing a near-zero
+    // projection from rounded weights would lose its direction at tangency.
+    let ax = a.x as float64; let ay = a.y as float64; let az = a.z as float64
+    let abx = (b.x as float64) - ax
+    let aby = (b.y as float64) - ay
+    let abz = (b.z as float64) - az
+    let acx = (c.x as float64) - ax
+    let acy = (c.y as float64) - ay
+    let acz = (c.z as float64) - az
+    let nx = aby * acz - abz * acy
+    let ny = abz * acx - abx * acz
+    let nz = abx * acy - aby * acx
+    let area = nx * nx + ny * ny + nz * nz
     if area > 0.0 {
-        let projection = normal.multiply(a.dot(normal) / area)
-        let offset = projection.subtract(a)
-        let v = offset.cross(ac).dot(normal) / area
-        let w = ab.cross(offset).dot(normal) / area
+        // The normal projection cancels from these triple products.
+        let v = ((az * acy - ay * acz) * nx + (ax * acz - az * acx) * ny + (ay * acx - ax * acy) * nz) / area
+        let w = ((abz * ay - aby * az) * nx + (abx * az - abz * ax) * ny + (aby * ax - abx * ay) * nz) / area
         let u = 1.0 - v - w
         if u >= 0.0 && v >= 0.0 && w >= 0.0 {
-            return SupportClosest3D(projection, Math.Vec3(u, v, w))
+            let weights = Math.Vec3(round_float<float32>(u),round_float<float32>(v),round_float<float32>(w))
+            let offset = (ax * nx + ay * ny + az * nz) / area
+            let point = Math.Vec3(round_float<float32>(nx * offset),round_float<float32>(ny * offset),round_float<float32>(nz * offset))
+            return SupportClosest3D(point, weights, offset * offset * area)
         }
     }
     var best = support_segment3d(a, b)
     let second = support_segment3d(a, c)
-    if second.point.length_squared() < best.point.length_squared() { best = SupportClosest3D(second.point, Math.Vec3(second.weights.x, 0.0, second.weights.y)) }
+    if second.distance_squared < best.distance_squared { best = SupportClosest3D(second.point, Math.Vec3(second.weights.x, 0.0, second.weights.y), second.distance_squared) }
     let third = support_segment3d(b, c)
-    if third.point.length_squared() < best.point.length_squared() { best = SupportClosest3D(third.point, Math.Vec3(0.0, third.weights.x, third.weights.y)) }
+    if third.distance_squared < best.distance_squared { best = SupportClosest3D(third.point, Math.Vec3(0.0, third.weights.x, third.weights.y), third.distance_squared) }
     return best
+}
+func support_orientation64_3d(a:Math.Vec3, b:Math.Vec3, c:Math.Vec3, d:Math.Vec3) float64 {
+    let bx = (b.x as float64) - (a.x as float64)
+    let by = (b.y as float64) - (a.y as float64)
+    let bz = (b.z as float64) - (a.z as float64)
+    let cx = (c.x as float64) - (a.x as float64)
+    let cy = (c.y as float64) - (a.y as float64)
+    let cz = (c.z as float64) - (a.z as float64)
+    let dx = (d.x as float64) - (a.x as float64)
+    let dy = (d.y as float64) - (a.y as float64)
+    let dz = (d.z as float64) - (a.z as float64)
+    return bx * (cy * dz - cz * dy) + by * (cz * dx - cx * dz) + bz * (cx * dy - cy * dx)
 }
 class SupportSimplex3D {
     var first:SupportVertex3D = SupportVertex3D()
@@ -151,26 +189,31 @@ class SupportSimplex3D {
         }
         if self.count == 4 {
             let a = self.first.difference; let b = self.second.difference; let c = self.third.difference; let d = self.fourth.difference
-            let ab = b.subtract(a); let ac = c.subtract(a); let ad = d.subtract(a)
-            let determinant = ab.dot(ac.cross(ad))
+            // Thin tetrahedra lose the signs of their barycentric volumes in
+            // float32. Evaluate orientations before rounding edge differences.
+            let determinant = support_orientation64_3d(a, b, c, d)
             if Math.abs(determinant) > 0.000000000001 {
-                let u = a.negated().dot(ac.cross(ad)) / determinant
-                let v = ab.dot(a.negated().cross(ad)) / determinant
-                let w = ab.dot(ac.cross(a.negated())) / determinant
+                let origin = Math.Vec3()
+                let u = support_orientation64_3d(a, origin, c, d) / determinant
+                let v = support_orientation64_3d(a, b, origin, d) / determinant
+                let w = support_orientation64_3d(a, b, c, origin) / determinant
                 let t = 1.0 - u - v - w
                 if t >= 0.0 && u >= 0.0 && v >= 0.0 && w >= 0.0 {
-                    self.first.weight = t; self.second.weight = u; self.third.weight = v; self.fourth.weight = w
+                    self.first.weight = round_float<float32>(t)
+                    self.second.weight = round_float<float32>(u)
+                    self.third.weight = round_float<float32>(v)
+                    self.fourth.weight = round_float<float32>(w)
                     return Math.Vec3()
                 }
             }
             var best = support_triangle3d(a, b, c)
             var selected = 0
             let abd = support_triangle3d(a, b, d)
-            if abd.point.length_squared() < best.point.length_squared() { best = abd; selected = 1 }
+            if abd.distance_squared < best.distance_squared { best = abd; selected = 1 }
             let acd = support_triangle3d(a, c, d)
-            if acd.point.length_squared() < best.point.length_squared() { best = acd; selected = 2 }
+            if acd.distance_squared < best.distance_squared { best = acd; selected = 2 }
             let bcd = support_triangle3d(b, c, d)
-            if bcd.point.length_squared() < best.point.length_squared() { best = bcd; selected = 3 }
+            if bcd.distance_squared < best.distance_squared { best = bcd; selected = 3 }
             closest_point = best.point
             self.first.weight = 0.0; self.second.weight = 0.0; self.third.weight = 0.0; self.fourth.weight = 0.0
             if selected == 0 { self.first.weight = best.weights.x; self.second.weight = best.weights.y; self.third.weight = best.weights.z }
@@ -361,7 +404,7 @@ func support_penetration3d(first:SupportPlacement3D, second:SupportPlacement3D, 
         while index < faces.count() {
             let face = faces[index]
             let candidate = support_triangle3d(points[face.a].difference, points[face.b].difference, points[face.c].difference)
-            if candidate.point.length_squared() < closest.point.length_squared() { best = index; closest = candidate }
+            if candidate.distance_squared < closest.distance_squared { best = index; closest = candidate }
             index++
         }
         let selected = faces[best]
@@ -473,7 +516,7 @@ func support_axis_penetration3d(first:SupportPlacement3D, second:SupportPlacemen
         var best = 0; var closest = support_segment3d(polygon[0].difference, polygon[1].difference); index = 1
         while index < polygon.count() {
             let candidate = support_segment3d(polygon[index].difference, polygon[(index + 1) % polygon.count()].difference)
-            if candidate.point.length_squared() < closest.point.length_squared() { best = index; closest = candidate }
+            if candidate.distance_squared < closest.distance_squared { best = index; closest = candidate }
             index++
         }
         let a = polygon[best]; let b = polygon[(best + 1) % polygon.count()]

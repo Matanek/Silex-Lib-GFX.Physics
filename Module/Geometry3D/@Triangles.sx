@@ -79,10 +79,12 @@ func ray_triangle_cast(ray:Ray3D, triangle:Triangle3D,
     let fraction = face.dot(triangle.first.subtract(origin)) / denominator
     if fraction < 0.0 || fraction > 1.0 { return CastResult3D() }
     let point = origin.add(direction.multiply(fraction))
-    let closest = closest_triangle_point3d(point, triangle)
-    if point.subtract(closest).length_squared() > 0.000000000001 {
-        return CastResult3D()
-    }
+    // Test the plane point against edges directly: reconstructing an interior
+    // closest point loses precision on large triangles and can reject real hits.
+    let first_side = triangle.second.subtract(triangle.first).cross(point.subtract(triangle.first)).dot(face)
+    let second_side = triangle.third.subtract(triangle.second).cross(point.subtract(triangle.second)).dot(face)
+    let third_side = triangle.first.subtract(triangle.third).cross(point.subtract(triangle.third)).dot(face)
+    if first_side < 0.0 || second_side < 0.0 || third_side < 0.0 { return CastResult3D() }
     var normal = face
     if denominator > 0.0 { normal = face.negated() }
     return CastResult3D(ray.origin.add(ray.translation.multiply(fraction)),

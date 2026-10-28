@@ -1,0 +1,27 @@
+use GFX.Physics
+use STD.Math
+
+func verify_planar_wheel_normal(body:Physics.Transform3D, anchor:Math.Vec3, target:Physics.ShapePlacement3D, normal:Math.Vec3) {
+    let axle = Math.Vec3(-1.0,0.0,0.0)
+    let alignment = Math.Quat(Math.Vec3.up().cross(axle),1.0+axle.y).normalized()
+    let pose = Physics.Transform3D(body.point(anchor),body.rotation.multiply(alignment).normalized())
+    let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.3,0.2)),pose),body.vector(Math.Vec3(0.0,-0.6,0.0)))
+    let hit = Physics.Geometry3D.shape_cast(cast,target)
+    assert(hit.hit)
+    assert(hit.normal.nearly_equal(normal,0.0001))
+}
+
+test "captured cylinder contact retains planar normal on terrain 1" {
+    let rotation = Math.Quat.angle_axis(0.15,Math.Vec3.right())
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(200.0,1.0,200.0))),Physics.Transform3D(rotation.rotate(Math.Vec3(0.0,-0.5,0.0)),rotation))
+    let normal = rotation.rotate(Math.Vec3.up())
+    verify_planar_wheel_normal(Physics.Transform3D(Math.Vec3(8.439297e-07,-4.4999385,35.630245),Math.Quat(0.07492508,-6.243465e-05,0.00018194523,0.9971891)),Math.Vec3(0.6,0.0,1.0),target,normal)
+}
+
+test "captured cylinder contact retains planar normal on terrain 4" {
+    let heights:float[] = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+    var mesh = Physics.TriangleMesh3D.from_height_grid(4,4,heights,40.0/3.0,40.0/3.0)
+    let target = Physics.ShapePlacement3D(Physics.Shape3D.mesh(mesh),Physics.Transform3D(Math.Vec3(-20.0,0.0,-20.0)))
+    let normal = Math.Vec3.up()
+    verify_planar_wheel_normal(Physics.Transform3D(Math.Vec3(-5.8574074e-07,0.87467736,1.3989869),Math.Quat(1.6573489e-06,-9.425064e-05,2.7104666e-06,1.0)),Math.Vec3(-0.6,0.0,-1.0),target,normal)
+}

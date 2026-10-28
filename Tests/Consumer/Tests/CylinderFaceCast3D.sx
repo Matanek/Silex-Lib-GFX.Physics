@@ -1,0 +1,20 @@
+use GFX.Physics
+use STD.Math
+
+test "cylinder sweep witnesses stay on both boundaries for a large inclined box" {
+    let body=Physics.Transform3D(Math.Vec3(0.00000023120222,0.296489,3.7271721),Math.Quat(0.07409017,-0.00000001440452,0.00000014367436,0.9972516))
+    let slope=Math.Quat.angle_axis(0.15,Math.Vec3(1.0,0.0,0.0))
+    let target=Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(200.0,1.0,200.0))),Physics.Transform3D(slope.rotate(Math.Vec3(0.0,-0.5,0.0)),slope))
+    let axle=Math.Vec3(0.0,0.0,1.0).cross(Math.Vec3.up()).normalized()
+    let orientation=Math.Quat(Math.Vec3.up().cross(axle),1.0+axle.y).normalized()
+    let pose=Physics.Transform3D(body.point(Math.Vec3(0.0,0.0,1.0)),body.rotation.multiply(orientation).normalized())
+    let shape=Physics.Shape3D.cylinder(Physics.Cylinder3D(0.3,0.2))
+    let cast=Physics.ShapeCast3D(Physics.ShapePlacement3D(shape,pose),body.vector(Math.Vec3(0.0,-0.6,0.0)))
+    let hit=Physics.Geometry3D.shape_cast(cast,target)
+    assert(hit.hit)
+    let moving=Physics.ShapePlacement3D(shape,Physics.Transform3D(pose.position.add(cast.translation.multiply(hit.fraction)),pose.rotation))
+    let probe=Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.00001)),Physics.Transform3D(hit.point))
+    let first=Physics.Geometry3D.distance(probe,moving);let second=Physics.Geometry3D.distance(probe,target)
+    assert(Math.abs(first.separation+0.00001)<0.0003 && Math.abs(second.separation+0.00001)<0.0003)
+    assert(hit.normal.nearly_equal(slope.rotate(Math.Vec3.up()),0.003))
+}

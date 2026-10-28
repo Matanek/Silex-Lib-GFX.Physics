@@ -1,0 +1,33 @@
+use GFX.Physics
+use STD.Math
+
+func verify_facet_penetration(common:Physics.Transform3D) {
+    let vertices:Math.Vec3[] = [
+        Math.Vec3(-0.5,-0.5,-0.5),Math.Vec3(0.5,-0.5,-0.5),
+        Math.Vec3(-0.5,0.5,-0.5),Math.Vec3(0.5,0.5,-0.5),
+        Math.Vec3(-0.5,-0.5,0.5),Math.Vec3(0.5,-0.5,0.5),
+        Math.Vec3(-0.5,0.5,0.5),Math.Vec3(0.5,0.5,0.5)]
+    let cube = Physics.ShapePlacement3D(Physics.Shape3D.convex(Physics.ConvexHull3D(vertices)),
+        Physics.Transform3D(common.point(Math.Vec3(0.0,1.1,0.0)),common.rotation))
+    let cap = Physics.ShapePlacement3D(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D()),common)
+    let result = Physics.Geometry3D.distance(cube,cap)
+    assert(Math.abs(result.separation+0.15)<0.0001)
+    assert(result.normal.nearly_equal(common.vector(Math.Vec3.down()),0.002))
+    let first = common.inverse_point(result.first_point)
+    let second = common.inverse_point(result.second_point)
+    assert(Math.abs(first.y-0.6)<0.0001 && Math.abs(second.y-0.75)<0.0001)
+    assert(Math.abs(first.x)<=0.5001 && Math.abs(first.z)<=0.5001)
+    assert(result.second_point.subtract(result.first_point).subtract(result.normal.multiply(result.separation)).length()<0.0001)
+    let reverse = Physics.Geometry3D.distance(cap,cube)
+    assert(Math.abs(reverse.separation-result.separation)<0.0001)
+    assert(reverse.normal.nearly_equal(result.normal.negated(),0.002))
+}
+
+test "a convex facet above a rounded cap retains its analytic penetration" {
+    verify_facet_penetration(Physics.Transform3D())
+}
+
+test "facet penetration is invariant under a common rigid transform" {
+    verify_facet_penetration(Physics.Transform3D(Math.Vec3(4.0,2.0,-3.0),
+        Math.Quat.angle_axis(0.37,Math.Vec3(1.0,2.0,3.0).normalized())))
+}

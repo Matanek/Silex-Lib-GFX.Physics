@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les rayons ne perdent plus les intérieurs de grands triangles à cause de la reconstruction du point le plus proche. La réduction des simplexes minces calcule en `float64` les orientations, les poids et les projections avant l’arrondi de sortie, ce qui supprime les contacts de roue aberrants sur grande face ou maillage. Le classement des faces conserve leur distance en précision accrue pour éviter une non-convergence EPA due à l’arrondi. Les balayages axiaux conservent aussi la normale exacte d’une face lorsqu’elle fournit un appui commun aux deux formes, sans amplifier le résidu du point le plus proche. Cette révision de développement nécessite le compilateur qui fournit `round_float<T>`.
+
 - Précharge, modes fréquence/amortissement relatif et coefficients normalisés à la masse, et point local optionnel des forces de roue. Réglages communs aux voitures, motos et chenilles ; coefficients SI et contact réel conservés par défaut. Équilibres, conservation sur support dynamique, paramètres invalides et neuf recettes Jolt Native Debug/Release contrôlés.
 
 - L’assistance d’équilibre moto conserve les très petits angles d’inclinaison : le calcul signé utilise atan2 de la norme du produit vectoriel et du produit scalaire, sans zone morte due à acos en simple précision. Réponse analytique comparée avec assistance coupée à ±1e−5/±1e−4 rad, sans changer les gains.

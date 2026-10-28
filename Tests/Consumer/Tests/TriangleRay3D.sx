@@ -1,0 +1,25 @@
+use GFX.Physics
+use STD.Math
+
+test "triangle rays retain both large planar interiors and their shared seam" {
+    let extents:float[]=[2.0,20.0,200.0]
+    let coordinates:Math.Vec2[]=[Math.Vec2(-0.6,-1.0),Math.Vec2(-0.6,1.0),Math.Vec2(0.6,-1.0),Math.Vec2(0.6,1.0),Math.Vec2(),Math.Vec2(0.6,-0.6)]
+    let directions:float[]=[-1.0,1.0]
+    for extent in extents { for turned in [false,true] {
+        var pose=Physics.Transform3D()
+        if turned { pose=Physics.Transform3D(Math.Vec3(5.0,3.0,-7.0),Math.Quat.angle_axis(0.37,Math.Vec3(1.0,2.0,3.0).normalized())) }
+        let a=Math.Vec3(-extent,0.0,-extent);let b=Math.Vec3(-extent,0.0,extent)
+        let c=Math.Vec3(extent,0.0,-extent);let d=Math.Vec3(extent,0.0,extent)
+        var surface=Physics.ShapePlacement3D(Physics.Shape3D.mesh(Physics.TriangleMesh3D([Physics.Triangle3D(a,b,c),Physics.Triangle3D(c,b,d)])),pose)
+        for point in coordinates { for sign in directions {
+            let origin=pose.point(Math.Vec3(point.x,-sign*0.8,point.y))
+            let ray=Physics.Ray3D(origin,pose.vector(Math.Vec3(0.0,sign*1.8,0.0)))
+            let hit=Physics.Geometry3D.ray_cast(ray,surface)
+            assert(hit.hit && Math.abs(hit.fraction-0.8/1.8)<0.00001)
+            assert(hit.point.nearly_equal(pose.point(Math.Vec3(point.x,0.0,point.y)),0.00001))
+            assert(hit.normal.nearly_equal(pose.vector(Math.Vec3(0.0,-sign,0.0)),0.00001))
+        } }
+        let outside=Physics.Ray3D(pose.point(Math.Vec3(extent+0.01,0.8,0.0)),pose.vector(Math.Vec3(0.0,-1.8,0.0)))
+        assert(!Physics.Geometry3D.ray_cast(outside,surface).hit)
+    } }
+}
