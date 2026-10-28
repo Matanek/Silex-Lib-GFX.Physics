@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Cylinder wheel contacts ignore overlaps whose normal separates along suspension extension. Overturned cars no longer alternate fictitious floor support through their roof; legitimate ceiling support and compressed initial overlaps remain supported.
+
 - Qualification of all three vehicle families on the retained terrains and in composed driving with variable grip; mixed controls, sleep/wake and destruction/recreation coverage. Ray/sphere profiles cover driving through stopping; cylinder trajectory parity and wide-cylinder motorcycle repose remain explicitly unqualified. Profile and snapshot lifetime documentation synchronized.
 
 - Rays retain large triangle interiors without reconstructing a rounded closest point. Thin support simplex reduction computes orientations, weights and projections in `float64` before rounding the outputs, removing spurious wheel contacts on large faces or meshes. Face ranking retains its wider distance metric to prevent EPA non-convergence caused by rounding. Axial sweeps also preserve an exact face normal when it is a common support of both shapes, without amplifying the closest-point residue. This development revision requires the compiler providing `round_float<T>`.

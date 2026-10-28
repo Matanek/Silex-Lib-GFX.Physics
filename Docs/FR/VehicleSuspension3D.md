@@ -158,6 +158,10 @@ Le cylindre est exact, sans arrondi des rebords. Largeur, rayon et parcours
 doivent être positifs et représentables ; les échelles dont le carré devient
 nul ou non fini sont refusées. Ce mode ignore `maximum_slope_angle`, comme le
 détecteur cylindrique Jolt : une paroi ou un rebord peut donc porter un contact.
+La normale doit néanmoins s’opposer à la direction de détente du balayage.
+Un chevauchement qui s’en éloigne ne constitue pas un appui : les roues d’une
+voiture sur le dos ne prennent pas le sol à travers le toit. Un plafond peut
+toujours porter des roues qui pointent vers lui.
 Les filtres bilatéraux, capteurs, corps désactivés et exclusion du châssis
 restent appliqués. Le premier contact, ou la pénétration initiale la plus
 profonde, devient le support, y compris entre feuilles d’un composé/maillage.

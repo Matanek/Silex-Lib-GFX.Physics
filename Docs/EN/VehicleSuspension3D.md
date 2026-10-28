@@ -151,7 +151,10 @@ Rolling rotation leaves this volume of revolution unchanged.
 The cylinder has sharp, unrounded rims. Width, radius and travel must be
 positive and representable; scales whose square becomes zero or non-finite
 are rejected. This mode ignores `maximum_slope_angle`, like Jolt’s cylinder
-tester: a wall or rim may therefore provide a contact. Bilateral filters,
+tester: a wall or rim may therefore provide a contact. The normal must still
+oppose the cast extension direction. A separating overlap does not provide
+support: overturned wheels do not catch the floor through the roof. A ceiling
+can still support wheels pointing toward it. Bilateral filters,
 sensors, disabled bodies and chassis exclusion still apply. The earliest
 contact, or deepest initial penetration, becomes the support, including
 among compound/mesh leaves.

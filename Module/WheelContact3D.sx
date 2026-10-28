@@ -84,7 +84,7 @@ package func cast_wheel_cylinder3d(cast:Geometry3D.ShapeCast3D, target:Geometry3
         else => {}
     }
     let hit=Geometry3D.shape_cast(cast,target)
-    if !hit.hit { return WheelCastHit3D() }
+    if !hit.hit || hit.normal.dot(cast.translation)>=0.0 { return WheelCastHit3D() }
     var priority=hit.fraction
     if hit.fraction==0.0 { priority=Math.min(0.0,Geometry3D.distance(cast.placement,target).separation) }
     if hit.fraction>0.0 {

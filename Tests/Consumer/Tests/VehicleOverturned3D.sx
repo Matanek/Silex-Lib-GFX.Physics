@@ -1,0 +1,38 @@
+use GFX.Physics
+use STD.Math
+
+func wheel_probe(world:Physics.World3D,rotation:Math.Quat,height:float) Physics.WheeledVehicle3D {
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0),rotation) ..allow_sleep=false
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+            ..linear_damping=0.0 ..angular_damping=0.0,
+        [Physics.Wheel3DSettings(Math.Vec3(),contact:Physics.WheelContact3D.cylinder(0.4))]))
+}
+test "overturned overlapping cylinders do not alternate fictitious support on the floor" {
+    for rate in [60,120] {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+        var car=wheel_probe(world,Math.Quat(0.0,0.0,1.0,0.0),0.21);var step=0
+        while step<rate*2 {
+            world.step(1.0/rate as float)
+            let wheel=car.wheel(0)
+            assert(wheel.support()==null && wheel.length==0.6 && wheel.normal_force==0.0)
+            step++
+        }
+        assert(car.chassis().position().y>0.19 && car.chassis().position().y<0.22)
+    }
+}
+test "inverted cylinders retain legitimate ceiling support while upright initial overlaps still compress" {
+    var ceiling=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3(0.0,9.81,0.0))
+    ceiling.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,0.5,10.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,1.25,0.0)))
+    var upside=wheel_probe(ceiling,Math.Quat(0.0,0.0,1.0,0.0),0.2)
+    ceiling.step(1.0/120.0);assert(upside.wheel(0).support()!=null && upside.wheel(0).normal_force>0.0)
+    var floor=Physics.World3D()
+    floor.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var upright=wheel_probe(floor,Math.Quat(),0.21);floor.step(1.0/120.0)
+    assert(upright.wheel(0).support()!=null && upright.wheel(0).length==0.0 && upright.wheel(0).normal_force>0.0)
+}
