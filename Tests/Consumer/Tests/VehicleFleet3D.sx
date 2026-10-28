@@ -1,0 +1,135 @@
+use GFX.Physics
+use STD.Math
+
+func chassis(x:float,allow_sleep:bool) Physics.RigidBody3DSettings {
+    return Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4)))
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0))
+        ..transform=Physics.Transform3D(Math.Vec3(x,1.15,0.0)) ..allow_sleep=allow_sleep
+        ..linear_damping=0.0 ..angular_damping=0.0 ..friction=0.0
+}
+func gearbox() Physics.VehicleTransmission3DSettings {
+    return Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0],reverse_gear_ratios:[-1.0])
+}
+class Fleet {
+    var ground:Physics.RigidBody3D
+    var car:Physics.WheeledVehicle3D
+    var tracks:Physics.TrackedVehicle3D
+    var bike:Physics.Motorcycle3D
+    init(world:Physics.World3D,allow_sleep:bool=false) {
+        self.ground=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..friction=1.0)
+        let tire=Physics.Tire3DSettings();var wheels:Physics.Wheel3DSettings[]=[]
+        var belts:Physics.TrackedWheel3DSettings[]=[]
+        let sides:float[]=[-0.6,0.6];let stations:float[]=[-1.0,1.0]
+        for x in sides { for z in stations {
+            wheels.append(Physics.Wheel3DSettings(Math.Vec3(x,0.0,z),tire:tire,maximum_brake_torque:300.0))
+            belts.append(Physics.TrackedWheel3DSettings(Math.Vec3(x,0.0,z)))
+        } }
+        let engine=Physics.VehicleEngine3DSettings(maximum_torque:15.0,angular_damping:0.0)
+        self.car=world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(chassis(-6.0,allow_sleep),wheels,
+            engine:engine,transmission:gearbox(),differentials:[Physics.VehicleDifferential3DSettings(0,2,ratio:3.0)]))
+        self.tracks=world.create_tracked_vehicle(Physics.TrackedVehicle3DSettings(chassis(0.0,allow_sleep),belts,
+            Physics.VehicleTrack3DSettings(0,[0,1],inertia:2.0,maximum_brake_torque:1500.0),
+            Physics.VehicleTrack3DSettings(2,[2,3],inertia:2.0,maximum_brake_torque:1500.0),engine:engine,transmission:gearbox()))
+        self.bike=world.create_motorcycle(Physics.Motorcycle3DSettings(chassis(6.0,allow_sleep),
+            Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,1.0),tire:tire,maximum_brake_torque:300.0),
+            Physics.Wheel3DSettings(Math.Vec3(0.0,0.0,-1.0),tire:tire,maximum_brake_torque:300.0),engine:engine,transmission:gearbox()))
+    }
+    func body(index:int) Physics.RigidBody3D {
+        if index==0 { return self.car.chassis() }if index==1 { return self.tracks.chassis() }return self.bike.chassis()
+    }
+    func valid(index:int) bool {
+        if index==0 { return self.car.is_valid() }if index==1 { return self.tracks.is_valid() }return self.bike.is_valid()
+    }
+    func wheel(index:int) Physics.VehicleWheelState3D {
+        if index==0 { return self.car.wheel(0) }if index==1 { return self.tracks.wheel(0) }return self.bike.wheel(1)
+    }
+    func drive(index:int,throttle:float) {
+        if index==0 { self.car.set_transmission(1);self.car.set_controls(throttle:throttle) }
+        if index==1 { self.tracks.set_transmission(1);self.tracks.set_controls(throttle:throttle) }
+        if index==2 { self.bike.set_transmission(1);self.bike.set_controls(throttle:throttle) }
+    }
+    func destroy(world:Physics.World3D,index:int) {
+        if index==0 { world.destroy_wheeled_vehicle(self.car) }
+        if index==1 { world.destroy_tracked_vehicle(self.tracks) }
+        if index==2 { world.destroy_motorcycle(self.bike) }
+    }
+}
+func advance(world:Physics.World3D,steps:int,rate:int) {
+    var step=0;while step<steps { world.step(1.0/rate as float);step++ }
+}
+func expired_fleet() Fleet { var world=Physics.World3D();return Fleet(world) }
+
+func verify_commands() {
+    for rate in [60,120] {
+        var world=Physics.World3D();var fleet=Fleet(world);advance(world,2*rate,rate)
+        assert(world.body_count()==4)
+        for family in [0,1,2] {
+            let support=fleet.wheel(family).support();assert(support!=null && support!.same_body(fleet.ground))
+        }
+        fleet.drive(0,0.5);advance(world,rate,rate)
+        assert(fleet.car.chassis().position().z>0.05)
+        assert(Math.abs(fleet.tracks.chassis().position().z)<0.001 && Math.abs(fleet.bike.chassis().position().z)<0.001)
+        fleet.car.set_controls(brake:1.0);fleet.drive(1,0.5);advance(world,rate,rate)
+        assert(fleet.tracks.chassis().position().z>0.05 && Math.abs(fleet.bike.chassis().position().z)<0.001)
+        fleet.tracks.set_controls(brake:1.0);fleet.drive(2,0.5);advance(world,rate,rate)
+        assert(fleet.bike.chassis().position().z>0.05)
+        for family in [0,1,2] { assert(fleet.valid(family) && fleet.body(family).position().y>0.5);fleet.destroy(world,family) }
+        assert(world.body_count()==1);world.destroy_rigid_body(fleet.ground);assert(world.body_count()==0)
+    }
+}
+
+func verify_sleep() {
+    for rate in [60,120] {
+        for selected in [0,1,2] {
+            var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());var fleet=Fleet(world,allow_sleep:true)
+            advance(world,3*rate,rate)
+            for family in [0,1,2] { assert(!fleet.body(family).is_awake()) }
+            fleet.drive(selected,0.5);assert(fleet.body(selected).is_awake())
+            for family in [0,1,2] { if family!=selected { assert(!fleet.body(family).is_awake()) } }
+            let pose=fleet.body(selected).transform();let angle=fleet.wheel(selected).rotation_angle
+            world.step(0.0);assert(fleet.body(selected).transform()==pose && fleet.wheel(selected).rotation_angle==angle)
+            advance(world,rate/2,rate);assert(fleet.wheel(selected).angular_velocity>0.0)
+            var body=fleet.body(selected);body.set_enabled(false)
+            let speed=fleet.wheel(selected).angular_velocity;let frozen=fleet.wheel(selected).rotation_angle
+            let other=(selected+1)%3;fleet.drive(other,0.5);advance(world,rate/2,rate)
+            assert(body.transform()==pose && fleet.wheel(selected).angular_velocity==speed && fleet.wheel(selected).rotation_angle==frozen)
+            assert(fleet.wheel(other).angular_velocity>0.0);body.set_enabled(true);advance(world,rate/2,rate)
+            assert(fleet.wheel(selected).rotation_angle!=frozen)
+            for family in [0,1,2] { fleet.destroy(world,family) }world.destroy_rigid_body(fleet.ground);assert(world.body_count()==0)
+        }
+    }
+}
+
+func verify_lifetime() {
+    let orders:int[][]=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]
+    for rate in [60,120] { for order in orders {
+        var world=Physics.World3D();var old=Fleet(world);advance(world,rate,rate)
+        var bodies:Physics.RigidBody3D[]=[old.body(0),old.body(1),old.body(2)]
+        // Snapshots retain observations and an invalidated support handle.
+        let snapshot=old.wheel(0);world.destroy_rigid_body(old.ground)
+        assert(snapshot.support()!=null && !snapshot.support()!.is_valid() && snapshot.normal_force>0.0)
+        for family in [0,1,2] { assert(old.valid(family) && old.wheel(family).support()==null) }
+        var removed:bool[]=[false,false,false];var index=0
+        for family in order {
+            if index%2==0 { old.destroy(world,family) }else { world.destroy_rigid_body(bodies[family]) }
+            removed[family]=true;index++
+            for candidate in [0,1,2] { assert(old.valid(candidate)== !removed[candidate] && bodies[candidate].is_valid()== !removed[candidate]) }
+            world.step(1.0/rate as float);assert(world.body_count()==3-index)
+        }
+        for cycle in [0,1,2] {
+            var replacement=Fleet(world);advance(world,3,rate)
+            for family in [0,1,2] { assert(replacement.valid(family) && !old.valid(family) && !bodies[family].is_valid()) }
+            for family in order { replacement.destroy(world,family) }world.destroy_rigid_body(replacement.ground)
+            assert(world.body_count()==0)
+        }
+    } }
+    var expired=expired_fleet();assert(!expired.ground.is_valid())
+    for family in [0,1,2] { assert(!expired.valid(family)) }
+}
+
+test "mixed families receive independent persistent controls on their own loaded wheels" { verify_commands() }
+test "mixed families isolate sleep wake disable and zero-step observations" { verify_sleep() }
+test "every mixed destruction order invalidates chassis generations without disturbing survivors" { verify_lifetime() }
+
+func main() { verify_commands();verify_sleep();verify_lifetime();print("Mixed vehicles: controls, sleep/wake, disable, snapshots and lifetime verified") }

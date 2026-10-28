@@ -69,3 +69,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Tracked vehicles](Docs/EN/TrackedVehicle3D.md) · [Véhicules à chenilles](Docs/FR/TrackedVehicle3D.md): drive, turn and pivot with two coupled tracks of suspended wheels.
 
 [Motorcycle balance](Docs/EN/Motorcycle3D.md) · [Équilibre moto](Docs/FR/Motorcycle3D.md): two suspended wheels, independently switchable balance assistance and speed-dependent steering limits.
+
+[Qualified vehicle profiles](Docs/EN/VehicleQualification3D.md) · [Profils véhicules qualifiés](Docs/FR/VehicleQualification3D.md): choose a family, contact detector and validated driving configuration, including current numerical limits.

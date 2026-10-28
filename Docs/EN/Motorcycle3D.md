@@ -100,11 +100,15 @@ of its chassis or the end of the world's lifetime invalidate all its handles;
 Settings are validated before insertion. `step(0)` computes neither a pose nor
 a new target; controls and configuration mutations are forbidden during a step.
 
-The current comparison covers 16 recipes, 60/120 Hz and Native Debug/Release on
-macOS ARM64: balance, disabling/re-enabling, jumping, coasting turns, smoothing,
+The initial balance comparison covers 16 recipes at 60/120 Hz, with Native
+Debug/Release on macOS ARM64: balance, disabling/re-enabling, jumping, coasting turns, smoothing,
 target limits and airborne steering. The engine has zero torque in these
 recipes. Both modes produce identical outputs. Once the falling, unassisted
 chassis center drops below 0.2 m, the proof checks the event and bounded state,
-without pointwise rebound angle parity. Composed propulsion, terrain and other
-wheel detectors require their own campaigns; see the
+without pointwise rebound angle parity.
+
+Composed driving on a plane is now qualified with ray/sphere contacts, and all
+three detectors have a terrain campaign with propulsion disabled. Wide cylinders
+retain repose and trajectory-parity limits: see the
+[current profiles](VehicleQualification3D.md) and
 [witnesses and budgets](OracleAndBudgets.md).

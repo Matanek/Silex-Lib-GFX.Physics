@@ -1,5 +1,7 @@
 # Reconstruction corpus and budgets
 
+[Qualified vehicle profiles](VehicleQualification3D.md) summarize available capabilities and their limits. The detailed campaigns below retain their own configurations; an initial witness does not replace later compositions.
+
 This protocol defines the evidence for the native Silex 2D physics
 reconstruction. Each result identifies the OS, architecture, CPU, commits,
 build mode, worker count, fixed step and repetitions. Time and memory budgets

@@ -1,5 +1,7 @@
 # Corpus de reconstruction et budgets
 
+Les [profils qualifiés des véhicules](VehicleQualification3D.md) regroupent les capacités disponibles et leurs limites. Les campagnes détaillées ci-dessous gardent leur configuration propre ; une preuve initiale ne remplace pas les compositions ultérieures.
+
 Ce contrat fixe les preuves de la reconstruction Silex native. Chaque résultat
 nomme OS, architecture, CPU, commits, mode, workers, pas fixe et répétitions.
 Les budgets de temps et mémoire appartiennent uniquement à la machine macOS

@@ -102,11 +102,15 @@ Les réglages sont validés avant insertion. `step(0)` ne calcule ni pose ni
 nouvelle cible ; les commandes et mutations de configuration ne sont pas permises
 pendant un pas.
 
-La comparaison actuelle couvre 16 recettes, 60/120 Hz et Native Debug/Release
-sur macOS ARM64 : équilibre, désactivation/réactivation, saut, virages sur élan,
+La comparaison initiale d’équilibre couvre 16 recettes à 60/120 Hz, en Native
+Debug/Release sur macOS ARM64 : équilibre, désactivation/réactivation, saut, virages sur élan,
 lissage, limite de cible et direction en vol. Le moteur a un couple nul dans
 ces recettes. Les sorties des deux modes sont identiques. Dès que le centre
 de la moto qui tombe sans assistance passe sous 0,2 m, la preuve porte sur
-l’événement et un état borné, sans angle de rebond pointwise. Propulsion composée, terrains et autres
-détecteurs de roue nécessitent leurs campagnes propres ; voir les
+l’événement et un état borné, sans angle de rebond pointwise.
+
+La propulsion composée sur plan est depuis qualifiée avec contacts rayon/sphère,
+et les trois détecteurs ont leur campagne de terrains à propulsion coupée.
+Les cylindres larges gardent une limite de repos et de parité de trajectoire :
+voir les [profils actuels](VehicleQualification3D.md) et les
 [témoins et budgets](OracleAndBudgets.md).

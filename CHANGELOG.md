@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Qualification of all three vehicle families on the retained terrains and in composed driving with variable grip; mixed controls, sleep/wake and destruction/recreation coverage. Ray/sphere profiles cover driving through stopping; cylinder trajectory parity and wide-cylinder motorcycle repose remain explicitly unqualified. Profile and snapshot lifetime documentation synchronized.
+
 - Rays retain large triangle interiors without reconstructing a rounded closest point. Thin support simplex reduction computes orientations, weights and projections in `float64` before rounding the outputs, removing spurious wheel contacts on large faces or meshes. Face ranking retains its wider distance metric to prevent EPA non-convergence caused by rounding. Axial sweeps also preserve an exact face normal when it is a common support of both shapes, without amplifying the closest-point residue. This development revision requires the compiler providing `round_float<T>`.
 
 - Wheel preload, frequency/damping-ratio and mass-normalized spring modes, and optional local force points. Settings are shared by cars, motorcycles and tracks; SI coefficients and actual contact forces remain the defaults. Equilibria, conservation on a dynamic support, invalid settings and nine Native Debug/Release Jolt recipes are checked.
