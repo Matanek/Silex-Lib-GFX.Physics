@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require cylinder wheel calibration diagnostics in both native modes."""
+"""Require cylinder and side collision calibration diagnostics in both native modes."""
 import os
 import subprocess
 from pathlib import Path
@@ -16,12 +16,15 @@ def main():
         binary=root/f'.silex/invalid-vehicle-cylinder-contact-{mode}'
         try:
             subprocess.run(['silex','compile',str(source),'--'+mode,'-o',str(binary)],env=env,check=True)
-            for name in CASES:
-                result=subprocess.run([str(binary),name],capture_output=True,text=True)
-                assert result.returncode>0 and 'cylinder contact requires positive representable width, radius and travel' in result.stdout+result.stderr,(name,result)
+            for sides in (False,True):
+                diagnostic='side collision' if sides else 'cylinder contact'
+                for name in CASES:
+                    args=[str(binary),name]+(['sides'] if sides else [])
+                    result=subprocess.run(args,capture_output=True,text=True)
+                    assert result.returncode>0 and f'{diagnostic} requires positive representable width, radius and travel' in result.stdout+result.stderr,(name,sides,result)
         finally:
             binary.unlink(missing_ok=True)
-    print(f'vehicle cylinder contact rejected {2*len(CASES)} invalid calibration cases')
+    print(f'vehicle cylinder and side contacts rejected {4*len(CASES)} invalid calibration cases')
 
 
 if __name__=='__main__': main()

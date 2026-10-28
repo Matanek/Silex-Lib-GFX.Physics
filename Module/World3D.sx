@@ -176,6 +176,7 @@ public class World3D {
     private var hinge_constraints:HingeConstraintStore3D
     private var wheeled_vehicles:WheeledVehicle3D[]=[]
     private var vehicle_ray_hits:WorldRayHit3D[]=[]
+    private var wheel_side_contacts:WheelSideContactState3D[]=[]
     private var current_gravity:Math.Vec3
     private let position_iterations:int
     private let velocity_iterations:int
@@ -396,6 +397,88 @@ public class World3D {
             slot++
         }
         if let support=nearest { vehicle.accept_contact(index,support,point,normal,length,delta) }
+    }
+    // Solve wheel sides on the chassis when no suspension support can clear
+    // them. Fore/aft tread contacts remain with the spring and rolling tires.
+    private func prepare_wheel_side_contacts(delta:float) {
+        self.wheel_side_contacts.clear()
+        for vehicle in self.wheeled_vehicles {
+            var first=self.store.require(vehicle.chassis_id())
+            if !first.is_enabled || first.is_sensor { continue }
+            var index=0
+            while index<vehicle.wheel_count() {
+                let wheel=vehicle.wheel_settings(index)
+                if let width=wheel.side_collision_width { self.prepare_wheel_side_contact(vehicle,index,width,delta) }
+                index++
+            }
+        }
+    }
+    private func prepare_wheel_side_contact(vehicle:WheeledVehicle3D,index:int,width:float,delta:float) {
+        var first=self.store.require(vehicle.chassis_id())
+        let placement=vehicle.cylinder_placement(index,width)
+        let bounds=shape_pose_bounds3d(placement.shape(),placement.transform())
+        let axle=placement.transform().vector(Math.Vec3.up());let forward=vehicle.wheel_forward(index)
+        let unsupported=vehicle.support_id(index)==null
+        let direction=first.transform.vector(vehicle.wheel_settings(index).direction)
+        var slot=0
+        while slot<self.store.slots.count() {
+            if slot!=vehicle.chassis_id().slot {
+                if var second=self.store.slots[slot] {
+                    if second.is_enabled && !second.is_sensor && body_collision_allows3d(first,second) {
+                        var candidate=true
+                        match second.shape {
+                            plane(_) => {}
+                            else => { candidate=linear_sweeps_overlap3d(bounds,shape_pose_bounds3d(second.shape,second.transform)) }
+                        }
+                        if candidate {
+                            var distances:DistanceResult3D[]=[]
+                            write_leaf_contacts3d(placement,ShapePlacement3D(second.shape,second.transform),-1,-1,distances)
+                            for distance in distances {
+                                var target=contact_placement3d(second,distance.second_child_id)
+                                target=mesh_contact_face3d(target,distance.second_child_id)
+                                let normal=contact_normal3d(placement,target,distance.normal)
+                                let moving=second.body_type==BodyType3D.kinematic &&
+                                    (second.linear_velocity.length_squared()>0.0 || second.angular_velocity.length_squared()>0.0)
+                                // Fore/aft tread contacts belong to the rolling tire model.
+                                // A side contact must face the axle more than the rolling direction.
+                                let side=Math.abs(normal.dot(axle))>Math.abs(normal.dot(forward))+0.0001
+                                if side && (unsupported || normal.dot(direction)<=0.0001) && (first.awake || second.awake || moving) {
+                                    if !first.awake { first.wake() }
+                                    if !second.awake { second.wake() }
+                                    let point=distance.first_point.add(distance.second_point).multiply(0.5)
+                                    var constraints:ContactPointState3D[]=[]
+                                    for contact in contact_points3d(placement,target,normal,point) {
+                                        constraints.append(ContactPointState3D(contact,first,second,normal,
+                                            Math.max(first.restitution,second.restitution),0.0,delta))
+                                    }
+                                    self.wheel_side_contacts.append(WheelSideContactState3D(vehicle,index,width,first,second,
+                                        distance.second_child_id,normal,Math.sqrt(first.friction)*Math.sqrt(second.friction),constraints))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            slot++
+        }
+    }
+    private func solve_wheel_side_velocities() {
+        for var contact in self.wheel_side_contacts {
+            for point in contact.constraints {
+                solve_contact_point3d(contact.first,contact.second,contact.normal,contact.friction,point)
+            }
+        }
+    }
+    private func solve_wheel_side_positions() {
+        for var contact in self.wheel_side_contacts {
+            let wheel=contact.vehicle.cylinder_placement(contact.index,contact.width)
+            var target=contact_placement3d(contact.second,contact.second_child_id)
+            target=mesh_contact_face3d(target,contact.second_child_id)
+            let distance=contact_separation3d(wheel,target)
+            if distance.separation<0.0 {
+                correct_contact3d(contact.first,contact.second,contact_normal3d(wheel,target,distance.normal),distance.separation)
+            }
+        }
     }
     private func has_active_vehicle_suspension() bool {
         for vehicle in self.wheeled_vehicles { if vehicle.has_active_contact() { return true } }
@@ -900,6 +983,7 @@ public class World3D {
             vehicle.prepare_tilt_limit(self.current_gravity,delta)
             vehicle.prepare_tires(delta)
         }
+        self.prepare_wheel_side_contacts(delta)
         var has_continuous_body = false
         for state in self.store.slots {
             if let body = state {
@@ -934,7 +1018,7 @@ public class World3D {
         for vehicle in self.wheeled_vehicles { vehicle.warm_start_tires() }
         self.warm_start_fixed_constraints(delta)
         self.warm_start_hinge_constraints(delta)
-        let coupled_constraints = self.has_active_vehicle_suspension() || self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint()
+        let coupled_constraints = !self.wheel_side_contacts.is_empty() || self.has_active_vehicle_suspension() || self.has_active_hinge_constraint() || self.has_active_fixed_constraint() || self.has_active_slider_constraint() || self.has_active_cone_constraint() || self.has_active_swing_twist_constraint() || self.has_active_six_dof_constraint() || self.has_active_path_constraint() || self.has_active_pulley_constraint() || self.has_active_gear_constraint() || self.has_active_rack_and_pinion_constraint()
         var retained_contacts:ContactPairState3D[] = []
         if !self.contacts.is_empty() { retained_contacts = self.prepare_retained_contacts(delta,!coupled_constraints) }
         // Near-plane face candidates require support before pose integration.
@@ -972,6 +1056,7 @@ public class World3D {
             }
         }
         self.detect_and_resolve_contacts(delta, retained_contacts)
+        self.wheel_side_contacts.clear()
         if has_continuous_body {
             self.emit_continuous_sensor_events(previous_poses, continuous_poses)
         }
@@ -1450,6 +1535,7 @@ public class World3D {
     }
 
     private func solve_constraint_velocities(delta:float, reverse:bool) {
+        self.solve_wheel_side_velocities()
         for vehicle in self.wheeled_vehicles { vehicle.solve_velocity() }
         var constraint_index = 0
         while constraint_index < self.distance_constraints.slots.count() {
@@ -2182,6 +2268,7 @@ public class World3D {
             }
             normal_iteration++
         }
+        self.prepare_wheel_side_contacts(delta)
         var iteration = 0
         while iteration < self.velocity_iterations {
             solve_contact_pairs_velocity3d(pairs, iteration % 2 == 1)
@@ -2421,6 +2508,7 @@ public class World3D {
                     }
                 }
             }
+            self.solve_wheel_side_positions()
             position_iteration++
         }
         // Both snapshots are ordered by body slots and child IDs. Merge once to emit
@@ -3147,6 +3235,23 @@ func merge_retained_contacts3d(retained:ContactPairState3D[], current:ContactPai
         }
     }
     return result
+}
+
+class WheelSideContactState3D {
+    var vehicle:WheeledVehicle3D
+    let index:int
+    let width:float
+    var first:BodyState3D
+    var second:BodyState3D
+    let second_child_id:int
+    let normal:Math.Vec3
+    let friction:float
+    var constraints:ContactPointState3D[]
+    init(vehicle:WheeledVehicle3D,index:int,width:float,first:BodyState3D,second:BodyState3D,
+        second_child_id:int,normal:Math.Vec3,friction:float,constraints:ContactPointState3D[]) {
+        self.vehicle=vehicle;self.index=index;self.width=width;self.first=first;self.second=second
+        self.second_child_id=second_child_id;self.normal=normal;self.friction=friction;self.constraints=constraints
+    }
 }
 
 class ContactPairState3D {

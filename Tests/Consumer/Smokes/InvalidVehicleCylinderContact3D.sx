@@ -16,7 +16,9 @@ func main() {
     if selected("underflow") { width=1.0e-30 }
     if selected("radius-underflow") { radius=1.0e-30 }
     if selected("travel-underflow") { travel=1.0e-30 }
+    var contact=Physics.WheelContact3D.cylinder(width);var sides:float?=null
+    if selected("sides") { contact=Physics.WheelContact3D.ray;sides=width }
     Physics.Wheel3DSettings(Math.Vec3(),radius:radius,minimum_length:0.0,maximum_length:travel,
-        contact:Physics.WheelContact3D.cylinder(width))
+        contact:contact,side_collision_width:sides)
     panic("invalid cylinder contact was accepted")
 }

@@ -3,7 +3,7 @@
 `WheeledVehicle3D` associe un châssis dynamique et des roues à suspension.
 Le monde cherche leurs appuis par rayon, sphère ou cylindre balayé, résout ressorts et butées et applique
 les réactions aux deux corps. L’application appelle seulement `world.step`.
-Sans pneu optionnel, les roues appliquent seulement la suspension. Les
+Sans pneu optionnel, les appuis de suspension ne transmettent pas d’effort tangentiel. Les
 [pneus passifs](PassiveTires3D.md) ajoutent roulement et adhérence ; les [commandes](VehicleControls3D.md)
 ajoutent braquage et freinage. Le [groupe moteur](VehiclePowertrain3D.md) ajoute la propulsion.
 
@@ -31,6 +31,7 @@ supplémentaires et n’ajoutent pas de masse au châssis.
 | `direction` | Direction locale unitaire de détente, `(0,-1,0)` |
 | `radius` | Rayon de roue en mètres, `0.3` |
 | `contact` | `WheelContact3D.ray` par défaut ; `WheelContact3D.sphere(rayon)` ou `WheelContact3D.cylinder(largeur)` pour un contact volumique |
+| `side_collision_width` | Largeur totale des flancs solides en mètres ; `null` désactive cette enveloppe latérale quel que soit le balayage |
 | `minimum_length`, `maximum_length` | Longueurs de suspension en mètres, `0.2` et `0.6` ; elles excluent le rayon |
 | `stiffness` | Raideur par roue en N/m, `10000` |
 | `damping` | Amortissement par roue en N·s/m, `1000` |
@@ -165,6 +166,33 @@ toujours porter des roues qui pointent vers lui.
 Les filtres bilatéraux, capteurs, corps désactivés et exclusion du châssis
 restent appliqués. Le premier contact, ou la pénétration initiale la plus
 profonde, devient le support, y compris entre feuilles d’un composé/maillage.
+
+Pour protéger les flancs avec un balayage rayon, sphère ou cylindre, définir
+`side_collision_width` dans `Wheel3DSettings` avec la largeur totale du pneu.
+Par exemple, les arguments `contact:Physics.WheelContact3D.sphere(0.32)` et
+`side_collision_width:0.2` associent une recherche sphérique à un pneu de 20 cm
+de large. Le défaut `null` conserve les appuis de suspension seuls, y compris
+pour le cylindre. La largeur doit être positive, finie et représentable
+avec le rayon et la course.
+
+Le cylindre latéral suit la longueur et le braquage courants de la roue.
+Ses contacts doivent être davantage orientés selon l’axe de roue que selon
+le roulement : le choc de la bande de roulement contre une marche reste du
+ressort du modèle de pneu. Un contact latéral devient solide lorsque la
+suspension n’a pas d’appui ou que sa compression ne peut pas dégager le flanc.
+Cela empêche une roue couchée de traverser le sol par son côté lors d’un
+retournement, sans bloquer le franchissement des rampes en conduite normale.
+Ces contacts transmettent impulsion, frottement et réaction au châssis et au
+corps touché, avec les mêmes filtres et exclusions.
+
+Ces collisions de flanc sont discrètes ; le CCD du châssis ne balaie pas les
+roues. Elles ne créent pas de corps de roue, de masse supplémentaire ni
+d’événement `Contact3D` distinct. `wheel.support()`, `length` et `normal_force`
+restent les observations de la suspension. Sans largeur explicite, aucun
+mode de balayage ne possède cette enveloppe latérale solide. Le
+[test des flancs](../../Tests/Consumer/Tests/VehicleWheelSides3D.sx) couvre le
+retournement sur plan à 60/120 Hz, deux dimensions de roues, la réaction sur
+une boîte dynamique et les exclusions de collision.
 
 Une bande cylindrique peut toucher une face selon une ligne. Lorsque l’axe
 est tangent au plan de contact, le monde préfère la projection du centre de

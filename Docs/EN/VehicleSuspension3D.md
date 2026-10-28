@@ -2,7 +2,7 @@
 
 `WheeledVehicle3D` combines a dynamic chassis with suspended wheels. The world
 finds supports by ray, swept sphere or cylinder, solves springs and compression stops, and applies
-reactions to both bodies. The application only calls `world.step`. Without an optional tire, wheels only apply suspension.
+reactions to both bodies. The application only calls `world.step`. Without an optional tire, suspension supports transmit no tangential force.
 [Passive tires](PassiveTires3D.md) add rolling and grip; [controls](VehicleControls3D.md)
 add steering and braking. The [powertrain](VehiclePowertrain3D.md) adds propulsion.
 
@@ -29,6 +29,7 @@ settings. Wheels create no additional rigid bodies and add no chassis mass.
 | `direction` | Unit local extension direction, `(0,-1,0)` |
 | `radius` | Wheel radius in meters, `0.3` |
 | `contact` | `WheelContact3D.ray` by default; `WheelContact3D.sphere(radius)` or `WheelContact3D.cylinder(width)` for volume contact |
+| `side_collision_width` | Total solid side width in metres; `null` disables this side envelope for every sweep mode |
 | `minimum_length`, `maximum_length` | Suspension lengths in meters, `0.2` and `0.6`; these exclude the radius |
 | `stiffness` | Per-wheel spring stiffness in N/m, `10000` |
 | `damping` | Per-wheel damping in N·s/m, `1000` |
@@ -158,6 +159,31 @@ can still support wheels pointing toward it. Bilateral filters,
 sensors, disabled bodies and chassis exclusion still apply. The earliest
 contact, or deepest initial penetration, becomes the support, including
 among compound/mesh leaves.
+
+To protect wheel sides with ray, sphere or cylinder sweeps, set
+`side_collision_width` in `Wheel3DSettings` to the total tire width. For
+example, the arguments `contact:Physics.WheelContact3D.sphere(0.32)` and
+`side_collision_width:0.2` pair a sphere query with a 20 cm wide tire. An
+explicit width is required for every sweep mode; the default `null` retains
+suspension supports alone, including for cylinders. The width must be positive,
+finite and representable with the radius and travel.
+
+The side cylinder follows the current wheel length and steering. Its contacts
+must face the wheel axle more than the rolling direction: tread impacts
+against a step remain handled by the tire model. A side contact becomes solid
+when the suspension has no support or compression cannot clear the side.
+This prevents a sideways wheel from passing through the floor during rollover
+without blocking ordinary ramp driving. These contacts transfer impulse,
+friction and reaction to the chassis and the touched body, using the same
+filters and exclusions.
+
+These side collisions are discrete; chassis CCD does not sweep the wheels.
+They add no wheel bodies, extra mass or separate `Contact3D` events.
+`wheel.support()`, `length` and `normal_force` remain suspension observations.
+Without an explicit width, no sweep mode has this solid side envelope. The
+[wheel-side test](../../Tests/Consumer/Tests/VehicleWheelSides3D.sx) covers
+rollover on a plane at 60/120 Hz, two wheel sizes, reaction against a dynamic
+box and collision exclusions.
 
 A cylindrical tread can touch a face along a line. When the axle is tangent
 to the contact plane, the world prefers the wheel center’s projection if it

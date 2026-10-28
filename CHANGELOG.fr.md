@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les roues réagissent aussi par leurs flancs aux contacts transversaux ou opposés à la détente : elles ne traversent plus le sol de côté pendant un retournement. Réactions au châssis et aux obstacles mobiles, filtres et exclusions vérifiés ; appuis de suspension inchangés. `side_collision_width` active cette protection pour les balayages rayon, sphère et cylindre ; le défaut `null` conserve leur comportement. Collisions latérales discrètes, sans corps ni événements de contact supplémentaires.
+
 - Les contacts cylindriques de roue ignorent les chevauchements dont la normale s’éloigne dans le sens de détente de la suspension. Une voiture retournée ne reçoit plus de faux appuis alternés sur son toit ; les appuis légitimes au plafond et les chevauchements comprimés restent pris en charge.
 
 - Qualification des trois familles de véhicules sur les terrains retenus et en conduite composée à adhérence variable ; campagne mixte de commandes, sommeil/réveil et destruction/recréation. Les profils rayon/sphère couvrent la conduite jusqu’à l’arrêt ; la parité des trajectoires cylindriques et le repos moto à cylindre large restent explicitement non qualifiés. Documentation des profils et de la durée de vie des snapshots synchronisée.

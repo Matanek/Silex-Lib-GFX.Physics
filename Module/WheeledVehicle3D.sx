@@ -41,6 +41,7 @@ public struct Wheel3DSettings {
     let spring:SuspensionSpring3D?
     let maximum_slope_angle:float
     let contact:WheelContact3D
+    let side_collision_width:float?
     let tire:Tire3DSettings?
     let maximum_steering_angle:float
     let steering_axis:Math.Vec3
@@ -54,7 +55,7 @@ public struct Wheel3DSettings {
         maximum_steering_angle:float=0.0, steering_axis:Math.Vec3=Math.Vec3.up(),
         maximum_brake_torque:float=1500.0, maximum_handbrake_torque:float=0.0,
         contact:WheelContact3D=WheelContact3D.ray,preload_length:float=0.0,
-        force_point:Math.Vec3?=null,spring:SuspensionSpring3D?=null)
+        force_point:Math.Vec3?=null,spring:SuspensionSpring3D?=null,side_collision_width:float?=null)
     {
         if !finite_body3d_point(position) || !finite_body3d_value(position.length_squared()) ||
             !finite_body3d_point(direction) || Math.abs(direction.length_squared()-1.0)>0.0001
@@ -116,6 +117,16 @@ public struct Wheel3DSettings {
                 }
             }
         }
+        if let width=side_collision_width {
+            let half=width*0.5
+            if !finite_body3d_value(width) || width<=0.0 ||
+                !finite_body3d_value(half*half) || half*half==0.0 ||
+                !finite_body3d_value(radius*radius) || radius*radius==0.0 ||
+                !finite_body3d_value((half+radius)*(half+radius)) || maximum_length*maximum_length==0.0 {
+                panic("GFX.Physics.Wheel3DSettings side collision requires positive representable width, radius and travel")
+            }
+        }
+        self.side_collision_width=side_collision_width
         self.contact=contact
         self.maximum_steering_angle=maximum_steering_angle;self.steering_axis=steering_axis.normalized()
         self.maximum_brake_torque=maximum_brake_torque;self.maximum_handbrake_torque=maximum_handbrake_torque
@@ -665,6 +676,17 @@ public class WheeledVehicle3D {
         let pose=Transform3D(body.transform.point(wheel.position),body.transform.rotation.multiply(orientation).normalized())
         return Geometry3D.ShapeCast3D(Geometry3D.ShapePlacement3D(Shape3D.cylinder(Cylinder3D(wheel.radius,width*0.5)),pose),
             body.transform.vector(wheel.direction).multiply(wheel.maximum_length))
+    }
+    package func wheel_forward(index:int) Math.Vec3 {
+        let wheel=self.settings.wheel(index);var forward=Math.Vec3(0.0,0.0,1.0)
+        if let tire=wheel.tire { forward=tire.forward }
+        let steering=Math.Quat.angle_axis(self.requested_steering(wheel.maximum_steering_angle,wheel.steering_axis),wheel.steering_axis)
+        return self.store.require(self.id).transform.vector(steering.rotate(forward))
+    }
+    package func cylinder_placement(index:int,width:float) Geometry3D.ShapePlacement3D {
+        let cast=self.cylinder_cast(index,width);let pose=cast.placement.transform()
+        let position=pose.position.add(cast.translation.multiply(self.wheels[index].length/self.settings.wheel(index).maximum_length))
+        return Geometry3D.ShapePlacement3D(cast.placement.shape(),Transform3D(position,pose.rotation))
     }
     package func clear_contacts() {
         var index=0

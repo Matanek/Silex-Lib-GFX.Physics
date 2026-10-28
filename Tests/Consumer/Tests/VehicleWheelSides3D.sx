@@ -1,0 +1,123 @@
+use GFX.Physics
+use STD.Math
+
+func car(world:Physics.World3D,rotation:Math.Quat,height:float,radius:float=0.32,width:float=0.4,contact:Physics.WheelContact3D?=null) Physics.WheeledVehicle3D {
+    var detector=Physics.WheelContact3D.cylinder(width)
+    if let mode=contact { detector=mode }
+    var wheels:Physics.Wheel3DSettings[]=[]
+    let signs:int[]=[-1,1]
+    for x in signs { for z in signs {
+        wheels.append(Physics.Wheel3DSettings(Math.Vec3(x as float*0.9,0.0,z as float),radius:radius,
+            contact:detector,side_collision_width:width,maximum_steering_angle:0.6))
+    } }
+    return world.create_wheeled_vehicle(Physics.WheeledVehicle3DSettings(
+        Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.4,0.4,2.4)))
+            ..transform=Physics.Transform3D(Math.Vec3(0.0,height,0.0),rotation) ..allow_sleep=false
+            ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(100.0)),wheels))
+}
+func lowest(vehicle:Physics.WheeledVehicle3D,index:int,width:float) float {
+    let wheel=vehicle.wheel_settings(index);let pose=vehicle.chassis().transform()
+    let center=pose.point(wheel.position.add(wheel.direction.multiply(vehicle.wheel(index).length)))
+    let steering=Math.Quat.angle_axis(vehicle.wheel(index).steering_angle,wheel.steering_axis)
+    let axle=pose.vector(steering.rotate(Math.Vec3.right())).y
+    let extent=width*0.5*Math.abs(axle)+wheel.radius*Math.sqrt(Math.max(0.0,1.0-axle*axle))
+    return center.y-extent
+}
+func verify_rollovers() {
+    let angles:float[]=[90.0,110.0,150.0,180.0]
+    for rate in [60,120] { for angle in angles { for monster in [false,true] {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+        var radius=0.32;var width=0.4;if monster { radius=0.65;width=0.72 }
+        var vehicle=car(world,Math.Quat.angle_axis(Math.radians(angle),Math.Vec3(0.0,0.0,1.0)),2.0,radius,width)
+        var step=0;var checked=0
+        while step<rate*2 {
+            world.step(1.0/rate as float)
+            if vehicle.chassis().transform().vector(Math.Vec3.up()).y<=0.00001 {
+                for index in [0,1,2,3] { assert(lowest(vehicle,index,width)> -0.002) }
+                checked++
+            }
+            assert(vehicle.chassis().linear_velocity().length()<15.0)
+            step++
+        }
+        assert(checked>0)
+    } } }
+}
+func verify_dynamic_reaction() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var vehicle=car(world,Math.Quat.angle_axis(Math.radians(110.0),Math.Vec3(0.0,0.0,1.0)),0.935)
+    var body=vehicle.chassis();body.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0))
+    var obstacle=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,0.2,10.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.1,0.0)) ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(100.0,Math.Vec3(1000.0))
+        ..linear_damping=0.0 ..angular_damping=0.0)
+    let before=body.linear_velocity().y*100.0
+    world.step(1.0/120.0)
+    let after=body.linear_velocity().y*100.0+obstacle.linear_velocity().y*100.0
+    for index in [0,1,2,3] { assert(vehicle.wheel(index).support()==null && vehicle.wheel(index).normal_force==0.0) }
+    assert(obstacle.linear_velocity().y< -0.1 && body.linear_velocity().y> -0.9)
+    // The chassis default damping is applied once during velocity integration.
+    assert(Math.abs(after-before)<0.1)
+}
+func verify_exclusions() {
+    for mode in [0,1,2] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var settings=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D())
+        if mode==0 { settings.is_sensor=true }
+        if mode==1 { settings.is_enabled=false }
+        if mode==2 { settings.collision_filter=Physics.CollisionFilter3D(1 as uint64,0 as uint64) }
+        world.create_rigid_body(settings)
+        var vehicle=car(world,Math.Quat.angle_axis(Math.half_pi(),Math.Vec3(0.0,0.0,1.0)),1.0)
+        var body=vehicle.chassis();body.set_linear_velocity(Math.Vec3(0.0,-1.0,0.0))
+        var step=0;while step<10 { world.step(1.0/120.0);step++ }
+        assert(lowest(vehicle,0,0.4)< -0.05 && body.position().y<1.0)
+        world.destroy_wheeled_vehicle(vehicle)
+        world.step(1.0/120.0);assert(world.body_count()==1)
+    }
+}
+
+func verify_kinematic_wake() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var obstacle=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(10.0,0.2,10.0)))
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,-0.1,0.0)))
+    var vehicle=car(world,Math.Quat.angle_axis(Math.radians(110.0),Math.Vec3(0.0,0.0,1.0)),0.935)
+    var body=vehicle.chassis();body.set_sleep_enabled(true)
+    var step=0;while step<240 { world.step(1.0/120.0);step++ }
+    assert(!body.is_awake())
+    let height=body.position().y
+    obstacle.set_linear_velocity(Math.Vec3(0.0,0.5,0.0))
+    step=0;while step<30 { world.step(1.0/120.0);step++ }
+    assert(body.is_awake() && body.position().y>height+0.05 && body.linear_velocity().y>0.1)
+}
+
+func verify_query_modes() {
+    let modes:Physics.WheelContact3D[]=[Physics.WheelContact3D.ray,Physics.WheelContact3D.sphere(0.32)]
+    let angles:float[]=[80.0,110.0]
+    let turns:float[]=[-1.0,1.0]
+    for mode in modes { for rate in [60,120] { for angle in angles { for turn in turns {
+        var world=Physics.World3D()
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+        var vehicle=car(world,Math.Quat.angle_axis(Math.radians(angle),Math.Vec3(0.0,0.0,1.0)),1.4,contact:mode)
+        vehicle.set_controls(steering:turn)
+        assert(vehicle.wheel_settings(0).side_collision_width==0.4)
+        var step=0;while step<rate*2 {
+            world.step(1.0/rate as float)
+            if vehicle.chassis().transform().vector(Math.Vec3.up()).y<=0.3 {
+                for index in [0,1,2,3] { assert(lowest(vehicle,index,0.4)> -0.002) }
+            }
+            step++
+        }
+    } } } }
+}
+
+test "cylinder wheel sides stay above the floor during a rollover at 60 and 120 Hz" { verify_rollovers() }
+test "cylinder side collisions transfer equal and opposite momentum to a dynamic obstacle" { verify_dynamic_reaction() }
+test "sensors disabled bodies and collision masks do not block wheel sides" { verify_exclusions() }
+test "a moving kinematic obstacle wakes a sleeping chassis through its wheel side" { verify_kinematic_wake() }
+test "ray and sphere suspension can keep solid wheel sides with an explicit width" { verify_query_modes() }
+func main() { verify_rollovers();verify_dynamic_reaction();verify_exclusions();verify_kinematic_wake();verify_query_modes();print("Wheel side collision checks passed") }

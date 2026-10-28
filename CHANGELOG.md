@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Wheels also react through their sides to contacts across or against suspension extension, preventing sideways floor penetration during rollover. Chassis and dynamic-obstacle reactions, filters and exclusions are tested; suspension support remains unchanged. `side_collision_width` enables this protection for ray, sphere and cylinder sweeps; the default `null` preserves their behavior. Side collisions are discrete, with no extra bodies or contact events.
+
 - Cylinder wheel contacts ignore overlaps whose normal separates along suspension extension. Overturned cars no longer alternate fictitious floor support through their roof; legitimate ceiling support and compressed initial overlaps remain supported.
 
 - Qualification of all three vehicle families on the retained terrains and in composed driving with variable grip; mixed controls, sleep/wake and destruction/recreation coverage. Ray/sphere profiles cover driving through stopping; cylinder trajectory parity and wide-cylinder motorcycle repose remain explicitly unqualified. Profile and snapshot lifetime documentation synchronized.
