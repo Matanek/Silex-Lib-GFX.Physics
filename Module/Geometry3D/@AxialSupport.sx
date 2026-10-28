@@ -298,8 +298,10 @@ func support_distance3d(first:SupportPlacement3D, second:SupportPlacement3D) Sup
     let b = SupportPlacement3D(second.volume, second.position.subtract(anchor).divide(scale), second.rotation, 1.0 / scale)
     var normalized = SupportDistance3D(Math.Vec3(), Math.Vec3(), 0.0, 0)
     let axis = a.rotation.rotate(Math.Vec3.up())
+    // A nearly parallel cap can choose a rim witness outside the common
+    // meridian. Only exactly parallel axes admit this two-dimensional solve.
     if support_round_axis3d(a.volume) && support_round_axis3d(b.volume) &&
-        axis.cross(b.rotation.rotate(Math.Vec3.up())).length_squared() <= 0.00000000000001 {
+        axis.cross(b.rotation.rotate(Math.Vec3.up())).length_squared() == 0.0 {
         normalized = support_axis_distance3d(a, b, axis)
     } else { normalized = support_distance_normalized3d(a, b) }
     return SupportDistance3D(anchor.add(normalized.first.multiply(scale)), anchor.add(normalized.second.multiply(scale)), normalized.separation * scale, normalized.iterations, normalized.normal)

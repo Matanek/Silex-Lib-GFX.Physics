@@ -86,6 +86,21 @@ suspend la résolution. Deux corps distincts du même monde, dont au moins
 un dynamique, sont requis. Destruction explicite, destruction d’un corps ou
 du monde invalident le handle ; seul `is_valid()` peut encore lire un handle périmé.
 
+## Correction des butées et ancrage déporté
+
+La correction de position d’une butée tient compte du couplage entre rotation
+et déplacement de l’ancrage. Elle conserve l’attache pendant la correction
+angulaire ; la projection de point suivante ne doit pas annuler cette correction.
+La correction angulaire d’un joint SixDOF conserve quant à elle ses translations
+libres et ne fixe pas implicitement son ancrage.
+
+Le [consommateur d’ancrage déporté](../../Tests/Consumer/Tests/OffsetLimitProjection3D.sx)
+vérifie une violation initiale de 0,3 rad : le résidu reste sous 0,2 rad avec une
+passe de position, l’erreur d’attache sous 10 µm, et le centre de masse global
+reste conservé lorsque les deux corps sont mobiles. Les deux butées, deux
+repères mondiaux et les pas 60/120 Hz sont couverts ; un contre-témoin SixDOF
+vérifie l’absence de translation imposée.
+
 ## Qualification
 
 Consommateurs sans rendu : mouvements libres, limites Y/Z/twist, ellipse

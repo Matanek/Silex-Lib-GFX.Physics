@@ -30,6 +30,31 @@ formes. Les appuis de boîtes sur
 des faces presque parallèles utilisent plusieurs points. Le balayage linéaire
 des corps dynamiques est disponible sur demande pour les mouvements rapides.
 
+La correction d’une pénétration tient compte de la masse et de l’inertie au
+point de contact : elle peut déplacer et tourner les corps. Une articulation
+et son appui ne corrigent ainsi pas le pied par des translations incompatibles.
+Les points d’une plage de contacts sont corrigés ensemble, avec leurs
+profondeurs reconstruites selon la face de référence du clipping. Les contacts
+des enfants composés et les surfaces de maillage entre les deux mêmes corps
+participent à cette résolution commune, en conservant chaque point et sa
+normale. Les événements et snapshots restent distincts par paire de formes. Ces corrections
+de position ne sont pas des impulsions de vitesse et ne s’ajoutent pas aux
+impulsions publiées par les snapshots de contact.
+
+Le [test d’appui articulé](../../Tests/Consumer/Tests/ArticulatedSupport3D.sx)
+vérifie une colonne motorisée sur un pied, avec cibles constantes : repos sans
+auto-propulsion ni hausse d’énergie dans ce profil, sur plan ou boîte, dans les
+deux ordres de création et à 60/120 Hz. Il emploie 48 tours de vitesse et 32 passes de
+position. Ce témoin ne constitue pas une qualification universelle des impacts
+ou de la locomotion d’un personnage.
+
+Les candidats de collision sont également réévalués pendant les corrections
+de position : une articulation peut créer une pénétration après la détection
+initiale. Le [témoin de contact créé par projection](../../Tests/Consumer/Tests/PositionCreatedContact3D.sx)
+couvre un plan et une boîte, ainsi que les capteurs, filtres et supports
+désactivés. Ces projections ne créent pas d’impulsion d’impact rétroactive ;
+les contacts de vitesse sont observés lors de la détection suivante.
+
 Un `Triangle3D` peut être la forme d'un corps **fixe**. Il répond aux sphères,
 capsules, boîtes et enveloppes convexes dynamiques du côté avant défini par l'ordre de ses sommets, y compris aux arêtes
 et sommets isolés ; une forme dont le centre est derrière le plan du triangle

@@ -1,0 +1,104 @@
+use GFX.Physics
+use STD.Math
+
+func solid(size:Math.Vec3,mass:float) Physics.RigidBody3DSettings {
+    let inertia=Math.Vec3(size.y*size.y+size.z*size.z,size.x*size.x+size.z*size.z,size.x*size.x+size.y*size.y).multiply(mass/12.0)
+    return Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(size))
+        ..mass_properties=Physics.MassProperties3D(mass,inertia) ..allow_sleep=false ..friction=0.9
+}
+func ground(world:Physics.World3D,offset:Math.Vec3,plane:bool) Physics.RigidBody3D {
+        var settings=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..transform=Physics.Transform3D(offset) ..friction=0.9
+        if !plane { settings.shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0,0.2,20.0)));settings.transform=Physics.Transform3D(offset.add(Math.Vec3(0.0,-0.1,0.0))) }
+        return world.create_rigid_body(settings)
+    }
+
+class Fixture {
+    var world:Physics.World3D
+    var robot:Physics.Ragdoll3D
+    var floor:Physics.RigidBody3D
+    var balance:Physics.SixDOFConstraint3D
+    let offset:Math.Vec3
+    init(plane:bool,floor_last:bool,count:int,offset:Math.Vec3=Math.Vec3()) {
+        self.offset=offset
+        self.world=Physics.World3D(Physics.World3DSettings() ..velocity_iterations=48 ..position_iterations=32)
+        var support:Physics.RigidBody3D?=null
+        if !floor_last { support=ground(self.world,self.offset,plane) }
+        var parts:Physics.RagdollPart3D[]=[];let length=1.0/count as float
+        var index=0
+        while index<count {
+            var anchor=Math.Vec3(0.0,-length,0.0);if index==0 { anchor=Math.Vec3() }
+            parts.append(Physics.RagdollPart3D(index-1,solid(Math.Vec3(0.2,length,0.2),12.0/count as float),
+                local_transform:Physics.Transform3D(anchor),body_offset:Physics.Transform3D(Math.Vec3(0.0,-length*0.5,0.0))))
+            index++
+        }
+        parts.append(Physics.RagdollPart3D(count-1,solid(Math.Vec3(0.4,0.12,0.6),2.0),
+            local_transform:Physics.Transform3D(Math.Vec3(0.0,-length,0.0)),
+            body_offset:Physics.Transform3D(Math.Vec3(0.0,-0.04,0.1))))
+        var settings=Physics.Ragdoll3DSettings(parts)
+        self.robot=self.world.create_ragdoll(settings,Physics.Transform3D(offset.add(Math.Vec3(0.0,1.105,0.0))))
+        if var first=support { self.floor=first }else { self.floor=ground(self.world,self.offset,plane) }
+        var pose:Physics.Transform3D[]=[]
+        index=0;while index<=count { pose.append(settings.part(index).local_transform);index++ }
+        self.robot.drive_to_local_pose(pose,250.0,900.0,35.0)
+        self.balance=self.world.create_six_dof_constraint(self.floor,self.robot.body(0),Physics.SixDOFConstraint3DSettings()
+            ..rotation_x_motor=Physics.AngularMotor3D.position(0.0,350.0,1000.0,100.0)
+            ..rotation_y_motor=Physics.AngularMotor3D.position(0.0,350.0,1000.0,100.0)
+            ..rotation_z_motor=Physics.AngularMotor3D.position(0.0,350.0,1000.0,100.0))
+    }
+    func center() Math.Vec3 {
+        var center=Math.Vec3();var i=0
+        while i<self.robot.part_count() {
+            var part=self.robot.body(i);center=center.add(part.world_center_of_mass().multiply(part.mass_properties().mass));i++
+        }
+        return center.divide(14.0)
+    }
+    func energy() float {
+        var energy=0.0;var i=0
+        while i<self.robot.part_count() {
+            var part=self.robot.body(i);let mass=part.mass_properties()
+            let omega=part.rotation().conjugated().rotate(part.angular_velocity())
+            energy+=0.5*mass.mass*part.linear_velocity().length_squared()+
+                0.5*omega.dot(mass.inertia_tensor.multiply(omega))+
+                mass.mass*9.81*(part.world_center_of_mass().y-self.offset.y)
+            i++
+        }
+        return energy
+    }
+}
+func verify_rest() {
+    for plane in [true,false] { for floor_last in [true,false] { for rate in [60,120] { for count in [1,2] {
+        var fixture=Fixture(plane,floor_last,count,Math.Vec3(0.37,0.2,-0.21))
+        let initial=fixture.center();let energy=fixture.energy();var peak=energy;var step=0
+        while step<rate*3 {
+            fixture.world.step(1.0/rate as float);peak=Math.max(peak,fixture.energy())
+            assert(fixture.center().subtract(initial).multiply(Math.Vec3(1.0,0.0,1.0)).length()<0.01)
+            assert(peak<=energy+0.25)
+            assert(fixture.balance.motor_force().length()==0.0)
+            var joint=1
+            while joint<=count { assert(fixture.robot.joint(joint)!.anchor_error().length()<0.001);joint++ }
+            step++
+        }
+        assert(Math.abs(fixture.center().y-initial.y)<0.03)
+        assert(fixture.robot.body(0).linear_velocity().length()<0.05)
+        assert(fixture.robot.body(0).rotation().rotate(Math.Vec3.up()).y>0.999)
+        assert(fixture.world.body_count()==count+2)
+        fixture.world.destroy_ragdoll(fixture.robot)
+        assert(fixture.world.body_count()==1 && !fixture.balance.is_valid())
+    } } } }
+}
+func verify_free_translation() {
+    var fixture=Fixture(true,false,1)
+    fixture.floor.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0))
+    let initial=fixture.center();var step=0
+    while step<60 { fixture.world.step(1.0/120.0);step++ }
+    assert(fixture.center().y<initial.y-1.0)
+    assert(fixture.balance.motor_force().length()==0.0)
+}
+test "constant angular targets on an articulated support do not create locomotion or energy" { verify_rest() }
+test "angular balance leaves every translation free" { verify_free_translation() }
+func main() {
+    verify_rest()
+    verify_free_translation()
+    print("Articulated supports: plane/box, both creation orders, 60/120Hz, energy, free translations and lifetime verified")
+}

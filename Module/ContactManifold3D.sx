@@ -621,3 +621,87 @@ package func plane_surface_contact_points(volume:ShapePlacement3D, surface:Shape
     if points.is_empty() { points = plane_contact_points3d(volume,surface) }
     return reduce_contact_points3d(points, tangent, normal.cross(tangent))
 }
+
+// Use the same outward face as the clipped patch. Projecting along the
+// separating axis instead can select the shallow end of an inclined patch.
+func correction_face_normal3d(placement:ShapePlacement3D,direction:Math.Vec3) Math.Vec3 {
+    match placement.shape() {
+        plane(plane) => { return placement.transform().vector(plane.normal).normalized() }
+        box(box) => {
+            let face=box_face3d(box,placement.transform(),direction)
+            return placement.transform().vector(box_axis3d(face.axis)).multiply(face.sign)
+        }
+        convex(hull) => { return placement.transform().vector(hull.face_normal(convex_face3d(hull,placement.transform(),direction))) }
+        triangle(triangle) => { return placement.transform().vector(triangle.normal()) }
+        cylinder(_) => {
+            var axis=placement.transform().vector(Math.Vec3.up())
+            if axis.dot(direction)<0.0 { axis=axis.negated() }
+            if axis.dot(direction)>0.99999 { return axis }
+        }
+        tapered_cylinder(_) => {
+            var axis=placement.transform().vector(Math.Vec3.up())
+            if axis.dot(direction)<0.0 { axis=axis.negated() }
+            if axis.dot(direction)>0.99999 { return axis }
+        }
+        else => {}
+    }
+    return Math.Vec3()
+}
+package func contact_correction_depths3d(first:ShapePlacement3D,second:ShapePlacement3D,
+    normal:Math.Vec3,witness:Math.Vec3,points:@Math.Vec3[],separation:float) Math.Vec4 {
+    let a=correction_face_normal3d(first,normal)
+    let b=correction_face_normal3d(second,normal.negated())
+    var outward=b
+    if a.dot(normal)>=b.dot(normal.negated()) { outward=a }
+    // Follow the clipping owner rather than only the best-aligned face.
+    var first_box=false;var second_box=false
+    var first_triangle=false;var second_triangle=false
+    var first_convex=false;var second_convex=false
+    match first.shape() {
+        box(_) => { first_box=true }
+        triangle(_) => { first_triangle=true }
+        convex(_) => { first_convex=true }
+        else => {}
+    }
+    match second.shape() {
+        box(_) => { second_box=true }
+        triangle(_) => { second_triangle=true }
+        convex(_) => { second_convex=true }
+        else => {}
+    }
+    if first_box && second_triangle { outward=a }
+    if second_box && first_triangle { outward=b }
+    if first_convex && second_triangle {
+        outward=b;if a.dot(normal)>=0.99999 { outward=a }
+    }
+    if second_convex && first_triangle {
+        outward=a;if b.dot(normal.negated())>=0.99999 { outward=b }
+    }
+    if axial_shape3d(first.shape()) && !axial_shape3d(second.shape()) { outward=b }
+    if axial_shape3d(second.shape()) && !axial_shape3d(first.shape()) { outward=a }
+    // A plane always owns the reference face, including rounded alignment ties.
+    match first.shape() {
+        plane(_) => { outward=a }
+        else => {}
+    }
+    match second.shape() {
+        plane(_) => { outward=b }
+        else => {}
+    }
+    var result=Math.Vec4(separation)
+    let alignment=Math.abs(outward.dot(normal))
+    if points.is_empty() || alignment<0.7 { return result }
+    var deepest=points[0].subtract(witness).dot(outward)
+    for point in points { deepest=Math.min(deepest,point.subtract(witness).dot(outward)) }
+    var index=0
+    for point in points {
+        // Patch points lie midway between incident and reference planes.
+        let gap=separation+2.0*(point.subtract(witness).dot(outward)-deepest)/alignment
+        if index==0 { result.x=gap }
+        else if index==1 { result.y=gap }
+        else if index==2 { result.z=gap }
+        else { result.w=gap }
+        index++
+    }
+    return result
+}

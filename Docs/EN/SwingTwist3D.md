@@ -82,6 +82,19 @@ Creation requires distinct bodies in the same world with at least one dynamic
 body. Explicit removal or destruction of either body or the world invalidates
 the handle; only `is_valid()` can then read it.
 
+## Stop correction and an offset anchor
+
+Position correction at a stop accounts for the coupling between rotation and
+anchor displacement. It preserves the attachment during angular correction;
+the following point projection must not undo that correction. SixDOF angular
+correction retains its free translations and does not implicitly fix an anchor.
+
+The [offset-anchor consumer](../../Tests/Consumer/Tests/OffsetLimitProjection3D.sx)
+checks an initial 0.3 rad violation: the residual stays below 0.2 rad with one
+position pass, attachment error below 10 µm, and the total center of mass is
+preserved when both bodies move. Both stops, two world frames and 60/120 Hz steps
+are covered; a SixDOF countercheck verifies that no translation is imposed.
+
 ## Qualification
 
 Headless consumers cover free motion, Y/Z/twist limits, diagonal ellipses,

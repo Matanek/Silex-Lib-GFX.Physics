@@ -1,0 +1,63 @@
+use GFX.Physics
+use STD.Math
+
+func solid(size:Math.Vec3,mass:float) Physics.RigidBody3DSettings {
+    return Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.box(Physics.Box3D(size))
+        ..mass_properties=Physics.MassProperties3D(mass,Math.Vec3(size.y*size.y+size.z*size.z,
+            size.x*size.x+size.z*size.z,size.x*size.x+size.y*size.y).multiply(mass/12.0))
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0) ..allow_sleep=false
+}
+func verify_offset_stops() {
+    let frames:Math.Quat[]=[Math.Quat.identity(),Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,-1.0).normalized())]
+    let rates:int[]=[60,120]
+    let angles:float[]=[-1.3,1.0]
+    for fixed in [true,false] { for frame in frames { for rate in rates { for angle in angles {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=1)
+        var first_settings=solid(Math.Vec3(0.16,0.42,0.18),3.0)
+        if fixed { first_settings.body_type=Physics.BodyType3D.fixed;first_settings.mass_properties=null }
+        first_settings.transform=Physics.Transform3D(Math.Vec3(0.0,1.0,0.0),frame)
+        var first=world.create_rigid_body(first_settings)
+        let pivot=first.transform().point(Math.Vec3(0.0,-0.21,0.0))
+        let offset=Math.Vec3(0.0,-0.04,0.09)
+        let rotation=frame.multiply(Math.Quat.angle_axis(angle,Math.Vec3.right()))
+        var second_settings=solid(Math.Vec3(0.22,0.12,0.38),1.8)
+        second_settings.transform=Physics.Transform3D(pivot.add(rotation.rotate(offset)),rotation)
+        var second=world.create_rigid_body(second_settings)
+        var joint=world.create_swing_twist_constraint(first,second,Physics.SwingTwistConstraint3DSettings()
+            ..first_local_frame=Physics.Transform3D(Math.Vec3(0.0,-0.21,0.0))
+            ..second_local_frame=Physics.Transform3D(offset.negated()) ..minimum_twist= -1.0 ..maximum_twist=0.7)
+        let center=first.world_center_of_mass().multiply(3.0).add(second.world_center_of_mass().multiply(1.8)).divide(4.8)
+        assert(joint.anchor_error().length()<0.000001)
+        world.step(1.0/rate as float)
+        // A 0.3 rad violation must contract below 0.2 in this single-pass
+        // recipe without an anchor projection undoing the angular correction.
+        let excess=Math.max(joint.minimum_twist()-joint.twist_angle(),joint.twist_angle()-joint.maximum_twist())
+        assert(excess>=0.0 && excess<0.2)
+        assert(joint.anchor_error().length()<0.00001)
+        assert(first.linear_velocity().length()<0.0001 && second.linear_velocity().length()<0.0001)
+        assert(first.angular_velocity().length()<0.0001 && second.angular_velocity().length()<0.0001)
+        if !fixed {
+            let after=first.world_center_of_mass().multiply(3.0).add(second.world_center_of_mass().multiply(1.8)).divide(4.8)
+            assert(after.nearly_equal(center,0.000003))
+        }
+    } } } }
+}
+func verify_free_translations() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..position_iterations=1)
+    var first=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0))
+    let offset=Math.Vec3(0.0,-0.04,0.09)
+    let rotation=Math.Quat.angle_axis(-1.3,Math.Vec3.right())
+    var settings=solid(Math.Vec3(0.22,0.12,0.38),1.8)
+    settings.transform=Physics.Transform3D(rotation.rotate(offset),rotation)
+    var second=world.create_rigid_body(settings)
+    var joint=world.create_six_dof_constraint(first,second,Physics.SixDOFConstraint3DSettings()
+        ..second_local_frame=Physics.Transform3D(offset.negated()) ..minimum_twist= -1.0 ..maximum_twist=0.7)
+    let center=second.world_center_of_mass()
+    world.step(1.0/60.0)
+    assert(second.world_center_of_mass()==center && second.linear_velocity().length()==0.0)
+    assert(joint.translation().length()>0.005 && joint.motor_force().length()==0.0)
+}
+test "offset swing twist stops contract while preserving anchors in both frames and mass configurations" { verify_offset_stops() }
+test "six DOF angular stops retain free translations instead of fixing an offset anchor" { verify_free_translations() }
+func main() { verify_offset_stops();verify_free_translations();print("Offset stops: anchors, limits, mass center, frames, rates and free SixDOF translations verified") }

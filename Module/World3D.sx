@@ -80,6 +80,7 @@ use GFX.Physics.FixedConstraint3D.FixedConstraintState3D
 use GFX.Physics.FixedConstraint3D.FixedConstraintStore3D
 use GFX.Physics.FixedConstraint3D.fixed_angular_error3d
 use GFX.Physics.Geometry3D.plane_shape3d
+use GFX.Physics.ContactManifold3D.contact_correction_depths3d
 use GFX.Physics.ContactManifold3D.plane_surface_contact_points
 use GFX.Physics.ContactManifold3D.axial_surface_contact_points
 use GFX.Physics.Geometry3D.axial_shape3d
@@ -2298,6 +2299,10 @@ public class World3D {
                 pair.first.pose_revision, pair.second.pose_revision
             ))
         }
+        var position_candidates:ContactPositionCandidate3D[]=[]
+        var position_inputs:ContactPositionInput3D[]=[]
+        var position_rows:ContactPositionRow3D[]=[]
+        var position_distances:DistanceResult3D[]=[]
         var position_iteration = 0
         while position_iteration < self.position_iterations {
             for vehicle in self.wheeled_vehicles { vehicle.solve_position() }
@@ -2478,35 +2483,19 @@ public class World3D {
                     }
                 }
             }
-            var pair_index = pairs.count()
-            while pair_index > 0 {
-                pair_index--
-                var pair = pairs[pair_index]
-                if pair.active {
-                    if pair.first_sphere_radius > 0.0 && pair.second_sphere_radius > 0.0 {
-                        correct_sphere_pair3d(pair)
-                        continue
-                    }
-                    var first_shape = contact_placement3d(
-                        pair.first, pair.first_child_id
-                    )
-                    var second_shape = contact_placement3d(
-                        pair.second, pair.second_child_id
-                    )
-                    if supports_mesh_manifolds3d(first_shape.shape(), second_shape.shape()) {
-                        first_shape = mesh_contact_face3d(first_shape, pair.first_child_id)
-                        second_shape = mesh_contact_face3d(second_shape, pair.second_child_id)
-                    }
-                    let distance = contact_separation3d(first_shape, second_shape)
-                    if distance.separation < 0.0 {
-                        correct_contact3d(
-                            pair.first, pair.second,
-                            contact_normal3d(first_shape, second_shape,
-                                distance.normal),
-                            distance.separation
-                        )
-                    }
-                }
+            var pair_end=pairs.count()
+            while pair_end>0 {
+                var pair_start=pair_end-1
+                while pair_start>0 && pairs[pair_start-1].first_id.slot==pairs[pair_end-1].first_id.slot &&
+                    pairs[pair_start-1].second_id.slot==pairs[pair_end-1].second_id.slot { pair_start-- }
+                correct_contact_body_pair3d(pairs,pair_start,pair_end,position_inputs,position_rows)
+                pair_end=pair_start
+            }
+            write_new_position_candidates3d(self.store,pairs,position_candidates)
+            var candidate=position_candidates.count()
+            while candidate>0 {
+                candidate--;var pair=position_candidates[candidate]
+                correct_new_position_contacts3d(pair.first,pair.second,position_inputs,position_rows,position_distances)
             }
             self.solve_wheel_side_positions()
             position_iteration++
@@ -3977,6 +3966,163 @@ func solve_contact_point3d(
     }
 }
 
+struct ContactPositionCandidate3D {
+    var first:BodyState3D
+    var second:BodyState3D
+    let first_slot:int
+    let second_slot:int
+    init(first:BodyState3D,second:BodyState3D,first_slot:int,second_slot:int) {
+        self.first=first;self.second=second;self.first_slot=first_slot;self.second_slot=second_slot
+    }
+}
+func write_new_position_candidates3d(store:BodyStore3D,pairs:ContactPairState3D[],output:&ContactPositionCandidate3D[]) {
+    output.clear();let candidates=broadphase_pairs3d(store);var current=0
+    for candidate in candidates {
+        while current<pairs.count() && (pairs[current].first_id.slot<candidate.first ||
+            (pairs[current].first_id.slot==candidate.first && pairs[current].second_id.slot<candidate.second)) { current++ }
+        if current<pairs.count() && pairs[current].first_id.slot==candidate.first && pairs[current].second_id.slot==candidate.second { continue }
+        if var first=store.slots[candidate.first] { if var second=store.slots[candidate.second] {
+            if first.is_enabled && second.is_enabled && !first.is_sensor && !second.is_sensor &&
+                (first.awake || second.awake) && body_collision_allows3d(first,second) &&
+                (first.body_type==BodyType3D.dynamic || second.body_type==BodyType3D.dynamic) {
+                output.append(ContactPositionCandidate3D(first,second,candidate.first,candidate.second))
+            }
+        } }
+    }
+}
+struct ContactPositionInput3D {
+    let first:ShapePlacement3D
+    let second:ShapePlacement3D
+    let first_patch:ShapePlacement3D
+    let second_patch:ShapePlacement3D
+    init(first:ShapePlacement3D,second:ShapePlacement3D,first_patch:ShapePlacement3D,second_patch:ShapePlacement3D) {
+        self.first=first;self.second=second;self.first_patch=first_patch;self.second_patch=second_patch
+    }
+}
+struct ContactPositionRow3D {
+    let normal:Math.Vec3
+    let gap:float
+    let first_radius:Math.Vec3
+    let second_radius:Math.Vec3
+    let first_response:Math.Vec3
+    let second_response:Math.Vec3
+    let inverse_mass:float
+    var impulse:float=0.0
+    init(first:BodyState3D,second:BodyState3D,point:Math.Vec3,normal:Math.Vec3,gap:float) {
+        self.normal=normal;self.gap=gap
+        self.first_radius=point.subtract(first.world_center())
+        self.second_radius=point.subtract(second.world_center())
+        self.first_response=first.inverse_inertia_times(self.first_radius.cross(normal))
+        self.second_response=second.inverse_inertia_times(self.second_radius.cross(normal))
+        self.inverse_mass=first.inverse_mass+second.inverse_mass+
+            self.first_radius.cross(normal).dot(self.first_response)+self.second_radius.cross(normal).dot(self.second_response)
+    }
+}
+func position_component4d(value:Math.Vec4,index:int) float {
+    if index==0 { return value.x }
+    if index==1 { return value.y }
+    if index==2 { return value.z }
+    return value.w
+}
+func correct_contact_body_pair3d(pairs:ContactPairState3D[],start:int,end:int,
+    inputs:&ContactPositionInput3D[],rows:&ContactPositionRow3D[]) {
+    var first=pairs[start].first;var second=pairs[start].second
+    if end-start==1 && pairs[start].active &&
+        pairs[start].first_sphere_radius>0.0 && pairs[start].second_sphere_radius>0.0 {
+        correct_sphere_pair3d(pairs[start]);return
+    }
+    inputs.clear();rows.clear();var penetrating=false;var index=end
+    while index>start {
+        index--;var pair=pairs[index]
+        if !pair.active { continue }
+        let first_patch=contact_placement3d(first,pair.first_child_id)
+        let second_patch=contact_placement3d(second,pair.second_child_id)
+        var first_shape=first_patch;var second_shape=second_patch
+        if supports_mesh_manifolds3d(first_shape.shape(),second_shape.shape()) {
+            first_shape=mesh_contact_face3d(first_shape,pair.first_child_id)
+            second_shape=mesh_contact_face3d(second_shape,pair.second_child_id)
+        }
+        // Keep the SAT-only rejection before requesting exact witnesses.
+        if contact_separation3d(first_shape,second_shape).separation<0.0 { penetrating=true }
+        inputs.append(ContactPositionInput3D(first_shape,second_shape,first_patch,second_patch))
+    }
+    if !penetrating { return }
+    solve_contact_position_inputs3d(first,second,inputs,rows)
+}
+func correct_new_position_contacts3d(first:BodyState3D,second:BodyState3D,
+    inputs:&ContactPositionInput3D[],rows:&ContactPositionRow3D[],distances:&DistanceResult3D[]) {
+    inputs.clear();rows.clear()
+    let first_patch=ShapePlacement3D(first.shape,first.transform)
+    let second_patch=ShapePlacement3D(second.shape,second.transform)
+    if is_compound3d(first.shape) || is_compound3d(second.shape) || supports_mesh_manifolds3d(first.shape,second.shape) {
+        distances.clear();write_leaf_contacts3d(first_patch,second_patch,-1,-1,distances)
+        Sort.sort<DistanceResult3D>(&distances[0:distances.count()],leaf_contact_before3d)
+        for distance in distances {
+            let a=contact_placement3d(first,distance.first_child_id)
+            let b=contact_placement3d(second,distance.second_child_id)
+            var first_shape=a;var second_shape=b
+            if supports_mesh_manifolds3d(a.shape(),b.shape()) {
+                first_shape=mesh_contact_face3d(a,distance.first_child_id)
+                second_shape=mesh_contact_face3d(b,distance.second_child_id)
+            }
+            inputs.append(ContactPositionInput3D(first_shape,second_shape,a,b))
+        }
+    } else {
+        if contact_separation3d(first_patch,second_patch).separation>=0.0 { return }
+        inputs.append(ContactPositionInput3D(first_patch,second_patch,first_patch,second_patch))
+    }
+    solve_contact_position_inputs3d(first,second,inputs,rows)
+}
+func solve_contact_position_inputs3d(first:BodyState3D,second:BodyState3D,
+    inputs:@ContactPositionInput3D[],rows:&ContactPositionRow3D[]) {
+    if inputs.is_empty() { return }
+    for input in inputs {
+        let distance=contact_distance3d(input.first,input.second)
+        let normal=contact_normal3d(input.first,input.second,distance.normal)
+        let witness=distance.first_point.add(distance.second_point).multiply(0.5)
+        // Mesh manifolds collect the complete coplanar footprint, not only
+        // the triangle chosen to identify this surface contact.
+        let points=contact_points3d(input.first_patch,input.second_patch,normal,witness)
+        let gaps=contact_correction_depths3d(input.first,input.second,normal,witness,points,distance.separation)
+        var point=0
+        for position in points {
+            rows.append(ContactPositionRow3D(first,second,position,normal,position_component4d(gaps,point)));point++
+        }
+    }
+    // Solve the complete body pair together, including compound children and
+    // distinct mesh normals. Virtual pose deltas keep all rows in one frame.
+    var first_shift=Math.Vec3();var second_shift=Math.Vec3()
+    var first_turn=Math.Vec3();var second_turn=Math.Vec3();var iteration=0
+    while iteration<8 {
+        var index=0
+        while index<rows.count() {
+            let row=rows[index]
+            if row.inverse_mass>0.0 {
+                let displacement=second_shift.add(second_turn.cross(row.second_radius))
+                    .subtract(first_shift).subtract(first_turn.cross(row.first_radius))
+                let gap=row.gap+displacement.dot(row.normal)
+                let impulse=Math.max(0.0,row.impulse-gap/row.inverse_mass)-row.impulse
+                rows[index].impulse+=impulse
+                first_shift=first_shift.subtract(row.normal.multiply(impulse*first.inverse_mass))
+                second_shift=second_shift.add(row.normal.multiply(impulse*second.inverse_mass))
+                first_turn=first_turn.subtract(row.first_response.multiply(impulse))
+                second_turn=second_turn.add(row.second_response.multiply(impulse))
+            }
+            index++
+        }
+        iteration++
+    }
+    shift_contact_body3d(first,first_shift,first_turn)
+    shift_contact_body3d(second,second_shift,second_turn)
+}
+func shift_contact_body3d(state:BodyState3D,translation:Math.Vec3,rotation_vector:Math.Vec3) {
+    if state.inverse_mass==0.0 { return }
+    let center=state.world_center().add(translation)
+    var rotation=state.transform.rotation;let angle=rotation_vector.length()
+    if angle>0.0 { rotation=Math.Quat.angle_axis(angle,rotation_vector.divide(angle)).multiply(rotation).normalized() }
+    state.transform=Transform3D(center.subtract(rotation.rotate(state.mass_properties.local_center)),rotation)
+}
+
 func correct_contact3d(
     first:BodyState3D,
     second:BodyState3D,
@@ -5230,18 +5376,32 @@ func solve_swing_twist_limits_velocity3d(first:&BodyState3D,second:&BodyState3D,
         solve_swing_limit_row3d(first,second,state,0,axis,false)
     }
 }
-func solve_swing_twist_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
-    solve_swing_twist_rotation_position3d(first,second,state)
-    solve_point_position3d(first,second,state.point)
-}
-func solve_swing_twist_rotation_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
+func swing_twist_position_error3d(first:@BodyState3D,second:@BodyState3D,state:SwingTwistConstraintState3D) Math.Vec3 {
     let q=swing_twist_orientation3d(first.transform,second.transform,state)
     let rotation=decompose_swing_twist3d(q)
     let swing=clamp_swing3d(rotation.swing,state.swing_limits,state.swing_radii)
     let twist=Math.Quat.angle_axis(Math.clamp(rotation.twist_angle,state.minimum_twist,state.maximum_twist),swing_axis3d(0))
     let target=swing.multiply(twist)
     var diff=q.multiply(target.conjugated());if diff.w<0.0 { diff=diff.multiply(-1.0) }
-    let error=first.transform.rotation.multiply(state.first_frame).rotate(Math.Vec3(diff.x,diff.y,diff.z)).multiply(2.0)
+    return first.transform.rotation.multiply(state.first_frame).rotate(Math.Vec3(diff.x,diff.y,diff.z)).multiply(2.0)
+}
+func solve_swing_twist_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
+    let error=swing_twist_position_error3d(first,second,state)
+    if error.length_squared()>0.000000000001 {
+        let first_radius=first.transform.point(state.point.first_local_anchor).subtract(first.world_center())
+        let second_radius=second.transform.point(state.point.second_local_anchor).subtract(second.world_center())
+        // Keep the anchor fixed while correcting the angular stop. Otherwise
+        // the following point projection can rotate the joint back outside it.
+        let impulse=fixed_impulse3d(first,second,first_radius,second_radius,Math.Vec3(),error.multiply(0.2))
+        shift_fixed_body3d(first,impulse.linear.negated(),impulse.angular.negated(),first_radius)
+        shift_fixed_body3d(second,impulse.linear,impulse.angular,second_radius)
+    }
+    solve_point_position3d(first,second,state.point)
+}
+func solve_swing_twist_rotation_position3d(first:BodyState3D,second:BodyState3D,state:SwingTwistConstraintState3D) {
+    // Six DOF joints use this angular-only projection; their translations may
+    // be free, so they must not inherit an anchor-preserving correction.
+    let error=swing_twist_position_error3d(first,second,state)
     if error.length_squared()>0.000000000001 {
         let x=swing_axis3d(0);let y=swing_axis3d(1);let z=swing_axis3d(2)
         let mass=Math.Mat3(first.inverse_inertia_times(x).add(second.inverse_inertia_times(x)),

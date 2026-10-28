@@ -5,6 +5,14 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Position correction refreshes collision candidates when a joint creates penetration after initial detection. Planes and boxes respond while respecting sensors, filters and disabled supports; no retroactive impact impulse is published.
+
+- Swing/twist stops correct rotation with the coupled mass of an offset anchor, preventing point projection from undoing stop correction. Fixed/mobile parents, two frames, both directions and 60/120 Hz checked; free SixDOF translations remain independent.
+
+- Nearly parallel bodies of revolution use the 3D solver: the 2D meridian shortcut is reserved for exactly parallel axes. This prevents non-convergence between slightly tilted caps, checked against analytical witnesses in both orders across scales and frames.
+
+- 3D penetration correction accounts for inertia and lever arms at the contact point. The body-pair correction uses individual depths from the clipping reference face, including compound children and distinct mesh surfaces. A driven articulated column no longer propels itself at rest: plane/box, both creation orders, 60/120 Hz, energy, free translation and lifetime checks. Default iteration counts are unchanged.
+
 - Wheels also react through their sides to contacts across or against suspension extension, preventing sideways floor penetration during rollover. Chassis and dynamic-obstacle reactions, filters and exclusions are tested; suspension support remains unchanged. `side_collision_width` enables this protection for ray, sphere and cylinder sweeps; the default `null` preserves their behavior. Side collisions are discrete, with no extra bodies or contact events.
 
 - Cylinder wheel contacts ignore overlaps whose normal separates along suspension extension. Overturned cars no longer alternate fictitious floor support through their roof; legitimate ceiling support and compressed initial overlaps remain supported.

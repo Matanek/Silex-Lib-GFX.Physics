@@ -29,6 +29,28 @@ cylinders, tapered solids and convex hulls, with contacts between these shapes.
 Boxes resting on nearly parallel faces use multiple points. Dynamic bodies can opt into linear continuous
 collision for fast motion.
 
+Penetration correction accounts for mass and inertia at the contact point:
+it can translate and rotate bodies. A joint and its support therefore no longer
+correct the foot through incompatible translations. Contact patch points are corrected together, with their individual depths
+reconstructed along the clipping reference face. Compound-child contacts
+and mesh surfaces between the same two bodies share this solve, retaining
+every point and its normal. Events and snapshots remain distinct per shape pair. These position corrections are not velocity impulses and are not
+added to the impulses published by contact snapshots.
+
+The [articulated support test](../../Tests/Consumer/Tests/ArticulatedSupport3D.sx)
+checks a motorized column on a foot with constant targets: rest without
+self-propulsion or energy growth in this profile, on a plane or box, in both
+creation orders at 60/120 Hz. It uses 48 velocity iterations and 32 position passes.
+This witness does not establish universal impact or character locomotion
+qualification.
+
+Collision candidates are also refreshed during position correction: a joint
+can create a penetration after initial detection. The
+[projection-created contact witness](../../Tests/Consumer/Tests/PositionCreatedContact3D.sx)
+covers a plane and a box, as well as sensors, filters and disabled supports.
+These projections do not create retroactive impact impulses; velocity contacts
+are observed at the following detection.
+
 A `Triangle3D` may be the shape of a **fixed** body. It responds to dynamic
 spheres, capsules, boxes and convex hulls on the front side defined by vertex winding,
 including exposed edges and vertices; a shape whose center is behind the triangle plane creates no

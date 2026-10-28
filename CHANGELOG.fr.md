@@ -6,6 +6,14 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les corrections de position réévaluent les candidats de collision lorsqu’une articulation crée une pénétration après la détection initiale. Les plans et boîtes réagissent tout en respectant capteurs, filtres et supports désactivés ; aucune impulsion d’impact rétroactive n’est publiée.
+
+- Les butées SwingTwist corrigent la rotation avec la masse couplée de l’ancrage déporté, afin que la projection de point n’annule pas leur correction. Parent fixe ou mobile, deux repères, deux sens et 60/120 Hz vérifiés ; les translations libres SixDOF restent indépendantes.
+
+- Les axes presque parallèles des solides de révolution passent par le calcul 3D : le raccourci méridien 2D est réservé aux axes exactement parallèles. Cela évite une non-convergence entre deux couvercles légèrement inclinés, avec témoins analytiques dans les deux ordres, plusieurs échelles et repères.
+
+- La correction de pénétration 3D tient compte des inerties et des bras de levier au point de contact. La correction commune aux deux corps conserve les profondeurs de chaque point selon la face de référence du clipping, y compris les enfants composés et les pans de maillage distincts. Une colonne articulée motorisée ne se propulse plus au repos : tests sur plan/boîte, deux ordres de création, 60/120 Hz, énergie, translations libres et lifetime. Les valeurs par défaut des itérations restent inchangées.
+
 - Les roues réagissent aussi par leurs flancs aux contacts transversaux ou opposés à la détente : elles ne traversent plus le sol de côté pendant un retournement. Réactions au châssis et aux obstacles mobiles, filtres et exclusions vérifiés ; appuis de suspension inchangés. `side_collision_width` active cette protection pour les balayages rayon, sphère et cylindre ; le défaut `null` conserve leur comportement. Collisions latérales discrètes, sans corps ni événements de contact supplémentaires.
 
 - Les contacts cylindriques de roue ignorent les chevauchements dont la normale s’éloigne dans le sens de détente de la suspension. Une voiture retournée ne reçoit plus de faux appuis alternés sur son toit ; les appuis légitimes au plafond et les chevauchements comprimés restent pris en charge.

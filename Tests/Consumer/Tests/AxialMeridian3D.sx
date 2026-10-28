@@ -1,0 +1,29 @@
+use GFX.Physics
+use STD.Math
+
+func verify_meridians() {
+    let frames:Math.Quat[]=[Math.Quat.identity(),Math.Quat.angle_axis(0.6,Math.Vec3(1.0,0.2,0.5).normalized())]
+    let tilts:Math.Quat[]=[Math.Quat(0.0,-0.000004172961,0.0,1.0),
+        Math.Quat(-0.00000000010288008,-0.000004172961,0.000000024024954,1.0),
+        Math.Quat(0.00000000010288008,-0.000004172961,-0.000000024024954,1.0)]
+    let scales:float[]=[0.001,1.0,100.0]
+    for scale in scales { for frame in frames { for tilt in tilts {
+        let shape=Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.25*scale,0.5*scale,0.5*scale))
+        let origin=Math.Vec3(10.0,-2.0,3.0).multiply(scale)
+        let first=Physics.ShapePlacement3D(shape,Physics.Transform3D(origin,frame))
+        let second=Physics.ShapePlacement3D(shape,Physics.Transform3D(
+            origin.add(frame.rotate(Math.Vec3(-0.000008102377,0.99727494,-0.000004706181).multiply(scale))),frame.multiply(tilt)))
+        let forward=Physics.Geometry3D.distance(first,second)
+        let reverse=Physics.Geometry3D.distance(second,first)
+        // Almost parallel cap disks overlap by their vertical separation.
+        // The tiny tilt contributes less than 1e-7 times the shape scale.
+        let expected=(0.99727494-1.0)*scale
+        assert(Math.abs(forward.separation-expected)<0.000003*scale)
+        assert(Math.abs(reverse.separation-expected)<0.000003*scale)
+        assert(forward.normal.dot(frame.rotate(Math.Vec3.up()))>0.99999)
+        assert(reverse.normal.dot(frame.rotate(Math.Vec3.down()))>0.99999)
+        assert(Math.abs(forward.second_point.subtract(forward.first_point).dot(forward.normal)-forward.separation)<0.000003*scale)
+    } } }
+}
+test "parallel and nearly parallel cap contacts retain three dimensional witnesses across scales and frames" { verify_meridians() }
+func main() { verify_meridians();print("Axial meridians: scales, frames, cap depth, normals, witnesses and reverse queries verified") }
