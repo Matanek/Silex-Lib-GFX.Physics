@@ -493,7 +493,8 @@ func sphere_box_distance(
         face_distance = z_distance
         local_normal = Math.Vec3(0.0, 0.0, signed_geometry3d_axis(local_center.z))
     }
-    let normal = box_transform.vector(local_normal)
+    // A negative separation moves the first shape opposite the normal.
+    let normal = box_transform.vector(local_normal).negated()
     return DistanceResult3D(
         sphere_transform.position.add(normal.multiply(sphere.radius)),
         box_transform.point(local_center.add(local_normal.multiply(face_distance))),

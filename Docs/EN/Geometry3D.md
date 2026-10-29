@@ -129,8 +129,8 @@ analytic edge-contact normal.
 
 Outside separation is Euclidean; in penetration, the axis gives the estimated
 minimum translation needed to separate the volumes (move `first` opposite the
-normal). Sphere/axial containment follows this convention, unlike the historic
-sphere/box geometric exit normal. Support queries use a common extent for
+normal). Sphere/axial, sphere/box and capsule/box containment follow this
+convention. Support queries use a common extent for
 normalization: distance convergence `10⁻⁷`, penetration `10⁻⁵`, tangency within
 `10⁻⁶`. Axial sweeps use the continuous boundary, with a `10⁻⁶` margin of that extent. Qualification covers oblique pairs,
 caps, joins, containment and witnesses on both boundaries; it does not establish
@@ -156,9 +156,10 @@ yet provide a builder for large assets.
 
 Sphere/convex pairs support both orders, oriented poses and face, edge and
 vertex contacts. From inside, separation is the negative distance to the nearest
-exit plane minus the radius; the geometric normal points toward that exit, as
-for sphere/box. The world uses the corresponding response normal to push the
-sphere out. Rays clip against the solid's half-spaces and return the exit when
+exit plane minus the radius; the geometric normal points toward that exit.
+This historical sphere/convex exception differs from box containment. The world
+uses the corresponding response normal to push the sphere out. Rays clip against
+the solid's half-spaces and return the exit when
 the origin is inside. `triangle_count()` and `triangle(index)` expose the outward
 triangulated boundary for visualization.
 
@@ -252,6 +253,14 @@ points are equally close, their coordinates may differ without changing the
 separation. During penetration or containment, the difference between the
 witnesses need not encode the penetration depth; read `separation` directly.
 Concentric spheres use +X as a deterministic normal.
+
+Inside a box, sphere/box and capsule/box distances follow the signed convention:
+moving the first shape opposite the normal takes it out. Capsule depth accounts
+for the whole segment and its radius, including tilted axes and segments crossing
+the box. Face normals and normals of edges extruded along the segment determine
+the shortest exit; exterior distance retains its Euclidean minimum.
+The [containment tests](../../Tests/Consumer/Tests/BoxInterior3D.sx) check witnesses,
+reverse queries, common transforms and three scales.
 
 `Geometry3D.overlaps` counts tangency as overlap. For two boxes it uses
 separating axes without calculating every closest feature. A

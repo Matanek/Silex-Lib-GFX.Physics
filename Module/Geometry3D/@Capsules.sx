@@ -109,6 +109,39 @@ func capsule_capsule_distance(
     )
 }
 
+struct CapsuleBoxAxis3D {
+    let normal:Math.Vec3
+    let gap:float
+    init(normal:Math.Vec3, gap:float) { self.normal = normal; self.gap = gap }
+}
+
+// A box minus a segment has the box face normals and the normals of faces
+// extruded from its edges. Project the entire segment, never one interior point.
+func capsule_box_axis3d(first:Math.Vec3, second:Math.Vec3, half:Math.Vec3) CapsuleBoxAxis3D {
+    let direction = second.subtract(first).normalized()
+    var best = CapsuleBoxAxis3D(Math.Vec3.right(), -3.4028235e38)
+    var index = 0
+    while index < 6 {
+        var normal = Math.Vec3.right()
+        if index % 3 == 1 { normal = Math.Vec3.up() }
+        else if index % 3 == 2 { normal = Math.Vec3.back() }
+        if index >= 3 { normal = direction.cross(normal) }
+        let squared = normal.length_squared()
+        if squared > 0.0 {
+            normal = normal.divide(Math.sqrt(squared))
+            let extent = half.x * Math.abs(normal.x) + half.y * Math.abs(normal.y) + half.z * Math.abs(normal.z)
+            let a = first.dot(normal); let b = second.dot(normal)
+            let forward = -extent - Math.max(a, b)
+            let backward = Math.min(a, b) - extent
+            var gap = backward; var selected = normal.negated()
+            if forward > backward { gap = forward; selected = normal }
+            if gap > best.gap { best = CapsuleBoxAxis3D(selected, gap) }
+        }
+        index++
+    }
+    return best
+}
+
 func capsule_box_distance(
     capsule:Capsule3D, capsule_transform:Transform3D,
     box:Box3D, box_transform:Transform3D
@@ -118,14 +151,20 @@ func capsule_box_distance(
     let second = box_transform.inverse_point(axis.second)
     let direction = second.subtract(first)
     let half = box.half_size()
+    let separator = capsule_box_axis3d(first, second, half)
+    var projection = Math.Vec3()
+    if separator.gap <= 0.0 { projection = separator.normal.multiply(separator.gap) }
+    // On penetration, find witnesses after separating the axial segment.
+    // Translate its witness back before applying the radius on the capsule.
+    let origin = first.add(projection)
     var lower = 0.0
     var upper = 1.0
     var iteration = 0
     while iteration < 48 {
         let left = lower + (upper - lower) / 3.0
         let right = upper - (upper - lower) / 3.0
-        let left_point = first.add(direction.multiply(left))
-        let right_point = first.add(direction.multiply(right))
+        let left_point = origin.add(direction.multiply(left))
+        let right_point = origin.add(direction.multiply(right))
         let left_gap = left_point.subtract(
             left_point.clamped(half.negated(), half)
         ).length_squared()
@@ -135,35 +174,22 @@ func capsule_box_distance(
         if left_gap < right_gap { upper = right } else { lower = left }
         iteration++
     }
-    let local_axis = first.add(direction.multiply((lower + upper) * 0.5))
+    let local_axis = origin.add(direction.multiply((lower + upper) * 0.5))
     let local_box = local_axis.clamped(half.negated(), half)
-    let offset = local_box.subtract(local_axis)
-    let length = offset.length()
-    if length > 0.0 {
-        let normal = box_transform.vector(offset.divide(length))
-        let axis_point = box_transform.point(local_axis)
+    if separator.gap <= 0.0 {
+        let normal = box_transform.vector(separator.normal)
         return DistanceResult3D(
-            axis_point.add(normal.multiply(capsule.radius)),
-            box_transform.point(local_box), normal, length - capsule.radius
+            box_transform.point(local_axis.subtract(projection)).add(normal.multiply(capsule.radius)),
+            box_transform.point(local_box), normal, separator.gap - capsule.radius
         )
     }
-    var face_distance = half.x - Math.abs(local_axis.x)
-    var local_normal = Math.Vec3(signed_geometry3d_axis(local_axis.x), 0.0, 0.0)
-    let y_distance = half.y - Math.abs(local_axis.y)
-    if y_distance < face_distance {
-        face_distance = y_distance
-        local_normal = Math.Vec3(0.0, signed_geometry3d_axis(local_axis.y), 0.0)
-    }
-    let z_distance = half.z - Math.abs(local_axis.z)
-    if z_distance < face_distance {
-        face_distance = z_distance
-        local_normal = Math.Vec3(0.0, 0.0, signed_geometry3d_axis(local_axis.z))
-    }
-    let normal = box_transform.vector(local_normal)
+    let offset = local_box.subtract(local_axis)
+    let length = offset.length()
+    var normal = box_transform.vector(separator.normal)
+    if length > 0.0 { normal = box_transform.vector(offset.divide(length)) }
     return DistanceResult3D(
         box_transform.point(local_axis).add(normal.multiply(capsule.radius)),
-        box_transform.point(local_axis.add(local_normal.multiply(face_distance))),
-        normal, -face_distance - capsule.radius
+        box_transform.point(local_box), normal, length - capsule.radius
     )
 }
 

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les inclusions capsule/boîte utilisent la profondeur de sortie du segment entier et de son rayon, avec axes de faces et d’arêtes extrudées. Les sphères et capsules incluses suivent la normale signée de réponse dès la requête géométrique ; le monde ne la retourne plus une seconde fois. Une capsule profondément incluse retrouve son appui sans oscillation, comme sur une boîte convexe identique. Tests analytiques, requêtes inversées, rotations, trois échelles et deux ordres de création des corps.
+
 - Les corrections de position réévaluent les candidats de collision lorsqu’une articulation crée une pénétration après la détection initiale. Les plans et boîtes réagissent tout en respectant capteurs, filtres et supports désactivés ; aucune impulsion d’impact rétroactive n’est publiée.
 
 - Les butées SwingTwist corrigent la rotation avec la masse couplée de l’ancrage déporté, afin que la projection de point n’annule pas leur correction. Parent fixe ou mobile, deux repères, deux sens et 60/120 Hz vérifiés ; les translations libres SixDOF restent indépendantes.

@@ -3487,73 +3487,17 @@ func contact_normal3d(
     second:ShapePlacement3D,
     geometric_normal:Math.Vec3
 ) Math.Vec3 {
+    // Sphere/convex queries retain their historical geometric exit normal.
+    // Primitive box queries already follow the signed response convention.
     match first.shape() {
         sphere(_) => {
             match second.shape() {
-                box(box) => {
-                    if inside_box3d(first.transform().position, box, second.transform()) {
-                        return geometric_normal.negated()
-                    }
-                }
-                sphere(_) => {}
-                capsule(_) => {}
-                compound(_) => {}
-                triangle(_) => {}
-                mesh(_) => {}
                 convex(hull) => {
                     if inside_convex3d(first.transform().position, hull, second.transform()) { return geometric_normal.negated() }
                 }
-                cylinder(_) => {}
-                tapered_cylinder(_) => {}
-                tapered_capsule(_) => {}
-                plane(_) => {}
+                else => {}
             }
         }
-        box(box) => {
-            match second.shape() {
-                sphere(_) => {
-                    if inside_box3d(second.transform().position, box, first.transform()) {
-                        return geometric_normal.negated()
-                    }
-                }
-                capsule(_) => {
-                    if inside_box3d(second.transform().position, box, first.transform()) {
-                        return geometric_normal.negated()
-                    }
-                }
-                box(_) => {}
-                compound(_) => {}
-                triangle(_) => {}
-                mesh(_) => {}
-                convex(_) => {}
-                cylinder(_) => {}
-                tapered_cylinder(_) => {}
-                tapered_capsule(_) => {}
-                plane(_) => {}
-            }
-        }
-        capsule(_) => {
-            match second.shape() {
-                box(box) => {
-                    if inside_box3d(first.transform().position, box, second.transform()) {
-                        return geometric_normal.negated()
-                    }
-                }
-                sphere(_) => {}
-                capsule(_) => {}
-                compound(_) => {}
-                triangle(_) => {}
-                mesh(_) => {}
-                convex(_) => {}
-                cylinder(_) => {}
-                tapered_cylinder(_) => {}
-                tapered_capsule(_) => {}
-                plane(_) => {}
-            }
-        }
-        compound(_) => {}
-        triangle(_) => {}
-        mesh(_) => {}
         convex(hull) => {
             match second.shape() {
                 sphere(_) => {
@@ -3562,20 +3506,9 @@ func contact_normal3d(
                 else => {}
             }
         }
-        cylinder(_) => {}
-        tapered_cylinder(_) => {}
-        tapered_capsule(_) => {}
-        plane(_) => {}
+        else => {}
     }
     return geometric_normal
-}
-
-func inside_box3d(point:Math.Vec3, box:Box3D, transform:Transform3D) bool {
-    let local_point = transform.inverse_point(point)
-    let half = box.half_size()
-    return Math.abs(local_point.x) <= half.x &&
-        Math.abs(local_point.y) <= half.y &&
-        Math.abs(local_point.z) <= half.z
 }
 
 class ContactPointState3D {

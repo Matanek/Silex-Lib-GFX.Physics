@@ -129,7 +129,12 @@ test "capsule pairs respond in the world and enclosed capsules leave a box" {
         ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0))))
     enclosure.step(0.01)
     assert(enclosure.contact_count() == 1)
-    assert(capsule.position().y > 0.0)
+    // The shortest exit is sideways for this tall capsule, not toward a cap.
+    assert(capsule.position().x > 1.2)
+    let recovered = Physics.Geometry3D.distance(
+        Physics.ShapePlacement3D(capsule.shape(), capsule.transform()),
+        Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0)))))
+    assert(recovered.separation > -0.01)
 }
 
 test "a sphere collides with a capsule without a false distant pair" {

@@ -1,0 +1,173 @@
+use GFX.Physics
+use STD.Math
+
+func hull_box(size:Math.Vec3) Physics.Shape3D {
+    let h = size.multiply(0.5)
+    var vertices:Math.Vec3[] = []
+    let xs:float[] = [-h.x, h.x]; let ys:float[] = [-h.y, h.y]; let zs:float[] = [-h.z, h.z]
+    for x in xs { for y in ys { for z in zs {
+        vertices.append(Math.Vec3(x, y, z))
+    } } }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(vertices))
+}
+
+func capsule(radius:float, height:float, position:Math.Vec3,
+    rotation:Math.Quat = Math.Quat()) Physics.ShapePlacement3D {
+    return Physics.ShapePlacement3D(Physics.Shape3D.capsule(Physics.Capsule3D(radius, height)),
+        Physics.Transform3D(position, rotation))
+}
+
+func check(first:Physics.ShapePlacement3D, box:Physics.ShapePlacement3D,
+    depth:float, direction:Math.Vec3, scale:float) {
+    let tolerance = 0.00002 * scale
+    let result = Physics.Geometry3D.distance(first, box)
+    assert(Math.abs(result.separation + depth) < tolerance)
+    assert(result.normal.nearly_equal(direction, 0.00002))
+    let delta = result.second_point.subtract(result.first_point)
+    assert(delta.subtract(result.normal.multiply(result.separation)).length() < tolerance)
+    assert(Math.abs(result.normal.length() - 1.0) < 0.00002)
+    let on_first = first.transform().inverse_point(result.first_point)
+    match first.shape() {
+        sphere(shape) => { assert(Math.abs(on_first.length() - shape.radius) < tolerance) }
+        capsule(shape) => {
+            let axial = Math.Vec3(0.0, Math.clamp(on_first.y, -shape.half_height, shape.half_height), 0.0)
+            assert(Math.abs(on_first.subtract(axial).length() - shape.radius) < tolerance)
+        }
+        else => { assert(false) }
+    }
+    let on_box = box.transform().inverse_point(result.second_point)
+    match box.shape() {
+        box(shape) => {
+            let half = shape.half_size()
+            assert(on_box.nearly_equal(on_box.clamped(half.negated(), half), tolerance))
+            let face_gap = Math.min(half.x - Math.abs(on_box.x),
+                Math.min(half.y - Math.abs(on_box.y), half.z - Math.abs(on_box.z)))
+            assert(Math.abs(face_gap) < tolerance)
+        }
+        else => { assert(false) }
+    }
+    let reverse = Physics.Geometry3D.distance(box, first)
+    assert(Math.abs(reverse.separation - result.separation) < tolerance)
+    assert(reverse.normal.nearly_equal(result.normal.negated(), 0.00002))
+    assert(reverse.first_point.nearly_equal(result.second_point, tolerance))
+    assert(reverse.second_point.nearly_equal(result.first_point, tolerance))
+    let moved = Physics.ShapePlacement3D(first.shape(), Physics.Transform3D(
+        first.transform().position.subtract(result.normal.multiply(depth + 0.001 * scale)),
+        first.transform().rotation))
+    let escaped = Physics.Geometry3D.distance(moved, box)
+    assert(Math.abs(escaped.separation - 0.001 * scale) < tolerance)
+}
+
+func distances() {
+    let scales:float[] = [0.01, 1.0, 100.0]
+    for scale in scales { for rotated in [false, true] {
+        var frame = Physics.Transform3D()
+        if rotated { frame = Physics.Transform3D(Math.Vec3(4.0, -3.0, 2.0).multiply(scale),
+            Math.Quat.angle_axis(0.4, Math.Vec3(1.0, 2.0, 3.0).normalized())) }
+        let size = Math.Vec3(4.0, 2.0, 4.0).multiply(scale)
+        let box = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(size)), frame)
+        let place = capsule(0.3 * scale, 0.55 * scale,
+            frame.point(Math.Vec3(0.0, 0.8, 0.0).multiply(scale)), frame.rotation)
+        check(place, box, 1.05 * scale, frame.vector(Math.Vec3.down()), scale)
+        let convex = Physics.ShapePlacement3D(hull_box(size), frame)
+        let equivalent = Physics.Geometry3D.distance(place, convex)
+        assert(Math.abs(equivalent.separation + 1.05 * scale) < 0.00002 * scale)
+        assert(equivalent.normal.nearly_equal(frame.vector(Math.Vec3.down()), 0.00002))
+        let sphere = Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(0.3 * scale)),
+            Physics.Transform3D(frame.point(Math.Vec3(0.0, 0.8, 0.0).multiply(scale)), frame.rotation))
+        check(sphere, box, 0.5 * scale, frame.vector(Math.Vec3.down()), scale)
+        let center = capsule(0.3 * scale, 0.55 * scale, frame.position, frame.rotation)
+        check(center, box, 1.85 * scale, frame.vector(Math.Vec3.down()), scale)
+        let sides:Math.Vec3[] = [Math.Vec3(1.8, 0.0, 0.0), Math.Vec3(-1.8, 0.0, 0.0),
+            Math.Vec3(0.0, 0.0, 1.8), Math.Vec3(0.0, 0.0, -1.8)]
+        for side in sides {
+            check(capsule(0.3 * scale, 0.55 * scale, frame.point(side.multiply(scale)), frame.rotation),
+                box, 0.5 * scale, frame.vector(side.normalized().negated()), scale)
+        }
+        let lower = capsule(0.3 * scale, 0.55 * scale,
+            frame.point(Math.Vec3(0.0, -0.8, 0.0).multiply(scale)), frame.rotation)
+        check(lower, box, 1.05 * scale, frame.vector(Math.Vec3.up()), scale)
+        let tilted = capsule(0.3 * scale, 0.55 * scale,
+            frame.point(Math.Vec3(0.0, 0.8, 0.0).multiply(scale)),
+            frame.rotation.multiply(Math.Quat.angle_axis(Math.pi() * 0.25, Math.Vec3.back())))
+        check(tilted, box, (0.5 + 0.55 / Math.sqrt(2.0)) * scale,
+            frame.vector(Math.Vec3.down()), scale)
+        // A segment crossing both faces must escape with its entire radius.
+        let crossing = capsule(0.3 * scale, 3.0 * scale, frame.position, frame.rotation)
+        let hit = Physics.Geometry3D.distance(crossing, box)
+        assert(Math.abs(hit.separation + 2.3 * scale) < 0.00002 * scale)
+        assert(Math.abs(frame.inverse_vector(hit.normal).y) < 0.00002)
+        check(crossing, box, 2.3 * scale, hit.normal, scale)
+        let outer = capsule(0.3 * scale, 0.55 * scale,
+            frame.point(Math.Vec3(3.0, 0.0, 0.0).multiply(scale)), frame.rotation)
+        let separated = Physics.Geometry3D.distance(outer, box)
+        assert(Math.abs(separated.separation - 0.7 * scale) < 0.00002 * scale)
+        assert(separated.normal.nearly_equal(frame.vector(Math.Vec3.left()), 0.00002))
+    } }
+}
+
+func edge_extrusion() {
+    let box = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0, 2.0, 2.0))))
+    let diagonal = Math.Quat.angle_axis(-Math.pi() * 0.25, Math.Vec3.back())
+    let normal = Math.Vec3(-1.0, 1.0, 0.0).normalized()
+    let inside = capsule(0.3, 3.0, Math.Vec3(0.9, -0.9, 0.0), diagonal)
+    check(inside, box, 0.3 + 0.1 * Math.sqrt(2.0), normal, 1.0)
+    let outside = capsule(0.3, 3.0, Math.Vec3(1.1, -1.1, 0.0), diagonal)
+    check(outside, box, 0.3 - 0.1 * Math.sqrt(2.0), normal, 1.0)
+}
+
+func recovery() {
+    for convex in [false, true] {
+        var world = Physics.World3D()
+        let size = Math.Vec3(4.0, 2.0, 4.0)
+        var shape = Physics.Shape3D.box(Physics.Box3D(size))
+        if convex { shape = hull_box(size) }
+        var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+            ..body_type = Physics.BodyType3D.fixed ..shape = shape
+            ..transform = Physics.Transform3D(rotation:Math.Quat.angle_axis(0.35, Math.Vec3.up())))
+        var mover = Physics.CharacterMover3D()
+        let result = mover.calculate_move(world, Math.Vec3(0.0, 0.8, 0.0), Math.Vec3())
+        print("deep recovery convex=$(convex) position=$(result.position.to_str()) grounded=$(result.grounded)")
+        assert(result.grounded && result.position.nearly_equal(Math.Vec3(0.0, 1.852, 0.0), 0.00002))
+        if let support = result.support() { assert(support.same_body(floor)) } else { assert(false) }
+        let idle = mover.calculate_move(world, result.position, Math.Vec3(), true)
+        assert(idle.grounded && idle.position.nearly_equal(result.position, 0.00002))
+    }
+}
+
+func rigid_recovery() {
+    for sphere in [false, true] { for floor_last in [false, true] {
+        var world = Physics.World3D(Physics.World3DSettings()
+            ..gravity = Math.Vec3() ..position_iterations = 12)
+        var obstacle = Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(4.0, 2.0, 4.0)))
+            ..transform = Physics.Transform3D(rotation:Math.Quat.angle_axis(0.35, Math.Vec3.up()))
+        if !floor_last { world.create_rigid_body(obstacle) }
+        var shape = Physics.Shape3D.capsule(Physics.Capsule3D(0.3, 0.55))
+        var expected_y = 1.85
+        if sphere { shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.3)); expected_y = 1.3 }
+        var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..shape = shape
+            ..transform = Physics.Transform3D(Math.Vec3(0.0, 0.8, 0.0)) ..allow_sleep = false)
+        if floor_last { world.create_rigid_body(obstacle) }
+        var step = 0
+        while step < 8 { world.step(1.0 / 120.0); step++ }
+        assert(Math.abs(body.position().y - expected_y) < 0.002)
+        assert(body.linear_velocity().length() < 0.00001 && body.angular_velocity().length() < 0.00001)
+    } }
+}
+
+test "box interior sphere and whole capsule distances retain signed witnesses across frames and scales" { distances() }
+test "capsule box penetration uses faces extruded from edges and preserves rounded exterior contacts" { edge_extrusion() }
+test "rigid box inclusion retains the response direction in both body creation orders" { rigid_recovery() }
+test "deep box inclusion recovers a virtual character to the same stable support as a convex box" { recovery() }
+
+func main() {
+    let box = Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(4.0, 2.0, 4.0))))
+    let before = Physics.Geometry3D.distance(capsule(0.3, 0.55, Math.Vec3(0.0, 0.8, 0.0)), box)
+    let sphere = Physics.Geometry3D.distance(Physics.ShapePlacement3D(
+        Physics.Shape3D.sphere(Physics.Sphere3D(0.3)), Physics.Transform3D(Math.Vec3(0.0, 0.8, 0.0))), box)
+    print("capsule separation=$(before.separation) normal=$(before.normal.to_str()) witness=$(before.second_point.subtract(before.first_point).dot(before.normal))")
+    print("sphere separation=$(sphere.separation) normal=$(sphere.normal.to_str()) witness=$(sphere.second_point.subtract(sphere.first_point).dot(sphere.normal))")
+    recovery(); distances(); edge_extrusion(); rigid_recovery()
+    print("Box interior: analytical depth, signed witnesses, exterior, scales, frames, reverse queries and stable character recovery verified")
+}

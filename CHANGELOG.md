@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Capsule/box containment uses the exit depth of the whole segment and its radius, including face and extruded-edge axes. Contained spheres and capsules follow the signed response normal in geometry queries; the world no longer flips it again. Deeply embedded characters recover to the same stable support as an equivalent convex box. Analytical tests cover reverse queries, rotations, three scales and both body creation orders.
+
 - Position correction refreshes collision candidates when a joint creates penetration after initial detection. Planes and boxes respond while respecting sensors, filters and disabled supports; no retroactive impact impulse is published.
 
 - Swing/twist stops correct rotation with the coupled mass of an offset anchor, preventing point projection from undoing stop correction. Fixed/mobile parents, two frames, both directions and 60/120 Hz checked; free SixDOF translations remain independent.

@@ -178,7 +178,8 @@ test "measure a sphere contained inside a box" {
     )
     let result = Physics.Geometry3D.distance(sphere, box)
     assert(Math.nearly_equal(result.separation, -1.5, 0.00001))
-    assert(result.normal.nearly_equal(Math.Vec3.right(), 0.00001))
+    assert(result.normal.nearly_equal(Math.Vec3.left(), 0.00001))
+    assert(Math.nearly_equal(result.second_point.subtract(result.first_point).dot(result.normal), -1.5, 0.00001))
     assert(Physics.Geometry3D.overlaps(sphere, box))
 }
 

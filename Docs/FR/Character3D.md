@@ -66,6 +66,11 @@ franchissable au retour vers le bas. Le suivi du sol est désactivé pendant la
 montée d'un saut. Une pente interdite ne transforme pas la poussée horizontale
 en ascension. Un chevauchement initial est corrigé par passes bornées ; une
 capsule profondément enfermée dans une géométrie ne garantit pas une sortie.
+Dans une boîte isolée, la récupération utilise désormais la profondeur du
+volume entier et retrouve le même appui que son enveloppe convexe : la capsule
+0,3/0,55 centrée à y=0,8 dans une boîte 4 × 2 × 4 sort à y=1,852, skin inclus.
+Les huit passes restent bornées ; plusieurs obstacles incompatibles ou une sortie
+trop éloignée peuvent encore laisser une pénétration résiduelle.
 
 ## Portée actuelle
 

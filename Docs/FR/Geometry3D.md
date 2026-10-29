@@ -133,9 +133,8 @@ exposés d’une capsule effilée gardent leur normale analytique sur les arête
 
 La séparation extérieure est euclidienne ; en pénétration, l’axe indique la
 translation minimale estimée pour séparer les volumes (`premier` déplacé à
-l’opposé de la normale). L’inclusion sphère/forme axiale suit cette convention,
-contrairement à la normale géométrique de sortie historique sphère/boîte.
-Les requêtes par support sont normalisées à l’étendue commune : convergence de
+l’opposé de la normale). Les inclusions sphère/forme axiale, sphère/boîte et
+capsule/boîte suivent cette convention. Les requêtes par support sont normalisées à l’étendue commune : convergence de
 distance à `10⁻⁷`, pénétration à `10⁻⁵`, tangence classée dans `10⁻⁶`. Les
 balayages axiaux utilisent la surface continue,
 avec une marge `10⁻⁶` de cette étendue. La qualification couvre les paires
@@ -163,7 +162,8 @@ au démarrage. Le package ne fournit pas encore une construction de gros assets.
 La paire sphère/convexe accepte les deux ordres, les poses orientées et les
 contacts de face, d’arête et de sommet. Depuis l’intérieur, la séparation vaut
 l’opposé de la distance au plan de sortie le plus proche, moins le rayon ; la
-normale géométrique pointe vers cette sortie, comme pour sphère/boîte. Le monde
+normale géométrique pointe vers cette sortie. Cette exception historique
+sphère/convexe diffère des inclusions dans une boîte ; le monde
 emploie la normale de réponse correspondante pour expulser la sphère.
 Les rayons sont découpés par les demi-espaces du solide et retournent la sortie
 quand leur origine est intérieure. `triangle_count()` et `triangle(index)`
@@ -266,6 +266,15 @@ différer sans changer la séparation. En pénétration ou en inclusion, la
 différence des témoins ne représente pas nécessairement la profondeur ; lire
 `separation` directement. Une paire de sphères concentriques choisit +X comme
 normale déterministe.
+
+Depuis l’intérieur d’une boîte, les distances sphère/boîte et capsule/boîte
+conservent la convention signée : déplacer la première forme à l’opposé de la
+normale la fait sortir. Pour la capsule, la profondeur prend en compte le
+segment entier et son rayon, y compris un axe incliné ou traversant la boîte.
+Les normales des faces et celles des arêtes extrudées par le segment déterminent
+la plus courte sortie ; la distance extérieure conserve son minimum euclidien.
+Les [tests d’inclusion](../../Tests/Consumer/Tests/BoxInterior3D.sx) vérifient les
+points témoins, l’inversion, les transformations communes et trois échelles.
 
 `Geometry3D.overlaps` traite la tangence comme un recouvrement. Pour deux
 boîtes, il utilise les axes séparateurs sans calculer tous les points les plus

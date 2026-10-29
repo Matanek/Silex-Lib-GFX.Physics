@@ -63,6 +63,12 @@ Floor snapping is disabled while jumping upwards. An unwalkable slope cannot
 turn horizontal pressure into ascent. Initial overlap recovery uses bounded
 passes; a capsule deeply enclosed in geometry is not guaranteed to escape.
 
+For an isolated box, recovery uses the depth of the whole capsule and reaches
+the same support as the equivalent convex hull: a 0.3/0.55 capsule centered at
+y=0.8 inside a 4×2×4 box exits at y=1.852, including skin. The eight recovery
+passes remain bounded; conflicting obstacles or a distant exit may still leave
+residual penetration.
+
 ## Current scope
 
 The mover is virtual and registers no rigid body. It reads current poses of
