@@ -1,0 +1,216 @@
+use GFX.Physics
+use STD.Math
+
+func emit(name:str, value:float) { print("$(name)=$(value)") }
+func near(value:float, expected:float, tolerance:float) {
+    assert(value == value && Math.abs(value - expected) <= tolerance)
+}
+func height_ray(shape:Physics.Shape3D, x:float, z:float) Physics.CastResult3D {
+    return Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(x * 0.75,2.0,z * 1.25),Math.Vec3(0.0,-4.0,0.0)),Physics.ShapePlacement3D(shape))
+}
+func emit_height(name:str, hit:Physics.CastResult3D) {
+    emit(name,hit.point.y); emit("$(name)_nx",hit.normal.x); emit("$(name)_ny",hit.normal.y)
+    emit("$(name)_nz",hit.normal.z); emit("$(name)_fraction",hit.fraction)
+}
+func terrain_versions() {
+    var heights:float[] = []; var index = 0
+    while index < 64 {
+        heights.append(0.02 * (index % 8) as float - 0.03 * (index / 8) as float); index++
+    }
+    var original = Physics.HeightField3D(8,8,heights,0.75,1.25,diagonal:Physics.HeightGridDiagonal3D.first_to_opposite)
+    let initial = height_ray(original.shape(),2.25,2.4)
+    assert(initial.hit); near(initial.point.y,-0.027,0.00001); emit_height("terrain_before",initial)
+    var raised = original.with_heights(2,2,2,2,[0.4,0.4,0.4,0.4])
+    let high = height_ray(raised.shape(),2.25,2.4)
+    assert(high.hit); near(high.point.y,0.4,0.00001); emit_height("terrain_raised",high)
+    let outside = height_ray(raised.shape(),6.1,3.7)
+    assert(outside.hit); near(outside.point.y,0.011,0.00001); emit_height("terrain_outside",outside)
+    var open = raised.with_holes(4,4,2,2,[true,true,true,true])
+    assert(!height_ray(open.shape(),4.4,4.3).hit); emit("terrain_hole",0.0)
+    var restored = open.with_holes(4,4,2,2,[false,false,false,false])
+    let filled = height_ray(restored.shape(),4.4,4.3)
+    assert(filled.hit); near(filled.point.y,-0.041,0.00001); emit_height("terrain_restored",filled)
+    near(height_ray(original.shape(),2.25,2.4).point.y,initial.point.y,0.000001)
+}
+func large_terrain_queries() {
+    var heights:float[] = []; var holes:bool[] = []; var index = 0
+    while index < 4225 {
+        heights.append(0.02 * (index % 65) as float - 0.03 * (index / 65) as float)
+        holes.append(index == 32 * 65 + 32); index++
+    }
+    var terrain = Physics.HeightField3D(65,65,heights,0.75,1.25,holes:holes,
+        diagonal:Physics.HeightGridDiagonal3D.first_to_opposite)
+    let n = Math.Vec3(-0.02 / 0.75,1.0,0.03 / 1.25).normalized()
+    let x = 7.25 * 0.75; let z = 8.4 * 1.25; let height = -0.107
+    let ray = height_ray(terrain.shape(),7.25,8.4)
+    assert(ray.hit && ray.child_id == 1038); near(ray.point.y,height,0.0002)
+    assert(!height_ray(terrain.shape(),32.0,32.0).hit)
+    let points:Math.Vec3[] = [Math.Vec3(-0.2,-0.3,-0.25),Math.Vec3(0.2,-0.3,-0.25),
+        Math.Vec3(-0.2,0.3,-0.25),Math.Vec3(-0.2,-0.3,0.25)]
+    var hull = Physics.ConvexHull3D(points)
+    var hull_support = -3.4028235e38
+    for point in points { hull_support = Math.max(hull_support,-point.dot(n)) }
+    var volumes:Physics.Shape3D[] = [Physics.Shape3D.sphere(Physics.Sphere3D(0.2)),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.15,0.25)),
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4,0.6,0.5))),
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2,0.3)),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1,0.2,0.3)),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1,0.2,0.3)),Physics.Shape3D.convex(hull)]
+    let radial = Math.sqrt(n.x * n.x + n.z * n.z)
+    let supports:float[] = [0.2,0.15 + 0.25 * n.y,0.2 * Math.abs(n.x) + 0.3 * n.y + 0.25 * Math.abs(n.z),
+        0.3 * n.y + 0.2 * radial,0.3 * n.y + 0.2 * radial,0.3 * n.y + 0.2,hull_support]
+    let target = Physics.ShapePlacement3D(terrain.shape())
+    index = 0
+    for volume in volumes {
+        let origin = Math.Vec3(x,height + 2.0,z)
+        let moving = Physics.ShapePlacement3D(volume,Physics.Transform3D(origin))
+        let expected = 2.0 * n.y - supports[index]
+        near(Physics.Geometry3D.distance(moving,target).separation,expected,0.0002)
+        let hit = Physics.Geometry3D.shape_cast(Physics.ShapeCast3D(moving,Math.Vec3(0.0,-4.0,0.0)),target)
+        assert(hit.hit); near(hit.fraction,expected / (4.0 * n.y),0.0002)
+        index++
+    }
+    let pose = Physics.Transform3D(Math.Vec3(7.0,-2.0,11.0),Math.Quat.angle_axis(0.31,Math.Vec3.up()))
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = terrain.shape() ..transform = pose ..friction = 0.0)
+    let world_ray = Physics.Ray3D(pose.point(Math.Vec3(x,2.0,z)),pose.vector(Math.Vec3(0.0,-4.0,0.0)))
+    let world_hit = world.ray_cast(world_ray)!
+    near(pose.inverse_point(world_hit.point()).y,height,0.0002)
+    let ball_origin = Math.Vec3(9.25 * 0.75,0.02 * 9.25 - 0.03 * 16.4 + 0.5,16.4 * 1.25)
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false ..friction = 0.0
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2)) ..transform = Physics.Transform3D(pose.point(ball_origin)))
+    index = 0
+    while index < 120 { world.step(1.0 / 60.0); index++ }
+    let local_ball = pose.inverse_point(ball.position())
+    let level = 0.02 * local_ball.x / 0.75 - 0.03 * local_ball.z / 1.25
+    near((local_ball.y - level) * n.y,0.2,0.005)
+    var actor = world.create_virtual_character(position:pose.point(Math.Vec3(x,height + 0.852,z)))
+    actor.move(world,Math.Vec3(),1.0 / 60.0)
+    assert(actor.is_grounded() && actor.support()!.same_body(floor))
+}
+func guided(world:&Physics.World3D, anchor:Physics.RigidBody3D, moving:Physics.RigidBody3D, x:float) Physics.SixDOFConstraint3D {
+    var settings = Physics.SixDOFConstraint3DSettings()
+    settings.first_local_frame = Physics.Transform3D(Math.Vec3(x,2.0,0.0))
+    settings.translation_x = Physics.LinearAxis3DSettings() ..limit = Physics.LinearLimit3D.locked
+    settings.translation_z = Physics.LinearAxis3DSettings() ..limit = Physics.LinearLimit3D.locked
+    settings.minimum_twist = 0.0; settings.maximum_twist = 0.0
+    settings.swing_limits = Physics.SwingLimits3D.cone(Math.Vec2())
+    return world.create_six_dof_constraint(anchor,moving,settings)
+}
+func pulley_guides(case_id:int) {
+    var positions = 8
+    if case_id == 1 { positions = 48 }
+    emit("pulley_$(case_id)_positions",positions as float)
+    var world = Physics.World3D(Physics.World3DSettings() ..velocity_iterations = 24 ..position_iterations = positions)
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(20.0,0.5,20.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,-0.25,0.0)) ..friction = 0.0)
+    var anchor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var first = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5))) ..friction = 0.0
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2))
+        ..transform = Physics.Transform3D(Math.Vec3(-1.0,2.0,0.0)))
+    var second = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.5))) ..friction = 0.0
+        ..mass_properties = Physics.MassProperties3D(8.0,Math.Vec3(0.8))
+        ..transform = Physics.Transform3D(Math.Vec3(1.0,2.0,0.0)))
+    var left = guided(world,anchor,first,-1.0); var right = guided(world,anchor,second,1.0)
+    var ratio = 1.0; var z1 = 0.0; var z2 = 0.0
+    if case_id == 1 { ratio = 2.0; z1 = 0.4; z2 = -0.6 }
+    let l1 = Math.sqrt(36.0 + z1 * z1); let l2 = Math.sqrt(36.0 + z2 * z2)
+    let length = l1 + ratio * l2
+    var joint = world.create_pulley_constraint(first,second,Physics.PulleyConstraint3DSettings(Math.Vec3(-1.0,8.0,z1),Math.Vec3(1.0,8.0,z2))
+        ..ratio = ratio ..minimum_length = length ..maximum_length = length)
+    var maximum_error = 0.0
+    var contacts = false; var step = 1
+    while step <= 360 {
+        world.step(1.0 / 60.0)
+        if step == 1 {
+            let k = ratio * (6.0 / l2) / (6.0 / l1)
+            let a2 = 9.81 * (2.0 * k - 8.0) / (8.0 + 2.0 * k * k)
+            near(first.linear_velocity().y,-k * a2 / 60.0,0.005)
+            near(second.linear_velocity().y,a2 / 60.0,0.005)
+            emit("pulley_$(case_id)_first_vy",first.linear_velocity().y)
+            emit("pulley_$(case_id)_second_vy",second.linear_velocity().y)
+        }
+        maximum_error = Math.max(maximum_error,Math.abs(joint.length() - length))
+        maximum_error = Math.max(maximum_error,Math.abs(first.position().x + 1.0))
+        maximum_error = Math.max(maximum_error,Math.abs(second.position().x - 1.0))
+        maximum_error = Math.max(maximum_error,Math.abs(first.position().z))
+        maximum_error = Math.max(maximum_error,Math.abs(second.position().z))
+        if world.contact_count() > 0 { contacts = true }
+        step++
+    }
+    let final_l2 = Math.sqrt(7.75 * 7.75 + z2 * z2)
+    let final_l1 = length - ratio * final_l2
+    let vertical = Math.sqrt(final_l1 * final_l1 - z1 * z1)
+    let tension = 19.62 * final_l1 / vertical
+    near(first.position().y,8.0 - vertical,0.01); near(second.position().y,0.25,0.01)
+    near(first.linear_velocity().y,0.0,0.02); near(second.linear_velocity().y,0.0,0.02)
+    near(joint.first_reaction_force().length(),tension,0.5)
+    near(left.reaction_force().z,-tension * z1 / final_l1,0.5)
+    near(right.reaction_force().z,-ratio * tension * z2 / final_l2,0.5)
+    assert(maximum_error < 0.01 && contacts)
+    emit("pulley_$(case_id)_first_y",first.position().y); emit("pulley_$(case_id)_second_y",second.position().y)
+    emit("pulley_$(case_id)_tension",joint.first_reaction_force().length())
+    emit("pulley_$(case_id)_final_first_vy",first.linear_velocity().y); emit("pulley_$(case_id)_final_second_vy",second.linear_velocity().y)
+    emit("pulley_$(case_id)_guide_first_z",left.reaction_force().z); emit("pulley_$(case_id)_guide_second_z",right.reaction_force().z)
+    emit("pulley_$(case_id)_max_error",maximum_error)
+    joint.set_enabled(false); assert(joint.first_reaction_force().length_squared() == 0.0)
+    joint.set_ratio(1.0); joint.set_limits(0.0,length + 1.0)
+    joint.set_enabled(true); world.step(1.0 / 60.0)
+    world.destroy_rigid_body(second)
+    assert(!joint.is_valid() && !right.is_valid() && left.is_valid() && first.is_valid() && floor.is_valid())
+    world.step(1.0 / 60.0); emit("pulley_$(case_id)_lifetime",1.0)
+}
+func loaded_path() {
+    var world = Physics.World3D(Physics.World3DSettings() ..velocity_iterations = 24 ..position_iterations = 8)
+    var rail = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..transform = Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)) ..collision_filter = Physics.CollisionFilter3D(mask_bits:0))
+    var carrier = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2)) ..friction = 0.0
+        ..mass_properties = Physics.MassProperties3D(2.0,Math.Vec3(0.2)) ..transform = Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)))
+    var payload = world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2)) ..friction = 0.0
+        ..mass_properties = Physics.MassProperties3D(4.0,Math.Vec3(0.4)) ..transform = Physics.Transform3D(Math.Vec3(0.0,2.2,0.0)))
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+        ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.4,4.0,4.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(1.7,2.0,0.0)) ..friction = 0.0)
+    var path = Physics.Path3D.line(Math.Vec3(-2.0,0.0,0.0),Math.Vec3(2.0,0.0,0.0),Math.Vec3.up())
+    var follower = world.create_path_constraint(rail,carrier,Physics.PathConstraint3DSettings(path)
+        ..orientation = Physics.PathOrientation3D.relative_to_body ..motor = Physics.LinearMotor3D(0.5,20.0))
+    let axis = Math.Vec3(0.3,0.2,1.0).normalized()
+    let normal = axis.cross(Math.Vec3.up()).normalized()
+    var hinge = world.create_hinge_constraint(carrier,payload,Physics.HingeConstraint3DSettings()
+        ..second_local_anchor = Math.Vec3(0.0,0.8,0.0) ..first_local_axis = axis ..second_local_axis = axis
+        ..first_local_normal = normal ..second_local_normal = normal)
+    var maximum_error = 0.0; var maximum_normal_error = 0.0; var maximum_motor = 0.0; var average_support = 0.0; var contacts = false; var step = 1
+    while step <= 360 {
+        world.step(1.0 / 60.0)
+        maximum_error = Math.max(maximum_error,hinge.anchor_error().length())
+        near(carrier.position().y,3.0,0.02); near(carrier.position().z,0.0,0.02)
+        maximum_normal_error = Math.max(maximum_normal_error,Math.max(Math.abs(carrier.position().y - 3.0),Math.abs(carrier.position().z)))
+        maximum_motor = Math.max(maximum_motor,Math.abs(follower.motor_force()))
+        if step > 300 { average_support += follower.reaction_force().y / 60.0 }
+        if world.contact_count() > 0 { contacts = true }
+        step++
+    }
+    near(carrier.position().x,1.3,0.02); near(average_support,58.86,1.0)
+    assert(maximum_error < 0.03 && maximum_motor <= 20.0001 && contacts)
+    emit("path_blocked_x",carrier.position().x); emit("path_support_y",average_support)
+    emit("path_normal_error",maximum_normal_error); emit("path_max_error",maximum_error); emit("path_max_motor",maximum_motor)
+    follower.set_motor(Physics.LinearMotor3D(-0.5,20.0)); assert(follower.motor_force() == 0.0)
+    step = 0
+    while step < 120 { world.step(1.0 / 60.0); step++ }
+    assert(carrier.position().x < 1.2); emit("path_released",1.0)
+    world.destroy_rigid_body(carrier)
+    assert(!follower.is_valid() && !hinge.is_valid() && payload.is_valid())
+    world.step(1.0 / 60.0); emit("path_lifetime",1.0)
+}
+test "large height terrain retains analytical queries contacts and registered character support" { large_terrain_queries() }
+test "edited terrain preserves analytical heights and holes" { terrain_versions() }
+test "SixDOF guided pulley shares asymmetric load with real ground contacts" { pulley_guides(0); pulley_guides(1) }
+test "path motor carries a spatially hinged load into and away from an obstacle" { loaded_path() }
+func main() { large_terrain_queries(); terrain_versions(); pulley_guides(0); pulley_guides(1); loaded_path() }

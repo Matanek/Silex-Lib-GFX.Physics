@@ -333,3 +333,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 - [Character mode selection and qualification](CharacterQualification3D.md)
 
 - [Editing a height terrain](HeightField3D.md)
+
+- [Terrain and constraint assembly qualification](TerrainConstraintQualification3D.md)

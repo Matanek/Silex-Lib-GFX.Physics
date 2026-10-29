@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Qualification des terrains édités et des assemblages SixDOF/poulie/sol et chemin/charnière/obstacle : témoins analytiques et Jolt, budgets de position explicites, mutations et retrait des corps. Le guide bilingue récapitule les douze familles et les limites des recettes.
+
 - Les grilles de terrain sélectionnent leurs cellules pour les rayons, balayages et contacts, avec identités conservées et témoins exhaustifs sur des reliefs irréguliers. Le rayon des maillages et les bornes des grilles sont réutilisés entre pas.
 
 - `HeightField3D` ajoute des versions de terrain par hauteurs : éditions locales de niveaux et de trous, anciennes formes conservées et publication explicite par `set_shape`. Les grilles évaluent leurs triangles depuis des échantillons copiés. La distance des calottes exposées de capsules effilées aux triangles utilise son certificat analytique, pour conserver les contacts CCD aux bords de terrain.

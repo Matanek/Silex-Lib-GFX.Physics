@@ -86,3 +86,6 @@ singularity handling, sleep, lifetime and real floor contact. Analytic Atwood
 energy propagates velocity tolerance; pairwise Jolt energy retains its 0.05 J
 bound. General spatial chains and exact impact-step phase remain outside
 these witnesses.
+
+[Mixed assemblies](TerrainConstraintQualification3D.md) add two SixDOF guides
+and ground contact with explicit position budgets.

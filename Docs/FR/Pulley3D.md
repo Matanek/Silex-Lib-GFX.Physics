@@ -91,3 +91,6 @@ limite inférieure, énergie, singularité, sommeil, durée de vie et contact r�
 au sol. L’énergie analytique d’Atwood propage la tolérance de vitesse ; la
 comparaison d’énergie avec Jolt garde sa borne de 0,05 J. Les chaînes spatiales
 générales et la phase exacte des impacts restent hors de ces témoins.
+
+Les [assemblages mixtes](TerrainConstraintQualification3D.md) ajoutent deux
+guides SixDOF et le contact au sol, avec budgets de position explicités.

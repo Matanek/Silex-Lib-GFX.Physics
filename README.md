@@ -72,3 +72,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Motorcycle balance](Docs/EN/Motorcycle3D.md) · [Équilibre moto](Docs/FR/Motorcycle3D.md): two suspended wheels, independently switchable balance assistance and speed-dependent steering limits.
 
 [Qualified vehicle profiles](Docs/EN/VehicleQualification3D.md) · [Profils véhicules qualifiés](Docs/FR/VehicleQualification3D.md): choose a family, contact detector and validated driving configuration, including current numerical limits.
+
+[Terrain and constraint assembly qualification](Docs/EN/TerrainConstraintQualification3D.md) · [Terrains et assemblages qualifiés](Docs/FR/TerrainConstraintQualification3D.md): supported connections, edited terrains and loaded assembly budgets.

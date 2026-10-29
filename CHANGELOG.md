@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Qualify edited terrains and SixDOF/pulley/ground and path/hinge/obstacle assemblies with analytical and Jolt controls, explicit position budgets, mutations and body removal. A bilingual guide lists all twelve families and recipe limits.
+
 - Terrain grids select cells for rays, sweeps and contacts while preserving face identities, checked against exhaustive irregular meshes. Mesh radii and grid bounds are reused between steps.
 
 - `HeightField3D` adds versioned height terrains: regional height and hole edits, preserved old shapes and explicit publication through `set_shape`. Grids evaluate triangles from owned sample copies. Exposed tapered-capsule caps use an analytical triangle-distance certificate, preserving CCD contacts at terrain rims.

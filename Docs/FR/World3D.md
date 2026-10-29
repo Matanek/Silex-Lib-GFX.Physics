@@ -308,8 +308,9 @@ que la distance rigide.
 La [charnière 3D](Hinge3D.md) maintient les ancrages et un axe de rotation,
 avec des butées rigides et un moteur de vitesse. Le
 [servo de charnière](HingePosition3D.md) approche un angle signé avec raideur,
-amortissement et couple borné. Le ressort de distance est disponible ; les
-autres familles d’articulations restent à livrer. Un choc très rapide peut
+amortissement et couple borné. Les douze familles et leurs réglages disponibles
+sont regroupés dans [la qualification des assemblages](TerrainConstraintQualification3D.md).
+Un choc très rapide peut
 encore traverser un obstacle quand le balayage continu est désactivé, ce qui
 est le réglage par défaut.
 
