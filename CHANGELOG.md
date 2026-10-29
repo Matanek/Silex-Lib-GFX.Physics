@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `PhysicalCharacter3D` adds a world-owned dynamic capsule with locked physical rotations and real mass. A consumer covers post-step contacts/support, slopes, platforms, resizing with fixed feet and mass, teleporting and lifetime.
+
 - `CharacterMover3D.move` adds bounded pushing, virtual weight and dynamic support following. Results expose owned contacts and share push budgets per compound body. `calculate_move` remains a query without impulses. Tests cover weight, effective mass, symmetries, pause and lifetime.
 
 - Virtual characters can resize their capsule while keeping their feet fixed: `try_resize` returns the new center or atomically rejects a blocked shape. `capsule()` reads the current dimensions and `reset()` forgets support after teleporting. Tests cover ceilings, width, filtering, sensors and kinematic transport.

@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world = Physics.World3D()
+    var character = world.create_physical_character()
+    character.body().set_angular_velocity(Math.Vec3(1.0, 0.0, 0.0))
+}

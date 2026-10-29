@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `PhysicalCharacter3D` ajoute une capsule dynamique propriétaire du monde, à rotations physiques bloquées et masse réelle. Contacts/appui après simulation, pente, plateforme, resize conservant les pieds et la masse, téléportation et durées de vie sont couverts par un consommateur.
+
 - `CharacterMover3D.move` ajoute poussée bornée, masse virtuelle et suivi des supports dynamiques. Les résultats exposent des contacts possédés ; le budget de poussée est partagé par corps composé. La requête `calculate_move` reste sans impulsions. Poids, masse effective, symétries, pause et durée de vie sont vérifiés.
 
 - Le personnage virtuel peut changer de capsule en conservant les pieds : `try_resize` retourne le nouveau centre ou refuse atomiquement une forme bloquée. `capsule()` lit les dimensions courantes et `reset()` oublie le support après téléportation. Plafond bas, largeur, filtres/capteurs et transport cinématique sont vérifiés.

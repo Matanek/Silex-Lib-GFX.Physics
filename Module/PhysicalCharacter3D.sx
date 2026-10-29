@@ -1,0 +1,149 @@
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.MassProperties3D
+use GFX.Physics.RigidBody3D.shape_mass_properties3d
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.CollisionFilter3D.CollisionFilter3D
+use GFX.Physics.CollisionFilter3D.QueryFilter3D
+use GFX.Physics.CharacterContact3D.CharacterContact3D
+use GFX.Physics.World3D.World3D
+use GFX.Physics.World3D.CharacterShape3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Geometry3D.front_triangle_contact3d
+use STD.Math
+
+public enum CharacterGroundState3D {
+    grounded
+    steep
+    touching
+    airborne
+}
+
+public struct PhysicalCharacter3DSettings {
+    var capsule:Capsule3D
+    var mass:float = 70.0
+    var friction:float = 0.2
+    var gravity_scale:float = 1.0
+    var max_slope_angle:float = 0.78539816
+    var support_distance:float = 0.02
+    var collision_filter:CollisionFilter3D
+    var allow_sleep:bool = false
+    init() { self.capsule = Capsule3D(0.3, 0.55); self.collision_filter = CollisionFilter3D() }
+}
+
+package class PhysicalCharacterState3D {
+    let body_id:BodyId3D
+    let slope_cos:float
+    let support_distance:float
+    var ground:CharacterGroundState3D
+    var normal:Math.Vec3
+    var velocity:Math.Vec3
+    var support_body:RigidBody3D?
+    var contacts:CharacterContact3D[]
+    init(body_id:BodyId3D, settings:PhysicalCharacter3DSettings) {
+        self.body_id = body_id
+        self.slope_cos = Math.cos(settings.max_slope_angle)
+        self.support_distance = settings.support_distance
+        self.ground = CharacterGroundState3D.airborne
+        self.normal = Math.Vec3.up(); self.velocity = Math.Vec3()
+        self.support_body = null; self.contacts = []
+    }
+    func reset() {
+        self.ground = CharacterGroundState3D.airborne
+        self.normal = Math.Vec3.up(); self.velocity = Math.Vec3()
+        self.support_body = null; self.contacts = []
+    }
+}
+
+package func physical_character_mass3d(capsule:Capsule3D, mass:float) MassProperties3D {
+    let geometry = shape_mass_properties3d(Shape3D.capsule(capsule), 1.0)
+    return MassProperties3D(mass, geometry.local_inertia.multiply(mass / geometry.mass))
+}
+
+package func validate_physical_character3d(settings:PhysicalCharacter3DSettings) {
+    if !finite_body3d_value(settings.mass) || settings.mass <= 0.0 ||
+        !finite_body3d_value(settings.max_slope_angle) || settings.max_slope_angle <= 0.0 ||
+        settings.max_slope_angle >= Math.pi() / 2.0 ||
+        !finite_body3d_value(settings.support_distance) || settings.support_distance < 0.0 {
+        panic("GFX.Physics.PhysicalCharacter3D requires positive mass and valid slope and support distance")
+    }
+}
+
+// A dynamic capsule with translation degrees of freedom. World3D owns its body.
+public class PhysicalCharacter3D {
+    private var current_body:RigidBody3D
+    private var state:PhysicalCharacterState3D
+    package init(body:RigidBody3D, state:PhysicalCharacterState3D) {
+        self.current_body = body; self.state = state
+    }
+    package func belongs_to_body(body:RigidBody3D) bool { return self.current_body.same_body(body) }
+    func is_valid() bool { return self.current_body.is_valid() }
+    private func require_valid() {
+        if !self.is_valid() { panic("GFX.Physics.PhysicalCharacter3D is no longer valid") }
+    }
+    func body() RigidBody3D { self.require_valid(); return self.current_body }
+    func position() Math.Vec3 { return self.body().position() }
+    func linear_velocity() Math.Vec3 { return self.body().linear_velocity() }
+    func set_linear_velocity(velocity:Math.Vec3) { self.body().set_linear_velocity(velocity) }
+    func capsule() Capsule3D {
+        match self.body().shape() {
+            capsule(shape) => { return shape }
+            else => { panic("GFX.Physics.PhysicalCharacter3D body must retain a capsule shape") }
+        }
+    }
+    func set_position(position:Math.Vec3) {
+        self.body().set_transform(Transform3D(position, self.body().rotation()))
+        self.state.reset()
+    }
+    func ground_state() CharacterGroundState3D {
+        self.require_valid()
+        if self.state.ground == CharacterGroundState3D.grounded || self.state.ground == CharacterGroundState3D.steep {
+            if self.support() == null { return CharacterGroundState3D.airborne }
+        }
+        return self.state.ground
+    }
+    func is_grounded() bool { return self.ground_state() == CharacterGroundState3D.grounded }
+    func ground_normal() Math.Vec3 { self.require_valid(); return self.state.normal }
+    func ground_velocity() Math.Vec3 { self.require_valid(); return self.state.velocity }
+    func support() RigidBody3D? {
+        self.require_valid()
+        if var body = self.state.support_body { if body.is_valid() && body.is_enabled() { return body } }
+        return null
+    }
+    func contact_count() int { self.require_valid(); return self.state.contacts.count() }
+    func contact(index:int) CharacterContact3D { self.require_valid(); return self.state.contacts[index] }
+
+    func try_resize(world:@World3D, capsule:Capsule3D, max_penetration:float = 0.005) bool {
+        var body = self.body()
+        if !world.owns_body(body) { panic("GFX.Physics.PhysicalCharacter3D belongs to another world") }
+        if !finite_body3d_value(max_penetration) || max_penetration < 0.0 {
+            panic("GFX.Physics.PhysicalCharacter3D requires a finite non-negative resize penetration")
+        }
+        let old = self.capsule()
+        let position = body.position().add(Math.Vec3(0.0,
+            capsule.radius + capsule.half_height - old.radius - old.half_height, 0.0))
+        if !finite_body3d_point(position) { panic("GFX.Physics.PhysicalCharacter3D requires finite resize position") }
+        let properties = physical_character_mass3d(capsule, body.mass_properties().mass)
+        let shape = Shape3D.capsule(capsule)
+        let placement = ShapePlacement3D(shape, Transform3D(position, body.rotation()))
+        let radius = capsule.radius + capsule.half_height
+        var candidates:CharacterShape3D[] = []
+        world.character_shapes(position.subtract(Math.Vec3(radius)), position.add(Math.Vec3(radius)),
+            QueryFilter3D(mask_bits:body.collision_filter().mask_bits, include_sensors:false), candidates)
+        for target in candidates {
+            var other = world.character_body(target.body_id)
+            if other.same_body(body) || !body.collision_filter().allows(other.collision_filter()) { continue }
+            if front_triangle_contact3d(placement, target.placement) &&
+                contact_distance3d(placement, target.placement).separation < -max_penetration - 0.00001 { return false }
+        }
+        body.set_shape(shape)
+        body.set_mass_properties(properties)
+        body.set_transform(placement.transform())
+        return true
+    }
+}

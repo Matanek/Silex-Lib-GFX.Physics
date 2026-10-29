@@ -1,0 +1,7 @@
+use GFX.Physics
+func main() {
+    var owner = Physics.World3D()
+    var other = Physics.World3D()
+    var character = owner.create_physical_character()
+    other.destroy_physical_character(character)
+}

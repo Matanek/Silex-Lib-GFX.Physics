@@ -13,8 +13,9 @@ simultaneous valley supports and merge duplicate seam or ridge reactions.
 Public translation sweeps and filtered world queries accompany rigid or spring
 distance constraints, point joints and hinges with hard stops, torque-limited
 velocity/position motors with symmetric or signed effort bounds, optional soft stops and passive axis friction, contact events,
-sleeping and linear CCD. A virtual
-capsule character also walks on fixed convex hulls. See the documentation for
+sleeping and linear CCD. Virtual capsule characters walk, resize and push dynamic objects.
+[Physical capsule characters](Docs/EN/PhysicalCharacter3D.md) use the rigid solver
+with real mass and locked rotations. See the documentation for
 qualified pairs and limits.
 
 ```text
@@ -27,7 +28,7 @@ silex install GFX.Physics
 - [English documentation](Docs/EN/README.md)
 - [Release notes](CHANGELOG.md) · [Nouveautés](CHANGELOG.fr.md)
 
-The package requires Silex 0.44.0 or newer.
+The package requires Silex 0.47.1 or newer.
 
 Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · [Français](Docs/FR/HingeCombined3D.md).
 

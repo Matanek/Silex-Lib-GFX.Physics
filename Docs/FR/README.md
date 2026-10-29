@@ -205,3 +205,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 [Véhicule à deux chenilles : conduite, pivot et freinage](TrackedVehicle3D.md).
 
 [Équilibrer et diriger une moto](Motorcycle3D.md).
+
+- [Personnage physique 3D](PhysicalCharacter3D.md)

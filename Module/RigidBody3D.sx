@@ -141,6 +141,7 @@ package class BodyState3D {
     var transform:Transform3D
     var linear_velocity:Math.Vec3
     var angular_velocity:Math.Vec3
+    var rotation_locked:bool = false
     var force:Math.Vec3
     var torque:Math.Vec3
     var mass_properties:MassProperties3D
@@ -276,6 +277,10 @@ package class BodyState3D {
         )
         self.inverse_inertia_tensor = invert_inertia3d(properties.inertia_tensor)
         self.has_cross_inertia = cross_inertia3d(properties.inertia_tensor)
+        if self.rotation_locked {
+            self.inverse_inertia = Math.Vec3(); self.inverse_inertia_tensor = Math.Mat3.zero()
+            self.has_cross_inertia = false
+        }
         self.linear_velocity = self.linear_velocity.add(
             self.angular_velocity.cross(self.world_center().subtract(previous_center))
         )
@@ -401,6 +406,13 @@ public class RigidBody3D {
         var state = self.store.require(self.id)
         let arm = point.subtract(state.world_center()).cross(normal)
         return state.inverse_mass + arm.dot(state.inverse_inertia_times(arm))
+    }
+    package func lock_rotation() {
+        self.store.require_mutable()
+        var state = self.store.require(self.id)
+        state.rotation_locked = true
+        state.inverse_inertia = Math.Vec3(); state.inverse_inertia_tensor = Math.Mat3.zero()
+        state.has_cross_inertia = false; state.angular_velocity = Math.Vec3()
     }
     func body_type() BodyType3D { return self.store.require(self.id).body_type }
     func shape() Shape3D { return self.store.require(self.id).shape }
@@ -550,6 +562,9 @@ public class RigidBody3D {
         self.store.require_mutable()
         var state = self.store.require(self.id)
         if state.body_type == BodyType3D.fixed { panic("GFX.Physics.RigidBody3D fixed body cannot rotate") }
+        if state.rotation_locked && velocity.length_squared() > 0.0 {
+            panic("GFX.Physics.RigidBody3D rotation is locked by its character")
+        }
         state.angular_velocity = velocity
         state.target = null
         state.wake()

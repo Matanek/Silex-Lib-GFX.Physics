@@ -152,6 +152,9 @@ public use GFX.Physics.CharacterContact3D.CharacterContact3D
 public use GFX.Physics.CharacterMover3D.CharacterMover3D
 public use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
 public use GFX.Physics.CharacterMover3D.CharacterMoveResult3D
+public use GFX.Physics.PhysicalCharacter3D.PhysicalCharacter3D
+public use GFX.Physics.PhysicalCharacter3D.PhysicalCharacter3DSettings
+public use GFX.Physics.PhysicalCharacter3D.CharacterGroundState3D
 
 public use GFX.Physics.ConvexHull3D.ConvexHull3D
 

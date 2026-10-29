@@ -1,0 +1,130 @@
+use GFX.Physics
+use STD.Math
+
+func floor(world:Physics.World3D) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+}
+func rest_and_resize() {
+    var world = Physics.World3D()
+    var support = floor(world)
+    var actor = world.create_physical_character(position:Math.Vec3(0.0, 1.2, 0.0))
+    var step = 0
+    while step < 180 { world.step(1.0 / 120.0); step++ }
+    assert(actor.is_grounded() && Math.abs(actor.position().y - 0.85) < 0.005)
+    assert(actor.ground_normal().nearly_equal(Math.Vec3.up(), 0.0001))
+    if var body = actor.support() { assert(body.same_body(support)) } else { assert(false) }
+    assert(world.physical_character_count() == 1 && world.body_count() == 2)
+    let feet = actor.position().y - 0.85
+    assert(actor.try_resize(world, Physics.Capsule3D(0.3, 0.15)))
+    assert(Math.abs(actor.position().y - 0.45 - feet) < 0.00001)
+    var ceiling = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(4.0, 0.2, 4.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, 1.1, 0.0)))
+    let before = actor.position()
+    assert(!actor.try_resize(world, Physics.Capsule3D(0.3, 0.55)) && actor.position() == before)
+    assert(actor.capsule().half_height == 0.15 && actor.body().mass_properties().mass == 70.0)
+    world.destroy_rigid_body(ceiling)
+    assert(actor.try_resize(world, Physics.Capsule3D(0.3, 0.55)))
+    actor.body().apply_impulse(Math.Vec3(1.0, 0.0, 0.0), actor.position().add(Math.Vec3(0.0, 0.4, 0.0)))
+    world.step(1.0 / 120.0)
+    assert(actor.body().angular_velocity().length() == 0.0)
+    assert(actor.body().rotation().rotate(Math.Vec3.up()).nearly_equal(Math.Vec3.up(), 0.00001))
+    actor.set_position(Math.Vec3(0.0, 4.0, 0.0))
+    assert(!actor.is_grounded() && actor.contact_count() == 0)
+    world.destroy_physical_character(actor)
+    assert(!actor.is_valid() && world.physical_character_count() == 0 && world.body_count() == 1)
+}
+func momentum() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var actor = world.create_physical_character(Physics.PhysicalCharacter3DSettings() ..mass = 70.0 ..friction = 0.0,
+        Math.Vec3(-0.6, 0.0, 0.0))
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.3)) ..friction = 0.0
+        ..mass_properties = Physics.MassProperties3D(30.0, Math.Vec3(1.0)) ..allow_sleep = false)
+    actor.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    world.step(0.01)
+    assert(Math.abs(actor.linear_velocity().x - 0.7) < 0.0001)
+    assert(Math.abs(ball.linear_velocity().x - 0.7) < 0.0001)
+    assert(Math.abs(70.0 * actor.linear_velocity().x + 30.0 * ball.linear_velocity().x - 70.0) < 0.001)
+}
+func slope() {
+    let angles:float[] = [0.3, 1.0]
+    for angle in angles {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        let normal = Math.Vec3(Math.sin(angle), Math.cos(angle), 0.0)
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = Physics.Shape3D.plane(Physics.Plane3D(normal)))
+        let height = 0.55 * Math.abs(normal.y) + 0.3
+        var actor = world.create_physical_character(position:normal.multiply(height))
+        world.step(1.0 / 120.0)
+        assert(actor.ground_normal().nearly_equal(normal, 0.0001))
+        if angle < 0.7 { assert(actor.ground_state() == Physics.CharacterGroundState3D.grounded) }
+        else { assert(actor.ground_state() == Physics.CharacterGroundState3D.steep && !actor.is_grounded()) }
+    }
+}
+func removal() {
+    var world = Physics.World3D()
+    var support = floor(world)
+    var actor = world.create_physical_character(position:Math.Vec3(0.0, 0.85, 0.0))
+    world.step(1.0 / 120.0)
+    assert(actor.is_grounded())
+    world.destroy_rigid_body(support)
+    assert(!actor.is_grounded() && actor.support() == null)
+    world.destroy_rigid_body(actor.body())
+    assert(!actor.is_valid() && world.physical_character_count() == 0)
+}
+func platform_motion() {
+    var world = Physics.World3D()
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(6.0, 0.2, 6.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, -0.1, 0.0)) ..linear_velocity = Math.Vec3(0.5, 0.0, 0.0) ..friction = 0.8)
+    var actor = world.create_physical_character(Physics.PhysicalCharacter3DSettings() ..friction = 0.8,
+        Math.Vec3(0.0, 0.85, 0.0))
+    var step = 0
+    while step < 120 { world.step(1.0 / 120.0); step++ }
+    assert(actor.is_grounded() && Math.abs(actor.position().x - platform.position().x) < 0.05)
+    assert(actor.ground_velocity().nearly_equal(Math.Vec3(0.5, 0.0, 0.0), 0.0001))
+    let position = actor.position(); let contacts = actor.contact_count()
+    world.step(0.0)
+    assert(actor.position() == position && actor.contact_count() == contacts)
+}
+func filters() {
+    var world = Physics.World3D()
+    var support = floor(world)
+    support.set_sensor(true)
+    var actor = world.create_physical_character(position:Math.Vec3(0.0, 0.85, 0.0))
+    world.step(1.0 / 120.0)
+    assert(!actor.is_grounded() && actor.contact_count() == 0)
+    support.set_sensor(false)
+    actor.set_position(Math.Vec3(0.0, 0.85, 0.0)); actor.set_linear_velocity(Math.Vec3())
+    actor.body().set_collision_filter(Physics.CollisionFilter3D(category_bits:2, mask_bits:1))
+    support.set_collision_filter(Physics.CollisionFilter3D(category_bits:1, mask_bits:1))
+    world.step(1.0 / 120.0)
+    assert(!actor.is_grounded())
+    support.set_collision_filter(Physics.CollisionFilter3D(category_bits:1, mask_bits:2))
+    actor.set_position(Math.Vec3(0.0, 0.85, 0.0)); actor.set_linear_velocity(Math.Vec3())
+    world.step(1.0 / 120.0)
+    assert(actor.is_grounded())
+    actor.body().set_enabled(false)
+    world.step(1.0 / 120.0)
+    assert(actor.is_valid() && !actor.is_grounded())
+}
+func lifetime() {
+    var saved:Physics.PhysicalCharacter3D? = null
+    {
+        var world = Physics.World3D()
+        saved = world.create_physical_character()
+        assert(saved!.is_valid())
+    }
+    assert(!saved!.is_valid())
+}
+
+test "physical character falls rests keeps upright and resizes atomically with its mass" { rest_and_resize() }
+test "physical character exchanges momentum with dynamic bodies through the rigid solver" { momentum() }
+test "physical character classifies walkable and steep planes after the physics step" { slope() }
+test "physical character follows a kinematic platform through real friction and reports its velocity" { platform_motion() }
+test "physical character support honors sensors reciprocal masks and disabled characters" { filters() }
+test "physical character handles expire with their world" { lifetime() }
+test "physical character support and handle invalidate safely when bodies are removed" { removal() }
+func main() { rest_and_resize(); momentum(); slope(); platform_motion(); filters(); lifetime(); removal(); print("Physical characters: all scenarios passed") }

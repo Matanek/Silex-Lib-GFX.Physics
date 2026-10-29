@@ -142,6 +142,13 @@ use GFX.Physics.WorldQuery3D.WorldRayHit3D
 use GFX.Physics.WorldQuery3D.WorldOverlap3D
 use GFX.Physics.CollisionFilter3D.QueryFilter3D
 use STD.Algorithms.Sort
+use GFX.Physics.PhysicalCharacter3D.PhysicalCharacter3D
+use GFX.Physics.PhysicalCharacter3D.PhysicalCharacter3DSettings
+use GFX.Physics.PhysicalCharacter3D.PhysicalCharacterState3D
+use GFX.Physics.PhysicalCharacter3D.CharacterGroundState3D
+use GFX.Physics.PhysicalCharacter3D.physical_character_mass3d
+use GFX.Physics.PhysicalCharacter3D.validate_physical_character3d
+use GFX.Physics.CharacterContact3D.CharacterContact3D
 use STD.Math
 
 public struct World3DSettings {
@@ -165,6 +172,7 @@ package struct CharacterShape3D {
 
 public class World3D {
     private var store:BodyStore3D
+    private var physical_characters:PhysicalCharacterState3D[]
     private var distance_constraints:DistanceConstraintStore3D
     private var slider_constraints:SliderConstraintStore3D
     private var fixed_constraints:FixedConstraintStore3D
@@ -215,6 +223,7 @@ public class World3D {
             panic("GFX.Physics.World3D requires velocity iterations between 1 and 128")
         }
         self.store = BodyStore3D()
+        self.physical_characters = []
         self.distance_constraints = DistanceConstraintStore3D(self.store)
         self.slider_constraints = SliderConstraintStore3D(self.store)
         self.fixed_constraints = FixedConstraintStore3D(self.store)
@@ -488,6 +497,25 @@ public class World3D {
         return false
     }
 
+    func create_physical_character(settings:PhysicalCharacter3DSettings = PhysicalCharacter3DSettings(),
+        position:Math.Vec3 = Math.Vec3()) PhysicalCharacter3D {
+        validate_physical_character3d(settings)
+        var body = self.create_rigid_body(RigidBody3DSettings()
+            ..shape = Shape3D.capsule(settings.capsule) ..transform = Transform3D(position)
+            ..mass_properties = physical_character_mass3d(settings.capsule, settings.mass)
+            ..friction = settings.friction ..gravity_scale = settings.gravity_scale
+            ..collision_filter = settings.collision_filter ..allow_sleep = settings.allow_sleep)
+        body.lock_rotation()
+        var state = PhysicalCharacterState3D(body.body_id(), settings)
+        self.physical_characters.append(state)
+        return PhysicalCharacter3D(body, state)
+    }
+    func destroy_physical_character(character:PhysicalCharacter3D) {
+        self.destroy_rigid_body(character.body())
+    }
+    func physical_character_count() int { return self.physical_characters.count() }
+    package func owns_body(body:RigidBody3D) bool { return body.belongs_to(self.store) }
+
     func create_rigid_body(settings:RigidBody3DSettings = RigidBody3DSettings()) RigidBody3D {
         let id = self.store.append(settings)
         return RigidBody3D(self.store, id)
@@ -723,6 +751,11 @@ public class World3D {
             if vehicle.chassis_id()!=body.body_id() { vehicle.forget_support(body.body_id());retained_vehicles.append(vehicle) }
         }
         self.wheeled_vehicles=retained_vehicles
+        var retained_characters:PhysicalCharacterState3D[] = []
+        for character in self.physical_characters {
+            if character.body_id != body.body_id() { retained_characters.append(character) }
+        }
+        self.physical_characters = retained_characters
         self.store.destroy(body.body_id())
         var retained:Contact3D[] = []
         for contact in self.contacts {
@@ -1064,6 +1097,7 @@ public class World3D {
             self.emit_continuous_sensor_events(previous_poses, continuous_poses)
         }
         self.update_sleep(delta)
+        self.update_physical_characters()
         self.store.locked = false
     }
 
@@ -1205,6 +1239,44 @@ public class World3D {
                 }
             }
             first_slot++
+        }
+    }
+
+    private func update_physical_characters() {
+        for entry in self.physical_characters {
+            var character = entry
+            character.reset()
+            if !self.store.contains(character.body_id) { continue }
+            var body = self.store.require(character.body_id)
+            if !body.is_enabled { continue }
+            let placement = ShapePlacement3D(body.shape, body.transform)
+            let reach = shape_bounding_radius3d(body.shape) + character.support_distance
+            var candidates:CharacterShape3D[] = []
+            self.character_shapes(body.transform.position.subtract(Math.Vec3(reach)),
+                body.transform.position.add(Math.Vec3(reach)),
+                QueryFilter3D(mask_bits:body.collision_filter.mask_bits, include_sensors:false), candidates)
+            var best_y = -1.0
+            for target in candidates {
+                if target.body_id == character.body_id { continue }
+                var other = self.store.require(target.body_id)
+                if !body.collision_filter.allows(other.collision_filter) ||
+                    !front_triangle_contact3d(placement, target.placement) { continue }
+                let distance = contact_distance3d(placement, target.placement)
+                if distance.separation > character.support_distance { continue }
+                let normal = distance.normal.negated()
+                var support = RigidBody3D(self.store, target.body_id)
+                character.contacts.append(CharacterContact3D(support, distance.second_point, normal, distance.separation))
+                if normal.y > best_y && distance.second_point.y <= body.world_center().y + 0.00001 {
+                    best_y = normal.y
+                    character.normal = normal
+                    character.support_body = support
+                    character.velocity = support.velocity_at(distance.second_point)
+                }
+            }
+            if character.contacts.is_empty() { character.ground = CharacterGroundState3D.airborne }
+            else if best_y >= character.slope_cos { character.ground = CharacterGroundState3D.grounded }
+            else if best_y > 0.00001 { character.ground = CharacterGroundState3D.steep }
+            else { character.ground = CharacterGroundState3D.touching }
         }
     }
 
