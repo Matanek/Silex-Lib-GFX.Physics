@@ -154,10 +154,12 @@ public struct World3DSettings {
 package struct CharacterShape3D {
     let body_id:BodyId3D
     let placement:ShapePlacement3D
+    let is_sensor:bool
 
-    init(body_id:BodyId3D, placement:ShapePlacement3D) {
+    init(body_id:BodyId3D, placement:ShapePlacement3D, is_sensor:bool = false) {
         self.body_id = body_id
         self.placement = placement
+        self.is_sensor = is_sensor
     }
 }
 
@@ -943,7 +945,7 @@ public class World3D {
             if let state = self.store.slots[slot] {
                 if state.is_enabled && filter.allows(state.collision_filter, state.is_sensor) {
                     if plane_shape3d(state.shape) {
-                        append_character_shapes3d(state.shape, state.transform, BodyId3D(slot,self.store.generations[slot]),output)
+                        append_character_shapes3d(state.shape, state.transform, BodyId3D(slot,self.store.generations[slot]),output,state.is_sensor)
                         slot++; continue
                     }
                     let extent = broad_extent3d(state.shape, state.transform, shape_bounding_radius3d(state.shape))
@@ -953,7 +955,7 @@ public class World3D {
                         hi.y >= lower.y && lo.y <= upper.y &&
                         hi.z >= lower.z && lo.z <= upper.z {
                         append_character_shapes3d(state.shape, state.transform,
-                            BodyId3D(slot, self.store.generations[slot]), output)
+                            BodyId3D(slot, self.store.generations[slot]), output, state.is_sensor)
                     }
                 }
             }
@@ -4591,7 +4593,7 @@ func continuous_fraction3d(
 }
 
 func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
-    body_id:BodyId3D, output:&CharacterShape3D[]) {
+    body_id:BodyId3D, output:&CharacterShape3D[], is_sensor:bool = false) {
     match shape {
         compound(compound) => {
             var index = 0
@@ -4599,19 +4601,19 @@ func append_character_shapes3d(shape:Shape3D, transform:Transform3D,
                 let child = compound.child(index)
                 index++
                 append_character_shapes3d(child.shape,
-                    compound_child_transform(transform, child), body_id, output)
+                    compound_child_transform(transform, child), body_id, output, is_sensor)
             }
         }
-        box(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        sphere(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        triangle(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        mesh(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        convex(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        tapered_cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        tapered_capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
-        plane(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform))) }
+        box(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        sphere(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        triangle(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        mesh(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        convex(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        tapered_cylinder(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        tapered_capsule(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
+        plane(_) => { output.append(CharacterShape3D(body_id, ShapePlacement3D(shape, transform), is_sensor)) }
     }
 }
 

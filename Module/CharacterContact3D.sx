@@ -1,0 +1,18 @@
+use GFX.Physics.RigidBody3D.RigidBody3D
+use STD.Math
+
+// Owned contact data; the body handle retains its usual world lifetime rules.
+public struct CharacterContact3D {
+    private var current_body:RigidBody3D
+    let position:Math.Vec3
+    let normal:Math.Vec3
+    let separation:float
+
+    package init(body:RigidBody3D, position:Math.Vec3, normal:Math.Vec3, separation:float) {
+        self.current_body = body
+        self.position = position
+        self.normal = normal
+        self.separation = separation
+    }
+    func body() RigidBody3D { return self.current_body }
+}

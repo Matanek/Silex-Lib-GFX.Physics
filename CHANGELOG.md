@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D.move` adds bounded pushing, virtual weight and dynamic support following. Results expose owned contacts and share push budgets per compound body. `calculate_move` remains a query without impulses. Tests cover weight, effective mass, symmetries, pause and lifetime.
+
 - Virtual characters can resize their capsule while keeping their feet fixed: `try_resize` returns the new center or atomically rejects a blocked shape. `capsule()` reads the current dimensions and `reset()` forgets support after teleporting. Tests cover ceilings, width, filtering, sensors and kinematic transport.
 
 - Capsule/box containment uses the exit depth of the whole segment and its radius, including face and extruded-edge axes. Contained spheres and capsules follow the signed response normal in geometry queries; the world no longer flips it again. Deeply embedded characters recover to the same stable support as an equivalent convex box. Analytical tests cover reverse queries, rotations, three scales and both body creation orders.

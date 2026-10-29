@@ -1,0 +1,113 @@
+use GFX.Physics
+use STD.Math
+
+func settings(shape:Physics.Shape3D, position:Math.Vec3) Physics.RigidBody3DSettings {
+    return Physics.RigidBody3DSettings() ..shape = shape ..transform = Physics.Transform3D(position)
+        ..mass_properties = Physics.MassProperties3D(10.0, Math.Vec3(1.0)) ..allow_sleep = false
+}
+func pushes() {
+    let signs:int[] = [-1, 1]
+    for sign in signs {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var sphere = world.create_rigid_body(settings(Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+            Math.Vec3(sign as float, 0.852, 0.0)))
+        var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..max_push_force = 100.0)
+        let query = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(sign as float, 0.0, 0.0))
+        assert(sphere.linear_velocity().length() == 0.0 && query.contact_count() == 1)
+        let moved = mover.move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(sign as float, 0.0, 0.0), 0.1)
+        assert(Math.abs(moved.position.x - 0.198 * sign as float) < 0.0001)
+        assert(Math.abs(sphere.linear_velocity().x - sign as float) < 0.0001)
+        assert(sphere.angular_velocity().length() < 0.0001 && world.body_count() == 1 && world.contact_count() == 0)
+        let contact = moved.contact(0)
+        assert(contact.body().same_body(sphere))
+        assert(contact.normal.nearly_equal(Math.Vec3(-sign as float, 0.0, 0.0), 0.0001))
+        let saved = contact.position
+        world.destroy_rigid_body(sphere)
+        assert(!contact.body().is_valid() && contact.position == saved && moved.contact_count() == 1)
+    }
+}
+func damping() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var sphere = world.create_rigid_body(settings(Physics.Shape3D.sphere(Physics.Sphere3D(0.5)), Math.Vec3(1.0, 0.852, 0.0)))
+    var mover = Physics.CharacterMover3D()
+    mover.move(world, Math.Vec3(0.198, 0.852, 0.0), Math.Vec3(0.001, 0.0, 0.0), 0.1)
+    assert(Math.abs(sphere.linear_velocity().x - 0.009) < 0.00001)
+    let velocity = sphere.linear_velocity()
+    mover.move(world, Math.Vec3(0.198, 0.852, 0.0), Math.Vec3(), 0.1)
+    assert(sphere.linear_velocity() == velocity)
+}
+func compounds() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    let shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.5))
+    var children:Physics.CompoundChild3D[] = [
+        Physics.CompoundChild3D(10, shape, Physics.Transform3D(Math.Vec3(0.0, -0.25, 0.0))),
+        Physics.CompoundChild3D(20, shape, Physics.Transform3D(Math.Vec3(0.0, 0.25, 0.0)))]
+    var body = world.create_rigid_body(settings(Physics.Shape3D.compound(Physics.Compound3D(children)), Math.Vec3(1.0, 0.852, 0.0)))
+    var mover = Physics.CharacterMover3D()
+    let moved = mover.move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(1.0, 0.0, 0.0), 0.1)
+    assert(moved.contact_count() == 2)
+    assert(Math.abs(body.linear_velocity().x - 1.0) < 0.0001)
+    assert(body.angular_velocity().length() < 0.0001)
+}
+func weight_and_pause() {
+    var world = Physics.World3D()
+    var platform = world.create_rigid_body(settings(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(6.0, 0.2, 6.0))),
+        Math.Vec3(0.0, -0.1, 0.0)))
+    var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings() ..mass = 70.0)
+    let first = mover.move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(), 1.0 / 60.0)
+    assert(first.grounded && Math.abs(platform.linear_velocity().y + 70.0 / 10.0 * 9.81 / 60.0) < 0.0001)
+    let velocity = platform.linear_velocity()
+    let paused = mover.move(world, first.position, Math.Vec3(100.0, 0.0, 0.0), 0.0, true)
+    assert(paused.position == first.position && paused.grounded && platform.linear_velocity() == velocity)
+    world.step(1.0 / 60.0)
+    let next = mover.move(world, first.position, Math.Vec3(), 1.0 / 60.0, true)
+    assert(next.grounded && Math.abs(next.position.y - platform.position().y - 0.952) < 0.0001)
+    world.destroy_rigid_body(platform)
+    let removed = mover.move(world, next.position, Math.Vec3(), 1.0 / 60.0, true)
+    assert(!removed.grounded && removed.support() == null)
+}
+func filtering() {
+    for mode in [0, 1, 2, 3] {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var config = settings(Physics.Shape3D.sphere(Physics.Sphere3D(0.5)), Math.Vec3(1.0, 0.852, 0.0))
+        if mode == 0 { config.is_sensor = true }
+        if mode == 1 { config.collision_filter = Physics.CollisionFilter3D(category_bits:2) }
+        if mode == 2 { config.is_enabled = false }
+        if mode == 3 { config.body_type = Physics.BodyType3D.fixed; config.mass_properties = null }
+        var body = world.create_rigid_body(config)
+        var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings()
+            ..filter = Physics.QueryFilter3D(mask_bits:1, include_sensors:true))
+        let result = mover.move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3(1.0, 0.0, 0.0), 0.1)
+        assert(body.linear_velocity().length() == 0.0)
+        if mode < 3 { assert(Math.abs(result.position.x - 1.0) < 0.0001) }
+        else { assert(result.position.x < 0.2 && result.contact_count() == 1) }
+    }
+}
+func moving_support() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var config = settings(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(6.0, 0.2, 6.0))), Math.Vec3(0.0, -0.1, 0.0))
+    config.linear_velocity = Math.Vec3(0.2, 0.0, -0.1)
+    config.angular_velocity = Math.Vec3(0.0, 0.3, 0.0)
+    var platform = world.create_rigid_body(config)
+    var mover = Physics.CharacterMover3D()
+    let attachment = Math.Vec3(1.0, 0.952, 0.0)
+    var position = platform.transform().point(attachment)
+    let initial = mover.move(world, position, Math.Vec3(), 1.0 / 120.0)
+    assert(initial.grounded)
+    var step = 0
+    while step < 90 {
+        world.step(1.0 / 120.0)
+        let result = mover.move(world, position, Math.Vec3(), 1.0 / 120.0, true)
+        position = result.position
+        assert(result.grounded && position.nearly_equal(platform.transform().point(attachment), 0.0002))
+        step++
+    }
+}
+
+test "virtual movement applies a bounded impulse while the query stays read only and contacts retain owned data" { pushes() }
+test "weak virtual push matches the analytical damped effective mass impulse and never pulls a separating body" { damping() }
+test "compound leaves share one body push budget and preserve balanced angular momentum" { compounds() }
+test "a virtual character transfers its weight follows a dynamic support and pauses without forces" { weight_and_pause() }
+test "virtual movement follows translation and yaw of a finite mass support" { moving_support() }
+test "sensors filters disabled and fixed bodies do not receive virtual impulses" { filtering() }
+func main() { pushes(); damping(); compounds(); weight_and_pause(); moving_support(); filtering(); print("Virtual character dynamics: all scenarios passed") }

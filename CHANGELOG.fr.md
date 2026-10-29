@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `CharacterMover3D.move` ajoute poussée bornée, masse virtuelle et suivi des supports dynamiques. Les résultats exposent des contacts possédés ; le budget de poussée est partagé par corps composé. La requête `calculate_move` reste sans impulsions. Poids, masse effective, symétries, pause et durée de vie sont vérifiés.
+
 - Le personnage virtuel peut changer de capsule en conservant les pieds : `try_resize` retourne le nouveau centre ou refuse atomiquement une forme bloquée. `capsule()` lit les dimensions courantes et `reset()` oublie le support après téléportation. Plafond bas, largeur, filtres/capteurs et transport cinématique sont vérifiés.
 
 - Les inclusions capsule/boîte utilisent la profondeur de sortie du segment entier et de son rayon, avec axes de faces et d’arêtes extrudées. Les sphères et capsules incluses suivent la normale signée de réponse dès la requête géométrique ; le monde ne la retourne plus une seconde fois. Une capsule profondément incluse retrouve son appui sans oscillation, comme sur une boîte convexe identique. Tests analytiques, requêtes inversées, rotations, trois échelles et deux ordres de création des corps.

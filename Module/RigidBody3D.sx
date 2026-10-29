@@ -393,6 +393,15 @@ public class RigidBody3D {
     }
     package func belongs_to(store:BodyStore3D) bool { return self.store == store }
     package func body_id() BodyId3D { return self.id }
+    package func velocity_at(point:Math.Vec3) Math.Vec3 {
+        var state = self.store.require(self.id)
+        return state.linear_velocity.add(state.angular_velocity.cross(point.subtract(state.world_center())))
+    }
+    package func inverse_mass_at(point:Math.Vec3, normal:Math.Vec3) float {
+        var state = self.store.require(self.id)
+        let arm = point.subtract(state.world_center()).cross(normal)
+        return state.inverse_mass + arm.dot(state.inverse_inertia_times(arm))
+    }
     func body_type() BodyType3D { return self.store.require(self.id).body_type }
     func shape() Shape3D { return self.store.require(self.id).shape }
     func transform() Transform3D { return self.store.require(self.id).transform }

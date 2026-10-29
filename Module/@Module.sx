@@ -148,6 +148,7 @@ contribute GFX.Plugins {
     public use GFX.Physics.Application3D.Plugin as Physics3D
 }
 
+public use GFX.Physics.CharacterContact3D.CharacterContact3D
 public use GFX.Physics.CharacterMover3D.CharacterMover3D
 public use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
 public use GFX.Physics.CharacterMover3D.CharacterMoveResult3D

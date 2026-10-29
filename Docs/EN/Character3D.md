@@ -69,6 +69,40 @@ y=0.8 inside a 4×2×4 box exits at y=1.852, including skin. The eight recovery
 passes remain bounded; conflicting obstacles or a distant exit may still leave
 residual penetration.
 
+## Interact with dynamic bodies
+
+`move(world, position, translation, delta, was_grounded)` uses the same capsule
+movement solver with physical exchanges. Translation is the requested motion in
+meters and `delta` is the duration in seconds. The application still chooses the
+character gravity, jumping and controls.
+
+```sx
+var result = mover.move(world, position, velocity.multiply(delta), delta, grounded)
+position = result.position
+grounded = result.grounded
+velocity = result.clip_velocity(velocity)
+```
+
+`mass` defaults to 70 kg and transfers weight to dynamic supports.
+`max_push_force` defaults to 100 N and limits push impulses, sharing a budget
+between children of the same compound body. Zero disables weight or pushing,
+respectively. Contact-point velocity, lever arm and inertia contribute to the
+response. Sensors never receive impulses; when included by the filter, their
+contacts are observable without blocking `move`. Zero duration preserves position
+and applies no force.
+
+`calculate_move` remains a query without impulses. `move` also follows dynamic
+supports between calls after `world.step(delta)`; the application does not add
+support motion to its own translation.
+
+The result owns a snapshot exposed by `contact_count()` and `contact(index)`:
+`position`, `normal` pointing from the surface toward the character, `separation`
+and `body()`. Data remains readable after later moves; the body handle retains its
+validity rules after destruction or world disposal. Virtual mass is not a registered
+rigid body and receives no recoil: movement remains driven. `mass` controls support load without
+turning this mover into a dynamic body.
+See the [virtual dynamics witnesses](../../Tests/Consumer/Tests/CharacterDynamics3D.sx).
+
 ## Resize and teleport
 
 `capsule()` reads the current dimensions. `try_resize(world, position, capsule)`
@@ -105,8 +139,8 @@ or disabling the support, or excluding it with the query filter ends the carry.
 with any body handle, check `is_valid()` before reusing it after possible
 destruction.
 
-Other encountered bodies remain obstacles at their current poses. The mover
-does not push dynamic bodies or follow them as moving supports. The capsule
+`calculate_move` queries encountered bodies at their current poses.
+`move` adds the dynamic exchanges described above. The capsule
 retains its vertical axis. Physical characters and
 character-to-character interactions remain to be implemented. The package
 imposes no jump or camera behavior. Do not share one instance concurrently

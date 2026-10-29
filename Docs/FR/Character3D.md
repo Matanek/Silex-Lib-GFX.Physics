@@ -72,6 +72,41 @@ volume entier et retrouve le même appui que son enveloppe convexe : la capsule
 Les huit passes restent bornées ; plusieurs obstacles incompatibles ou une sortie
 trop éloignée peuvent encore laisser une pénétration résiduelle.
 
+## Interagir avec les corps dynamiques
+
+`move(world, position, translation, delta, was_grounded)` applique le même
+contrôle de capsule avec des échanges physiques. La translation reste une
+intention de déplacement en mètres et `delta` une durée en secondes ; la gravité,
+le saut et les commandes du personnage restent décidés par l’application.
+
+```sx
+var result = mover.move(world, position, velocity.multiply(delta), delta, grounded)
+position = result.position
+grounded = result.grounded
+velocity = result.clip_velocity(velocity)
+```
+
+`mass` vaut 70 kg par défaut : elle transmet le poids au support dynamique.
+`max_push_force` vaut 100 N : elle borne les impulsions de poussée, avec un budget
+partagé entre les enfants d’un même corps composé. Zéro désactive respectivement
+le poids ou la poussée. Le levier, l’inertie et la vitesse du corps au point de
+contact participent à la réaction. Les capteurs ne reçoivent aucune impulsion ;
+lorsqu’ils sont inclus dans le filtre, leurs contacts sont observables sans bloquer
+`move`. Une durée nulle conserve la position et n’applique aucune force.
+
+`calculate_move` conserve son usage de requête sans impulsions. `move` suit aussi
+les supports dynamiques entre deux appels, après `world.step(delta)`, sans demander
+à l’application de rajouter leur mouvement à sa translation propre.
+
+Le résultat possède un instantané accessible par `contact_count()` et
+`contact(index)` : `position`, `normal` orientée de la surface vers le personnage,
+`separation` et `body()`. Les données restent lisibles après le mouvement suivant ;
+le handle du corps conserve ses règles de validité après destruction ou fin du monde.
+La masse virtuelle n’est pas un corps rigide enregistré et ne reçoit pas une
+réaction de recul : le déplacement reste piloté. Le paramètre `mass` règle la
+charge du support, sans transformer ce contrôleur en corps dynamique.
+Voir [les témoins de dynamique virtuelle](../../Tests/Consumer/Tests/CharacterDynamics3D.sx).
+
 ## Changer de capsule et téléporter
 
 `capsule()` lit les dimensions courantes. `try_resize(world, position, capsule)`
@@ -109,10 +144,9 @@ filtre coupe le transport. `result.support()` retourne le corps qui a fourni
 l'appui de cet appel, ou `null` ; comme tout handle de corps, vérifier
 `is_valid()` avant de le réutiliser après une destruction possible.
 
-Les autres corps rencontrés restent des obstacles à leur pose courante : le
-contrôleur ne pousse pas les corps dynamiques et ne les suit pas comme supports
-mobiles. La capsule conserve son axe vertical. Les personnages
-physiques et les interactions entre personnages
-restent à implémenter. Aucun comportement de saut ou de caméra n'est imposé
+La requête `calculate_move` traite les corps rencontrés à leur pose courante.
+L’opération `move` ajoute les échanges dynamiques décrits plus haut. La capsule
+conserve son axe vertical. Les personnages physiques et les interactions entre
+personnages restent à implémenter. Aucun comportement de saut ou de caméra n'est imposé
 par le package. Ne pas partager simultanément une instance entre plusieurs
 threads.

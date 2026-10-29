@@ -1,6 +1,7 @@
 use GFX.Physics.Geometry3D.contact_distance3d
 use GFX.Physics.Geometry3D.front_triangle_contact3d
 use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.CharacterContact3D.CharacterContact3D
 use GFX.Physics.CollisionFilter3D.QueryFilter3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.CastResult3D
@@ -23,6 +24,8 @@ public struct CharacterMover3DSettings {
     var floor_snap:float = 0.5
     var skin:float = 0.002
     var filter:QueryFilter3D
+    var mass:float = 70.0
+    var max_push_force:float = 100.0
     init() { self.filter = QueryFilter3D(include_sensors:false) }
 }
 
@@ -33,18 +36,22 @@ public struct CharacterMoveResult3D {
     let stepped:bool
     private var current_support:RigidBody3D?
     private let planes:Math.Vec3[]
+    private var contacts:CharacterContact3D[]
 
     package init(position:Math.Vec3, grounded:bool, ground_normal:Math.Vec3,
-        stepped:bool, support:RigidBody3D?, planes:Math.Vec3[]) {
+        stepped:bool, support:RigidBody3D?, planes:Math.Vec3[], contacts:CharacterContact3D[] = []) {
         self.position = position
         self.grounded = grounded
         self.ground_normal = ground_normal
         self.stepped = stepped
         self.current_support = support
         self.planes = planes
+        self.contacts = contacts
     }
 
     func support() RigidBody3D? { return self.current_support }
+    func contact_count() int { return self.contacts.count() }
+    func contact(index:int) CharacterContact3D { return self.contacts[index] }
 
     func clip_velocity(velocity:Math.Vec3) Math.Vec3 {
         return clip_planes(velocity, self.planes)
@@ -70,6 +77,7 @@ public class CharacterMover3D {
     private var candidates:CharacterShape3D[]
     private var previous_support:RigidBody3D?
     private var previous_support_pose:Transform3D
+    private var previous_support_normal:Math.Vec3
 
     init(settings:CharacterMover3DSettings = CharacterMover3DSettings()) {
         if !finite_body3d_value(settings.max_slope_angle) ||
@@ -80,12 +88,17 @@ public class CharacterMover3D {
             !finite_body3d_value(settings.skin) || settings.skin <= 0.0 || settings.skin >= settings.radius {
             panic("GFX.Physics.CharacterMover3D requires finite valid slope, step, snap and skin settings")
         }
+        if !finite_body3d_value(settings.mass) || settings.mass < 0.0 ||
+            !finite_body3d_value(settings.max_push_force) || settings.max_push_force < 0.0 {
+            panic("GFX.Physics.CharacterMover3D requires finite non-negative mass and push force")
+        }
         self.shape = Shape3D.capsule(Capsule3D(settings.radius, settings.half_height))
         self.settings = settings
         self.slope_cos = Math.cos(settings.max_slope_angle)
         self.candidates = []
         self.previous_support = null
         self.previous_support_pose = Transform3D()
+        self.previous_support_normal = Math.Vec3.up()
     }
 
     func capsule() Capsule3D {
@@ -128,11 +141,40 @@ public class CharacterMover3D {
     func reset() {
         self.previous_support = null
         self.previous_support_pose = Transform3D()
+        self.previous_support_normal = Math.Vec3.up()
         self.candidates = []
     }
 
     func calculate_move(world:@World3D, position:Math.Vec3,
         translation:Math.Vec3, was_grounded:bool = false) CharacterMoveResult3D {
+        return self.solve_move(world, position, translation, was_grounded, false)
+    }
+
+    func move(world:World3D, position:Math.Vec3, translation:Math.Vec3,
+        delta:float, was_grounded:bool = false) CharacterMoveResult3D {
+        if !finite_body3d_value(delta) || delta < 0.0 ||
+            !finite_body3d_point(position) || !finite_body3d_point(translation) {
+            panic("GFX.Physics.CharacterMover3D.move requires finite motion and non-negative duration")
+        }
+        if delta == 0.0 {
+            var support:RigidBody3D? = null
+            if let previous = self.previous_support {
+                if was_grounded && world.valid_character_support(previous, self.settings.filter) { support = previous }
+            }
+            return CharacterMoveResult3D(position, support != null, self.previous_support_normal, false, support, [])
+        }
+        if !finite_body3d_point(translation.divide(delta)) ||
+            !finite_body3d_value(self.settings.max_push_force * delta) ||
+            !finite_body3d_value(self.settings.mass * world.gravity().length() * delta) {
+            panic("GFX.Physics.CharacterMover3D.move requires finite velocity and impulse budgets")
+        }
+        var result = self.solve_move(world, position, translation, was_grounded, true)
+        self.apply_interactions(world, result, translation, delta)
+        return result
+    }
+
+    private func solve_move(world:@World3D, position:Math.Vec3,
+        translation:Math.Vec3, was_grounded:bool, carry_dynamic:bool) CharacterMoveResult3D {
         if !finite_body3d_point(position) || !finite_body3d_point(translation) {
             panic("GFX.Physics.CharacterMover3D requires finite position and translation")
         }
@@ -140,7 +182,8 @@ public class CharacterMover3D {
         if was_grounded {
             if let support = self.previous_support {
                 if world.valid_character_support(support, self.settings.filter) &&
-                    support.body_type() == BodyType3D.kinematic {
+                    (support.body_type() == BodyType3D.kinematic ||
+                        (carry_dynamic && support.body_type() == BodyType3D.dynamic)) {
                     carried_position = support.transform().point(
                         self.previous_support_pose.inverse_point(position))
                 }
@@ -153,7 +196,11 @@ public class CharacterMover3D {
         var candidates = self.candidates
         world.character_shapes(position.subtract(Math.Vec3(reach)),
             position.add(Math.Vec3(reach)), self.settings.filter, candidates)
-        self.candidates = candidates
+        if carry_dynamic && self.settings.filter.include_sensors {
+            var solids:CharacterShape3D[] = []
+            for candidate in candidates { if !candidate.is_sensor { solids.append(candidate) } }
+            self.candidates = solids
+        } else { self.candidates = candidates }
         let start = self.recover(position)
         var planes:Math.Vec3[] = []
         var current = self.slide(start, carried_position.subtract(start).add(translation), planes)
@@ -235,7 +282,87 @@ public class CharacterMover3D {
             self.previous_support_pose = body.transform()
         }
         self.previous_support = support_body
-        return CharacterMoveResult3D(current, grounded, normal, stepped, support_body, planes)
+        self.previous_support_normal = normal
+        var contacts:CharacterContact3D[] = []
+        let placement = ShapePlacement3D(self.shape, Transform3D(current))
+        for target in candidates {
+            if !front_triangle_contact3d(placement, target.placement) { continue }
+            let distance = contact_distance3d(placement, target.placement)
+            if distance.separation <= self.settings.skin + 0.00002 {
+                var body = world.character_body(target.body_id)
+                contacts.append(CharacterContact3D(body, distance.second_point,
+                    distance.normal.negated(), distance.separation))
+            }
+        }
+        return CharacterMoveResult3D(current, grounded, normal, stepped, support_body, planes, contacts)
+    }
+
+    private func apply_interactions(world:World3D, result:CharacterMoveResult3D,
+        translation:Math.Vec3, delta:float) {
+        let velocity = translation.divide(delta)
+        var affected:RigidBody3D[] = []
+        var spent:float[] = []
+        var shares:int[] = []
+        var index = 0
+        while index < result.contact_count() {
+            let contact = result.contact(index)
+            var body = contact.body()
+            if body.body_type() == BodyType3D.dynamic && !body.is_sensor() {
+                var selected = -1
+                var other = 0
+                while other < affected.count() {
+                    if affected[other].same_body(body) { selected = other; break }
+                    other++
+                }
+                if selected < 0 {
+                    selected = affected.count(); affected.append(body); spent.append(0.0)
+                    var count = 0; var target = 0
+                    while target < result.contact_count() {
+                        if result.contact(target).body().same_body(body) { count++ }
+                        target++
+                    }
+                    shares.append(count)
+                }
+                let normal = contact.normal.negated()
+                let closing = velocity.subtract(body.velocity_at(contact.position)).dot(normal)
+                let change = 0.9 * closing - 0.4 * Math.min(contact.separation, 0.0) / delta
+                let inverse_mass = body.inverse_mass_at(contact.position, normal)
+                let budget = Math.min(self.settings.max_push_force * delta / shares[selected] as float,
+                    Math.max(0.0, self.settings.max_push_force * delta - spent[selected]))
+                if change > 0.0 && inverse_mass > 0.0 && budget > 0.0 {
+                    var impulse = normal.multiply(Math.min(change / inverse_mass, budget))
+                    // Support weight is transferred below, separately from the push budget.
+                    if impulse.y < 0.0 { impulse.y = 0.0 }
+                    if impulse.length_squared() > 0.0 {
+                        body.apply_impulse(impulse, contact.position)
+                        spent[selected] += impulse.length()
+                    }
+                }
+            }
+            index++
+        }
+        if result.grounded && self.settings.mass > 0.0 {
+            if var support = result.support() {
+                if support.body_type() == BodyType3D.dynamic && !support.is_sensor() {
+                    let gravity = world.gravity()
+                    let length = gravity.length()
+                    let projection = result.ground_normal.dot(gravity)
+                    if length > 0.0 && projection < 0.0 {
+                        var point = result.position.subtract(Math.Vec3(0.0,
+                            self.settings.radius + self.settings.half_height, 0.0))
+                        var contact_index = 0
+                        while contact_index < result.contact_count() {
+                            let contact = result.contact(contact_index)
+                            if contact.body().same_body(support) && contact.normal.dot(result.ground_normal) > 0.99 {
+                                point = contact.position; break
+                            }
+                            contact_index++
+                        }
+                        support.apply_impulse(gravity.multiply(-self.settings.mass * projection / length * delta), point)
+                    }
+                }
+            }
+        }
     }
 
     private func recover(position:Math.Vec3) Math.Vec3 {
