@@ -42,7 +42,7 @@ public class VirtualCharacter3D {
         self.mover.reset()
         self.previous = CharacterMoveResult3D(position, false, Math.Vec3.up(), false, null, [])
     }
-    func move(world:World3D, translation:Math.Vec3, delta:float) CharacterMoveResult3D {
+    func move(world:@World3D, translation:Math.Vec3, delta:float) CharacterMoveResult3D {
         var body = self.body()
         if !world.owns_body(body) { panic("GFX.Physics.VirtualCharacter3D belongs to another world") }
         self.mover.attach_body(body)

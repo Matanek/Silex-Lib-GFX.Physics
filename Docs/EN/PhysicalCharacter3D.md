@@ -5,6 +5,8 @@ contacts and its mass participate in the rigid solver. Physical rotations are
 locked; an offset force can translate the character without tipping it over.
 The application chooses its velocity and jump rules.
 
+This fragment assumes an existing `world` and `delta`.
+
 ```sx
 var character = world.create_physical_character(
     Physics.PhysicalCharacter3DSettings() ..mass = 70.0,

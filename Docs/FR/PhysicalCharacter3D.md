@@ -5,6 +5,8 @@ contacts et sa masse participent au solveur rigide. Les rotations physiques sont
 bloquées ; une force excentrée peut le déplacer sans le faire basculer.
 L’application choisit sa vitesse et ses règles de saut.
 
+Ce fragment suppose un monde `world` et une durée `delta` déjà définis.
+
 ```sx
 var character = world.create_physical_character(
     Physics.PhysicalCharacter3DSettings() ..mass = 70.0,

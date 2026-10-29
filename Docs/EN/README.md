@@ -329,3 +329,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 - [Physical 3D character](PhysicalCharacter3D.md)
 
 - [Registered virtual character](VirtualCharacter3D.md)
+
+- [Character mode selection and qualification](CharacterQualification3D.md)

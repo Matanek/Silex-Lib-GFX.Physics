@@ -4,6 +4,8 @@
 presence in the world. Other characters and ordinary queries see the capsule;
 its own mover excludes that presence.
 
+This fragment assumes an existing `world`, `velocity` and `delta`.
+
 ```sx
 var character = world.create_virtual_character(
     Physics.CharacterMover3DSettings() ..max_push_force = 100.0,

@@ -209,3 +209,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 - [Personnage physique 3D](PhysicalCharacter3D.md)
 
 - [Personnage virtuel enregistré](VirtualCharacter3D.md)
+
+- [Choix des modes et qualification des personnages](CharacterQualification3D.md)

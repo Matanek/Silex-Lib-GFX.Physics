@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Qualification des modes personnages et de leurs interactions, avec matrice des différences, consommateur GFX à pas fixe et comparaison Jolt des poussées, du poids, des masses, du repos et du changement de capsule en Native Debug/Release. Les déplacements acceptent un monde emprunté, y compris la ressource GFX, sans transfert de propriété.
+
 - `VirtualCharacter3D` enregistre une capsule cinématique pilotée avec le mover, exclue de ses propres requêtes. Les personnages virtuels et physiques se rencontrent via les mêmes corps et filtres réciproques. Pas de double déplacement, resize conservant les pieds, contacts conservés pendant la pause et durées de vie vérifiés.
 
 - `PhysicalCharacter3D` ajoute une capsule dynamique propriétaire du monde, à rotations physiques bloquées et masse réelle. Contacts/appui après simulation, pente, plateforme, resize conservant les pieds et la masse, téléportation et durées de vie sont couverts par un consommateur.

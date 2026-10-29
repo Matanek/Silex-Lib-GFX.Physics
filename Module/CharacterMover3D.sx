@@ -165,7 +165,7 @@ public class CharacterMover3D {
         return self.solve_move(world, position, translation, was_grounded, false)
     }
 
-    func move(world:World3D, position:Math.Vec3, translation:Math.Vec3,
+    func move(world:@World3D, position:Math.Vec3, translation:Math.Vec3,
         delta:float, was_grounded:bool = false) CharacterMoveResult3D {
         if !finite_body3d_value(delta) || delta < 0.0 ||
             !finite_body3d_point(position) || !finite_body3d_point(translation) {
@@ -313,7 +313,7 @@ public class CharacterMover3D {
         return CharacterMoveResult3D(current, grounded, normal, stepped, support_body, planes, contacts)
     }
 
-    private func apply_interactions(world:World3D, result:CharacterMoveResult3D,
+    private func apply_interactions(world:@World3D, result:CharacterMoveResult3D,
         translation:Math.Vec3, delta:float) {
         let velocity = translation.divide(delta)
         var affected:RigidBody3D[] = []

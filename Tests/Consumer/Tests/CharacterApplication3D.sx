@@ -1,0 +1,90 @@
+use GFX.Application
+use GFX.Physics
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+class CharacterState {
+    var virtual_actor:Physics.VirtualCharacter3D? = null
+    var physical_actor:Physics.PhysicalCharacter3D? = null
+    var before:int = 0
+    var after:int = 0
+}
+func before_step(application:Application, delta:float) {
+    var world_resources = application.resources()
+    var state_resources = application.resources()
+    var world = world_resources.get_mut<Physics.World3D>()
+    var state = state_resources.get_mut<CharacterState>()
+    if var actor = state.virtual_actor {
+        actor.move(world, Math.Vec3(2.0 * delta, -0.1 * delta, 0.0), delta)
+    } else { panic("missing virtual character") }
+    if var actor = state.physical_actor {
+        actor.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    } else { panic("missing physical character") }
+    state.before++
+}
+func after_step(application:Application, delta:float) {
+    var resources = application.resources()
+    var state = resources.get_mut<CharacterState>()
+    assert(delta > 0.0 && state.virtual_actor!.is_grounded() && state.physical_actor!.is_grounded())
+    state.after++
+}
+struct CharacterPlugin:Application.Plugin {
+    func id() str { return "CharacterModesQualification" }
+    func build(host:&Application) {
+        host.add_resource(CharacterState())
+        Physics.Physics3DStep.before_step(host, before_step)
+        Physics.Physics3DStep.after_step(host, after_step)
+    }
+}
+func frame(application:Application, delta:float) {
+    var resources = application.resources()
+    var time = resources.get_mut<Resources.FrameTime>()
+    time.delta = delta
+    application.run_schedule(Application.Schedule.update)
+    application.run_schedule(Application.Schedule.post_update)
+}
+func composed() {
+    var saved_virtual:Physics.VirtualCharacter3D? = null
+    var saved_physical:Physics.PhysicalCharacter3D? = null
+    {
+        var app = Application()
+            ..add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings() ..fixed_delta = 0.02))
+            ..add_plugin(CharacterPlugin())
+        app.prepare()
+        {
+            var world_resources = app.resources()
+            var state_resources = app.resources()
+            var world = world_resources.get_mut<Physics.World3D>()
+            world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+                ..shape = Physics.Shape3D.plane(Physics.Plane3D()))
+            var state = state_resources.get_mut<CharacterState>()
+            saved_virtual = world.create_virtual_character(position:Math.Vec3(0.0, 0.852, -2.0))
+            saved_physical = world.create_physical_character(Physics.PhysicalCharacter3DSettings() ..friction = 0.0,
+                Math.Vec3(0.0, 0.85, 2.0))
+            state.virtual_actor = saved_virtual
+            state.physical_actor = saved_physical
+        }
+        var step = 0
+        while step < 10 { frame(app, 0.02); step++ }
+        var resources = app.resources()
+        var simulation_resources = app.resources()
+        var state = resources.get_mut<CharacterState>()
+        assert(state.before == 10 && state.after == 10)
+        assert(Math.abs(state.virtual_actor!.position().x - 0.4) < 0.0001)
+        assert(Math.abs(state.physical_actor!.position().x - 0.2) < 0.0001)
+        let virtual_position = state.virtual_actor!.position()
+        let physical_position = state.physical_actor!.position()
+        simulation_resources.get_mut<Application.Simulation>().pause()
+        frame(app, 2.0)
+        assert(state.before == 10 && state.after == 10)
+        assert(state.virtual_actor!.position() == virtual_position && state.physical_actor!.position() == physical_position)
+        simulation_resources.get_mut<Application.Simulation>().resume()
+        frame(app, 0.02)
+        assert(state.before == 11 && state.after == 11)
+        app.run_schedule(Application.Schedule.shutdown)
+    }
+    assert(!saved_virtual!.is_valid() && !saved_physical!.is_valid())
+}
+test "both character modes participate in the GFX fixed step pause and world teardown without double movement" { composed() }
+func main() { composed(); print("Character GFX integration passed") }

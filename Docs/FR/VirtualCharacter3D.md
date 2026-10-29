@@ -4,6 +4,9 @@
 présence cinématique dans le monde. Les autres personnages et les requêtes
 ordinaires voient cette capsule ; le contrôleur exclut sa propre présence.
 
+Ce fragment suppose un monde `world`, une vitesse `velocity` et une durée
+`delta` déjà définis.
+
 ```sx
 var character = world.create_virtual_character(
     Physics.CharacterMover3DSettings() ..max_push_force = 100.0,

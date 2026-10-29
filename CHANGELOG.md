@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Qualify character modes and interactions with a behavior matrix, a fixed-step GFX consumer and Jolt comparisons for pushing, weight, momentum, rest and capsule changes in Native Debug/Release. Movement accepts a borrowed world, including the GFX resource, without transferring ownership.
+
 - `VirtualCharacter3D` registers a driven kinematic capsule with the mover, excluded from its own queries. Virtual and physical characters encounter each other through ordinary bodies and reciprocal filters. Tests cover no double movement, resizing with fixed feet, paused contacts and lifetime.
 
 - `PhysicalCharacter3D` adds a world-owned dynamic capsule with locked physical rotations and real mass. A consumer covers post-step contacts/support, slopes, platforms, resizing with fixed feet and mass, teleporting and lifetime.
