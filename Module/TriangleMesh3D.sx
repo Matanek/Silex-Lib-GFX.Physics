@@ -10,6 +10,9 @@ public enum HeightGridDiagonal3D {
 public class TriangleMesh3D {
     private var triangles:Triangle3D[]
     private var grid:HeightGridData3D?
+    private let radius:float
+    private let lower:Math.Vec3
+    private let upper:Math.Vec3
 
     init(triangles:Triangle3D[]) {
         if triangles.count() == 0 {
@@ -17,7 +20,15 @@ public class TriangleMesh3D {
         }
         self.grid = null
         self.triangles = []
-        for triangle in triangles { self.triangles.append(triangle) }
+        var radius = 0.0
+        var lower = triangles[0].first; var upper = lower
+        for triangle in triangles {
+            self.triangles.append(triangle)
+            lower = lower.minimum(triangle.first).minimum(triangle.second).minimum(triangle.third)
+            upper = upper.maximum(triangle.first).maximum(triangle.second).maximum(triangle.third)
+            radius = Math.max(radius, Math.max(triangle.first.length(), Math.max(triangle.second.length(), triangle.third.length())))
+        }
+        self.radius = radius; self.lower = lower; self.upper = upper
     }
 
     static func from_height_grid(
@@ -29,7 +40,31 @@ public class TriangleMesh3D {
         return TriangleMesh3D(HeightGridData3D(columns, rows, heights, column_spacing, row_spacing, holes, diagonal))
     }
 
-    package init(triangles:HeightGridData3D) { self.triangles = []; self.grid = triangles }
+    package init(triangles:HeightGridData3D) {
+        self.triangles = []; self.grid = triangles
+        var radius = 0.0; var index = 0
+        var lower = triangles.triangle(0).first; var upper = lower
+        while index < triangles.triangle_count() {
+            let face = triangles.triangle(index)
+            lower = lower.minimum(face.first).minimum(face.second).minimum(face.third)
+            upper = upper.maximum(face.first).maximum(face.second).maximum(face.third)
+            radius = Math.max(radius, Math.max(face.first.length(), Math.max(face.second.length(), face.third.length())))
+            index++
+        }
+        self.radius = radius; self.lower = lower; self.upper = upper
+    }
+    package func lower_bound() Math.Vec3 { return self.lower }
+    package func upper_bound() Math.Vec3 { return self.upper }
+    package func bounding_radius() float { return self.radius }
+    package func is_height_grid() bool { return self.grid != null }
+    package func seed_triangle(point:Math.Vec3) int {
+        if let grid = self.grid { return grid.seed_triangle(point) }
+        return 0
+    }
+    package func next_triangle(index:int, lower:Math.Vec3, upper:Math.Vec3) int {
+        if let grid = self.grid { return grid.next_triangle(index, lower, upper) }
+        return index
+    }
 
     func triangle_count() int {
         if let grid = self.grid { return grid.triangle_count() }

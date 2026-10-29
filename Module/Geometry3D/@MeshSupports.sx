@@ -1,3 +1,4 @@
+use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.TriangleMesh3D.TriangleMesh3D
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.ConvexHull3D.ConvexHull3D
@@ -158,7 +159,8 @@ package func convex_mesh_contact_faces3d(hull:ConvexHull3D, transform:Transform3
         face++
     }
     let center = surface.inverse_point(transform.point(hull.center()))
-    var selected:int[] = []; var index = 0
+    let selection = mesh_sweep_bounds3d(Shape3D.convex(hull), transform, Math.Vec3(), surface)
+    var selected:int[] = []; var index = mesh.next_triangle(0, selection.lower, selection.upper)
     while index < mesh.triangle_count() {
         let triangle = mesh.triangle(index)
         if center.subtract(triangle.first).dot(triangle.normal()) >= 0.0 {
@@ -173,7 +175,7 @@ package func convex_mesh_contact_faces3d(hull:ConvexHull3D, transform:Transform3
             }
             if !separated { selected.append(index) }
         }
-        index++
+        index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
     }
     return selected
 }

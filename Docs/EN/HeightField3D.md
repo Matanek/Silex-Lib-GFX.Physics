@@ -60,3 +60,20 @@ qualification remains separate from this editing API.
 
 The [executable consumer](../../Tests/Consumer/Tests/HeightField3D.sx) covers
 copies, old versions, publication, holes, waking, contacts and characters.
+
+## Larger reliefs and query cost
+
+Grids retain their samples and surviving face identities. Rays, translation
+sweeps and contact generation select cells covered by conservative bounds.
+Selection preserves face order and deterministic ties. Immutable surface bounds
+and radius are computed at construction and replaced with each version.
+
+Sphere, capsule and separated-box distances can also use a bound from a witness
+triangle. Queries without a safe bound retain exhaustive traversal, including
+some positive SAT distances and convex or CCD distances. A ray spanning the
+entire relief can still inspect the whole grid. Editing constructs a new version;
+it is not a constant-cost deformation. No universal constant query cost is promised.
+
+The [selection consumer](../../Tests/Consumer/Tests/HeightFieldSelection3D.sx)
+compares results against an exhaustive mesh: irregular reliefs, both diagonals,
+holes, transforms, seven convex volumes and a65×65 sample grid.

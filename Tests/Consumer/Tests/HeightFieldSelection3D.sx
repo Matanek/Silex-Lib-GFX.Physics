@@ -1,0 +1,81 @@
+use GFX.Physics
+use STD.Math
+
+func relief(size:int, alternate:bool, masked:bool) Physics.TriangleMesh3D {
+    var heights:float[] = []; var holes:bool[] = []; var index = 0
+    while index < size * size {
+        let x = index % size; let z = index / size
+        heights.append(0.12 * Math.sin(x as float * 0.7) + 0.09 * Math.cos(z as float * 0.4))
+        holes.append(masked && x >= size / 2 - 1 && x <= size / 2 + 1 && z >= size / 2 - 1 && z <= size / 2 + 1)
+        index++
+    }
+    var diagonal = Physics.HeightGridDiagonal3D.column_to_row
+    if alternate { diagonal = Physics.HeightGridDiagonal3D.first_to_opposite }
+    return Physics.TriangleMesh3D.from_height_grid(size,size,heights,0.75,1.25,holes:holes,diagonal:diagonal)
+}
+func exhaustive(grid:Physics.TriangleMesh3D) Physics.TriangleMesh3D {
+    var faces:Physics.Triangle3D[] = []; var index = 0
+    while index < grid.triangle_count() { faces.append(grid.triangle(index)); index++ }
+    return Physics.TriangleMesh3D(faces)
+}
+func same_hit(first:Physics.CastResult3D, second:Physics.CastResult3D) {
+    assert(first.hit == second.hit)
+    if first.hit {
+        assert(Math.abs(first.fraction - second.fraction) < 0.00001)
+        assert(first.point.subtract(second.point).length() < 0.0001)
+        assert(first.normal.subtract(second.normal).length() < 0.0001)
+        assert(first.child_id == second.child_id)
+    }
+}
+func offset_hull() Physics.Shape3D {
+    var points:Math.Vec3[] = []
+    let signs:float[] = [-1.0,1.0]
+    for x in signs { for y in signs { for z in signs {
+        points.append(Math.Vec3(x * 0.2 + 0.4,y * 0.3,z * 0.25))
+    } } }
+    return Physics.Shape3D.convex(Physics.ConvexHull3D(points))
+}
+func queries() {
+    var volumes:Physics.Shape3D[] = [Physics.Shape3D.sphere(Physics.Sphere3D(0.2)),
+        Physics.Shape3D.capsule(Physics.Capsule3D(0.15,0.25)),
+        Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.2,0.3,0.25))),
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.2,0.3)),
+        Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1,0.2,0.3)),
+        Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1,0.2,0.3)),
+        offset_hull()]
+    let points:Math.Vec3[] = [Math.Vec3(2.25,0.4,3.75), Math.Vec3(5.6,1.1,9.2),
+        Math.Vec3(-2.0,2.0,-1.0), Math.Vec3(16.0,7.0,23.0), Math.Vec3(4.5,-0.6,7.5)]
+    for alternate in [false,true] { for masked in [false,true] {
+        var grid = relief(13,alternate,masked); var plain = exhaustive(grid)
+        let pose = Physics.Transform3D(Math.Vec3(7.0,-2.0,11.0), Math.Quat.angle_axis(0.31,Math.Vec3(1.0,0.3,0.1).normalized()))
+        let selected = Physics.ShapePlacement3D(Physics.Shape3D.mesh(grid),pose)
+        let reference = Physics.ShapePlacement3D(Physics.Shape3D.mesh(plain),pose)
+        for point in points {
+            let ray = Physics.Ray3D(pose.point(point.add(Math.Vec3(0.0,3.0,0.0))),pose.vector(Math.Vec3(0.0,-8.0,0.0)))
+            same_hit(Physics.Geometry3D.ray_cast(ray,selected),Physics.Geometry3D.ray_cast(ray,reference))
+            for volume in volumes {
+                let moving = Physics.ShapePlacement3D(volume, Physics.Transform3D(pose.point(point),pose.rotation))
+                let first = Physics.Geometry3D.distance(moving,selected)
+                let second = Physics.Geometry3D.distance(moving,reference)
+                assert(Math.abs(first.separation - second.separation) < 0.00001)
+                assert(first.second_child_id == second.second_child_id)
+                let cast = Physics.ShapeCast3D(Physics.ShapePlacement3D(volume,Physics.Transform3D(pose.point(point.add(Math.Vec3(0.0,3.0,0.0))),pose.rotation)),pose.vector(Math.Vec3(0.1,-6.0,0.2)))
+                same_hit(Physics.Geometry3D.shape_cast(cast,selected),Physics.Geometry3D.shape_cast(cast,reference))
+            }
+        }
+    } }
+}
+func large() {
+    var grid = relief(65,true,true); var plain = exhaustive(grid)
+    let selected = Physics.ShapePlacement3D(Physics.Shape3D.mesh(grid))
+    let reference = Physics.ShapePlacement3D(Physics.Shape3D.mesh(plain))
+    let points:Math.Vec3[] = [Math.Vec3(0.0,3.0,0.0),Math.Vec3(48.0,3.0,80.0),
+        Math.Vec3(24.0,3.0,40.0),Math.Vec3(9.71,3.0,22.18),Math.Vec3(-5.0,3.0,30.0)]
+    for point in points {
+        let ray = Physics.Ray3D(point,Math.Vec3(0.0,-6.0,0.0))
+        same_hit(Physics.Geometry3D.ray_cast(ray,selected),Physics.Geometry3D.ray_cast(ray,reference))
+    }
+}
+test "height grid selection matches exhaustive faces distances and sweeps on irregular transformed reliefs" { queries() }
+test "large irregular relief preserves edge seam hole and outside ray identities" { large() }
+func main() { queries(); large(); print("Terrain selection passed") }

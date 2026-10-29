@@ -226,7 +226,9 @@ package func write_axial_mesh_contacts3d(first:ShapePlacement3D, second:ShapePla
     output:&DistanceResult3D[]) {
     match second.shape() {
         mesh(mesh) => {
-            var candidates:DistanceResult3D[] = []; var index = 0
+            var candidates:DistanceResult3D[] = []
+            let selection = mesh_sweep_bounds3d(first.shape(), first.transform(), Math.Vec3(), second.transform())
+            var index = mesh.next_triangle(0, selection.lower, selection.upper)
             while index < mesh.triangle_count() {
                 let triangle = ShapePlacement3D(Shape3D.triangle(mesh.triangle(index)), second.transform())
                 if front_triangle_contact3d(first, triangle) {
@@ -236,7 +238,7 @@ package func write_axial_mesh_contacts3d(first:ShapePlacement3D, second:ShapePla
                             distance.normal, distance.separation, -1, index))
                     }
                 }
-                index++
+                index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
             }
             write_mesh_supports3d(candidates, mesh, second.transform(), output)
         }

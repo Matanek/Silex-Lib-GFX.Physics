@@ -63,3 +63,22 @@ reste distincte de cette API d'édition.
 
 Le [consommateur exécutable](../../Tests/Consumer/Tests/HeightField3D.sx) couvre
 copies, anciennes versions, publication, trous, réveil, contacts et personnage.
+
+## Reliefs étendus et coût des requêtes
+
+Les grilles conservent leurs échantillons et les identités des faces survivantes.
+Rayons, balayages par translation et génération des contacts sélectionnent les
+cellules couvertes par des bornes conservatives. La sélection conserve l'ordre
+des faces ; les égalités restent déterministes. Les bornes et le rayon de la
+surface immuable sont calculés à sa construction, puis remplacés avec sa version.
+
+Les distances sphère, capsule et boîte séparée peuvent aussi utiliser une borne
+issue d'un triangle témoin. Les requêtes sans borne sûre gardent le parcours
+exhaustif, notamment certaines distances SAT positives et les distances convexes
+ou CCD. Un rayon couvrant tout le relief peut encore examiner toute la grille.
+L'édition reste une opération de construction de version, pas une déformation
+à coût constant. Aucun coût constant universel n'est garanti.
+
+Le [consommateur de sélection](../../Tests/Consumer/Tests/HeightFieldSelection3D.sx)
+compare les résultats à un maillage exhaustif : relief irrégulier, deux diagonales,
+trous, transforms, sept volumes convexes et grille de65×65 sommets.

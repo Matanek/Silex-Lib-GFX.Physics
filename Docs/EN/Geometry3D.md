@@ -347,7 +347,8 @@ from its previous revision. The mesh remains fixed, exact and uncompressed;
 quantized height updates and dynamic terrains are not provided. Use
 [HeightField3D](HeightField3D.md) to edit height or hole regions. A fully masked
 grid is rejected; remove the body from the world to remove the entire terrain.
-Queries visit the faces, without a large-terrain cost guarantee.
+Ordinary meshes visit faces; grids can select nearby cells, without a
+constant-cost guarantee for every query.
 
 Separated box pairs compare vertices against faces and edges against edges.
 Capsules use their axial segment; ray queries also test their hemispheres.

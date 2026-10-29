@@ -4280,6 +4280,21 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
             )
         }
         mesh(mesh) => {
+            if mesh.is_height_grid() {
+                let lower = mesh.lower_bound(); let upper = mesh.upper_bound()
+                var extent = Math.Vec3(); var corner = 0
+                while corner < 8 {
+                    var point = lower
+                    if corner % 2 == 1 { point.x = upper.x }
+                    if (corner / 2) % 2 == 1 { point.y = upper.y }
+                    if corner / 4 == 1 { point.z = upper.z }
+                    let rotated = transform.vector(point)
+                    extent = extent.maximum(Math.Vec3(Math.abs(rotated.x),Math.abs(rotated.y),Math.abs(rotated.z)))
+                    corner++
+                }
+                return extent
+            }
+
             var extent = Math.Vec3()
             var index = 0
             while index < mesh.triangle_count() {
@@ -4537,17 +4552,7 @@ func shape_bounding_radius3d(shape:Shape3D) float {
             }
             return radius
         }
-        mesh(mesh) => {
-            var radius = 0.0
-            var index = 0
-            while index < mesh.triangle_count() {
-                let triangle = mesh.triangle(index)
-                radius = Math.max(radius, Math.max(triangle.first.length(),
-                    Math.max(triangle.second.length(), triangle.third.length())))
-                index++
-            }
-            return radius
-        }
+        mesh(mesh) => { return mesh.bounding_radius() }
         sphere(sphere) => { return sphere.radius }
         box(box) => { return box.half_size().length() }
         capsule(capsule) => { return capsule.half_height + capsule.radius }

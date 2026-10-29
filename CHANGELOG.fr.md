@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les grilles de terrain sélectionnent leurs cellules pour les rayons, balayages et contacts, avec identités conservées et témoins exhaustifs sur des reliefs irréguliers. Le rayon des maillages et les bornes des grilles sont réutilisés entre pas.
+
 - `HeightField3D` ajoute des versions de terrain par hauteurs : éditions locales de niveaux et de trous, anciennes formes conservées et publication explicite par `set_shape`. Les grilles évaluent leurs triangles depuis des échantillons copiés. La distance des calottes exposées de capsules effilées aux triangles utilise son certificat analytique, pour conserver les contacts CCD aux bords de terrain.
 
 - Qualification des modes personnages et de leurs interactions, avec matrice des différences, consommateur GFX à pas fixe et comparaison Jolt des poussées, du poids, des masses, du repos et du changement de capsule en Native Debug/Release. Les déplacements acceptent un monde emprunté, y compris la ressource GFX, sans transfert de propriété.

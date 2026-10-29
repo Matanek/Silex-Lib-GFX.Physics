@@ -1,3 +1,4 @@
+use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.Triangle3D.Triangle3D
@@ -98,7 +99,8 @@ func sphere_mesh_distance(
 ) DistanceResult3D {
     var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(),
         1000000000000.0)
-    var index = 0
+    let selection = mesh_distance_bounds3d(mesh, Shape3D.sphere(sphere), sphere_transform, mesh_transform, front_only)
+    var index = mesh.next_triangle(0, selection.lower, selection.upper)
     while index < mesh.triangle_count() {
         let triangle = mesh.triangle(index)
         if !front_only || shape_triangle_front3d(sphere_transform, triangle,
@@ -110,7 +112,7 @@ func sphere_mesh_distance(
                     distance.normal, distance.separation, -1, index)
             }
         }
-        index++
+        index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
     }
     return best
 }
@@ -131,13 +133,16 @@ package func shape_mesh_front3d(
 func ray_mesh_cast(ray:Ray3D, mesh:TriangleMesh3D,
     transform:Transform3D) CastResult3D {
     var best = CastResult3D()
-    var index = 0
+    let first = transform.inverse_point(ray.origin)
+    let last = first.add(transform.inverse_vector(ray.translation))
+    let selection = MeshBounds3D(mesh_minimum3d(first, last), mesh_maximum3d(first, last))
+    var index = mesh.next_triangle(0, selection.lower, selection.upper)
     while index < mesh.triangle_count() {
         let hit = ray_triangle_cast(ray, mesh.triangle(index), transform)
         if hit.hit && (!best.hit || hit.fraction < best.fraction) {
             best = CastResult3D(hit.point, hit.normal, hit.fraction, index)
         }
-        index++
+        index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
     }
     return best
 }

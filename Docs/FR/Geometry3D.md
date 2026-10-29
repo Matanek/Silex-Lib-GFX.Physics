@@ -364,9 +364,10 @@ ne modifie pas le terrain. Reconstruire puis appeler `set_shape` remplace le
 maillage et termine les contacts de l'ancienne révision. Le maillage reste
 fixe, exact et non compressé ; il ne fournit ni mise à jour quantifiée de
 hauteurs ni terrain dynamique. Une grille entièrement trouée est refusée ;
-retirer le corps du monde pour retirer tout le terrain. Les requêtes parcourent
-les faces, sans garantie de coût pour les très grands terrains. Pour modifier une
-zone de hauteurs ou de trous, utiliser [HeightField3D](HeightField3D.md).
+retirer le corps du monde pour retirer tout le terrain. Les maillages ordinaires
+parcourent les faces ; les grilles peuvent sélectionner les cellules proches, sans
+garantie de coût constant pour tous les parcours. Pour modifier une zone de
+hauteurs ou de trous, utiliser [HeightField3D](HeightField3D.md).
 
 Le cas de boîte/boîte séparée évalue sommets contre faces puis arêtes contre
 arêtes. Les capsules utilisent le segment axial et les rayons testent aussi

@@ -1,0 +1,41 @@
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+func mesh_all_bounds3d() MeshBounds3D {
+    return MeshBounds3D(Math.Vec3(-3.4028235e38), Math.Vec3(3.4028235e38))
+}
+func mesh_volume_radius3d(shape:Shape3D) float {
+    match shape {
+        convex(hull) => {
+            var radius = 0.0; var index = 0
+            while index < hull.vertex_count() { radius = Math.max(radius, hull.vertex(index).length()); index++ }
+            return radius
+        }
+        else => { return shape_cast_extent3d(shape) }
+    }
+}
+func mesh_sweep_bounds3d(shape:Shape3D, pose:Transform3D, translation:Math.Vec3, surface:Transform3D) MeshBounds3D {
+    let first = surface.inverse_point(pose.position)
+    let second = surface.inverse_point(pose.position.add(translation))
+    let radius = mesh_volume_radius3d(shape)
+    let extent = Math.Vec3(radius + Math.max(1.0, radius) * 0.00001)
+    return MeshBounds3D(mesh_minimum3d(first, second).subtract(extent), mesh_maximum3d(first, second).add(extent))
+}
+// A valid face distance is an upper bound on the minimum. Any better face
+// must meet the origin sphere expanded by that bound. Back-face filtered seeds
+// provide no such bound: retain the exhaustive traversal in that case.
+func mesh_distance_bounds3d(mesh:TriangleMesh3D, shape:Shape3D, pose:Transform3D,
+    surface:Transform3D, front_only:bool = false) MeshBounds3D {
+    if !mesh.is_height_grid() { return mesh_all_bounds3d() }
+    let center = surface.inverse_point(pose.position)
+    let triangle = mesh.triangle(mesh.seed_triangle(center))
+    var front_center = center
+    match shape { convex(hull) => { front_center = surface.inverse_point(pose.point(hull.center())) }; else => {} }
+    if front_only && front_center.subtract(triangle.first).dot(triangle.normal()) < 0.0 { return mesh_all_bounds3d() }
+    let seed = Geometry3D.distance(ShapePlacement3D(shape, pose), ShapePlacement3D(Shape3D.triangle(triangle), surface))
+    let radius = mesh_volume_radius3d(shape) + Math.max(0.0, seed.separation)
+    let extent = Math.Vec3(radius + Math.max(1.0, radius) * 0.00001)
+    return MeshBounds3D(center.subtract(extent), center.add(extent))
+}

@@ -20,13 +20,15 @@ func convex_shape_cast3d(cast:ShapeCast3D, target:ShapePlacement3D) CastResult3D
             return result
         }
         mesh(mesh) => {
-            var result = CastResult3D(); var index = 0
+            var result = CastResult3D()
+            let selection = mesh_sweep_bounds3d(cast.placement.shape(), cast.placement.transform(), cast.translation, target.transform())
+            var index = mesh.next_triangle(0, selection.lower, selection.upper)
             while index < mesh.triangle_count() {
                 let hit = convex_shape_cast3d(cast, ShapePlacement3D(
                     Shape3D.triangle(mesh.triangle(index)), target.transform()))
                 if hit.hit { result = nearest_sphere_cast3d(result,
                     CastResult3D(hit.point, hit.normal, hit.fraction, index)) }
-                index++
+                index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
             }
             return result
         }

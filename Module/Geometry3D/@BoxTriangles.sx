@@ -1,3 +1,4 @@
+use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Box3D.Box3D
 use GFX.Physics.Transform3D.Transform3D
 use GFX.Physics.Triangle3D.Triangle3D
@@ -108,7 +109,9 @@ func box_mesh_distance(box:Box3D, transform:Transform3D,
     front_only:bool = false, contact_only:bool = false
 ) DistanceResult3D {
     var best = DistanceResult3D(Math.Vec3(), Math.Vec3(), Math.Vec3.up(), 3.4028235e38)
-    var index = 0
+    var selection = mesh_all_bounds3d()
+    if !contact_only { selection = mesh_distance_bounds3d(mesh, Shape3D.box(box), transform, mesh_transform, front_only) }
+    var index = mesh.next_triangle(0, selection.lower, selection.upper)
     while index < mesh.triangle_count() {
         let triangle = mesh.triangle(index)
         if !front_only || shape_triangle_front3d(transform, triangle, mesh_transform) {
@@ -118,7 +121,7 @@ func box_mesh_distance(box:Box3D, transform:Transform3D,
                     distance.normal, distance.separation, -1, index)
             }
         }
-        index++
+        index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
     }
     return best
 }
@@ -129,7 +132,8 @@ func box_mesh_distance(box:Box3D, transform:Transform3D,
 package func write_box_mesh_contacts3d(box:Box3D, transform:Transform3D,
     mesh:TriangleMesh3D, mesh_transform:Transform3D, output:&DistanceResult3D[]) {
     var candidates:DistanceResult3D[] = []
-    var index = 0
+    let selection = mesh_sweep_bounds3d(Shape3D.box(box), transform, Math.Vec3(), mesh_transform)
+    var index = mesh.next_triangle(0, selection.lower, selection.upper)
     while index < mesh.triangle_count() {
         let triangle = mesh.triangle(index)
         if shape_triangle_front3d(transform, triangle, mesh_transform) {
@@ -139,7 +143,7 @@ package func write_box_mesh_contacts3d(box:Box3D, transform:Transform3D,
                     distance.normal, distance.separation, -1, index))
             }
         }
-        index++
+        index = mesh.next_triangle(index + 1, selection.lower, selection.upper)
     }
     write_mesh_supports3d(candidates, mesh, mesh_transform, output)
 }

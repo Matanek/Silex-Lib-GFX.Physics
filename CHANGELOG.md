@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Terrain grids select cells for rays, sweeps and contacts while preserving face identities, checked against exhaustive irregular meshes. Mesh radii and grid bounds are reused between steps.
+
 - `HeightField3D` adds versioned height terrains: regional height and hole edits, preserved old shapes and explicit publication through `set_shape`. Grids evaluate triangles from owned sample copies. Exposed tapered-capsule caps use an analytical triangle-distance certificate, preserving CCD contacts at terrain rims.
 
 - Qualify character modes and interactions with a behavior matrix, a fixed-step GFX consumer and Jolt comparisons for pushing, weight, momentum, rest and capsule changes in Native Debug/Release. Movement accepts a borrowed world, including the GFX resource, without transferring ownership.

@@ -76,6 +76,51 @@ package class HeightGridData3D {
         let vertices = height_grid_face3d(self.columns, self.diagonal, face)
         return Triangle3D(self.point(vertices.first), self.point(vertices.second), self.point(vertices.third))
     }
+    // Return dense face identities in original order; skip whole cell rows.
+    // A one-cell halo conservatively covers boundaries and float rounding.
+    func next_triangle(index:int, lower:Math.Vec3, upper:Math.Vec3) int {
+        if index >= self.count { return self.count }
+        if upper.x < -self.column_spacing || upper.z < -self.row_spacing ||
+            lower.x > self.columns as float * self.column_spacing ||
+            lower.z > self.rows as float * self.row_spacing { return self.count }
+        let first_column = Math.floor(Math.clamp(lower.x / self.column_spacing - 1.0, 0.0, (self.columns - 2) as float)) as int
+        let last_column = Math.floor(Math.clamp(upper.x / self.column_spacing + 1.0, 0.0, (self.columns - 2) as float)) as int
+        let first_row = Math.floor(Math.clamp(lower.z / self.row_spacing - 1.0, 0.0, (self.rows - 2) as float)) as int
+        let last_row = Math.floor(Math.clamp(upper.z / self.row_spacing + 1.0, 0.0, (self.rows - 2) as float)) as int
+        var selected = index
+        while selected < self.count {
+            var raw = selected
+            if self.holes.count() > 0 { raw = self.faces[selected] }
+            let cell = raw / 2; let row = cell / (self.columns - 1); let column = cell % (self.columns - 1)
+            if row > last_row { return self.count }
+            var wanted = raw
+            if row < first_row { wanted = (first_row * (self.columns - 1) + first_column) * 2 }
+            else if column < first_column { wanted = (row * (self.columns - 1) + first_column) * 2 }
+            else if column > last_column { wanted = ((row + 1) * (self.columns - 1) + first_column) * 2 }
+            else { return selected }
+            selected = self.face_lower_bound(wanted)
+        }
+        return self.count
+    }
+    private func face_lower_bound(raw:int) int {
+        if self.holes.count() == 0 {
+            if raw < self.count { return raw }
+            return self.count
+        }
+        var low = 0; var high = self.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if self.faces[middle] < raw { low = middle + 1 } else { high = middle }
+        }
+        return low
+    }
+    func seed_triangle(point:Math.Vec3) int {
+        let column = Math.floor(Math.clamp(point.x / self.column_spacing, 0.0, (self.columns - 2) as float)) as int
+        let row = Math.floor(Math.clamp(point.z / self.row_spacing, 0.0, (self.rows - 2) as float)) as int
+        let selected = self.face_lower_bound((row * (self.columns - 1) + column) * 2)
+        if selected < self.count { return selected }
+        return self.count - 1
+    }
     func height(column:int, row:int) float {
         self.require_sample(column, row)
         return self.heights[row * self.columns + column]
