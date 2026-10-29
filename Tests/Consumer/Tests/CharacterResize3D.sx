@@ -1,0 +1,95 @@
+use GFX.Physics
+use STD.Math
+
+func body(world:Physics.World3D, size:Math.Vec3, position:Math.Vec3,
+    sensor:bool = false, category:uint64 = 1) Physics.RigidBody3D {
+    return world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.fixed ..shape = Physics.Shape3D.box(Physics.Box3D(size))
+        ..transform = Physics.Transform3D(position) ..is_sensor = sensor
+        ..collision_filter = Physics.CollisionFilter3D(category_bits:category))
+}
+func crouch() {
+    var world = Physics.World3D()
+    var floor = body(world, Math.Vec3(20.0, 1.0, 20.0), Math.Vec3(0.0, -0.5, 0.0))
+    var mover = Physics.CharacterMover3D()
+    let standing = mover.capsule()
+    var position = Math.Vec3(0.0, 0.852, 0.0)
+    let first = mover.calculate_move(world, position, Math.Vec3())
+    assert(first.grounded)
+    let small = Physics.Capsule3D(0.3, 0.15)
+    if let lowered = mover.try_resize(world, position, small) { position = lowered }
+    else { assert(false) }
+    assert(Math.abs(position.y - 0.452) < 0.00001 && mover.capsule() == small)
+    var ceiling = body(world, Math.Vec3(4.0, 0.2, 4.0), Math.Vec3(0.0, 1.1, 0.0))
+    assert(mover.try_resize(world, position, standing) == null && mover.capsule() == small)
+    let under = mover.calculate_move(world, position, Math.Vec3(0.2, 0.0, 0.0), true)
+    assert(under.grounded && Math.abs(under.position.x - 0.2) < 0.00001)
+    if let support = under.support() { assert(support.same_body(floor)) } else { assert(false) }
+    world.destroy_rigid_body(ceiling)
+    if let raised = mover.try_resize(world, under.position, standing) { position = raised }
+    else { assert(false) }
+    assert(Math.abs(position.y - 0.852) < 0.00001 && mover.capsule() == standing)
+    let idle = mover.calculate_move(world, position, Math.Vec3(), true)
+    assert(idle.grounded && idle.position.nearly_equal(position, 0.00001))
+}
+func filters() {
+    for sensor in [false, true] {
+        var world = Physics.World3D()
+        var ceiling = body(world, Math.Vec3(4.0, 0.2, 4.0), Math.Vec3(0.0, 1.1, 0.0), sensor, 2)
+        var mover = Physics.CharacterMover3D(Physics.CharacterMover3DSettings()
+            ..half_height = 0.15 ..filter = Physics.QueryFilter3D(mask_bits:1, include_sensors:false))
+        assert(mover.try_resize(world, Math.Vec3(0.0, 0.452, 0.0), Physics.Capsule3D(0.3, 0.55)) != null)
+        var included = Physics.CharacterMover3D(Physics.CharacterMover3DSettings()
+            ..half_height = 0.15 ..filter = Physics.QueryFilter3D(include_sensors:true))
+        assert(included.try_resize(world, Math.Vec3(0.0, 0.452, 0.0), Physics.Capsule3D(0.3, 0.55)) == null)
+        ceiling.set_enabled(false)
+        assert(included.try_resize(world, Math.Vec3(0.0, 0.452, 0.0), Physics.Capsule3D(0.3, 0.55)) != null)
+    }
+}
+func width() {
+    var world = Physics.World3D()
+    body(world, Math.Vec3(0.2, 4.0, 4.0), Math.Vec3(0.55, 1.0, 0.0))
+    var mover = Physics.CharacterMover3D()
+    let initial = mover.capsule()
+    assert(mover.try_resize(world, Math.Vec3(0.0, 0.852, 0.0), Physics.Capsule3D(0.6, 0.55)) == null)
+    assert(mover.capsule() == initial)
+    if let position = mover.try_resize(world, Math.Vec3(0.0, 0.852, 0.0), Physics.Capsule3D(0.2, 0.55)) {
+        assert(Math.abs(position.y - 0.752) < 0.00001)
+    } else { assert(false) }
+}
+func teleport() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(6.0, 0.2, 6.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, -0.1, 0.0)))
+    var mover = Physics.CharacterMover3D()
+    let first = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3())
+    assert(first.grounded)
+    platform.move_kinematic(Physics.Transform3D(Math.Vec3(1.0, -0.1, 0.0)), 1.0 / 60.0)
+    world.step(1.0 / 60.0)
+    mover.reset()
+    let after = mover.calculate_move(world, Math.Vec3(10.0, 0.852, 0.0), Math.Vec3(), true)
+    assert(Math.abs(after.position.x - 10.0) < 0.00001 && !after.grounded && after.support() == null)
+}
+func resized_support() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var platform = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type = Physics.BodyType3D.kinematic ..shape = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(6.0, 0.2, 6.0)))
+        ..transform = Physics.Transform3D(Math.Vec3(0.0, -0.1, 0.0)))
+    var mover = Physics.CharacterMover3D()
+    let first = mover.calculate_move(world, Math.Vec3(0.0, 0.852, 0.0), Math.Vec3())
+    assert(first.grounded)
+    if let crouched = mover.try_resize(world, first.position, Physics.Capsule3D(0.3, 0.15)) {
+        platform.move_kinematic(Physics.Transform3D(Math.Vec3(1.0, -0.1, 0.0)), 1.0 / 60.0)
+        world.step(1.0 / 60.0)
+        let carried = mover.calculate_move(world, crouched, Math.Vec3(), true)
+        assert(carried.grounded && carried.position.nearly_equal(Math.Vec3(1.0, 0.452, 0.0), 0.00002))
+    } else { assert(false) }
+}
+
+test "capsule crouches and stands with fixed feet and atomically rejects a ceiling" { crouch() }
+test "capsule resize honors filters sensors and disabled obstacles" { filters() }
+test "capsule resize rejects width and retains its old shape on failure" { width() }
+test "resizing retains attachment to a moving support" { resized_support() }
+test "reset after teleport discards the previous moving support" { teleport() }
+func main() { crouch(); filters(); width(); resized_support(); teleport(); print("Character resize and teleport: all scenarios passed") }

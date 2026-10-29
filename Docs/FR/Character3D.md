@@ -72,6 +72,27 @@ volume entier et retrouve le même appui que son enveloppe convexe : la capsule
 Les huit passes restent bornées ; plusieurs obstacles incompatibles ou une sortie
 trop éloignée peuvent encore laisser une pénétration résiduelle.
 
+## Changer de capsule et téléporter
+
+`capsule()` lit les dimensions courantes. `try_resize(world, position, capsule)`
+conserve la position des pieds et retourne le nouveau centre, ou `null` si la
+forme proposée pénètre un obstacle. Le refus conserve la forme et l’état de
+support : sous un plafond bas, le personnage reste accroupi. La requête respecte
+les capteurs, filtres et corps désactivés comme le déplacement ordinaire.
+
+```sx
+if let resized = mover.try_resize(world, position, Physics.Capsule3D(0.3, 0.15)) {
+    position = resized
+}
+```
+
+Le rayon doit rester supérieur à `skin`. La hauteur et la largeur peuvent changer,
+y compris pendant le transport par une plateforme. Après une téléportation ou
+avant de réutiliser l’instance pour un autre personnage, appeler `mover.reset()`
+pour oublier l’ancien support. L’application reste propriétaire de `position`.
+Le [consommateur de changement de capsule](../../Tests/Consumer/Tests/CharacterResize3D.sx)
+couvre refus atomique, plafond, largeur, filtres et support mobile.
+
 ## Portée actuelle
 
 Le contrôleur est virtuel et n'enregistre aucun corps rigide. Il lit les poses
@@ -90,8 +111,8 @@ l'appui de cet appel, ou `null` ; comme tout handle de corps, vérifier
 
 Les autres corps rencontrés restent des obstacles à leur pose courante : le
 contrôleur ne pousse pas les corps dynamiques et ne les suit pas comme supports
-mobiles. La capsule garde sa forme et son axe vertical. Les personnages
-physiques, le changement de forme et les interactions entre personnages
+mobiles. La capsule conserve son axe vertical. Les personnages
+physiques et les interactions entre personnages
 restent à implémenter. Aucun comportement de saut ou de caméra n'est imposé
 par le package. Ne pas partager simultanément une instance entre plusieurs
 threads.

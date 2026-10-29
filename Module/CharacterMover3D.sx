@@ -64,8 +64,8 @@ local struct CharacterCast3D {
 // Virtual upright capsule. Position is the capsule centre; gameplay owns
 // velocity, gravity, jumping and the eye offset. No rigid body is registered.
 public class CharacterMover3D {
-    private let settings:CharacterMover3DSettings
-    private let shape:Shape3D
+    private var settings:CharacterMover3DSettings
+    private var shape:Shape3D
     private let slope_cos:float
     private var candidates:CharacterShape3D[]
     private var previous_support:RigidBody3D?
@@ -86,6 +86,49 @@ public class CharacterMover3D {
         self.candidates = []
         self.previous_support = null
         self.previous_support_pose = Transform3D()
+    }
+
+    func capsule() Capsule3D {
+        return Capsule3D(self.settings.radius, self.settings.half_height)
+    }
+
+    // Keep the bottom of the capsule fixed. A rejected shape leaves both the
+    // movement history and current capsule unchanged.
+    func try_resize(world:@World3D, position:Math.Vec3, capsule:Capsule3D) Math.Vec3? {
+        if !finite_body3d_point(position) || capsule.radius <= self.settings.skin {
+            panic("GFX.Physics.CharacterMover3D.try_resize requires a finite position and radius greater than skin")
+        }
+        let height = capsule.radius + capsule.half_height
+        let current_height = self.settings.radius + self.settings.half_height
+        let proposed_position = position.add(Math.Vec3(0.0, height - current_height, 0.0))
+        if !finite_body3d_point(proposed_position) {
+            panic("GFX.Physics.CharacterMover3D.try_resize requires a finite resulting position")
+        }
+        let proposed = Shape3D.capsule(capsule)
+        let placement = ShapePlacement3D(proposed, Transform3D(proposed_position))
+        let extent = Math.Vec3(capsule.radius, height, capsule.radius)
+        var candidates:CharacterShape3D[] = []
+        world.character_shapes(proposed_position.subtract(extent), proposed_position.add(extent),
+            self.settings.filter, candidates)
+        for target in candidates {
+            if front_triangle_contact3d(placement, target.placement) &&
+                contact_distance3d(placement, target.placement).separation < -0.00001 {
+                return null
+            }
+        }
+        self.settings.radius = capsule.radius
+        self.settings.half_height = capsule.half_height
+        self.shape = proposed
+        self.candidates = []
+        return proposed_position
+    }
+
+    // The application owns position; discard old support history when it
+    // teleports or reuses the mover for a different logical character.
+    func reset() {
+        self.previous_support = null
+        self.previous_support_pose = Transform3D()
+        self.candidates = []
     }
 
     func calculate_move(world:@World3D, position:Math.Vec3,

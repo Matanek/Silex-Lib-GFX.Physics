@@ -69,6 +69,27 @@ y=0.8 inside a 4×2×4 box exits at y=1.852, including skin. The eight recovery
 passes remain bounded; conflicting obstacles or a distant exit may still leave
 residual penetration.
 
+## Resize and teleport
+
+`capsule()` reads the current dimensions. `try_resize(world, position, capsule)`
+keeps the feet fixed and returns the new center, or `null` when the proposed
+shape penetrates an obstacle. Rejection preserves both shape and support state:
+the character remains crouched under a low ceiling. The query honors sensors,
+filters and disabled bodies like ordinary movement.
+
+```sx
+if let resized = mover.try_resize(world, position, Physics.Capsule3D(0.3, 0.15)) {
+    position = resized
+}
+```
+
+The radius must remain greater than `skin`. Both height and width may change,
+including while riding a platform. Call `mover.reset()` after teleporting or
+before reusing the mover for another character to forget its previous support.
+The application still owns `position`.
+The [resize consumer](../../Tests/Consumer/Tests/CharacterResize3D.sx) covers atomic
+rejection, ceilings, width, filtering and moving supports.
+
 ## Current scope
 
 The mover is virtual and registers no rigid body. It reads current poses of
@@ -86,7 +107,7 @@ destruction.
 
 Other encountered bodies remain obstacles at their current poses. The mover
 does not push dynamic bodies or follow them as moving supports. The capsule
-retains its shape and vertical axis. Physical characters, shape changes, and
+retains its vertical axis. Physical characters and
 character-to-character interactions remain to be implemented. The package
 imposes no jump or camera behavior. Do not share one instance concurrently
 between threads.

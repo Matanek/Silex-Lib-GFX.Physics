@@ -1,0 +1,7 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var world = Physics.World3D()
+    var mover = Physics.CharacterMover3D()
+    mover.try_resize(world, Math.Vec3(), Physics.Capsule3D(0.001, 0.15))
+}
