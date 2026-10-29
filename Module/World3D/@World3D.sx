@@ -1,3 +1,4 @@
+use STD.Threading
 use GFX.Physics.VirtualCharacter3D.VirtualCharacter3D
 use GFX.Physics.CharacterMover3D.CharacterMover3D
 use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
@@ -176,6 +177,9 @@ package struct CharacterShape3D {
 
 public class World3D {
     private var store:BodyStore3D
+    private var parallel_executor:Threading.Executor? = null
+    private var current_worker_count:int = 1
+    private var parallel_observer:StepObserver3D? = null
     private var physical_characters:PhysicalCharacterState3D[]
     private var distance_constraints:DistanceConstraintStore3D
     private var slider_constraints:SliderConstraintStore3D
@@ -201,6 +205,7 @@ public class World3D {
     private var pending_contact_ends:Contact3D[]
 
     drop {
+        self.parallel_executor = null
         self.distance_constraints.invalidate_all()
         self.slider_constraints.invalidate_all()
         self.fixed_constraints.invalidate_all()
@@ -1029,6 +1034,31 @@ public class World3D {
         return body.is_enabled() && filter.allows(body.collision_filter(), body.is_sensor())
     }
 
+    func enable_parallelism(worker_count:int) {
+        self.store.require_mutable()
+        if worker_count < 1 { panic("GFX.Physics.World3D parallel worker count must be positive") }
+        if worker_count == self.current_worker_count { return }
+        self.parallel_executor = null
+        if worker_count > 1 { self.parallel_executor = Threading.Executor(worker_count:worker_count) }
+        self.current_worker_count = worker_count
+    }
+    func worker_count() int { return self.current_worker_count }
+
+    // Internal execution witness, deliberately absent from the public API.
+    package func observe_parallelism(observer:StepObserver3D?) {
+        self.store.require_mutable()
+        self.parallel_observer = observer
+    }
+    private func execute_bodies(delta:float, positions:bool) {
+        var job = StepBodies3D(store:self.store, gravity:self.current_gravity,
+            delta:delta, positions:positions, observer:self.parallel_observer)
+        let count = self.store.slots.count()
+        if count >= 64 {
+            if var executor = self.parallel_executor { executor.submit_parallel(count,job).complete(); return }
+        }
+        job.execute(0,count)
+    }
+
     func step(delta:float) {
         if !finite_body3d_value(delta) || delta < 0.0 {
             panic("GFX.Physics.World3D.step requires a finite non-negative delta")
@@ -1066,15 +1096,9 @@ public class World3D {
             }
         }
         self.reset_constraint_reactions(delta)
-        for slot in self.store.slots {
-            if var state = slot {
-                if state.is_enabled && state.body_type == BodyType3D.dynamic && state.awake {
-                    integrate_dynamic_velocity3d(state, self.current_gravity, delta)
-                }
-                state.force = Math.Vec3()
-                state.torque = Math.Vec3()
-            }
-        }
+        var constraint_data=ConstraintVelocityData3D(self.store,self.distance_constraints,self.slider_constraints,self.fixed_constraints,self.point_constraints,self.rack_and_pinion_constraints,self.path_constraints,self.pulley_constraints,self.gear_constraints,self.six_dof_constraints,self.swing_twist_constraints,self.cone_constraints,self.hinge_constraints)
+        var constraint_batch=ConstraintVelocityBatch3D(constraint_data,delta,self.store.slots.count())
+        self.execute_bodies(delta,false)
         for vehicle in self.wheeled_vehicles { vehicle.warm_start_tires() }
         self.warm_start_fixed_constraints(delta)
         self.warm_start_hinge_constraints(delta)
@@ -1084,24 +1108,15 @@ public class World3D {
         // Near-plane face candidates require support before pose integration.
         // Other manifolds keep their established schedule without coupled joints.
         if coupled_constraints || !retained_contacts.is_empty() {
+            var contact_batch=ContactVelocityBatch3D(retained_contacts,self.store.slots.count())
             var iteration = 0
             while iteration < self.velocity_iterations {
-                solve_contact_pairs_velocity3d(retained_contacts, iteration % 2 == 1)
-                self.solve_constraint_velocities(delta, iteration % 2 == 1)
+                contact_batch.solve(iteration % 2 == 1,self.parallel_executor,self.parallel_observer)
+                self.solve_constraint_velocities(constraint_batch, iteration % 2 == 1)
                 iteration++
             }
         }
-        for slot in self.store.slots {
-            if var state = slot {
-                if state.is_enabled {
-                    match state.body_type {
-                        fixed => {}
-                        kinematic => { integrate_kinematic3d(state, delta) }
-                        dynamic => { if state.awake { advance_pose3d(state, delta) } }
-                    }
-                }
-            }
-        }
+        self.execute_bodies(delta,true)
         self.observe_rack_phases(delta)
         self.observe_gear_phases(delta)
         if has_continuous_body { self.apply_continuous_motion(previous_poses) }
@@ -1115,7 +1130,7 @@ public class World3D {
                 }
             }
         }
-        self.detect_and_resolve_contacts(delta, retained_contacts)
+        self.detect_and_resolve_contacts(delta, retained_contacts,constraint_batch)
         self.wheel_side_contacts.clear()
         if has_continuous_body {
             self.emit_continuous_sensor_events(previous_poses, continuous_poses)
@@ -1633,237 +1648,10 @@ public class World3D {
         return false
     }
 
-    private func solve_constraint_velocities(delta:float, reverse:bool) {
+    private func solve_constraint_velocities(batch:ConstraintVelocityBatch3D, reverse:bool) {
         self.solve_wheel_side_velocities()
         for vehicle in self.wheeled_vehicles { vehicle.solve_velocity() }
-        var constraint_index = 0
-        while constraint_index < self.distance_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.distance_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.distance_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_distance_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.slider_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.slider_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.slider_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_slider_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.fixed_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.fixed_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.fixed_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_fixed_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.point_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.point_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.point_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_point_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.hinge_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.hinge_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.hinge_constraints.slots[selected] {
-                if constraint.point.is_enabled {
-                    var first = self.store.require(constraint.point.first_id)
-                    var second = self.store.require(constraint.point.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_hinge_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.rack_and_pinion_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.rack_and_pinion_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.rack_and_pinion_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_rack_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.path_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.path_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.path_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_path_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.pulley_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.pulley_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.pulley_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_pulley_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.gear_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.gear_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.gear_constraints.slots[selected] {
-                if constraint.is_enabled {
-                    var first = self.store.require(constraint.first_id)
-                    var second = self.store.require(constraint.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_gear_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.cone_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.cone_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.cone_constraints.slots[selected] {
-                if constraint.point.is_enabled {
-                    var first = self.store.require(constraint.point.first_id)
-                    var second = self.store.require(constraint.point.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_cone_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.swing_twist_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.swing_twist_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.swing_twist_constraints.slots[selected] {
-                if constraint.point.is_enabled {
-                    var first = self.store.require(constraint.point.first_id)
-                    var second = self.store.require(constraint.point.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_swing_twist_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
-        constraint_index = 0
-        while constraint_index < self.six_dof_constraints.slots.count() {
-            var selected = constraint_index
-            if reverse {
-                selected = self.six_dof_constraints.slots.count() - 1 - constraint_index
-            }
-            if var constraint = self.six_dof_constraints.slots[selected] {
-                if constraint.point.is_enabled {
-                    var first = self.store.require(constraint.point.first_id)
-                    var second = self.store.require(constraint.point.second_id)
-                    if first.is_enabled && second.is_enabled &&
-                        (first.awake || second.awake)
-                    {
-                        solve_six_velocity3d(first, second, constraint, delta)
-                    }
-                }
-            }
-            constraint_index++
-        }
+        batch.solve(reverse,self.parallel_executor,self.parallel_observer)
     }
 
     private func wake_constraint_islands() {
@@ -2260,7 +2048,7 @@ public class World3D {
         return pairs
     }
 
-    private func detect_and_resolve_contacts(delta:float, retained_contacts:ContactPairState3D[]) {
+    private func detect_and_resolve_contacts(delta:float, retained_contacts:ContactPairState3D[],constraint_batch:ConstraintVelocityBatch3D) {
         var previous_contacts:Contact3D[] = []
         for contact in self.contacts { previous_contacts.append(contact) }
         self.contacts.clear()
@@ -2271,67 +2059,28 @@ public class World3D {
         }
         self.pending_contact_ends.clear()
         var pairs:ContactPairState3D[] = []
-        let candidates = broadphase_pairs3d(self.store)
-        for broad_pair in candidates {
-            let first_slot = broad_pair.first
-            let second_slot = broad_pair.second
-            if var first = self.store.slots[first_slot] {
-                if first.is_enabled {
-                    if var second = self.store.slots[second_slot] {
-                        if second.is_enabled &&
-                            body_collision_allows3d(first, second) &&
-                            (first.body_type == BodyType3D.dynamic ||
-                                second.body_type == BodyType3D.dynamic ||
-                                ((first.is_sensor || second.is_sensor) &&
-                                    (first.body_type == BodyType3D.kinematic ||
-                                        second.body_type == BodyType3D.kinematic)))
-                        {
-                            let first_id = BodyId3D(
-                                first_slot, self.store.generations[first_slot])
-                            let second_id = BodyId3D(
-                                second_slot, self.store.generations[second_slot])
-                            if is_compound3d(first.shape) || is_compound3d(second.shape) ||
-                                supports_mesh_manifolds3d(first.shape, second.shape) {
-                                var distances:DistanceResult3D[] = []
-                                write_leaf_contacts3d(
-                                    ShapePlacement3D(first.shape, first.transform),
-                                    ShapePlacement3D(second.shape, second.transform),
-                                    -1, -1, distances)
-                                // Canonical child order also fixes solver order,
-                                // independent of the compound's construction order.
-                                Sort.sort<DistanceResult3D>(
-                                    &distances[0:distances.count()], leaf_contact_before3d)
-                                for distance in distances {
-                                    append_contact_pair3d(first, second,
-                                        first_id, second_id, distance, false, delta,
-                                        previous_contacts, pairs)
-                                }
-                            } else {
-                                let first_placement = ShapePlacement3D(first.shape, first.transform)
-                                let second_placement = ShapePlacement3D(second.shape, second.transform)
-                                if !front_triangle_contact3d(first_placement, second_placement) {
-                                    continue
-                                }
-                                let first_radius = primitive_sphere_radius3d(first.shape)
-                                let second_radius = primitive_sphere_radius3d(second.shape)
-                                let sphere_pair = first_radius > 0.0 && second_radius > 0.0
-                                var distance = DistanceResult3D(
-                                    Math.Vec3(), Math.Vec3(), Math.Vec3(), 0.0)
-                                if sphere_pair {
-                                    distance = sphere_centers_distance3d(
-                                        first.transform.position, first_radius,
-                                        second.transform.position, second_radius)
-                                } else {
-                                    distance = contact_distance3d(first_placement, second_placement)
-                                }
-                                append_contact_pair3d(first, second,
-                                    first_id, second_id, distance, sphere_pair, delta,
-                                    previous_contacts, pairs)
-                            }
-                        }
-                    }
+        var geometry = ContactGeometryBatch3D(self.store,broadphase_pairs3d(self.store))
+        var job = DetectContactGeometry3D(batch:geometry,observer:self.parallel_observer)
+        let count = geometry.candidates.count()
+        if count >= 64 && self.current_worker_count > 1 {
+            if var executor = self.parallel_executor { executor.submit_parallel(count,job).complete() }
+        } else { job.execute(0,count) }
+        // Publication, waking and warm-start selection retain canonical pair order.
+        var candidate = 0
+        while candidate < count {
+            let broad_pair = geometry.candidates[candidate]
+            var result = geometry.results[candidate]
+            if !result.distances.is_empty() {
+                var first = self.store.slots[broad_pair.first]!
+                var second = self.store.slots[broad_pair.second]!
+                let first_id = BodyId3D(broad_pair.first,self.store.generations[broad_pair.first])
+                let second_id = BodyId3D(broad_pair.second,self.store.generations[broad_pair.second])
+                for distance in result.distances {
+                    append_contact_pair3d(first,second,first_id,second_id,distance,
+                        result.sphere_pair,delta,previous_contacts,pairs)
                 }
             }
+            candidate++
         }
         if !retained_contacts.is_empty() { pairs = merge_retained_contacts3d(retained_contacts, pairs) }
         for var pair in pairs {
@@ -2368,10 +2117,11 @@ public class World3D {
             normal_iteration++
         }
         self.prepare_wheel_side_contacts(delta)
+        var contact_batch=ContactVelocityBatch3D(pairs,self.store.slots.count())
         var iteration = 0
         while iteration < self.velocity_iterations {
-            solve_contact_pairs_velocity3d(pairs, iteration % 2 == 1)
-            self.solve_constraint_velocities(delta, iteration % 2 == 1)
+            contact_batch.solve(iteration % 2 == 1,self.parallel_executor,self.parallel_observer)
+            self.solve_constraint_velocities(constraint_batch, iteration % 2 == 1)
             iteration++
         }
         for var pair in pairs {
@@ -2590,9 +2340,9 @@ public class World3D {
                 pair_end=pair_start
             }
             write_new_position_candidates3d(self.store,pairs,position_candidates)
-            var candidate=position_candidates.count()
-            while candidate>0 {
-                candidate--;var pair=position_candidates[candidate]
+            var position_candidate=position_candidates.count()
+            while position_candidate>0 {
+                position_candidate--;var pair=position_candidates[position_candidate]
                 correct_new_position_contacts3d(pair.first,pair.second,position_inputs,position_rows,position_distances)
             }
             self.solve_wheel_side_positions()
@@ -3264,37 +3014,19 @@ func warm_contact_points3d(
     }
 }
 
-func solve_contact_pairs_velocity3d(pairs:ContactPairState3D[], reverse:bool) {
-    var pair_index = 0
-    while pair_index < pairs.count() {
-        var selected_pair = pair_index
-        if reverse {
-            selected_pair = pairs.count() - 1 - pair_index
-        }
-        var pair = pairs[selected_pair]
-        if !pair.active {
-            pair_index++
-            continue
-        }
-        if pair.direct_spheres {
-            solve_sphere_point3d(pair.first, pair.second, pair.normal,
-                        pair.friction, pair.constraints[0])
-            pair_index++
-            continue
-        }
-        var point_index = 0
-        while point_index < pair.constraints.count() {
-            var selected_point = point_index
-            if reverse {
-                selected_point = pair.constraints.count() - 1 - point_index
-            }
-            solve_contact_point3d(
-                pair.first, pair.second, pair.normal, pair.friction,
-                pair.constraints[selected_point]
-            )
-            point_index++
-        }
-        pair_index++
+func solve_contact_pair_velocity3d(value:ContactPairState3D,reverse:bool) {
+    var pair=value
+    if !pair.active { return }
+    if pair.direct_spheres {
+        solve_sphere_point3d(pair.first,pair.second,pair.normal,pair.friction,pair.constraints[0])
+        return
+    }
+    var point_index=0
+    while point_index<pair.constraints.count() {
+        var selected_point=point_index
+        if reverse { selected_point=pair.constraints.count()-1-point_index }
+        solve_contact_point3d(pair.first,pair.second,pair.normal,pair.friction,pair.constraints[selected_point])
+        point_index++
     }
 }
 

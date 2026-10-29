@@ -1,0 +1,49 @@
+use GFX.Physics
+use GFX.Physics.World3D.StepObserver3D
+use STD.Math
+// A rendezvous proves overlapping call stacks without platform-specific code.
+class PhaseThreads { var entered:int=0;var active:int=0;var peak:int=0 }
+class WorkerWitness:StepObserver3D {
+    var phases:PhaseThreads[]=[]
+    init() { var i=0;while i<5 { self.phases.append(PhaseThreads());i++ } }
+    func executing(phase:int,start:int,end:int) {
+        mutex {
+            var state=self.phases[phase]
+            state.entered++;state.active++
+            if state.active>state.peak { state.peak=state.active }
+        }
+        // A sequential implementation cannot pass this four-range rendezvous.
+        // The runner bounds runtime so a scheduling regression fails explicitly.
+        var waiting=true
+        while waiting { mutex { waiting=self.phases[phase].entered<4 } }
+        mutex { var state=self.phases[phase];state.active-- }
+    }
+}
+func exercise_workers() {
+    var world=Physics.World3D()
+    world.enable_parallelism(4)
+    var witness=WorkerWitness()
+    world.observe_parallelism(witness)
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var i=0
+    while i<256 {
+        let position=Math.Vec3((i%16) as float,0.2,(i/16) as float)
+        var ball=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.2)) ..transform=Physics.Transform3D(position))
+        var anchor=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.02))
+            ..transform=Physics.Transform3D(position.add(Math.Vec3(0.0,10.0,0.0))))
+        world.create_distance_constraint(anchor,ball,Physics.DistanceConstraint3DSettings(10.0))
+        i++
+    }
+    world.step(1.0/60.0)
+    world.observe_parallelism(null)
+    var phase=0
+    while phase<5 { assert(witness.phases[phase].peak>=4 && witness.phases[phase].active==0);phase++ }
+    world.enable_parallelism(1)
+    world.step(1.0/60.0)
+    print("Four concurrent threads witnessed in body velocity, pose, contact geometry, contact solve and joint solve")
+}
+test "four threads execute all five independent physical phases" { exercise_workers() }
+func main() { exercise_workers() }

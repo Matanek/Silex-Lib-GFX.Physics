@@ -1,0 +1,262 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+use STD.Time
+class Fixture {
+    var world:Physics.World3D
+    var bodies:Physics.RigidBody3D[] = []
+    var handles:Physics.RigidBody3D[] = []
+    var joints:Physics.DistanceConstraint3D[]=[]
+    init(workers:int,joints:bool=false,terrain:bool=false) {
+        var world = Physics.World3D()
+        world.enable_parallelism(workers)
+        var floor_shape=Physics.Shape3D.plane(Physics.Plane3D())
+        if terrain {
+            var heights:float[]=[];var cell=0
+            while cell<289 { heights.append(0.005*(cell%17) as float+0.003*(cell/17) as float);cell++ }
+            var field=Physics.HeightField3D(17,17,heights,1.0,1.0)
+            floor_shape=field.shape()
+        }
+        self.handles.append(world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = floor_shape))
+        var index = 0
+        while index < 256 {
+            var shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.2));var level=0.0
+            if terrain { shape=terrain_volume(index);level=0.005*(index%16) as float+0.003*(index/16) as float }
+            self.bodies.append(world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep = false
+                ..shape = shape ..friction = 0.2
+                ..transform = Physics.Transform3D(Math.Vec3((index % 16) as float,level + 0.2 + (index % 3) as float * 0.02,(index / 16) as float))
+                ..linear_velocity = Math.Vec3(0.1,0.0,0.03)))
+            var ball=self.bodies[index]
+            self.handles.append(ball)
+            if joints {
+                var anchor=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+                    ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.02))
+                    ..transform=Physics.Transform3D(ball.position().add(Math.Vec3(0.0,10.0,0.0))))
+                self.handles.append(anchor)
+                self.joints.append(world.create_distance_constraint(anchor,ball,Physics.DistanceConstraint3DSettings(10.0)))
+            }
+            index++
+        }
+        self.world = world
+    }
+}
+func identity(fixture:Fixture,body:Physics.RigidBody3D) int {
+    var i=0
+    while i<fixture.handles.count() { if fixture.handles[i].same_body(body) { return i }
+i++ }
+    panic("unrecognized contact identity")
+}
+func compare_contacts(first:Fixture,second:Fixture,a:Physics.Contact3D[],b:Physics.Contact3D[]) {
+    assert(a.count()==b.count())
+    var i=0
+    while i<a.count() {
+        var left=a[i];var right=b[i]
+        assert(identity(first,left.first_body())==identity(second,right.first_body()))
+        assert(identity(first,left.second_body())==identity(second,right.second_body()))
+        assert(left.first_child_id()==right.first_child_id() && left.second_child_id()==right.second_child_id())
+        assert(left.normal()==right.normal() && left.point()==right.point() && left.separation()==right.separation())
+        assert(left.normal_impulse()==right.normal_impulse() && left.tangent_impulse()==right.tangent_impulse())
+        assert(left.friction()==right.friction() && left.restitution()==right.restitution() && left.is_sensor()==right.is_sensor())
+        var points_a:Physics.ContactPoint3D[]=[];var points_b:Physics.ContactPoint3D[]=[]
+        left.write_points(points_a);right.write_points(points_b)
+        assert(points_a.count()==points_b.count())
+        var j=0
+        while j<points_a.count() {
+            assert(points_a[j].position==points_b[j].position && points_a[j].normal_impulse==points_b[j].normal_impulse && points_a[j].tangent_impulse==points_b[j].tangent_impulse)
+            j++
+        }
+        i++
+    }
+}
+func compare(first:Fixture, second:Fixture) {
+    assert(first.world.contact_count() == second.world.contact_count())
+    var index = 0
+    while index < first.bodies.count() {
+        var a = first.bodies[index]; var b = second.bodies[index]
+        assert(a.is_valid()==b.is_valid())
+        if !a.is_valid() { index++;continue }
+        assert(a.is_awake()==b.is_awake() && a.is_enabled()==b.is_enabled())
+        assert(a.position() == b.position())
+        assert(a.linear_velocity() == b.linear_velocity())
+        assert(a.angular_velocity() == b.angular_velocity())
+        assert(a.rotation() == b.rotation())
+        index++
+    }
+    var a:Physics.Contact3D[]=[];var b:Physics.Contact3D[]=[]
+    first.world.write_contacts(a);second.world.write_contacts(b);compare_contacts(first,second,a,b)
+    first.world.write_contact_begin_events(a);second.world.write_contact_begin_events(b);compare_contacts(first,second,a,b)
+    first.world.write_contact_end_events(a);second.world.write_contact_end_events(b);compare_contacts(first,second,a,b)
+    index=0
+    while index<first.joints.count() {
+        var left=first.joints[index];var right=second.joints[index]
+        assert(left.is_valid()==right.is_valid())
+        if left.is_valid() { assert(left.reaction_force()==right.reaction_force()) }
+        index++
+    }
+}
+func mutate(value:Fixture,frame:int) {
+    var fixture=value
+    if frame==3 { fixture.bodies[0].set_sensor(true);fixture.bodies[1].set_enabled(false) }
+    if frame==5 { fixture.bodies[0].set_sensor(false);fixture.bodies[1].set_enabled(true) }
+    if frame==7 { fixture.bodies[2].set_shape(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.3)))) }
+    if frame==9 {
+        fixture.world.destroy_rigid_body(fixture.bodies[3])
+        var fresh=fixture.world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..transform=Physics.Transform3D(Math.Vec3(3.0,3.0,0.0)) ..continuous_collision=true
+            ..linear_velocity=Math.Vec3(0.0,-20.0,0.0))
+        fixture.bodies.append(fresh);fixture.handles.append(fresh)
+    }
+    if frame==11 { fixture.world.enable_parallelism(1) }
+    if frame==12 { fixture.world.enable_parallelism(4) }
+}
+func exercise() {
+    var first = Fixture(1); var second = Fixture(4)
+    assert(first.world.worker_count() == 1 && second.world.worker_count() == 4)
+    var step = 0
+    while step < 12 { first.world.step(1.0 / 60.0); second.world.step(1.0 / 60.0); compare(first,second); step++ }
+    second.world.enable_parallelism(1)
+    first.world.step(0.0); second.world.step(0.0); compare(first,second)
+    first.world.step(1.0 / 60.0); second.world.step(1.0 / 60.0); compare(first,second)
+}
+func exercise_joints() {
+    var first=Fixture(1,true);var second=Fixture(4,true);var repeat=Fixture(4,true)
+    var frame=0
+    while frame<16 {
+        mutate(first,frame);mutate(second,frame);mutate(repeat,frame)
+        // Keep the reference sequential after the shared configuration exercise.
+        first.world.enable_parallelism(1)
+        first.world.step(1.0/60.0);second.world.step(1.0/60.0);repeat.world.step(1.0/60.0)
+        compare(first,second);compare(second,repeat)
+        frame++
+    }
+}
+func attach_mixed(value:Fixture) {
+    var fixture=value
+    var index=0
+    while index<255 {
+        if index%16!=15 {
+            var first=fixture.bodies[index];var second=fixture.bodies[index+1]
+            let left=Math.Vec3(0.5,0.0,0.0);let right=Math.Vec3(-0.5,0.0,0.0)
+            let left_frame=Physics.Transform3D(left);let right_frame=Physics.Transform3D(right)
+            let family=index%11
+            if family==0 { fixture.world.create_point_constraint(first,second,Physics.PointConstraint3DSettings() ..first_local_anchor=left ..second_local_anchor=right) }
+            if family==1 { fixture.world.create_fixed_constraint(first,second,Physics.FixedConstraint3DSettings() ..first_local_frame=left_frame ..second_local_frame=right_frame) }
+            if family==2 { fixture.world.create_slider_constraint(first,second,Physics.SliderConstraint3DSettings() ..first_local_frame=left_frame ..second_local_frame=right_frame) }
+            if family==3 { fixture.world.create_hinge_constraint(first,second,Physics.HingeConstraint3DSettings() ..first_local_anchor=left ..second_local_anchor=right) }
+            if family==4 { fixture.world.create_cone_constraint(first,second,Physics.ConeConstraint3DSettings() ..first_local_anchor=left ..second_local_anchor=right) }
+            if family==5 { fixture.world.create_swing_twist_constraint(first,second,Physics.SwingTwistConstraint3DSettings() ..first_local_frame=left_frame ..second_local_frame=right_frame) }
+            if family==6 { fixture.world.create_six_dof_constraint(first,second,Physics.SixDOFConstraint3DSettings() ..first_local_frame=left_frame ..second_local_frame=right_frame) }
+            if family==7 { fixture.world.create_path_constraint(first,second,Physics.PathConstraint3DSettings(Physics.Path3D.line(Math.Vec3(),Math.Vec3(2.0,0.0,0.0),Math.Vec3.up()))) }
+            if family==8 { fixture.world.create_pulley_constraint(first,second,Physics.PulleyConstraint3DSettings(first.position().add(Math.Vec3(0.0,3.0,0.0)),second.position().add(Math.Vec3(0.0,3.0,0.0)))) }
+            if family==9 { fixture.world.create_gear_constraint(first,second,Physics.GearConstraint3DSettings()) }
+            if family==10 { fixture.world.create_rack_and_pinion_constraint(first,second,Physics.RackAndPinionConstraint3DSettings()) }
+        }
+        index++
+    }
+}
+func exercise_mixed() {
+    var first=Fixture(1,true);var second=Fixture(4,true)
+    attach_mixed(first);attach_mixed(second)
+    var frame=0
+    while frame<8 {
+        first.world.step(1.0/60.0);second.world.step(1.0/60.0);compare(first,second)
+        frame++
+    }
+}
+
+func terrain_volume(index:int) Physics.Shape3D {
+    if index%8==0 { return Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.3,0.4,0.3))) }
+    if index%8==1 { return Physics.Shape3D.capsule(Physics.Capsule3D(0.12,0.08)) }
+    if index%8==2 { return Physics.Shape3D.cylinder(Physics.Cylinder3D(0.15,0.2)) }
+    if index%8==3 { return Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(0.1,0.15,0.2)) }
+    if index%8==4 { return Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1,0.15,0.08)) }
+    if index%8==5 {
+        var hull=Physics.ConvexHull3D([Math.Vec3(-0.15,-0.2,-0.15),Math.Vec3(0.15,-0.2,-0.15),Math.Vec3(0.0,0.2,0.0),Math.Vec3(0.0,-0.2,0.15)])
+        return Physics.Shape3D.convex(hull)
+    }
+    if index%8==6 {
+        var compound=Physics.Compound3D([Physics.CompoundChild3D(7,Physics.Shape3D.sphere(Physics.Sphere3D(0.15)),Physics.Transform3D(Math.Vec3(-0.08,0.0,0.0))),Physics.CompoundChild3D(19,Physics.Shape3D.sphere(Physics.Sphere3D(0.15)),Physics.Transform3D(Math.Vec3(0.08,0.0,0.0)))])
+        return Physics.Shape3D.compound(compound)
+    }
+    return Physics.Shape3D.sphere(Physics.Sphere3D(0.2))
+}
+func exercise_terrain() {
+    var first=Fixture(1,false,true);var second=Fixture(4,false,true)
+    var frame=0
+    while frame<6 { first.world.step(1.0/60.0);second.world.step(1.0/60.0);compare(first,second);frame++ }
+    assert(first.world.contact_count()>64)
+}
+func exercise_sleep() {
+    var first=Fixture(1);var second=Fixture(4)
+    for body in first.bodies { body.set_linear_velocity(Math.Vec3());body.set_sleep_enabled(true) }
+    for body in second.bodies { body.set_linear_velocity(Math.Vec3());body.set_sleep_enabled(true) }
+    var frame=0
+    while frame<96 {
+        first.world.step(1.0/60.0);second.world.step(1.0/60.0)
+        if frame%12==0 { compare(first,second) }
+        frame++
+    }
+    assert(!first.bodies[128].is_awake() && !second.bodies[128].is_awake())
+    first.bodies[128].set_linear_velocity(Math.Vec3(0.0,1.0,0.0))
+    second.bodies[128].set_linear_velocity(Math.Vec3(0.0,1.0,0.0))
+    first.world.step(1.0/60.0);second.world.step(1.0/60.0);compare(first,second)
+    assert(first.bodies[128].is_awake())
+}
+func orphan_parallel_body() Physics.RigidBody3D {
+    var world=Physics.World3D();world.enable_parallelism(4)
+    var body=world.create_rigid_body()
+    var anchor=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..collision_filter=Physics.CollisionFilter3D(mask_bits:0) ..transform=Physics.Transform3D(Math.Vec3(0.0,10.0,0.0)))
+    world.create_distance_constraint(anchor,body,Physics.DistanceConstraint3DSettings(10.0))
+    var i=1
+    while i<256 {
+        let position=Math.Vec3(i as float*2.0,0.0,0.0)
+        var part=world.create_rigid_body(Physics.RigidBody3DSettings() ..transform=Physics.Transform3D(position))
+        var support=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0) ..transform=Physics.Transform3D(position.add(Math.Vec3(0.0,10.0,0.0))))
+        world.create_distance_constraint(support,part,Physics.DistanceConstraint3DSettings(10.0))
+        i++
+    }
+    world.step(1.0/60.0)
+    return body
+}
+func exercise_lifetime() {
+    var cycle=0
+    while cycle<12 { var body=orphan_parallel_body();assert(!body.is_valid());cycle++ }
+}
+
+test "one and four workers retain body state and ordered contact observations exactly" { exercise() }
+test "joint islands, repeated parallel runs and population changes remain exact" { exercise_joints() }
+test "twelve joint families in connected chains retain their canonical calculation order" { exercise_mixed() }
+test "height terrain, primitive and compound leaves preserve concurrent geometry" { exercise_terrain() }
+test "sleeping and waking preserve exact parallel results" { exercise_sleep() }
+test "world and worker lifetime invalidates retained handles" { exercise_lifetime() }
+func main() {
+    var workers=0
+    var rest=false
+    var lifetime=false
+    for argument in Process.arguments() { if argument=="rest" { rest=true }
+if argument=="lifetime" { lifetime=true }
+if argument=="one" { workers=1 }
+if argument=="four" { workers=4 } }
+    if rest { exercise_sleep();print("Sleeping and waking passed");return }
+    if lifetime { exercise_lifetime();print("World and worker lifetime passed");return }
+    if workers>0 {
+        var preparation=Time.Stopwatch();preparation.start()
+        var fixture=Fixture(workers,true)
+        preparation.stop()
+        print("prepare_ms",preparation.get_elapsed_milliseconds())
+        var frame=0
+        while frame<4 { fixture.world.step(1.0/60.0);frame++ }
+        var timer=Time.Stopwatch()
+        timer.start()
+        frame=0
+        while frame<32 { fixture.world.step(1.0/60.0);frame++ }
+        timer.stop()
+        print("steps_ms",timer.get_elapsed_milliseconds())
+        var signature=0.0
+        for body in fixture.bodies { signature+=body.position().x+body.position().y+body.position().z+body.linear_velocity().length_squared()+body.angular_velocity().length_squared() }
+        print("signature",signature,"contacts",fixture.world.contact_count())
+    } else { exercise();print("contacts passed");exercise_joints();print("joint islands passed");exercise_mixed();print("twelve families passed");exercise_terrain();print("terrain passed");exercise_sleep();print("sleep passed");exercise_lifetime();print("Parallel state, contacts, events, joints and lifetime checks passed") }
+}

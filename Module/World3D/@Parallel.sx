@@ -1,0 +1,527 @@
+use GFX.Physics.DistanceConstraint3D.DistanceConstraintStore3D
+use GFX.Physics.SliderConstraint3D.SliderConstraintStore3D
+use GFX.Physics.FixedConstraint3D.FixedConstraintStore3D
+use GFX.Physics.PointConstraint3D.PointConstraintStore3D
+use GFX.Physics.RackAndPinionConstraint3D.RackAndPinionConstraintStore3D
+use GFX.Physics.PathConstraint3D.PathConstraintStore3D
+use GFX.Physics.PulleyConstraint3D.PulleyConstraintStore3D
+use GFX.Physics.GearConstraint3D.GearConstraintStore3D
+use GFX.Physics.SixDOFConstraint3D.SixDOFConstraintStore3D
+use GFX.Physics.SwingTwistConstraint3D.SwingTwistConstraintStore3D
+use GFX.Physics.ConeConstraint3D.ConeConstraintStore3D
+use GFX.Physics.HingeConstraint3D.HingeConstraintStore3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.RigidBody3D.body_collision_allows3d
+use GFX.Physics.Geometry3D.DistanceResult3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.front_triangle_contact3d
+use GFX.Physics.Geometry3D.contact_distance3d
+use GFX.Physics.Geometry3D.sphere_centers_distance3d
+use STD.Math
+use STD.Threading
+use STD.Algorithms.Sort
+
+// Test/benchmark witness runs at range entry, never per body or solver row.
+package protocol StepObserver3D {
+    func executing(phase:int, start:int, end:int)
+}
+struct StepBodies3D:Threading.ParallelJob {
+    var store:BodyStore3D
+    var gravity:Math.Vec3
+    var delta:float
+    var positions:bool
+    var observer:StepObserver3D?
+    func execute(start:int, end:int) {
+        var phase = 0
+        if self.positions { phase = 1 }
+        if var observer = self.observer { observer.executing(phase,start,end) }
+        var index = start
+        while index < end {
+            if var state = self.store.slots[index] {
+                if self.positions {
+                    if state.is_enabled {
+                        match state.body_type {
+                            fixed => {}
+                            kinematic => { integrate_kinematic3d(state,self.delta) }
+                            dynamic => { if state.awake { advance_pose3d(state,self.delta) } }
+                        }
+                    }
+                } else {
+                    if state.is_enabled && state.body_type == BodyType3D.dynamic && state.awake {
+                        integrate_dynamic_velocity3d(state,self.gravity,self.delta)
+                    }
+                    state.force = Math.Vec3(); state.torque = Math.Vec3()
+                }
+            }
+            index++
+        }
+    }
+}
+class ContactGeometryResult3D {
+    var distances:DistanceResult3D[] = []
+    var sphere_pair:bool = false
+}
+class ContactGeometryBatch3D {
+    var store:BodyStore3D
+    var candidates:BroadPair3D[]
+    var results:ContactGeometryResult3D[] = []
+    init(store:BodyStore3D, candidates:BroadPair3D[]) {
+        self.store = store; self.candidates = candidates
+        for candidate in candidates { self.results.append(ContactGeometryResult3D()) }
+    }
+    func detect(index:int) {
+        let pair = self.candidates[index]
+        if var first = self.store.slots[pair.first] {
+            if var second = self.store.slots[pair.second] {
+                if !first.is_enabled || !second.is_enabled || !body_collision_allows3d(first,second) { return }
+                if first.body_type != BodyType3D.dynamic && second.body_type != BodyType3D.dynamic &&
+                    !((first.is_sensor || second.is_sensor) && (first.body_type == BodyType3D.kinematic || second.body_type == BodyType3D.kinematic)) { return }
+                var result = self.results[index]
+                let first_placement = ShapePlacement3D(first.shape,first.transform)
+                let second_placement = ShapePlacement3D(second.shape,second.transform)
+                if is_compound3d(first.shape) || is_compound3d(second.shape) || supports_mesh_manifolds3d(first.shape,second.shape) {
+                    write_leaf_contacts3d(first_placement,second_placement,-1,-1,result.distances)
+                    Sort.sort<DistanceResult3D>(&result.distances[0:result.distances.count()],leaf_contact_before3d)
+                } else {
+                    if !front_triangle_contact3d(first_placement,second_placement) { return }
+                    let first_radius = primitive_sphere_radius3d(first.shape)
+                    let second_radius = primitive_sphere_radius3d(second.shape)
+                    result.sphere_pair = first_radius > 0.0 && second_radius > 0.0
+                    if result.sphere_pair {
+                        result.distances.append(sphere_centers_distance3d(first.transform.position,first_radius,second.transform.position,second_radius))
+                    } else { result.distances.append(contact_distance3d(first_placement,second_placement)) }
+                }
+            }
+        }
+    }
+}
+struct DetectContactGeometry3D:Threading.ParallelJob {
+    var batch:ContactGeometryBatch3D
+    var observer:StepObserver3D?
+    func execute(start:int, end:int) {
+        if var observer = self.observer { observer.executing(2,start,end) }
+        var index = start
+        while index < end { self.batch.detect(index); index++ }
+    }
+}
+
+struct SolverRow3D {
+    let family:int
+    let index:int
+    let first:int
+    let second:int
+    init(family:int,index:int,first:int,second:int) {
+        self.family=family;self.index=index;self.first=first;self.second=second
+    }
+}
+class SolverWave3D { var rows:SolverRow3D[]=[] }
+class SolverSchedule3D {
+    var rows:SolverRow3D[]
+    var waves:SolverWave3D[]=[]
+    init(rows:SolverRow3D[],body_count:int) {
+        self.rows=rows
+        if rows.count()>=64 {
+            var previous:int[]=[]
+            var slot=0
+            while slot<body_count { previous.append(-1);slot++ }
+            for row in rows {
+                var depth=0
+                if row.first>=0 { depth=previous[row.first]+1 }
+                if row.second>=0 && previous[row.second]+1>depth { depth=previous[row.second]+1 }
+                if row.first>=0 { previous[row.first]=depth }
+                if row.second>=0 { previous[row.second]=depth }
+                while self.waves.count()<=depth { self.waves.append(SolverWave3D()) }
+                var wave=self.waves[depth]
+                wave.rows.append(row)
+            }
+        }
+    }
+}
+class ContactVelocityBatch3D {
+    var pairs:ContactPairState3D[]
+    var forward:SolverSchedule3D
+    var backward:SolverSchedule3D
+    init(pairs:ContactPairState3D[],body_count:int) {
+        self.pairs=pairs
+        var forward:SolverRow3D[]=[]
+        var backward:SolverRow3D[]=[]
+        var i=0
+        while i<pairs.count() {
+            var pair=pairs[i]
+            var first=-1
+            var second=-1
+            // Contact impulses never write zero-inverse-mass endpoints.
+            if pair.first.inverse_mass>0.0 { first=pair.first_id.slot }
+            if pair.second.inverse_mass>0.0 { second=pair.second_id.slot }
+            forward.append(SolverRow3D(0,i,first,second))
+            i++
+        }
+        i=forward.count()
+        while i>0 { i--;backward.append(forward[i]) }
+        self.forward=SolverSchedule3D(forward,body_count)
+        self.backward=SolverSchedule3D(backward,body_count)
+    }
+    func solve(reverse:bool,executor:Threading.Executor?,observer:StepObserver3D?) {
+        var schedule=self.forward
+        if reverse { schedule=self.backward }
+        if var pool=executor {
+            for wave in schedule.waves {
+                var job=SolveContactWave3D(self.pairs,wave.rows,reverse,observer)
+                if wave.rows.count()>=64 { pool.submit_parallel(wave.rows.count(),job).complete() }
+                else { job.execute(0,wave.rows.count()) }
+            }
+            if !schedule.waves.is_empty() { return }
+        }
+        var job=SolveContactWave3D(self.pairs,schedule.rows,reverse,observer)
+        job.execute(0,schedule.rows.count())
+    }
+}
+struct SolveContactWave3D:Threading.ParallelJob {
+    var pairs:ContactPairState3D[]
+    var rows:SolverRow3D[]
+    var reverse:bool
+    var observer:StepObserver3D?
+    init(pairs:ContactPairState3D[],rows:SolverRow3D[],reverse:bool,observer:StepObserver3D?) {
+        self.pairs=pairs;self.rows=rows;self.reverse=reverse;self.observer=observer
+    }
+    func execute(start:int,end:int) {
+        if var observer=self.observer { observer.executing(3,start,end) }
+        var i=start
+        while i<end { solve_contact_pair_velocity3d(self.pairs[self.rows[i].index],self.reverse);i++ }
+    }
+}
+// Worker payload owns only stable body/constraint stores, never the world
+// that owns its executor. Final payload releases cannot destroy that executor.
+class ConstraintVelocityData3D {
+    var store:BodyStore3D
+    var distance_constraints:DistanceConstraintStore3D
+    var slider_constraints:SliderConstraintStore3D
+    var fixed_constraints:FixedConstraintStore3D
+    var point_constraints:PointConstraintStore3D
+    var rack_and_pinion_constraints:RackAndPinionConstraintStore3D
+    var path_constraints:PathConstraintStore3D
+    var pulley_constraints:PulleyConstraintStore3D
+    var gear_constraints:GearConstraintStore3D
+    var six_dof_constraints:SixDOFConstraintStore3D
+    var swing_twist_constraints:SwingTwistConstraintStore3D
+    var cone_constraints:ConeConstraintStore3D
+    var hinge_constraints:HingeConstraintStore3D
+    init(store:BodyStore3D,distance_constraints:DistanceConstraintStore3D,slider_constraints:SliderConstraintStore3D,fixed_constraints:FixedConstraintStore3D,point_constraints:PointConstraintStore3D,rack_and_pinion_constraints:RackAndPinionConstraintStore3D,path_constraints:PathConstraintStore3D,pulley_constraints:PulleyConstraintStore3D,gear_constraints:GearConstraintStore3D,six_dof_constraints:SixDOFConstraintStore3D,swing_twist_constraints:SwingTwistConstraintStore3D,cone_constraints:ConeConstraintStore3D,hinge_constraints:HingeConstraintStore3D) {
+        self.store=store
+        self.distance_constraints=distance_constraints
+        self.slider_constraints=slider_constraints
+        self.fixed_constraints=fixed_constraints
+        self.point_constraints=point_constraints
+        self.rack_and_pinion_constraints=rack_and_pinion_constraints
+        self.path_constraints=path_constraints
+        self.pulley_constraints=pulley_constraints
+        self.gear_constraints=gear_constraints
+        self.six_dof_constraints=six_dof_constraints
+        self.swing_twist_constraints=swing_twist_constraints
+        self.cone_constraints=cone_constraints
+        self.hinge_constraints=hinge_constraints
+    }
+    // Internal scheduling keeps the established family order, reversing rows
+    // inside each family only. Fixed endpoints remain dependencies for joints.
+    func constraint_velocity_rows(reverse:bool) SolverRow3D[] {
+        var rows:SolverRow3D[] = []
+        var row_0=0
+        while row_0<self.distance_constraints.slots.count() {
+            var selected=row_0
+            if reverse { selected=self.distance_constraints.slots.count()-1-row_0 }
+            if var constraint=self.distance_constraints.slots[selected] {
+                rows.append(SolverRow3D(0,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_0++
+        }
+        var row_1=0
+        while row_1<self.slider_constraints.slots.count() {
+            var selected=row_1
+            if reverse { selected=self.slider_constraints.slots.count()-1-row_1 }
+            if var constraint=self.slider_constraints.slots[selected] {
+                rows.append(SolverRow3D(1,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_1++
+        }
+        var row_2=0
+        while row_2<self.fixed_constraints.slots.count() {
+            var selected=row_2
+            if reverse { selected=self.fixed_constraints.slots.count()-1-row_2 }
+            if var constraint=self.fixed_constraints.slots[selected] {
+                rows.append(SolverRow3D(2,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_2++
+        }
+        var row_3=0
+        while row_3<self.point_constraints.slots.count() {
+            var selected=row_3
+            if reverse { selected=self.point_constraints.slots.count()-1-row_3 }
+            if var constraint=self.point_constraints.slots[selected] {
+                rows.append(SolverRow3D(3,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_3++
+        }
+        var row_4=0
+        while row_4<self.hinge_constraints.slots.count() {
+            var selected=row_4
+            if reverse { selected=self.hinge_constraints.slots.count()-1-row_4 }
+            if var constraint=self.hinge_constraints.slots[selected] {
+                rows.append(SolverRow3D(4,selected,constraint.point.first_id.slot,constraint.point.second_id.slot))
+            }
+            row_4++
+        }
+        var row_5=0
+        while row_5<self.rack_and_pinion_constraints.slots.count() {
+            var selected=row_5
+            if reverse { selected=self.rack_and_pinion_constraints.slots.count()-1-row_5 }
+            if var constraint=self.rack_and_pinion_constraints.slots[selected] {
+                rows.append(SolverRow3D(5,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_5++
+        }
+        var row_6=0
+        while row_6<self.path_constraints.slots.count() {
+            var selected=row_6
+            if reverse { selected=self.path_constraints.slots.count()-1-row_6 }
+            if var constraint=self.path_constraints.slots[selected] {
+                rows.append(SolverRow3D(6,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_6++
+        }
+        var row_7=0
+        while row_7<self.pulley_constraints.slots.count() {
+            var selected=row_7
+            if reverse { selected=self.pulley_constraints.slots.count()-1-row_7 }
+            if var constraint=self.pulley_constraints.slots[selected] {
+                rows.append(SolverRow3D(7,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_7++
+        }
+        var row_8=0
+        while row_8<self.gear_constraints.slots.count() {
+            var selected=row_8
+            if reverse { selected=self.gear_constraints.slots.count()-1-row_8 }
+            if var constraint=self.gear_constraints.slots[selected] {
+                rows.append(SolverRow3D(8,selected,constraint.first_id.slot,constraint.second_id.slot))
+            }
+            row_8++
+        }
+        var row_9=0
+        while row_9<self.cone_constraints.slots.count() {
+            var selected=row_9
+            if reverse { selected=self.cone_constraints.slots.count()-1-row_9 }
+            if var constraint=self.cone_constraints.slots[selected] {
+                rows.append(SolverRow3D(9,selected,constraint.point.first_id.slot,constraint.point.second_id.slot))
+            }
+            row_9++
+        }
+        var row_10=0
+        while row_10<self.swing_twist_constraints.slots.count() {
+            var selected=row_10
+            if reverse { selected=self.swing_twist_constraints.slots.count()-1-row_10 }
+            if var constraint=self.swing_twist_constraints.slots[selected] {
+                rows.append(SolverRow3D(10,selected,constraint.point.first_id.slot,constraint.point.second_id.slot))
+            }
+            row_10++
+        }
+        var row_11=0
+        while row_11<self.six_dof_constraints.slots.count() {
+            var selected=row_11
+            if reverse { selected=self.six_dof_constraints.slots.count()-1-row_11 }
+            if var constraint=self.six_dof_constraints.slots[selected] {
+                rows.append(SolverRow3D(11,selected,constraint.point.first_id.slot,constraint.point.second_id.slot))
+            }
+            row_11++
+        }
+        return rows
+    }
+
+    func solve_constraint_row(row:SolverRow3D, delta:float) {
+        if row.family==0 {
+            if var constraint=self.distance_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_distance_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==1 {
+            if var constraint=self.slider_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_slider_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==2 {
+            if var constraint=self.fixed_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_fixed_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==3 {
+            if var constraint=self.point_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_point_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==4 {
+            if var constraint=self.hinge_constraints.slots[row.index] {
+                if constraint.point.is_enabled {
+                    var first=self.store.require(constraint.point.first_id)
+                    var second=self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_hinge_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==5 {
+            if var constraint=self.rack_and_pinion_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_rack_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==6 {
+            if var constraint=self.path_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_path_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==7 {
+            if var constraint=self.pulley_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_pulley_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==8 {
+            if var constraint=self.gear_constraints.slots[row.index] {
+                if constraint.is_enabled {
+                    var first=self.store.require(constraint.first_id)
+                    var second=self.store.require(constraint.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_gear_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==9 {
+            if var constraint=self.cone_constraints.slots[row.index] {
+                if constraint.point.is_enabled {
+                    var first=self.store.require(constraint.point.first_id)
+                    var second=self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_cone_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==10 {
+            if var constraint=self.swing_twist_constraints.slots[row.index] {
+                if constraint.point.is_enabled {
+                    var first=self.store.require(constraint.point.first_id)
+                    var second=self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_swing_twist_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+        if row.family==11 {
+            if var constraint=self.six_dof_constraints.slots[row.index] {
+                if constraint.point.is_enabled {
+                    var first=self.store.require(constraint.point.first_id)
+                    var second=self.store.require(constraint.point.second_id)
+                    if first.is_enabled && second.is_enabled && (first.awake || second.awake) {
+                        solve_six_velocity3d(first,second,constraint,delta)
+                    }
+                }
+            }
+            return
+        }
+    }
+
+}
+
+class ConstraintVelocityBatch3D {
+    var data:ConstraintVelocityData3D
+    let delta:float
+    var forward:SolverSchedule3D
+    var backward:SolverSchedule3D
+    init(data:ConstraintVelocityData3D,delta:float,body_count:int) {
+        self.data=data;self.delta=delta
+        self.forward=SolverSchedule3D(data.constraint_velocity_rows(false),body_count)
+        self.backward=SolverSchedule3D(data.constraint_velocity_rows(true),body_count)
+    }
+    func solve(reverse:bool,executor:Threading.Executor?,observer:StepObserver3D?) {
+        var schedule=self.forward
+        if reverse { schedule=self.backward }
+        if var pool=executor {
+            for wave in schedule.waves {
+                var job=SolveConstraintWave3D(self.data,wave.rows,self.delta,observer)
+                if wave.rows.count()>=64 { pool.submit_parallel(wave.rows.count(),job).complete() }
+                else { job.execute(0,wave.rows.count()) }
+            }
+            if !schedule.waves.is_empty() { return }
+        }
+        var job=SolveConstraintWave3D(self.data,schedule.rows,self.delta,observer)
+        job.execute(0,schedule.rows.count())
+    }
+}
+struct SolveConstraintWave3D:Threading.ParallelJob {
+    var data:ConstraintVelocityData3D
+    var rows:SolverRow3D[]
+    let delta:float
+    var observer:StepObserver3D?
+    init(data:ConstraintVelocityData3D,rows:SolverRow3D[],delta:float,observer:StepObserver3D?) {
+        self.data=data;self.rows=rows;self.delta=delta;self.observer=observer
+    }
+    func execute(start:int,end:int) {
+        if var observer=self.observer { observer.executing(4,start,end) }
+        var i=start
+        while i<end { self.data.solve_constraint_row(self.rows[i],self.delta);i++ }
+    }
+}

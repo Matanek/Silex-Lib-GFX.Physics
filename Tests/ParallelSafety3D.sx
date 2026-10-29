@@ -1,0 +1,27 @@
+use GFX.Physics
+use GFX.Physics.World3D.StepObserver3D
+use STD.Process
+class ForbiddenMutation:StepObserver3D {
+    var world:Physics.World3D
+    var body:Physics.RigidBody3D
+    let action:str
+    init(world:Physics.World3D,body:Physics.RigidBody3D,action:str) { self.world=world;self.body=body;self.action=action }
+    func executing(phase:int,start:int,end:int) {
+        if self.action=="workers" { self.world.enable_parallelism(4) }
+        if self.action=="create" { self.world.create_rigid_body() }
+        if self.action=="destroy" { self.world.destroy_rigid_body(self.body) }
+        if self.action=="body" { self.body.set_enabled(false) }
+        if self.action=="step" { self.world.step(1.0/60.0) }
+        panic("mutation witness did not reject the operation")
+    }
+}
+func main() {
+    var action=""
+    for argument in Process.arguments() { action=argument }
+    var world=Physics.World3D()
+    if action=="zero" { world.enable_parallelism(0) }
+    if action=="negative" { world.enable_parallelism(-1) }
+    var body=world.create_rigid_body()
+    world.observe_parallelism(ForbiddenMutation(world,body,action))
+    world.step(1.0/60.0)
+}

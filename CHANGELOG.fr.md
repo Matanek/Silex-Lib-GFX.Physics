@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `World3D.enable_parallelism` répartit l’intégration, la géométrie et les lignes indépendantes du solveur de vitesses sur les workers STD. Les états et observations conservent leur ordre ; `step` reste synchrone et le retour à un worker ferme le pool. Guide et qualifications dédiés.
+
 - Qualification des terrains édités et des assemblages SixDOF/poulie/sol et chemin/charnière/obstacle : témoins analytiques et Jolt, budgets de position explicites, mutations et retrait des corps. Le guide bilingue récapitule les douze familles et les limites des recettes.
 
 - Les grilles de terrain sélectionnent leurs cellules pour les rayons, balayages et contacts, avec identités conservées et témoins exhaustifs sur des reliefs irréguliers. Le rayon des maillages et les bornes des grilles sont réutilisés entre pas.

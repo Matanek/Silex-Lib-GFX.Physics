@@ -22,6 +22,8 @@ qualified pairs and limits.
 silex install GFX.Physics
 ```
 
+[Parallel 3D simulation](Docs/EN/Parallel3D.md) distributes independent physical work while preserving deterministic body calculations.
+
 ## Documentation
 
 - [French documentation](Docs/FR/README.md)
