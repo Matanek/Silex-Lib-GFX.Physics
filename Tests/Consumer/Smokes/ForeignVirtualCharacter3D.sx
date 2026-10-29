@@ -1,0 +1,8 @@
+use GFX.Physics
+use STD.Math
+func main() {
+    var owner = Physics.World3D()
+    var other = Physics.World3D()
+    var character = owner.create_virtual_character()
+    character.move(other, Math.Vec3(), 1.0 / 60.0)
+}

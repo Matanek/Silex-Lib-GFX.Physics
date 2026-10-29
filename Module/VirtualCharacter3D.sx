@@ -1,0 +1,65 @@
+use GFX.Physics.CharacterMover3D.CharacterMover3D
+use GFX.Physics.CharacterMover3D.CharacterMoveResult3D
+use GFX.Physics.CharacterContact3D.CharacterContact3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.Capsule3D.Capsule3D
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.World3D.World3D
+use STD.Math
+
+// Registered virtual character: driven motion and a kinematic presence in queries.
+public class VirtualCharacter3D {
+    private var current_body:RigidBody3D
+    private var mover:CharacterMover3D
+    private var previous:CharacterMoveResult3D
+    package init(body:RigidBody3D, mover:CharacterMover3D) {
+        self.current_body = body; self.mover = mover
+        self.mover.attach_body(body)
+        self.previous = CharacterMoveResult3D(body.position(), false, Math.Vec3.up(), false, null, [])
+    }
+    func is_valid() bool { return self.current_body.is_valid() }
+    private func require_valid() {
+        if !self.is_valid() { panic("GFX.Physics.VirtualCharacter3D is no longer valid") }
+    }
+    func body() RigidBody3D { self.require_valid(); return self.current_body }
+    func position() Math.Vec3 { return self.body().position() }
+    func capsule() Capsule3D { self.require_valid(); return self.mover.capsule() }
+    func support() RigidBody3D? {
+        self.require_valid()
+        if var body = self.previous.support() {
+            if body.is_valid() && body.is_enabled() && self.body().collision_filter().allows(body.collision_filter()) { return body }
+        }
+        return null
+    }
+    func is_grounded() bool { self.require_valid(); return self.previous.grounded && self.support() != null }
+    func ground_normal() Math.Vec3 { self.require_valid(); return self.previous.ground_normal }
+    func contact_count() int { self.require_valid(); return self.previous.contact_count() }
+    func contact(index:int) CharacterContact3D { self.require_valid(); return self.previous.contact(index) }
+    func set_position(position:Math.Vec3) {
+        var body = self.body()
+        body.set_transform(Transform3D(position, body.rotation()))
+        self.mover.reset()
+        self.previous = CharacterMoveResult3D(position, false, Math.Vec3.up(), false, null, [])
+    }
+    func move(world:World3D, translation:Math.Vec3, delta:float) CharacterMoveResult3D {
+        var body = self.body()
+        if !world.owns_body(body) { panic("GFX.Physics.VirtualCharacter3D belongs to another world") }
+        self.mover.attach_body(body)
+        var result = self.mover.move(world, body.position(), translation, delta, self.is_grounded())
+        if result.position != body.position() { body.set_transform(Transform3D(result.position, body.rotation())) }
+        self.previous = result
+        return result
+    }
+    func try_resize(world:@World3D, capsule:Capsule3D) bool {
+        var body = self.body()
+        if !world.owns_body(body) { panic("GFX.Physics.VirtualCharacter3D belongs to another world") }
+        self.mover.attach_body(body)
+        if let position = self.mover.try_resize(world, body.position(), capsule) {
+            body.set_shape(Shape3D.capsule(capsule))
+            body.set_transform(Transform3D(position, body.rotation()))
+            return true
+        }
+        return false
+    }
+}

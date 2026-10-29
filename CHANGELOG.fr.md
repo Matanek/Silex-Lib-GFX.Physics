@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `VirtualCharacter3D` enregistre une capsule cinématique pilotée avec le mover, exclue de ses propres requêtes. Les personnages virtuels et physiques se rencontrent via les mêmes corps et filtres réciproques. Pas de double déplacement, resize conservant les pieds, contacts conservés pendant la pause et durées de vie vérifiés.
+
 - `PhysicalCharacter3D` ajoute une capsule dynamique propriétaire du monde, à rotations physiques bloquées et masse réelle. Contacts/appui après simulation, pente, plateforme, resize conservant les pieds et la masse, téléportation et durées de vie sont couverts par un consommateur.
 
 - `CharacterMover3D.move` ajoute poussée bornée, masse virtuelle et suivi des supports dynamiques. Les résultats exposent des contacts possédés ; le budget de poussée est partagé par corps composé. La requête `calculate_move` reste sans impulsions. Poids, masse effective, symétries, pause et durée de vie sont vérifiés.

@@ -3,6 +3,7 @@ use GFX.Physics.Geometry3D.front_triangle_contact3d
 use GFX.Physics.Capsule3D.Capsule3D
 use GFX.Physics.CharacterContact3D.CharacterContact3D
 use GFX.Physics.CollisionFilter3D.QueryFilter3D
+use GFX.Physics.CollisionFilter3D.CollisionFilter3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.CastResult3D
 use GFX.Physics.Shape3D.Shape3D
@@ -78,6 +79,9 @@ public class CharacterMover3D {
     private var previous_support:RigidBody3D?
     private var previous_support_pose:Transform3D
     private var previous_support_normal:Math.Vec3
+    private var previous_contacts:CharacterContact3D[]
+    private var excluded_body:RigidBody3D? = null
+    private var pair_filter:CollisionFilter3D? = null
 
     init(settings:CharacterMover3DSettings = CharacterMover3DSettings()) {
         if !finite_body3d_value(settings.max_slope_angle) ||
@@ -99,6 +103,16 @@ public class CharacterMover3D {
         self.previous_support = null
         self.previous_support_pose = Transform3D()
         self.previous_support_normal = Math.Vec3.up()
+        self.previous_contacts = []
+    }
+
+    package func attach_body(body:RigidBody3D) {
+        self.excluded_body = body
+        self.pair_filter = body.collision_filter()
+    }
+    private func allows_support(body:RigidBody3D) bool {
+        if let filter = self.pair_filter { return filter.allows(body.collision_filter()) }
+        return true
     }
 
     func capsule() Capsule3D {
@@ -122,7 +136,7 @@ public class CharacterMover3D {
         let extent = Math.Vec3(capsule.radius, height, capsule.radius)
         var candidates:CharacterShape3D[] = []
         world.character_shapes(proposed_position.subtract(extent), proposed_position.add(extent),
-            self.settings.filter, candidates)
+            self.settings.filter, candidates, self.excluded_body, self.pair_filter)
         for target in candidates {
             if front_triangle_contact3d(placement, target.placement) &&
                 contact_distance3d(placement, target.placement).separation < -0.00001 {
@@ -142,6 +156,7 @@ public class CharacterMover3D {
         self.previous_support = null
         self.previous_support_pose = Transform3D()
         self.previous_support_normal = Math.Vec3.up()
+        self.previous_contacts = []
         self.candidates = []
     }
 
@@ -159,9 +174,9 @@ public class CharacterMover3D {
         if delta == 0.0 {
             var support:RigidBody3D? = null
             if let previous = self.previous_support {
-                if was_grounded && world.valid_character_support(previous, self.settings.filter) { support = previous }
+                if was_grounded && world.valid_character_support(previous, self.settings.filter) && self.allows_support(previous) { support = previous }
             }
-            return CharacterMoveResult3D(position, support != null, self.previous_support_normal, false, support, [])
+            return CharacterMoveResult3D(position, support != null, self.previous_support_normal, false, support, [], self.previous_contacts)
         }
         if !finite_body3d_point(translation.divide(delta)) ||
             !finite_body3d_value(self.settings.max_push_force * delta) ||
@@ -181,7 +196,7 @@ public class CharacterMover3D {
         var carried_position = position
         if was_grounded {
             if let support = self.previous_support {
-                if world.valid_character_support(support, self.settings.filter) &&
+                if world.valid_character_support(support, self.settings.filter) && self.allows_support(support) &&
                     (support.body_type() == BodyType3D.kinematic ||
                         (carry_dynamic && support.body_type() == BodyType3D.dynamic)) {
                     carried_position = support.transform().point(
@@ -195,7 +210,7 @@ public class CharacterMover3D {
             carried_position.subtract(position).length() + 0.1
         var candidates = self.candidates
         world.character_shapes(position.subtract(Math.Vec3(reach)),
-            position.add(Math.Vec3(reach)), self.settings.filter, candidates)
+            position.add(Math.Vec3(reach)), self.settings.filter, candidates, self.excluded_body, self.pair_filter)
         if carry_dynamic && self.settings.filter.include_sensors {
             var solids:CharacterShape3D[] = []
             for candidate in candidates { if !candidate.is_sensor { solids.append(candidate) } }
@@ -294,6 +309,7 @@ public class CharacterMover3D {
                     distance.normal.negated(), distance.separation))
             }
         }
+        self.previous_contacts = contacts
         return CharacterMoveResult3D(current, grounded, normal, stepped, support_body, planes, contacts)
     }
 

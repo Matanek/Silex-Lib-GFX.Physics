@@ -142,6 +142,7 @@ destruction.
 `calculate_move` queries encountered bodies at their current poses.
 `move` adds the dynamic exchanges described above. The capsule
 retains its vertical axis. [Physical characters](PhysicalCharacter3D.md) provide rigid mass and recoil.
-Character-to-character interactions still need qualification. The package
+[Registered virtual characters](VirtualCharacter3D.md) add a presence that
+encounters other virtual and physical characters through the same filters. The package
 imposes no jump or camera behavior. Do not share one instance concurrently
 between threads.

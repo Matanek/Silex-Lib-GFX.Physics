@@ -1,3 +1,7 @@
+use GFX.Physics.VirtualCharacter3D.VirtualCharacter3D
+use GFX.Physics.CharacterMover3D.CharacterMover3D
+use GFX.Physics.CharacterMover3D.CharacterMover3DSettings
+use GFX.Physics.CollisionFilter3D.CollisionFilter3D
 use GFX.Physics.TrackedVehicle3D.TrackedVehicle3D
 use GFX.Physics.TrackedVehicle3D.TrackedVehicle3DSettings
 use GFX.Physics.Motorcycle3D.Motorcycle3D
@@ -497,6 +501,18 @@ public class World3D {
         return false
     }
 
+    func create_virtual_character(settings:CharacterMover3DSettings = CharacterMover3DSettings(),
+        position:Math.Vec3 = Math.Vec3(), collision_filter:CollisionFilter3D = CollisionFilter3D()) VirtualCharacter3D {
+        var mover = CharacterMover3D(settings)
+        var body = self.create_rigid_body(RigidBody3DSettings() ..body_type = BodyType3D.kinematic
+            ..shape = Shape3D.capsule(mover.capsule()) ..transform = Transform3D(position)
+            ..collision_filter = collision_filter)
+        return VirtualCharacter3D(body, mover)
+    }
+    func destroy_virtual_character(character:VirtualCharacter3D) {
+        self.destroy_rigid_body(character.body())
+    }
+
     func create_physical_character(settings:PhysicalCharacter3DSettings = PhysicalCharacter3DSettings(),
         position:Math.Vec3 = Math.Vec3()) PhysicalCharacter3D {
         validate_physical_character3d(settings)
@@ -971,12 +987,20 @@ public class World3D {
     // Snapshot nearby leaves once per character move, shared by all slide/stair
     // sweeps. Character queries never retain a body's mutable state across moves.
     package func character_shapes(lower:Math.Vec3, upper:Math.Vec3,
-        filter:QueryFilter3D, output:&CharacterShape3D[]) {
+        filter:QueryFilter3D, output:&CharacterShape3D[], excluded_body:RigidBody3D? = null,
+        pair_filter:CollisionFilter3D? = null) {
+        var excluded_id = BodyId3D(-1, -1)
+        if var body = excluded_body {
+            if !body.belongs_to(self.store) { panic("GFX.Physics character belongs to another world") }
+            excluded_id = body.body_id()
+        }
         output.clear()
         var slot = 0
         while slot < self.store.slots.count() {
             if let state = self.store.slots[slot] {
-                if state.is_enabled && filter.allows(state.collision_filter, state.is_sensor) {
+                var allowed = BodyId3D(slot, self.store.generations[slot]) != excluded_id
+                if let selected = pair_filter { allowed = allowed && selected.allows(state.collision_filter) }
+                if allowed && state.is_enabled && filter.allows(state.collision_filter, state.is_sensor) {
                     if plane_shape3d(state.shape) {
                         append_character_shapes3d(state.shape, state.transform, BodyId3D(slot,self.store.generations[slot]),output,state.is_sensor)
                         slot++; continue

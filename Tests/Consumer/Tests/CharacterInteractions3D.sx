@@ -1,0 +1,93 @@
+use GFX.Physics
+use STD.Math
+
+func registration() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var actor = world.create_virtual_character(position:Math.Vec3(0.0, 0.852, 0.0))
+    let result = actor.move(world, Math.Vec3(1.0, 0.0, 0.0), 0.1)
+    assert(result.position.nearly_equal(Math.Vec3(1.0, 0.852, 0.0), 0.00001))
+    assert(actor.position() == result.position && actor.body().body_type() == Physics.BodyType3D.kinematic)
+    world.step(0.1)
+    assert(actor.position() == result.position && actor.body().linear_velocity().length() == 0.0)
+    if var hit = world.ray_cast(Physics.Ray3D(Math.Vec3(-2.0, 0.852, 0.0), Math.Vec3(4.0, 0.0, 0.0))) {
+        assert(hit.body().same_body(actor.body()))
+    } else { assert(false) }
+    assert(actor.try_resize(world, Physics.Capsule3D(0.3, 0.15)))
+    assert(Math.abs(actor.position().y - 0.452) < 0.00001)
+    assert(actor.try_resize(world, Physics.Capsule3D(0.3, 0.55)))
+    world.destroy_virtual_character(actor)
+    assert(!actor.is_valid() && world.body_count() == 0)
+}
+func virtual_pair() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_virtual_character(position:Math.Vec3(-1.0, 0.0, 0.0))
+    var second = world.create_virtual_character(position:Math.Vec3(1.0, 0.0, 0.0))
+    var index = 0
+    while index < 100 {
+        first.move(world, Math.Vec3(0.02, 0.0, 0.0), 1.0 / 60.0)
+        second.move(world, Math.Vec3(-0.02, 0.0, 0.0), 1.0 / 60.0)
+        assert(second.position().x - first.position().x >= 0.5999)
+        world.step(1.0 / 60.0)
+        index++
+    }
+    assert(first.contact_count() == 1 && first.contact(0).body().same_body(second.body()))
+    let count = first.contact_count(); let position = first.position()
+    let paused = first.move(world, Math.Vec3(10.0, 0.0, 0.0), 0.0)
+    assert(first.position() == position && paused.contact_count() == count && first.contact_count() == count)
+    world.destroy_virtual_character(second)
+    first.move(world, Math.Vec3(1.0, 0.0, 0.0), 0.1)
+    assert(first.position().x > position.x + 0.99)
+}
+func physical_pair() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var first = world.create_physical_character(position:Math.Vec3(-0.31, 0.0, 0.0))
+    var second = world.create_physical_character(position:Math.Vec3(0.31, 0.0, 0.0))
+    first.set_linear_velocity(Math.Vec3(1.0, 0.0, 0.0))
+    second.set_linear_velocity(Math.Vec3(-1.0, 0.0, 0.0))
+    world.step(0.02)
+    assert(first.linear_velocity().length() < 0.0001 && second.linear_velocity().length() < 0.0001)
+    assert(Math.abs(first.position().x + second.position().x) < 0.00001)
+    assert(second.position().x - first.position().x > 0.59)
+}
+func mixed() {
+    var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+    var virtual_actor = world.create_virtual_character(position:Math.Vec3(-1.0, 0.0, 0.0))
+    var physical_actor = world.create_physical_character(position:Math.Vec3(0.0, 0.0, 0.0))
+    virtual_actor.move(world, Math.Vec3(1.0, 0.0, 0.0), 0.1)
+    assert(virtual_actor.position().x < -0.59)
+    assert(Math.abs(physical_actor.linear_velocity().x - 10.0 / 70.0) < 0.0001)
+    let controlled = virtual_actor.position()
+    world.step(0.1)
+    assert(physical_actor.position().x > 0.01 && virtual_actor.position() == controlled)
+    virtual_actor.set_position(Math.Vec3(0.0, 0.0, 0.0))
+    physical_actor.set_position(Math.Vec3(-1.0, 0.0, 0.0))
+    physical_actor.set_linear_velocity(Math.Vec3(2.0, 0.0, 0.0))
+    var index = 0
+    while index < 8 { world.step(0.1); index++ }
+    assert(virtual_actor.position() == Math.Vec3())
+    assert(physical_actor.position().x < -0.59 && Math.abs(physical_actor.linear_velocity().x) < 0.0001)
+}
+func filtering_and_lifetime() {
+    var saved:Physics.VirtualCharacter3D? = null
+    {
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        var first = world.create_virtual_character(position:Math.Vec3(-1.0, 0.0, 0.0),
+            collision_filter:Physics.CollisionFilter3D(category_bits:2, mask_bits:1))
+        var second = world.create_virtual_character(position:Math.Vec3(1.0, 0.0, 0.0),
+            collision_filter:Physics.CollisionFilter3D(category_bits:2, mask_bits:1))
+        first.move(world, Math.Vec3(2.0, 0.0, 0.0), 0.1)
+        assert(first.position().x > 0.99 && first.contact_count() == 0)
+        first.set_position(Math.Vec3(-1.0, 0.0, 0.0))
+        second.body().set_collision_filter(Physics.CollisionFilter3D(category_bits:1, mask_bits:2))
+        first.move(world, Math.Vec3(2.0, 0.0, 0.0), 0.1)
+        assert(first.position().x < 0.5 && first.contact_count() == 1)
+        saved = first
+    }
+    assert(!saved!.is_valid())
+}
+test "registered virtual character excludes itself is queryable resizes and has no double integration" { registration() }
+test "virtual characters collide through stable body identities and preserve paused contacts" { virtual_pair() }
+test "physical characters collide with conserved linear momentum" { physical_pair() }
+test "virtual and physical characters interact in both directions with their own mass semantics" { mixed() }
+test "character collision masks are reciprocal and registered virtual handles expire with their world" { filtering_and_lifetime() }
+func main() { registration(); virtual_pair(); physical_pair(); mixed(); filtering_and_lifetime(); print("Character interactions: all scenarios passed") }

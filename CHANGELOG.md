@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `VirtualCharacter3D` registers a driven kinematic capsule with the mover, excluded from its own queries. Virtual and physical characters encounter each other through ordinary bodies and reciprocal filters. Tests cover no double movement, resizing with fixed feet, paused contacts and lifetime.
+
 - `PhysicalCharacter3D` adds a world-owned dynamic capsule with locked physical rotations and real mass. A consumer covers post-step contacts/support, slopes, platforms, resizing with fixed feet and mass, teleporting and lifetime.
 
 - `CharacterMover3D.move` adds bounded pushing, virtual weight and dynamic support following. Results expose owned contacts and share push budgets per compound body. `calculate_move` remains a query without impulses. Tests cover weight, effective mass, symmetries, pause and lifetime.

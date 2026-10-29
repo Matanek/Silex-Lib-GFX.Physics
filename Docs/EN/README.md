@@ -327,3 +327,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 [Balance and steer a motorcycle](Motorcycle3D.md).
 
 - [Physical 3D character](PhysicalCharacter3D.md)
+
+- [Registered virtual character](VirtualCharacter3D.md)

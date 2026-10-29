@@ -147,6 +147,7 @@ l'appui de cet appel, ou `null` ; comme tout handle de corps, vérifier
 La requête `calculate_move` traite les corps rencontrés à leur pose courante.
 L’opération `move` ajoute les échanges dynamiques décrits plus haut. La capsule
 conserve son axe vertical. Le [personnage physique](PhysicalCharacter3D.md) couvre la masse et le recul
-du solveur rigide. Les interactions entre personnages restent à qualifier. Aucun comportement de saut ou de caméra n'est imposé
+du solveur rigide. Le [personnage virtuel enregistré](VirtualCharacter3D.md) ajoute une présence
+qui rencontre les autres personnages virtuels ou physiques avec les mêmes filtres. Aucun comportement de saut ou de caméra n'est imposé
 par le package. Ne pas partager simultanément une instance entre plusieurs
 threads.
