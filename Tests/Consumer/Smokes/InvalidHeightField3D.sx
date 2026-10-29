@@ -1,0 +1,17 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+
+func main() {
+    var terrain = Physics.HeightField3D(2, 2, [0.0,0.0,0.0,0.0], 1.0, 1.0)
+    let arguments = Process.arguments()
+    for mode in arguments {
+        if mode == "region" { terrain.with_heights(1, 1, 2, 1, [0.0,0.0]) }
+        if mode == "count" { terrain.with_heights(0, 0, 2, 2, [0.0]) }
+        if mode == "height" { terrain.with_heights(0, 0, 1, 1, [Math.sqrt(-1.0)]) }
+        if mode == "mask" { terrain.with_holes(0, 0, 2, 2, [true]) }
+        if mode == "empty" { terrain.with_holes(0, 0, 2, 2, [true,true,true,true]) }
+        if mode == "sample" { terrain.height(2, 0) }
+    }
+    panic("invalid heightfield was accepted")
+}

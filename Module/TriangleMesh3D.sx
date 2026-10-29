@@ -1,3 +1,4 @@
+use GFX.Physics.HeightGridData3D.HeightGridData3D
 use GFX.Physics.Triangle3D.Triangle3D
 use STD.Math
 
@@ -8,11 +9,13 @@ public enum HeightGridDiagonal3D {
 
 public class TriangleMesh3D {
     private var triangles:Triangle3D[]
+    private var grid:HeightGridData3D?
 
     init(triangles:Triangle3D[]) {
         if triangles.count() == 0 {
             panic("GFX.Physics.TriangleMesh3D requires at least one triangle")
         }
+        self.grid = null
         self.triangles = []
         for triangle in triangles { self.triangles.append(triangle) }
     }
@@ -23,75 +26,17 @@ public class TriangleMesh3D {
         holes:bool[] = [],
         diagonal:HeightGridDiagonal3D = HeightGridDiagonal3D.column_to_row
     ) TriangleMesh3D {
-        if columns < 2 || rows < 2 ||
-            heights.count() / rows != columns || heights.count() % rows != 0 {
-            panic("GFX.Physics.TriangleMesh3D height grid requires at least two samples per axis and one height per vertex")
-        }
-        if holes.count() != 0 && holes.count() != heights.count() {
-            panic("GFX.Physics.TriangleMesh3D height grid requires an empty hole mask or one flag per vertex")
-        }
-        if !finite_grid_spacing(column_spacing) || column_spacing <= 0.0 ||
-            !finite_grid_spacing(row_spacing) || row_spacing <= 0.0 {
-            panic("GFX.Physics.TriangleMesh3D height grid requires positive finite spacing")
-        }
-        for height in heights {
-            if !finite_grid_spacing(height) {
-                panic("GFX.Physics.TriangleMesh3D height grid requires finite heights")
-            }
-        }
-
-        var triangles:Triangle3D[] = []
-        var row = 0
-        while row < rows - 1 {
-            var column = 0
-            while column < columns - 1 {
-                let first = Math.Vec3(column as float * column_spacing,
-                    heights[row * columns + column], row as float * row_spacing)
-                let next_column = Math.Vec3((column + 1) as float * column_spacing,
-                    heights[row * columns + column + 1], row as float * row_spacing)
-                let next_row = Math.Vec3(column as float * column_spacing,
-                    heights[(row + 1) * columns + column],
-                    (row + 1) as float * row_spacing)
-                let opposite = Math.Vec3((column + 1) as float * column_spacing,
-                    heights[(row + 1) * columns + column + 1],
-                    (row + 1) as float * row_spacing)
-                var first_present = true; var column_present = true
-                var row_present = true; var opposite_present = true
-                if holes.count() > 0 {
-                    first_present = !holes[row * columns + column]
-                    column_present = !holes[row * columns + column + 1]
-                    row_present = !holes[(row + 1) * columns + column]
-                    opposite_present = !holes[(row + 1) * columns + column + 1]
-                }
-                if diagonal == HeightGridDiagonal3D.column_to_row {
-                    if first_present && row_present && column_present {
-                        triangles.append(Triangle3D(first, next_row, next_column))
-                    }
-                    if column_present && row_present && opposite_present {
-                        triangles.append(Triangle3D(next_column, next_row, opposite))
-                    }
-                } else {
-                    if first_present && row_present && opposite_present {
-                        triangles.append(Triangle3D(first, next_row, opposite))
-                    }
-                    if first_present && opposite_present && column_present {
-                        triangles.append(Triangle3D(first, opposite, next_column))
-                    }
-                }
-                column++
-            }
-            row++
-        }
-        if triangles.count() == 0 {
-            panic("GFX.Physics.TriangleMesh3D height grid requires at least one unmasked triangle")
-        }
-        return TriangleMesh3D(triangles)
+        return TriangleMesh3D(HeightGridData3D(columns, rows, heights, column_spacing, row_spacing, holes, diagonal))
     }
 
-    func triangle_count() int { return self.triangles.count() }
-    func triangle(index:int) Triangle3D { return self.triangles[index] }
-}
+    package init(triangles:HeightGridData3D) { self.triangles = []; self.grid = triangles }
 
-func finite_grid_spacing(value:float) bool {
-    return value == value && (value == 0.0 || value + value != value)
+    func triangle_count() int {
+        if let grid = self.grid { return grid.triangle_count() }
+        return self.triangles.count()
+    }
+    func triangle(index:int) Triangle3D {
+        if let grid = self.grid { return grid.triangle(index) }
+        return self.triangles[index]
+    }
 }

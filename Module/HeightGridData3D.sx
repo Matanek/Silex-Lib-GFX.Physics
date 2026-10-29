@@ -1,0 +1,145 @@
+use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.TriangleMesh3D.HeightGridDiagonal3D
+use STD.Math
+
+// Immutable samples and topology. Triangles are evaluated only when requested.
+package class HeightGridData3D {
+    let columns:int
+    let rows:int
+    let column_spacing:float
+    let row_spacing:float
+    let diagonal:HeightGridDiagonal3D
+    private let heights:float[]
+    private let holes:bool[]
+    private let faces:int[]
+    private let count:int
+
+    init(columns:int, rows:int, heights:@float[], column_spacing:float, row_spacing:float,
+        holes:@bool[], diagonal:HeightGridDiagonal3D) {
+        if columns < 2 || rows < 2 || heights.count() / rows != columns || heights.count() % rows != 0 {
+            panic("GFX.Physics height grid requires at least two samples per axis and one height per vertex")
+        }
+        if holes.count() != 0 && holes.count() != heights.count() {
+            panic("GFX.Physics height grid requires an empty hole mask or one flag per vertex")
+        }
+        if !finite_height3d(column_spacing) || column_spacing <= 0.0 ||
+            !finite_height3d(row_spacing) || row_spacing <= 0.0 {
+            panic("GFX.Physics height grid requires positive finite spacing")
+        }
+        var copied_heights:float[] = []
+        for height in heights {
+            if !finite_height3d(height) { panic("GFX.Physics height grid requires finite heights") }
+            copied_heights.append(height)
+        }
+        var copied_holes:bool[] = []
+        for hole in holes { copied_holes.append(hole) }
+        var faces:int[] = []
+        var face = 0
+        let total = (columns - 1) * (rows - 1) * 2
+        while face < total {
+            let vertices = height_grid_face3d(columns, diagonal, face)
+            if copied_holes.count() == 0 || (!copied_holes[vertices.first] && !copied_holes[vertices.second] && !copied_holes[vertices.third]) {
+                // Preserve eager rejection of nonrepresentable/degenerate geometry.
+                Triangle3D(height_grid_point3d(copied_heights, columns, column_spacing, row_spacing, vertices.first),
+                    height_grid_point3d(copied_heights, columns, column_spacing, row_spacing, vertices.second),
+                    height_grid_point3d(copied_heights, columns, column_spacing, row_spacing, vertices.third))
+                if holes.count() > 0 { faces.append(face) }
+            }
+            face++
+        }
+        var count = total
+        if holes.count() > 0 { count = faces.count() }
+        if count == 0 { panic("GFX.Physics height grid requires at least one unmasked triangle") }
+        self.columns = columns; self.rows = rows
+        self.column_spacing = column_spacing; self.row_spacing = row_spacing
+        self.diagonal = diagonal; self.heights = copied_heights; self.holes = copied_holes
+        self.faces = faces; self.count = count
+    }
+
+    private func require_sample(column:int, row:int) {
+        if column < 0 || row < 0 || column >= self.columns || row >= self.rows {
+            panic("GFX.Physics height grid sample is outside the grid")
+        }
+    }
+    private func is_hole_index(index:int) bool {
+        return self.holes.count() > 0 && self.holes[index]
+    }
+    private func point(index:int) Math.Vec3 {
+        return Math.Vec3((index % self.columns) as float * self.column_spacing,
+            self.heights[index], (index / self.columns) as float * self.row_spacing)
+    }
+    func triangle_count() int { return self.count }
+    func triangle(index:int) Triangle3D {
+        if index < 0 || index >= self.count { panic("GFX.Physics height grid triangle is outside the grid") }
+        var face = index
+        if self.holes.count() > 0 { face = self.faces[index] }
+        let vertices = height_grid_face3d(self.columns, self.diagonal, face)
+        return Triangle3D(self.point(vertices.first), self.point(vertices.second), self.point(vertices.third))
+    }
+    func height(column:int, row:int) float {
+        self.require_sample(column, row)
+        return self.heights[row * self.columns + column]
+    }
+    func is_hole(column:int, row:int) bool {
+        self.require_sample(column, row)
+        return self.is_hole_index(row * self.columns + column)
+    }
+    func patched(column:int, row:int, columns:int, rows:int, values:@float[], flags:@bool[], edit_heights:bool) HeightGridData3D {
+        if column < 0 || row < 0 || columns <= 0 || rows <= 0 ||
+            column > self.columns || row > self.rows || columns > self.columns - column || rows > self.rows - row {
+            panic("GFX.Physics height grid patch is outside the grid")
+        }
+        if edit_heights {
+            if values.count() / rows != columns || values.count() % rows != 0 {
+                panic("GFX.Physics height grid patch requires one height per sample")
+            }
+        } else {
+            if flags.count() / rows != columns || flags.count() % rows != 0 {
+                panic("GFX.Physics height grid patch requires one hole flag per sample")
+            }
+        }
+        var heights:float[] = []
+        var holes:bool[] = []
+        for value in self.heights { heights.append(value) }
+        if self.holes.count() > 0 || !edit_heights {
+            var index = 0
+            while index < heights.count() { holes.append(self.is_hole_index(index)); index++ }
+        }
+        var y = 0
+        while y < rows {
+            var x = 0
+            while x < columns {
+                let destination = (row + y) * self.columns + column + x
+                if edit_heights { heights[destination] = values[y * columns + x] }
+                else { holes[destination] = flags[y * columns + x] }
+                x++
+            }
+            y++
+        }
+        return HeightGridData3D(self.columns, self.rows, heights, self.column_spacing, self.row_spacing, holes, self.diagonal)
+    }
+}
+
+func finite_height3d(value:float) bool {
+    return value == value && (value == 0.0 || value + value != value)
+}
+
+struct HeightGridFace3D {
+    let first:int
+    let second:int
+    let third:int
+    init(first:int, second:int, third:int) { self.first = first; self.second = second; self.third = third }
+}
+func height_grid_face3d(columns:int, diagonal:HeightGridDiagonal3D, face:int) HeightGridFace3D {
+    let cell = face / 2
+    let first = (cell / (columns - 1)) * columns + cell % (columns - 1)
+    if diagonal == HeightGridDiagonal3D.column_to_row {
+        if face % 2 == 0 { return HeightGridFace3D(first, first + columns, first + 1) }
+        return HeightGridFace3D(first + 1, first + columns, first + columns + 1)
+    }
+    if face % 2 == 0 { return HeightGridFace3D(first, first + columns, first + columns + 1) }
+    return HeightGridFace3D(first, first + columns + 1, first + 1)
+}
+func height_grid_point3d(heights:@float[], columns:int, column_spacing:float, row_spacing:float, index:int) Math.Vec3 {
+    return Math.Vec3((index % columns) as float * column_spacing, heights[index], (index / columns) as float * row_spacing)
+}

@@ -1,0 +1,91 @@
+use GFX.Physics
+use STD.Math
+
+func field() Physics.HeightField3D {
+    return Physics.HeightField3D(4, 4, [0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0,
+        0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0], 1.0, 1.0,
+        diagonal:Physics.HeightGridDiagonal3D.first_to_opposite)
+}
+func sample(shape:Physics.Shape3D, x:float, z:float) Physics.CastResult3D {
+    return Physics.Geometry3D.ray_cast(Physics.Ray3D(Math.Vec3(x, 3.0, z), Math.Vec3(0.0, -6.0, 0.0)),
+        Physics.ShapePlacement3D(shape))
+}
+func versions() {
+    var heights:float[] = [0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0]
+    var original = Physics.HeightField3D(4, 4, heights, 1.0, 1.0)
+    heights[5] = 99.0
+    assert(original.height(1, 1) == 0.0 && !original.is_hole(1, 1))
+    assert(original.columns() == 4 && original.rows() == 4)
+    assert(original.column_spacing() == 1.0 && original.row_spacing() == 1.0)
+    var patch:float[] = [1.0,1.0,1.0,1.0]
+    var edited = original.with_heights(1, 1, 2, 2, patch)
+    patch[0] = 55.0
+    assert(edited.height(1, 1) == 1.0 && original.height(1, 1) == 0.0)
+    assert(edited.height(0, 0) == 0.0 && edited.height(3, 3) == 0.0)
+    let before = sample(original.shape(), 1.25, 1.25)
+    let after = sample(edited.shape(), 1.25, 1.25)
+    assert(before.hit && after.hit && Math.abs(before.point.y) < 0.00001 && Math.abs(after.point.y - 1.0) < 0.00001)
+    assert(before.child_id == after.child_id)
+    var world = Physics.World3D()
+    var body = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = original.shape())
+    let ray = Physics.Ray3D(Math.Vec3(1.25, 3.0, 1.25), Math.Vec3(0.0, -6.0, 0.0))
+    let saved = world.ray_cast(ray)!
+    assert(Math.abs(saved.point().y) < 0.00001)
+    body.set_shape(edited.shape())
+    let current = world.ray_cast(ray)!
+    assert(Math.abs(current.point().y - 1.0) < 0.00001 && Math.abs(saved.point().y) < 0.00001)
+    assert(sample(original.shape(), 1.25, 1.25).point == before.point)
+}
+func holes() {
+    var original = field()
+    let saved_shape = original.shape()
+    var missing = original.with_holes(1, 1, 1, 1, [true])
+    assert(missing.is_hole(1, 1) && !original.is_hole(1, 1))
+    assert(!sample(missing.shape(), 0.75, 0.75).hit && sample(saved_shape, 0.75, 0.75).hit)
+    var restored = missing.with_holes(1, 1, 1, 1, [false])
+    assert(sample(restored.shape(), 0.75, 0.75).hit && !missing.is_hole(0, 0))
+    var raised = missing.with_heights(1, 1, 1, 1, [2.0])
+    assert(raised.is_hole(1, 1) && raised.height(1, 1) == 2.0 && missing.height(1, 1) == 0.0)
+    var filled = raised.with_holes(1, 1, 1, 1, [false])
+    assert(sample(filled.shape(), 1.0, 1.0).point.y > 1.999)
+}
+func contacts() {
+    var terrain = field()
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = terrain.shape())
+    var ball = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..shape = Physics.Shape3D.sphere(Physics.Sphere3D(0.2)) ..transform = Physics.Transform3D(Math.Vec3(0.5, 0.2, 0.5)))
+    var step = 0
+    while step < 180 { world.step(1.0 / 120.0); step++ }
+    assert(Math.abs(ball.position().y - 0.2) < 0.005)
+    var raised = terrain.with_heights(0, 0, 2, 2, [0.05,0.05,0.05,0.05])
+    floor.set_shape(raised.shape())
+    assert(ball.is_awake())
+    step = 0
+    while step < 120 { world.step(1.0 / 120.0); step++ }
+    assert(Math.abs(ball.position().y - 0.25) < 0.005)
+    var open = raised.with_holes(0, 0, 2, 2, [true,true,true,true])
+    floor.set_shape(open.shape())
+    step = 0
+    while step < 60 { world.step(1.0 / 120.0); step++ }
+    assert(ball.position().y < -0.5 && world.contact_count() == 0)
+}
+func character() {
+    var terrain = field()
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed ..shape = terrain.shape())
+    var actor = world.create_virtual_character(position:Math.Vec3(1.5, 0.852, 1.5))
+    actor.move(world, Math.Vec3(), 1.0 / 60.0)
+    assert(actor.is_grounded())
+    var lowered = terrain.with_heights(1, 1, 2, 2, [-0.2,-0.2,-0.2,-0.2])
+    floor.set_shape(lowered.shape())
+    actor.move(world, Math.Vec3(), 1.0 / 60.0)
+    assert(actor.is_grounded() && Math.abs(actor.position().y - 0.652) < 0.001)
+    assert(actor.support()!.same_body(floor))
+}
+
+test "heightfield edits preserve input copies old shapes ray snapshots and explicit publication" { versions() }
+test "heightfield hole edits restore stored heights without mutating old versions" { holes() }
+test "publishing terrain edits wakes bodies updates contacts and opens a real hole" { contacts() }
+test "registered character follows an edited support without duplicate support movement" { character() }
+func main() { versions(); holes(); contacts(); character(); print("Heightfield versions passed") }

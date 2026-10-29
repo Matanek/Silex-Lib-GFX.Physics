@@ -344,7 +344,8 @@ func main() {
 Triangles own immutable geometry: changing the source arrays does not change
 the terrain. Rebuild and call `set_shape` to replace the mesh and end contacts
 from its previous revision. The mesh remains fixed, exact and uncompressed;
-quantized height updates and dynamic terrains are not provided. A fully masked
+quantized height updates and dynamic terrains are not provided. Use
+[HeightField3D](HeightField3D.md) to edit height or hole regions. A fully masked
 grid is rejected; remove the body from the world to remove the entire terrain.
 Queries visit the faces, without a large-terrain cost guarantee.
 

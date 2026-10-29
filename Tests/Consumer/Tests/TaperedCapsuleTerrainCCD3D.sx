@@ -1,0 +1,51 @@
+use GFX.Physics
+use STD.Math
+
+func rim() Physics.Shape3D {
+    var heights:float[] = []; var holes:bool[] = []; var index = 0
+    while index < 25 { heights.append(0.0); holes.append(index == 12); index++ }
+    return Physics.Shape3D.mesh(Physics.TriangleMesh3D.from_height_grid(5, 5, heights, 1.25, 2.0, holes:holes))
+}
+func certificate() {
+    let angles:float[] = [0.0, 0.31, -0.47]
+    let offsets:float[] = [-0.001, 0.0, 0.000003, 0.001]
+    for angle in angles {
+        let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0), Math.Quat.angle_axis(angle, Math.Vec3.right()))
+        let surface = Physics.ShapePlacement3D(rim(), pose)
+        for offset in offsets {
+            let cap_height = Math.sqrt(0.03) + offset
+            let origin = pose.point(Math.Vec3(1.35, 0.2 + cap_height, 5.0))
+            let capsule = Physics.ShapePlacement3D(Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1, 0.2, 0.2)),
+                Physics.Transform3D(origin, pose.rotation))
+            let expected = Math.sqrt(0.01 + cap_height * cap_height) - 0.2
+            let distance = Physics.Geometry3D.distance(capsule, surface)
+            let reverse = Physics.Geometry3D.distance(surface, capsule)
+            print("cap angle=$(angle) gap=$(offset) actual=$(distance.separation) expected=$(expected)")
+            assert(Math.abs(distance.separation - expected) < 0.000001)
+            assert(Math.abs(reverse.separation - distance.separation) < 0.000001)
+            assert(distance.normal.add(reverse.normal).length() < 0.0001)
+        }
+    }
+}
+func impact() {
+    let angles:float[] = [0.0, 0.31, -0.47]
+    for angle in angles { for reversed in [false, true] {
+        let pose = Physics.Transform3D(Math.Vec3(4.0, 2.0, -3.0), Math.Quat.angle_axis(angle, Math.Vec3.right()))
+        var world = Physics.World3D(Physics.World3DSettings() ..gravity = Math.Vec3())
+        let settings = Physics.RigidBody3DSettings() ..allow_sleep = false ..continuous_collision = true
+            ..shape = Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(0.1, 0.2, 0.2))
+            ..transform = Physics.Transform3D(pose.point(Math.Vec3(1.35, 2.0, 5.0)), pose.rotation)
+            ..linear_velocity = pose.vector(Math.Vec3(0.0, -240.0, 0.0)) ..friction = 0.0
+        var body:Physics.RigidBody3D? = null
+        if reversed { body = world.create_rigid_body(settings) }
+        world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type = Physics.BodyType3D.fixed
+            ..shape = rim() ..transform = pose ..friction = 0.0)
+        if !reversed { body = world.create_rigid_body(settings) }
+        world.step(1.0 / 60.0)
+        let height = pose.inverse_point(body!.position()).y
+        assert(Math.abs(height - 0.2 - Math.sqrt(0.03)) < 0.002 && world.contact_count() > 0)
+    } }
+}
+test "exposed tapered capsule caps give an analytical signed distance at a terrain rim" { certificate() }
+test "tapered capsule CCD retains a real rim contact after clipping in both creation orders" { impact() }
+func main() { certificate(); impact() }

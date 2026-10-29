@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `HeightField3D` adds versioned height terrains: regional height and hole edits, preserved old shapes and explicit publication through `set_shape`. Grids evaluate triangles from owned sample copies. Exposed tapered-capsule caps use an analytical triangle-distance certificate, preserving CCD contacts at terrain rims.
+
 - Qualify character modes and interactions with a behavior matrix, a fixed-step GFX consumer and Jolt comparisons for pushing, weight, momentum, rest and capsule changes in Native Debug/Release. Movement accepts a borrowed world, including the GFX resource, without transferring ownership.
 
 - `VirtualCharacter3D` registers a driven kinematic capsule with the mover, excluded from its own queries. Virtual and physical characters encounter each other through ordinary bodies and reciprocal filters. Tests cover no double movement, resizing with fixed feet, paused contacts and lifetime.

@@ -211,3 +211,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 - [Personnage virtuel enregistré](VirtualCharacter3D.md)
 
 - [Choix des modes et qualification des personnages](CharacterQualification3D.md)
+
+- [Modifier un terrain par hauteurs](HeightField3D.md)

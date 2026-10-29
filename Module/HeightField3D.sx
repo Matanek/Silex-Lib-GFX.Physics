@@ -1,0 +1,30 @@
+use GFX.Physics.HeightGridData3D.HeightGridData3D
+use GFX.Physics.TriangleMesh3D.TriangleMesh3D
+use GFX.Physics.TriangleMesh3D.HeightGridDiagonal3D
+use GFX.Physics.Shape3D.Shape3D
+
+// A versioned height terrain. Applying a version to a body is explicit.
+public class HeightField3D {
+    private var grid:HeightGridData3D
+    private var surface:TriangleMesh3D
+    init(columns:int, rows:int, heights:@float[], column_spacing:float, row_spacing:float,
+        holes:@bool[] = [], diagonal:HeightGridDiagonal3D = HeightGridDiagonal3D.column_to_row) {
+        var grid = HeightGridData3D(columns, rows, heights, column_spacing, row_spacing, holes, diagonal)
+        self.grid = grid; self.surface = TriangleMesh3D(grid)
+    }
+    private init(grid:HeightGridData3D) { self.grid = grid; self.surface = TriangleMesh3D(grid) }
+    func columns() int { return self.grid.columns }
+    func rows() int { return self.grid.rows }
+    func column_spacing() float { return self.grid.column_spacing }
+    func row_spacing() float { return self.grid.row_spacing }
+    func diagonal() HeightGridDiagonal3D { return self.grid.diagonal }
+    func height(column:int, row:int) float { return self.grid.height(column, row) }
+    func is_hole(column:int, row:int) bool { return self.grid.is_hole(column, row) }
+    func shape() Shape3D { return Shape3D.mesh(self.surface) }
+    func with_heights(column:int, row:int, columns:int, rows:int, heights:@float[]) HeightField3D {
+        return HeightField3D(self.grid.patched(column, row, columns, rows, heights, [], true))
+    }
+    func with_holes(column:int, row:int, columns:int, rows:int, holes:@bool[]) HeightField3D {
+        return HeightField3D(self.grid.patched(column, row, columns, rows, [], holes, false))
+    }
+}

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `HeightField3D` ajoute des versions de terrain par hauteurs : éditions locales de niveaux et de trous, anciennes formes conservées et publication explicite par `set_shape`. Les grilles évaluent leurs triangles depuis des échantillons copiés. La distance des calottes exposées de capsules effilées aux triangles utilise son certificat analytique, pour conserver les contacts CCD aux bords de terrain.
+
 - Qualification des modes personnages et de leurs interactions, avec matrice des différences, consommateur GFX à pas fixe et comparaison Jolt des poussées, du poids, des masses, du repos et du changement de capsule en Native Debug/Release. Les déplacements acceptent un monde emprunté, y compris la ressource GFX, sans transfert de propriété.
 
 - `VirtualCharacter3D` enregistre une capsule cinématique pilotée avec le mover, exclue de ses propres requêtes. Les personnages virtuels et physiques se rencontrent via les mêmes corps et filtres réciproques. Pas de double déplacement, resize conservant les pieds, contacts conservés pendant la pause et durées de vie vérifiés.

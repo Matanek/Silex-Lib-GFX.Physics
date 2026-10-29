@@ -1,3 +1,4 @@
+public use GFX.Physics.HeightField3D.HeightField3D
 public use GFX.Physics.TileMapCollider2D.TileMapCollider2D
 public use GFX.Physics.TileMapCollider2D.TileCollisionRect2D
 public use GFX.Physics.Box2D.Box2D
