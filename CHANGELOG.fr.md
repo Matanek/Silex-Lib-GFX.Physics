@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les prédictions de quelques corps souples coûteux peuvent occuper plusieurs workers, sans exiger un grand nombre d'instances. Les contacts restent ordonnés et le pas synchrone ; une seule instance conserve sa résolution interne séquentielle.
+
 - Évite les requêtes de distance et balayages souples/rigides lorsque le segment du sommet ne peut pas atteindre le plan ou la surface convexe. Conserve le maillage, les sous-pas et la politique des surfaces triangulées.
 
 - Corps souples et tissus CPU : définitions partagées, distances/flexion/volumes, attaches et pose partielle, pression, contacts avec les rigides et maillage Scene3D déformé. Les instances indépendantes utilisent les workers du monde ; pause et durées de vie restent explicites.

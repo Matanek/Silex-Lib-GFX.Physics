@@ -74,6 +74,9 @@ Les contraintes internes suivent un ordre stable par instance. Avec
 `enable_parallelism`, les instances indépendantes se répartissent entre les
 workers ; les contacts et impulsions rigides sont ensuite traités dans un
 ordre canonique. Un même tissu conserve une résolution interne séquentielle.
+Quelques instances dont les maillages demandent beaucoup de travail peuvent
+déjà occuper plusieurs workers ; il n'est pas nécessaire de multiplier les
+petites instances pour déclencher cette répartition.
 Le pas reste synchrone et refuse les mutations du monde pendant son exécution.
 
 Chaque sommet possède une sphère de collision. Il réagit aux formes rigides

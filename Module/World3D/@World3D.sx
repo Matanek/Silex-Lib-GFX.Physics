@@ -1106,13 +1106,30 @@ public class World3D {
         for slot in self.store.slots {
             if var body = slot { if body.is_enabled && !body.is_sensor { colliders.append(SoftCollider3D(body)) } }
         }
+        // These sets are stable while the synchronous world step owns mutation.
+        var heavy:SoftBodyState3D[]=[];var light:SoftBodyState3D[]=[]
+        if self.parallel_executor!=null && self.soft_bodies.count()<64 {
+            for slot in self.soft_bodies {
+                if var body=slot {
+                    if body.settings.is_enabled {
+                        if soft_prediction_work3d(body)>=256 { heavy.append(body) }
+                        else { light.append(body) }
+                    }
+                }
+            }
+        }
         let sub_delta = delta/(self.soft_body_substeps as float)
         var step = 0
         while step < self.soft_body_substeps {
             var job = SoftStep3D(bodies:self.soft_bodies,gravity:self.current_gravity,delta:sub_delta,
                 fraction:((step+1) as float)/(self.soft_body_substeps as float))
             if var executor = self.parallel_executor {
-                executor.submit_parallel(self.soft_bodies.count(),job).complete()
+                if heavy.count()>=2 {
+                    predict_heavy_soft_bodies3d(executor,heavy,light,self.current_gravity,sub_delta,
+                        ((step+1) as float)/(self.soft_body_substeps as float),self.parallel_observer)
+                } else if self.soft_bodies.count()>=64 {
+                    executor.submit_parallel(self.soft_bodies.count(),job).complete()
+                } else { job.execute(0,self.soft_bodies.count()) }
             } else { job.execute(0,self.soft_bodies.count()) }
             for slot in self.soft_bodies {
                 if var body = slot {

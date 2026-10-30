@@ -162,3 +162,36 @@ struct SoftStep3D:Threading.ParallelJob {
         }
     }
 }
+
+// A few expensive meshes need body-sized jobs: the generic range scheduler
+// otherwise sees fewer than its minimum grain of 64 *bodies*, not particles.
+struct SoftPrediction3D:Threading.Job {
+    var body:SoftBodyState3D
+    let gravity:Math.Vec3
+    let delta:float
+    let fraction:float
+    let index:int
+    var observer:StepObserver3D?
+    func execute() {
+        if var observer=self.observer { observer.executing(5,self.index,self.index+1) }
+        predict_and_constrain(self.body,self.gravity,self.delta,self.fraction)
+    }
+}
+
+func soft_prediction_work3d(body:SoftBodyState3D) int {
+    return body.particles.count()+body.definition.edges.count()+
+        body.definition.bends.count()*4+body.definition.volumes.count()*8
+}
+
+func predict_heavy_soft_bodies3d(executor:Threading.Executor,heavy:SoftBodyState3D[],
+    light:SoftBodyState3D[],gravity:Math.Vec3,delta:float,fraction:float,observer:StepObserver3D?) {
+    var handles:Threading.JobHandle<SoftPrediction3D>[]=[]
+    var index=0
+    for body in heavy {
+        handles.append(executor.submit(SoftPrediction3D(body:body,gravity:gravity,delta:delta,
+            fraction:fraction,index:index,observer:observer)))
+        index++
+    }
+    for body in light { predict_and_constrain(body,gravity,delta,fraction) }
+    for handle in handles { var finished=handle.complete() }
+}

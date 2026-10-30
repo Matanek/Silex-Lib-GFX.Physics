@@ -1,0 +1,68 @@
+use GFX.Physics
+use GFX.Physics.World3D.StepObserver3D
+use STD.Math
+use STD.Time
+
+class Witness:StepObserver3D {
+    var entered:int=0
+    var active:int=0
+    var peak:int=0
+    var timeout:bool=false
+    func executing(phase:int,start:int,end:int) {
+        if phase!=5 { return }
+        mutex { self.entered++;self.active++
+            if self.active>self.peak { self.peak=self.active } }
+        var clock=Time.Stopwatch();clock.start();var waiting=true
+        while waiting && clock.get_elapsed_seconds()<2.0 { mutex { waiting=self.entered<4 } }
+        mutex { if waiting { self.timeout=true }
+            self.active-- }
+    }
+}
+
+func cloths(world:Physics.World3D) Physics.SoftBody3D[] {
+    var bodies:Physics.SoftBody3D[]=[]
+    var definition=Physics.SoftBody3DDefinition.cloth(9,9,0.1)
+    for index in 0...4 {
+        bodies.append(world.create_soft_body(definition,Physics.SoftBody3DSettings()
+            ..transform=Physics.Transform3D(Math.Vec3(index as float*2.0,2.0,0.0))
+            ..collision_filter=Physics.CollisionFilter3D(mask_bits:0)))
+    }
+    return bodies
+}
+
+func overlap() {
+    var world=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=1)
+    world.enable_parallelism(4)
+    var bodies=cloths(world);var witness=Witness()
+    world.observe_parallelism(witness);world.step(1.0/120.0);world.observe_parallelism(null)
+    assert(!witness.timeout && witness.entered==4 && witness.peak==4 && witness.active==0)
+    assert(bodies.count()==4)
+}
+
+func deterministic() {
+    var first=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=2)
+    var second=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=2)
+    second.enable_parallelism(4)
+    var a=cloths(first);var b=cloths(second)
+    var light1=first.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3()]))
+    var light4=second.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3()]))
+    var unused1=first.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3()]))
+    var unused4=second.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3()]))
+    first.destroy_soft_body(unused1);second.destroy_soft_body(unused4)
+    for frame in 0...12 {
+        if frame==4 { a[0].set_enabled(false);b[0].set_enabled(false) }
+        if frame==8 { a[0].set_enabled(true);b[0].set_enabled(true) }
+        first.step(1.0/120.0);second.step(1.0/120.0)
+        assert(light1.position(0).nearly_equal(light4.position(0),0.0))
+        assert(light1.velocity(0).nearly_equal(light4.velocity(0),0.0))
+        for index in 0...4 { for vertex in 0...a[index].vertex_count() {
+            assert(a[index].position(vertex).nearly_equal(b[index].position(vertex),0.0))
+            assert(a[index].velocity(vertex).nearly_equal(b[index].velocity(vertex),0.0))
+        } }
+    }
+    assert(light1.position(0).y<0.0)
+    second.enable_parallelism(1);second.step(1.0/120.0)
+}
+
+test "four expensive soft bodies execute concurrently without sixty-four dummy bodies" { overlap() }
+test "heavy and light soft bodies remain exact across workers, empty slots and enable changes" { deterministic() }

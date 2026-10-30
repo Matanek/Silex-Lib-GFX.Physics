@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Predictions for a few expensive soft bodies can use multiple workers without requiring a large instance count. Contacts remain ordered and stepping stays synchronous; each instance retains sequential internal resolution.
+
 - Skip soft/rigid distance queries and sweeps when the vertex segment cannot reach a plane or convex surface, preserving mesh resolution, substeps and triangle surface policy.
 
 - CPU soft bodies and cloth: shared definitions, distance/bend/volume constraints, attachments and partial pose control, pressure, rigid contacts and deformed Scene3D meshes. Independent instances use world workers; pause and lifetimes remain explicit.

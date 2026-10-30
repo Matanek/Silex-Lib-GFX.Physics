@@ -65,7 +65,9 @@ More substeps improve resolution at additional computational cost. Internal
 constraints follow a stable order per instance. With `enable_parallelism`,
 independent instances are distributed among workers; rigid contacts and impulses
 are then processed in canonical order. A single cloth retains sequential internal
-resolution. Steps remain synchronous and reject world mutations during execution.
+resolution. A few instances with substantial meshes can already occupy multiple
+workers; adding many small instances is not required to enable that distribution.
+Steps remain synchronous and reject world mutations during execution.
 
 Every vertex has a collision sphere. It reacts to enabled rigid shapes allowed
 by filtering; sensors produce no response. Dynamic rigid bodies receive opposite
