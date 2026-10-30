@@ -10,6 +10,7 @@ use GFX.Physics.SoftBody3D.Definition.SoftBody3DDefinition
 use GFX.Physics.RigidBody3D.BodyState3D
 use GFX.Physics.RigidBody3D.BodyType3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.motion_distance3d
 use GFX.Physics.Geometry3D.axial_shape3d
 use GFX.Physics.Geometry3D.AxialPointQuery3D
@@ -28,9 +29,12 @@ struct SoftCollider3D {
     let plane_origin:Math.Vec3
     let is_plane:bool
     var axial_queries:AxialPointQuery3D[]
+    let contact_bounds:ShapeBounds3D
+    var axial_motion_queries:AxialPointQuery3D[]
     init(body:BodyState3D) {
         self.body = body
-        self.surface_margin = soft_surface_margin3d(body.shape)
+        let margin=soft_surface_margin3d(body.shape)
+        self.surface_margin = margin
         var bounds = ShapeBounds3D(Math.Vec3(-3.4e38),Math.Vec3(3.4e38))
         var normal=Math.Vec3();var origin=Math.Vec3();var is_plane=false
         match body.shape {
@@ -43,28 +47,77 @@ struct SoftCollider3D {
         }
         self.plane_normal=normal;self.plane_origin=origin;self.is_plane=is_plane
         self.bounds = bounds
+        self.contact_bounds=ShapeBounds3D(bounds.lower.subtract(Math.Vec3(margin)),
+            bounds.upper.add(Math.Vec3(margin)))
         var queries:AxialPointQuery3D[]=[]
+        var motion_queries:AxialPointQuery3D[]=[]
+        // Match the extra Transform3D normalization in continuous_fraction3d.
         if axial_shape3d(body.shape) {
+            let motion_pose=Transform3D(body.transform.position.add(Math.Vec3()),body.transform.rotation)
             queries.append(AxialPointQuery3D(ShapePlacement3D(body.shape,body.transform)))
+            motion_queries.append(AxialPointQuery3D(ShapePlacement3D(body.shape,motion_pose)))
         } else {
             match body.shape {
                 compound(compound)=>{
+                    let motion_pose=Transform3D(body.transform.position.add(Math.Vec3()),body.transform.rotation)
                     var index=0;var all_axial=true
                     while index<compound.child_count() && all_axial {
                         let child=compound.child(index)
                         if axial_shape3d(child.shape) {
                             queries.append(AxialPointQuery3D(ShapePlacement3D(child.shape,
                                 compound_child_transform(body.transform,child))))
+                            motion_queries.append(AxialPointQuery3D(ShapePlacement3D(child.shape,
+                                compound_child_transform(motion_pose,child))))
                         } else { all_axial=false }
                         index++
                     }
-                    if !all_axial { queries=[] }
+                    if !all_axial { queries=[];motion_queries=[] }
                 }
                 else=>{}
             }
         }
         self.axial_queries=queries
+        self.axial_motion_queries=motion_queries
     }
+}
+
+func soft_axial_distance3d(queries:@AxialPointQuery3D[],point:Math.Vec3,radius:float) DistanceResult3D {
+    var result=empty_soft_distance3d()
+    for query in queries {
+        let next=query.sphere_distance(point,radius)
+        if next.separation<result.separation { result=next }
+    }
+    return result
+}
+
+// The caller already tested segment bounds. Rigid poses stay fixed throughout
+// the soft pass, so the generic advancement can reuse both placed query sets.
+package func soft_axial_fraction3d(initial_queries:@AxialPointQuery3D[],
+    motion_queries:@AxialPointQuery3D[],target_bounds:@ShapeBounds3D,
+    start:Math.Vec3,end:Math.Vec3,radius:float) float? {
+    let motion=end.subtract(start)
+    let speed=motion.subtract(Math.Vec3()).length()
+    if speed<=0.000001 { return null }
+    let moving_bounds=ShapeBounds3D(
+        start.subtract(Math.Vec3(radius)).add(Math.Vec3(Math.min(0.0,motion.x),Math.min(0.0,motion.y),Math.min(0.0,motion.z))),
+        start.add(Math.Vec3(radius)).add(Math.Vec3(Math.max(0.0,motion.x),Math.max(0.0,motion.y),Math.max(0.0,motion.z))))
+    if !linear_sweeps_overlap3d(moving_bounds,target_bounds) { return null }
+    let initial=soft_axial_distance3d(initial_queries,start,radius)
+    if initial.separation<=0.000001 { return null }
+    var fraction=0.0;var iteration=0
+    while iteration<32 && fraction<=1.0 {
+        let point=start.add(motion.multiply(fraction))
+        let distance=soft_axial_distance3d(motion_queries,point,radius)
+        if distance.separation<=0.000001 {
+            let closing=motion.subtract(Math.Vec3()).dot(distance.normal)
+            if distance.separation>0.0 && closing>0.0 {
+                return Math.min(1.0,fraction+distance.separation/closing)
+            }
+            return fraction
+        }
+        fraction+=distance.separation/speed;iteration++
+    }
+    return null
 }
 
 func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], delta:float, gravity:Math.Vec3) {
@@ -80,7 +133,8 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
     let body_bounds=ShapeBounds3D(lower.subtract(Math.Vec3(radius)),upper.add(Math.Vec3(radius)))
     var candidates:SoftCollider3D[]=[]
     for collider in colliders {
-        if linear_sweeps_overlap3d(body_bounds,collider.bounds) { candidates.append(collider) }
+        if body.settings.collision_filter.allows(collider.body.collision_filter) &&
+            linear_sweeps_overlap3d(body_bounds,collider.bounds) { candidates.append(collider) }
     }
     var index = 0
     while index < body.particles.count() {
@@ -90,91 +144,98 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
             particle.velocity = particle.position.subtract(particle.previous).divide(delta)
             for collider in candidates {
                 var rigid = collider.body
-                if body.settings.collision_filter.allows(rigid.collision_filter) {
-                    // Signed distance along a linear particle sweep is affine.
-                    // If both ends clear the plane, the whole segment clears it.
-                    if collider.is_plane {
-                        let start=particle.previous.subtract(collider.plane_origin).dot(collider.plane_normal)
-                        let end=particle.position.subtract(collider.plane_origin).dot(collider.plane_normal)
-                        if Math.min(start,end)>radius+0.000001 { continue }
-                    }
-                    let bounds = ShapeBounds3D(collider.bounds.lower.subtract(Math.Vec3(collider.surface_margin)),
-                        collider.bounds.upper.add(Math.Vec3(collider.surface_margin)))
-                    let minimum = Math.Vec3(Math.min(particle.position.x,particle.previous.x)-radius,
-                        Math.min(particle.position.y,particle.previous.y)-radius,Math.min(particle.position.z,particle.previous.z)-radius)
-                    let maximum = Math.Vec3(Math.max(particle.position.x,particle.previous.x)+radius,
-                        Math.max(particle.position.y,particle.previous.y)+radius,Math.max(particle.position.z,particle.previous.z)+radius)
-                    if maximum.x < bounds.lower.x || minimum.x > bounds.upper.x ||
-                        maximum.y < bounds.lower.y || minimum.y > bounds.upper.y ||
-                        maximum.z < bounds.lower.z || minimum.z > bounds.upper.z { continue }
-                    var distance=empty_soft_distance3d()
-                    if !collider.axial_queries.is_empty() {
-                        for query in collider.axial_queries {
-                            let next=query.sphere_distance(particle.position,radius)
-                            if next.separation<distance.separation { distance=next }
+                // Signed distance along a linear particle sweep is affine.
+                // If both ends clear the plane, the whole segment clears it.
+                if collider.is_plane {
+                    let start=particle.previous.subtract(collider.plane_origin).dot(collider.plane_normal)
+                    let end=particle.position.subtract(collider.plane_origin).dot(collider.plane_normal)
+                    if Math.min(start,end)>radius+0.000001 { continue }
+                }
+                let bounds=collider.contact_bounds
+                let minimum = Math.Vec3(Math.min(particle.position.x,particle.previous.x)-radius,
+                    Math.min(particle.position.y,particle.previous.y)-radius,Math.min(particle.position.z,particle.previous.z)-radius)
+                let maximum = Math.Vec3(Math.max(particle.position.x,particle.previous.x)+radius,
+                    Math.max(particle.position.y,particle.previous.y)+radius,Math.max(particle.position.z,particle.previous.z)+radius)
+                if maximum.x < bounds.lower.x || minimum.x > bounds.upper.x ||
+                    maximum.y < bounds.lower.y || minimum.y > bounds.upper.y ||
+                    maximum.z < bounds.lower.z || minimum.z > bounds.upper.z { continue }
+                var distance=empty_soft_distance3d()
+                if !collider.axial_queries.is_empty() {
+                    distance=soft_axial_distance3d(collider.axial_queries,particle.position,radius)
+                } else {
+                    let target=ShapePlacement3D(rigid.shape,rigid.transform)
+                    let placement=ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(particle.position))
+                    distance=soft_distance3d(placement,target)
+                }
+                var normal = distance.normal.negated()
+                var penetration = -distance.separation
+                if penetration <= 0.0 {
+                    let motion = particle.position.subtract(particle.previous)
+                    let motion_squared=motion.length_squared()
+                    // Convex distance is 1-Lipschitz: a segment shorter than
+                    // the endpoint gap cannot reach the surface. Preserve
+                    // the one-sided triangle/mesh backing policy unchanged.
+                    let gap=Math.max(0.0,distance.separation-0.000001)
+                    if motion_squared > 1e-12 &&
+                        (collider.surface_margin>0.0 || gap*gap<=motion_squared) {
+                        let start=Transform3D(particle.previous)
+                        var impact:float?=null
+                        if !collider.axial_queries.is_empty() {
+                            impact=soft_axial_fraction3d(collider.axial_queries,collider.axial_motion_queries,
+                                collider.bounds,particle.previous,particle.position,radius)
+                        } else {
+                            impact=continuous_fraction3d(Shape3D.sphere(sphere),start,Transform3D(particle.position),
+                                rigid.shape,rigid.transform,rigid.transform)
                         }
-                    } else {
-                        let target=ShapePlacement3D(rigid.shape,rigid.transform)
-                        let placement=ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(particle.position))
-                        distance=soft_distance3d(placement,target)
-                    }
-                    var normal = distance.normal.negated()
-                    var penetration = -distance.separation
-                    if penetration <= 0.0 {
-                        let motion = particle.position.subtract(particle.previous)
-                        let motion_squared=motion.length_squared()
-                        // Convex distance is 1-Lipschitz: a segment shorter than
-                        // the endpoint gap cannot reach the surface. Preserve
-                        // the one-sided triangle/mesh backing policy unchanged.
-                        let gap=Math.max(0.0,distance.separation-0.000001)
-                        if motion_squared > 1e-12 &&
-                            (collider.surface_margin>0.0 || gap*gap<=motion_squared) {
-                            let start=Transform3D(particle.previous)
-                            if let fraction=continuous_fraction3d(Shape3D.sphere(sphere),start,Transform3D(particle.position),
-                                rigid.shape,rigid.transform,rigid.transform) {
-                                let witness=motion_distance3d(ShapePlacement3D(Shape3D.sphere(sphere),
-                                    Transform3D(particle.previous.add(motion.multiply(fraction)))),
+                        if let fraction=impact {
+                            let point=particle.previous.add(motion.multiply(fraction))
+                            var witness=empty_soft_distance3d()
+                            if !collider.axial_queries.is_empty() {
+                                witness=soft_axial_distance3d(collider.axial_queries,point,radius)
+                            } else {
+                                witness=motion_distance3d(ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(point)),
                                     ShapePlacement3D(rigid.shape,rigid.transform),start,rigid.transform)
-                                normal=witness.normal.negated()
-                                penetration=Math.max(0.0,-motion.multiply(1.0-fraction).dot(normal))+0.000001
                             }
-                        }
-                    }
-                    if penetration > 0.0 {
-                        particle.position = particle.position.add(normal.multiply(penetration))
-                        // Particles have no spin: both impulses act at their corrected position.
-                        let arm = particle.position.subtract(rigid.world_center())
-                        let rigid_velocity = rigid.linear_velocity.add(rigid.angular_velocity.cross(arm))
-                        let relative = particle.velocity.subtract(rigid_velocity)
-                        let normal_speed = relative.dot(normal)
-                        let tangent = relative.subtract(normal.multiply(normal_speed))
-                        let tangent_speed = tangent.length()
-                        let friction = Math.sqrt(body.settings.friction*rigid.friction)
-                        var velocity_change = Math.Vec3()
-                        if tangent_speed > 1e-8 {
-                            velocity_change = tangent.multiply(Math.min(friction*penetration/(tangent_speed*delta),1.0))
-                        }
-                        // Separating contacts receive no normal impulse.
-                        if normal_speed < 0.0 {
-                            var speed_change = normal_speed
-                            let previous_speed = previous_velocity.subtract(rigid_velocity).dot(normal)
-                            if previous_speed < -2.0*gravity.length()*delta {
-                                speed_change += Math.max(body.settings.restitution,rigid.restitution)*previous_speed
-                            }
-                            velocity_change = velocity_change.add(normal.multiply(speed_change))
-                        }
-                        let angular_arm = arm.cross(normal)
-                        let denominator = particle.inverse_mass+rigid.inverse_mass+
-                            angular_arm.dot(rigid.inverse_inertia_times(angular_arm))
-                        let impulse = velocity_change.divide(denominator)
-                        particle.velocity = particle.velocity.subtract(impulse.multiply(particle.inverse_mass))
-                        if rigid.body_type == BodyType3D.dynamic && impulse.length_squared() > 0.0 {
-                            rigid.wake()
-                            rigid.linear_velocity = rigid.linear_velocity.add(impulse.multiply(rigid.inverse_mass))
-                            rigid.angular_velocity = rigid.angular_velocity.add(rigid.inverse_inertia_times(arm.cross(impulse)))
+                            normal=witness.normal.negated()
+                            penetration=Math.max(0.0,-motion.multiply(1.0-fraction).dot(normal))+0.000001
                         }
                     }
                 }
+                if penetration > 0.0 {
+                    particle.position = particle.position.add(normal.multiply(penetration))
+                    // Particles have no spin: both impulses act at their corrected position.
+                    let arm = particle.position.subtract(rigid.world_center())
+                    let rigid_velocity = rigid.linear_velocity.add(rigid.angular_velocity.cross(arm))
+                    let relative = particle.velocity.subtract(rigid_velocity)
+                    let normal_speed = relative.dot(normal)
+                    let tangent = relative.subtract(normal.multiply(normal_speed))
+                    let tangent_speed = tangent.length()
+                    let friction = Math.sqrt(body.settings.friction*rigid.friction)
+                    var velocity_change = Math.Vec3()
+                    if tangent_speed > 1e-8 {
+                        velocity_change = tangent.multiply(Math.min(friction*penetration/(tangent_speed*delta),1.0))
+                    }
+                    // Separating contacts receive no normal impulse.
+                    if normal_speed < 0.0 {
+                        var speed_change = normal_speed
+                        let previous_speed = previous_velocity.subtract(rigid_velocity).dot(normal)
+                        if previous_speed < -2.0*gravity.length()*delta {
+                            speed_change += Math.max(body.settings.restitution,rigid.restitution)*previous_speed
+                        }
+                        velocity_change = velocity_change.add(normal.multiply(speed_change))
+                    }
+                    let angular_arm = arm.cross(normal)
+                    let denominator = particle.inverse_mass+rigid.inverse_mass+
+                        angular_arm.dot(rigid.inverse_inertia_times(angular_arm))
+                    let impulse = velocity_change.divide(denominator)
+                    particle.velocity = particle.velocity.subtract(impulse.multiply(particle.inverse_mass))
+                    if rigid.body_type == BodyType3D.dynamic && impulse.length_squared() > 0.0 {
+                        rigid.wake()
+                        rigid.linear_velocity = rigid.linear_velocity.add(impulse.multiply(rigid.inverse_mass))
+                        rigid.angular_velocity = rigid.angular_velocity.add(rigid.inverse_inertia_times(arm.cross(impulse)))
+                    }
+                }
+
             }
         }
         body.particles[index] = particle; index++

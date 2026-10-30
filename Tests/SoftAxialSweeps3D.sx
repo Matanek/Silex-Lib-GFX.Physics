@@ -1,0 +1,69 @@
+use GFX.Physics
+use GFX.Physics.Geometry3D.AxialPointQuery3D
+use GFX.Physics.Geometry3D.compound_child_transform
+use GFX.Physics.World3D.continuous_fraction3d
+use GFX.Physics.World3D.soft_axial_fraction3d
+use GFX.Physics.World3D.shape_pose_bounds3d
+use STD.Math
+
+func compare(shape:Physics.Shape3D,pose:Physics.Transform3D,scale:float) {
+    var initial:AxialPointQuery3D[]=[];var motion:AxialPointQuery3D[]=[]
+    let cast_pose=Physics.Transform3D(pose.position.add(Math.Vec3()),pose.rotation)
+    match shape {
+        compound(parts)=>{
+            for index in 0...parts.child_count() {
+                let child=parts.child(index)
+                initial.append(AxialPointQuery3D(Physics.ShapePlacement3D(child.shape,compound_child_transform(pose,child))))
+                motion.append(AxialPointQuery3D(Physics.ShapePlacement3D(child.shape,compound_child_transform(cast_pose,child))))
+            }
+        }
+        else=>{
+            initial.append(AxialPointQuery3D(Physics.ShapePlacement3D(shape,pose)))
+            motion.append(AxialPointQuery3D(Physics.ShapePlacement3D(shape,cast_pose)))
+        }
+    }
+    let starts:Math.Vec3[]=[Math.Vec3(-3.0,0.0,0.0),Math.Vec3(0.0,3.0,0.0),
+        Math.Vec3(-3.0,0.3,0.0),Math.Vec3(-3.0,0.6,0.7),Math.Vec3(0.0,0.0,0.0),
+        Math.Vec3(3.0,3.0,0.0),Math.Vec3(0.0,-3.0,0.0),Math.Vec3(-3.0,0.0,0.0)]
+    let ends:Math.Vec3[]=[Math.Vec3(3.0,0.0,0.0),Math.Vec3(0.0,-3.0,0.0),
+        Math.Vec3(3.0,0.3,0.0),Math.Vec3(3.0,0.6,-0.7),Math.Vec3(3.0,0.0,0.0),
+        Math.Vec3(4.0,3.0,0.0),Math.Vec3(0.0,3.0,0.0),Math.Vec3(-3.0,0.0,0.0)]
+    let radius=0.035*scale
+    let bounds=shape_pose_bounds3d(shape,pose)
+    for index in 0...starts.count() {
+        let start=pose.point(starts[index].multiply(scale));let end=pose.point(ends[index].multiply(scale))
+        let expected=continuous_fraction3d(Physics.Shape3D.sphere(Physics.Sphere3D(radius)),
+            Physics.Transform3D(start),Physics.Transform3D(end),shape,pose,pose)
+        let actual=soft_axial_fraction3d(initial,motion,bounds,start,end,radius)
+        if (actual==null)!=(expected==null) {
+            print("axial sweep presence mismatch: path=",index," scale=",scale)
+        }
+        assert((actual==null)==(expected==null))
+        if let value=expected {
+            if actual! != value { print("axial sweep fraction mismatch: path=",index," scale=",scale," expected=",value," actual=",actual!) }
+            assert(actual! == value)
+        }
+        // Require an impact in the canonical crossing. The generic solver's
+        // absolute search margin can exhaust its iterations on tiny shapes
+        // placed far from the origin; those cases must retain its exact result.
+        if index==0 && scale==1.0 && pose.position==Math.Vec3() { assert(actual!=null) }
+    }
+}
+
+test "prepared soft axial sweeps retain exact generic CCD fractions" {
+    let scales:float[]=[0.001,1.0,1000.0]
+    for scale in scales {
+        let poses:Physics.Transform3D[]=[Physics.Transform3D(),
+            Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())),
+            Physics.Transform3D(Math.Vec3(-20.0,0.25,30.0),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back()))]
+        var shapes:Physics.Shape3D[]=[Physics.Shape3D.cylinder(Physics.Cylinder3D(0.64*scale,0.25*scale)),
+            Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(1.0*scale,0.5*scale,0.5*scale)),
+            Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(1.0*scale,0.5*scale,0.5*scale))]
+        var children:Physics.CompoundChild3D[]=[
+            Physics.CompoundChild3D(0,Physics.Shape3D.cylinder(Physics.Cylinder3D(0.58*scale,0.25*scale))),
+            Physics.CompoundChild3D(1,Physics.Shape3D.cylinder(Physics.Cylinder3D(0.64*scale,0.0175*scale)),Physics.Transform3D(Math.Vec3(0.0,0.28*scale,0.0))),
+            Physics.CompoundChild3D(2,Physics.Shape3D.cylinder(Physics.Cylinder3D(0.64*scale,0.0175*scale)),Physics.Transform3D(Math.Vec3(0.0,-0.28*scale,0.0)))]
+        shapes.append(Physics.Shape3D.compound(Physics.Compound3D(children)))
+        for pose in poses { for shape in shapes { compare(shape,pose,scale) } }
+    }
+}

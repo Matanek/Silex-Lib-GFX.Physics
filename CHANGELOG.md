@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reduce soft/rigid contact cost by reusing axial sweep queries and stable contact data. CCD fractions and reaction ordering are preserved.
+
 - Soft vertex contacts with cylinders and axial shapes reuse a profile prepared for the step, including entirely axial compounds. Distances, normals and reactions preserve their ordering and conventions.
 
 - Predictions for a few expensive soft bodies can use multiple workers without requiring a large instance count. Contacts remain ordered and stepping stays synchronous; each instance retains sequential internal resolution.
