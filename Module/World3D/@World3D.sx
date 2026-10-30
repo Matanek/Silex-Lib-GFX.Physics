@@ -1,3 +1,9 @@
+use GFX.Physics.SoftBody3D.SoftBody3D
+use GFX.Physics.SoftBody3D.SoftBody3DSettings
+use GFX.Physics.SoftBody3D.SoftBodyState3D
+use GFX.Physics.SoftBody3D.begin_soft_frame3d
+use GFX.Physics.SoftBody3D.publish_soft_frame3d
+use GFX.Physics.SoftBody3D.Definition.SoftBody3DDefinition
 use STD.Threading
 use GFX.Physics.VirtualCharacter3D.VirtualCharacter3D
 use GFX.Physics.CharacterMover3D.CharacterMover3D
@@ -160,7 +166,8 @@ public struct World3DSettings {
     var gravity:Math.Vec3
     var position_iterations:int
     var velocity_iterations:int
-    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0);self.position_iterations = 4;self.velocity_iterations = 12 }
+    var soft_body_substeps:int
+    init() { self.gravity = Math.Vec3(0.0, -9.81, 0.0);self.position_iterations = 4;self.velocity_iterations = 12;self.soft_body_substeps = 8 }
 }
 
 package struct CharacterShape3D {
@@ -176,6 +183,8 @@ package struct CharacterShape3D {
 }
 
 public class World3D {
+    private var soft_bodies:SoftBodyState3D?[] = []
+    private let soft_body_substeps:int
     private var store:BodyStore3D
     private var parallel_executor:Threading.Executor? = null
     private var current_worker_count:int = 1
@@ -206,6 +215,8 @@ public class World3D {
 
     drop {
         self.parallel_executor = null
+        for slot in self.soft_bodies { if var body = slot { body.alive = false } }
+        self.soft_bodies = []
         self.distance_constraints.invalidate_all()
         self.slider_constraints.invalidate_all()
         self.fixed_constraints.invalidate_all()
@@ -231,6 +242,10 @@ public class World3D {
         if settings.velocity_iterations < 1 || settings.velocity_iterations > 128 {
             panic("GFX.Physics.World3D requires velocity iterations between 1 and 128")
         }
+        if settings.soft_body_substeps < 1 || settings.soft_body_substeps > 128 {
+            panic("GFX.Physics.World3D requires soft body substeps between 1 and 128")
+        }
+        self.soft_body_substeps = settings.soft_body_substeps
         self.store = BodyStore3D()
         self.physical_characters = []
         self.distance_constraints = DistanceConstraintStore3D(self.store)
@@ -1059,6 +1074,58 @@ public class World3D {
         job.execute(0,count)
     }
 
+    func create_soft_body(definition:SoftBody3DDefinition, settings:SoftBody3DSettings = SoftBody3DSettings()) SoftBody3D {
+        self.store.require_mutable()
+        var state = SoftBodyState3D(definition,settings)
+        var index = 0
+        while index < self.soft_bodies.count() && self.soft_bodies[index] != null { index++ }
+        if index == self.soft_bodies.count() { self.soft_bodies.append(state) }
+        else { self.soft_bodies[index] = state }
+        return SoftBody3D(self.store,state)
+    }
+    func destroy_soft_body(body:SoftBody3D) {
+        self.store.require_mutable()
+        if !body.belongs_to(self.store) || !body.is_valid() { panic("GFX.Physics soft body does not belong to this world") }
+        var index = 0
+        while index < self.soft_bodies.count() {
+            if var state = self.soft_bodies[index] {
+                if body.same_state(state) { state.alive = false; self.soft_bodies[index] = null; return }
+            }
+            index++
+        }
+    }
+    private func simulate_soft_bodies(delta:float) {
+        var active = false
+        for slot in self.soft_bodies {
+            if var body = slot {
+                if body.settings.is_enabled { begin_soft_frame3d(body,self.store); active = true }
+            }
+        }
+        if !active { return }
+        var colliders:SoftCollider3D[] = []
+        for slot in self.store.slots {
+            if var body = slot { if body.is_enabled && !body.is_sensor { colliders.append(SoftCollider3D(body)) } }
+        }
+        let sub_delta = delta/(self.soft_body_substeps as float)
+        var step = 0
+        while step < self.soft_body_substeps {
+            var job = SoftStep3D(bodies:self.soft_bodies,gravity:self.current_gravity,delta:sub_delta,
+                fraction:((step+1) as float)/(self.soft_body_substeps as float))
+            if var executor = self.parallel_executor {
+                executor.submit_parallel(self.soft_bodies.count(),job).complete()
+            } else { job.execute(0,self.soft_bodies.count()) }
+            for slot in self.soft_bodies {
+                if var body = slot {
+                    if body.settings.is_enabled { finish_soft_substep3d(body,colliders,sub_delta,self.current_gravity) }
+                }
+            }
+            step++
+        }
+        for slot in self.soft_bodies {
+            if var body=slot { if body.settings.is_enabled { publish_soft_frame3d(body) } }
+        }
+    }
+
     func step(delta:float) {
         if !finite_body3d_value(delta) || delta < 0.0 {
             panic("GFX.Physics.World3D.step requires a finite non-negative delta")
@@ -1135,6 +1202,7 @@ public class World3D {
         if has_continuous_body {
             self.emit_continuous_sensor_events(previous_poses, continuous_poses)
         }
+        self.simulate_soft_bodies(delta)
         self.update_sleep(delta)
         self.update_physical_characters()
         self.store.locked = false

@@ -1,0 +1,184 @@
+use STD.Math
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.CollisionFilter3D.CollisionFilter3D
+use GFX.Physics.RigidBody3D.BodyStore3D
+use GFX.Physics.RigidBody3D.RigidBody3D
+use GFX.Physics.RigidBody3D.BodyId3D
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use GFX.Physics.SoftBody3D.Definition.SoftBody3DDefinition
+
+public struct SoftBody3DSettings {
+    var transform:Transform3D = Transform3D()
+    var linear_velocity:Math.Vec3 = Math.Vec3()
+    var gravity_scale:float = 1.0
+    var linear_damping:float = 0.1
+    var vertex_radius:float = 0.03
+    var friction:float = 0.5
+    var restitution:float = 0.0
+    var pressure:float = 0.0
+    var collision_filter:CollisionFilter3D = CollisionFilter3D()
+    var is_enabled:bool = true
+}
+
+// World-space target of an already blended skin pose. This keeps skeleton and
+// animation ownership outside the physics solver.
+public struct SoftPose3D {
+    let vertex:int
+    let position:Math.Vec3
+    let max_distance:float
+    let normal:Math.Vec3
+    let back_stop_distance:float?
+    let back_stop_radius:float
+    init(vertex:int, position:Math.Vec3, max_distance:float = 0.0,
+        normal:Math.Vec3 = Math.Vec3.up(), back_stop_distance:float? = null,
+        back_stop_radius:float = 1.0) {
+        if !finite_body3d_point(position) || !finite_body3d_value(max_distance) || max_distance < 0.0 ||
+            !finite_body3d_point(normal) || normal.length_squared() < 1e-12 ||
+            !finite_body3d_value(back_stop_radius) || back_stop_radius <= 0.0 {
+            panic("GFX.Physics soft pose requires a finite target, normal and non-negative distance")
+        }
+        if let distance = back_stop_distance {
+            if !finite_body3d_value(distance) || distance < 0.0 || distance > max_distance {
+                panic("GFX.Physics soft backstop must lie inside the pose distance")
+            }
+        }
+        self.vertex = vertex; self.position = position; self.max_distance = max_distance
+        self.normal = normal.normalized(); self.back_stop_distance = back_stop_distance
+        self.back_stop_radius = back_stop_radius
+    }
+}
+
+package struct SoftParticle3D {
+    var position:Math.Vec3
+    var previous:Math.Vec3
+    var velocity:Math.Vec3
+    let inverse_mass:float
+    var fixed_target:Math.Vec3
+    var frame_start:Math.Vec3
+    var attached_body:BodyId3D? = null
+    var local_anchor:Math.Vec3 = Math.Vec3()
+    init(position:Math.Vec3, velocity:Math.Vec3, inverse_mass:float) {
+        self.position = position; self.previous = position; self.frame_start = position
+        self.fixed_target = position; self.velocity = velocity; self.inverse_mass = inverse_mass
+    }
+}
+
+package class SoftBodyState3D {
+    var definition:SoftBody3DDefinition
+    var particles:SoftParticle3D[] = []
+    var pose:SoftPose3D[] = []
+    var settings:SoftBody3DSettings
+    var alive:bool = true
+    var revision:int = 1
+    init(definition:SoftBody3DDefinition, settings:SoftBody3DSettings) {
+        if !finite_body3d_point(settings.linear_velocity) || !finite_body3d_value(settings.gravity_scale) ||
+            !finite_body3d_value(settings.linear_damping) || settings.linear_damping < 0.0 ||
+            !finite_body3d_value(settings.vertex_radius) || settings.vertex_radius <= 0.0 ||
+            !finite_body3d_value(settings.friction) || settings.friction < 0.0 ||
+            !finite_body3d_value(settings.restitution) || settings.restitution < 0.0 || settings.restitution > 1.0 {
+            panic("GFX.Physics soft settings require finite valid material and motion values")
+        }
+        validate_pressure(definition,settings.pressure)
+        self.definition = definition; self.settings = settings
+        var i = 0
+        while i < definition.rest_positions.count() {
+            self.particles.append(SoftParticle3D(settings.transform.point(definition.rest_positions[i]),
+                settings.linear_velocity,definition.inverse_masses[i]))
+            i++
+        }
+    }
+}
+
+public class SoftBody3D {
+    private var store:BodyStore3D
+    private var state:SoftBodyState3D
+    package init(store:BodyStore3D, state:SoftBodyState3D) { self.store = store; self.state = state }
+    package func belongs_to(store:BodyStore3D) bool { return self.store == store }
+    package func same_state(state:SoftBodyState3D) bool { return self.state == state }
+    func is_valid() bool { return self.state.alive }
+    func is_enabled() bool { self.require(); return self.state.settings.is_enabled }
+    func set_enabled(enabled:bool) { self.mutate(); self.state.settings.is_enabled = enabled }
+    func vertex_count() int { self.require(); return self.state.particles.count() }
+    func revision() int { self.require(); return self.state.revision }
+    func position(vertex:int) Math.Vec3 { self.vertex(vertex); return self.state.particles[vertex].position }
+    func velocity(vertex:int) Math.Vec3 { self.vertex(vertex); return self.state.particles[vertex].velocity }
+    func positions() Math.Vec3[] {
+        self.require(); var result:Math.Vec3[] = []
+        for particle in self.state.particles { result.append(particle.position) }
+        return result
+    }
+    func definition() SoftBody3DDefinition { self.require(); return self.state.definition }
+    func set_fixed_position(vertex:int, position:Math.Vec3) {
+        self.mutate(); self.vertex(vertex)
+        if self.state.particles[vertex].inverse_mass != 0.0 || !finite_body3d_point(position) {
+            panic("GFX.Physics soft fixed target requires a fixed vertex and finite position")
+        }
+        self.state.particles[vertex].attached_body = null
+        self.state.particles[vertex].fixed_target = position
+    }
+    func attach(vertex:int, body:RigidBody3D, local_point:Math.Vec3) {
+        self.mutate(); self.vertex(vertex)
+        if self.state.particles[vertex].inverse_mass != 0.0 || !body.belongs_to(self.store) ||
+            !body.is_valid() || !finite_body3d_point(local_point) {
+            panic("GFX.Physics soft attachment requires a fixed vertex and a live body in the same world")
+        }
+        self.state.particles[vertex].attached_body = body.body_id()
+        self.state.particles[vertex].local_anchor = local_point
+    }
+    func detach(vertex:int) {
+        self.mutate(); self.vertex(vertex)
+        self.state.particles[vertex].attached_body = null
+        self.state.particles[vertex].fixed_target = self.state.particles[vertex].position
+    }
+    func set_pose(pose:SoftPose3D[]) {
+        self.mutate()
+        var seen:bool[] = []
+        for _ in self.state.particles { seen.append(false) }
+        for target in pose {
+            self.vertex(target.vertex)
+            if seen[target.vertex] || self.state.particles[target.vertex].inverse_mass == 0.0 {
+                panic("GFX.Physics soft pose requires distinct dynamic vertices")
+            }
+            seen[target.vertex] = true
+        }
+        self.state.pose = pose
+    }
+    func set_pressure(pressure:float) {
+        self.mutate(); validate_pressure(self.state.definition,pressure)
+        self.state.settings.pressure = pressure
+    }
+    func apply_impulse(vertex:int, impulse:Math.Vec3) {
+        self.mutate(); self.vertex(vertex)
+        if !finite_body3d_point(impulse) { panic("GFX.Physics soft impulse must be finite") }
+        var particle = self.state.particles[vertex]
+        particle.velocity = particle.velocity.add(impulse.multiply(particle.inverse_mass))
+        self.state.particles[vertex] = particle
+    }
+    private func require() {
+        if !self.is_valid() { panic("GFX.Physics soft body is stale or its world was destroyed") }
+    }
+    private func mutate() { self.require(); self.store.require_mutable() }
+    private func vertex(index:int) {
+        self.require()
+        if index < 0 || index >= self.state.particles.count() { panic("GFX.Physics soft vertex index is out of range") }
+    }
+}
+
+func validate_pressure(definition:SoftBody3DDefinition, pressure:float) {
+    if !finite_body3d_value(pressure) || pressure < 0.0 || (pressure > 0.0 && !definition.closed_surface) {
+        panic("GFX.Physics soft pressure requires a closed oriented surface and a non-negative coefficient")
+    }
+    if pressure > 0.0 {
+        let positions = definition.rest_positions
+        let faces = definition.triangles
+        let origin = positions[0]
+        var six_volume = 0.0; var i = 0
+        while i < faces.count() {
+            six_volume += positions[faces[i]].subtract(origin).dot(
+                positions[faces[i+1]].subtract(origin).cross(positions[faces[i+2]].subtract(origin)))
+            i += 3
+        }
+        if six_volume <= 1e-12 { panic("GFX.Physics soft pressure requires outward surface winding and positive volume") }
+    }
+}

@@ -24,6 +24,8 @@ silex install GFX.Physics
 
 [Parallel 3D simulation](Docs/EN/Parallel3D.md) distributes independent physical work while preserving deterministic body calculations.
 
+[Soft bodies and cloth](Docs/EN/SoftBodies3D.md) add constrained particles, tetrahedral volumes, moving anchors, pose targets and deformed Scene3D meshes.
+
 ## Documentation
 
 - [French documentation](Docs/FR/README.md)
@@ -76,3 +78,5 @@ Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · 
 [Qualified vehicle profiles](Docs/EN/VehicleQualification3D.md) · [Profils véhicules qualifiés](Docs/FR/VehicleQualification3D.md): choose a family, contact detector and validated driving configuration, including current numerical limits.
 
 [Terrain and constraint assembly qualification](Docs/EN/TerrainConstraintQualification3D.md) · [Terrains et assemblages qualifiés](Docs/FR/TerrainConstraintQualification3D.md): supported connections, edited terrains and loaded assembly budgets.
+
+Soft constraint formulas and triangular contact behavior are adapted from pinned Jolt Physics under its [MIT notice](Jolt-NOTICE.txt). The distributed simulation remains written in Silex.

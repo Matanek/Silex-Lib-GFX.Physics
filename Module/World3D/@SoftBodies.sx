@@ -1,0 +1,142 @@
+use STD.Math
+use GFX.Physics.SoftBody3D.SoftBody3D
+use GFX.Physics.SoftBody3D.SoftBody3DSettings
+use GFX.Physics.SoftBody3D.SoftBodyState3D
+use GFX.Physics.SoftBody3D.SoftParticle3D
+use GFX.Physics.SoftBody3D.predict_and_constrain
+use STD.Threading
+use GFX.Physics.SoftBody3D.begin_soft_frame3d
+use GFX.Physics.SoftBody3D.Definition.SoftBody3DDefinition
+use GFX.Physics.RigidBody3D.BodyState3D
+use GFX.Physics.RigidBody3D.BodyType3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.motion_distance3d
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Sphere3D.Sphere3D
+use GFX.Physics.Transform3D.Transform3D
+
+// Snapshot the geometric broad phase once per world step. Dynamic velocities
+// remain live, but soft contact gather never runs concurrently with rigid work.
+struct SoftCollider3D {
+    var body:BodyState3D
+    let bounds:ShapeBounds3D
+    let surface_margin:float
+    init(body:BodyState3D) {
+        self.body = body
+        self.surface_margin = soft_surface_margin3d(body.shape)
+        var bounds = ShapeBounds3D(Math.Vec3(-3.4e38),Math.Vec3(3.4e38))
+        match body.shape {
+            plane(_) => {}
+            else => { bounds = shape_pose_bounds3d(body.shape,body.transform) }
+        }
+        self.bounds = bounds
+    }
+}
+
+func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], delta:float, gravity:Math.Vec3) {
+    var body = state
+    let radius = body.settings.vertex_radius
+    let sphere = Sphere3D(radius)
+    var lower=body.particles[0].position;var upper=lower
+    for particle in body.particles {
+        let first=particle.position;let second=particle.previous
+        lower=Math.Vec3(Math.min(lower.x,Math.min(first.x,second.x)),Math.min(lower.y,Math.min(first.y,second.y)),Math.min(lower.z,Math.min(first.z,second.z)))
+        upper=Math.Vec3(Math.max(upper.x,Math.max(first.x,second.x)),Math.max(upper.y,Math.max(first.y,second.y)),Math.max(upper.z,Math.max(first.z,second.z)))
+    }
+    let body_bounds=ShapeBounds3D(lower.subtract(Math.Vec3(radius)),upper.add(Math.Vec3(radius)))
+    var candidates:SoftCollider3D[]=[]
+    for collider in colliders {
+        if linear_sweeps_overlap3d(body_bounds,collider.bounds) { candidates.append(collider) }
+    }
+    var index = 0
+    while index < body.particles.count() {
+        var particle = body.particles[index]
+        if particle.inverse_mass > 0.0 {
+            let previous_velocity = particle.velocity
+            particle.velocity = particle.position.subtract(particle.previous).divide(delta)
+            for collider in candidates {
+                var rigid = collider.body
+                if body.settings.collision_filter.allows(rigid.collision_filter) {
+                    let bounds = ShapeBounds3D(collider.bounds.lower.subtract(Math.Vec3(collider.surface_margin)),
+                        collider.bounds.upper.add(Math.Vec3(collider.surface_margin)))
+                    let minimum = Math.Vec3(Math.min(particle.position.x,particle.previous.x)-radius,
+                        Math.min(particle.position.y,particle.previous.y)-radius,Math.min(particle.position.z,particle.previous.z)-radius)
+                    let maximum = Math.Vec3(Math.max(particle.position.x,particle.previous.x)+radius,
+                        Math.max(particle.position.y,particle.previous.y)+radius,Math.max(particle.position.z,particle.previous.z)+radius)
+                    if maximum.x < bounds.lower.x || minimum.x > bounds.upper.x ||
+                        maximum.y < bounds.lower.y || minimum.y > bounds.upper.y ||
+                        maximum.z < bounds.lower.z || minimum.z > bounds.upper.z { continue }
+                    let target = ShapePlacement3D(rigid.shape,rigid.transform)
+                    let placement = ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(particle.position))
+                    let distance = soft_distance3d(placement,target)
+                    var normal = distance.normal.negated()
+                    var penetration = -distance.separation
+                    if penetration <= 0.0 {
+                        let motion = particle.position.subtract(particle.previous)
+                        if motion.length_squared() > 1e-12 {
+                            let start=Transform3D(particle.previous)
+                            if let fraction=continuous_fraction3d(Shape3D.sphere(sphere),start,Transform3D(particle.position),
+                                rigid.shape,rigid.transform,rigid.transform) {
+                                let witness=motion_distance3d(ShapePlacement3D(Shape3D.sphere(sphere),
+                                    Transform3D(particle.previous.add(motion.multiply(fraction)))),target,start,rigid.transform)
+                                normal=witness.normal.negated()
+                                penetration=Math.max(0.0,-motion.multiply(1.0-fraction).dot(normal))+0.000001
+                            }
+                        }
+                    }
+                    if penetration > 0.0 {
+                        particle.position = particle.position.add(normal.multiply(penetration))
+                        // Particles have no spin: both impulses act at their corrected position.
+                        let arm = particle.position.subtract(rigid.world_center())
+                        let rigid_velocity = rigid.linear_velocity.add(rigid.angular_velocity.cross(arm))
+                        let relative = particle.velocity.subtract(rigid_velocity)
+                        let normal_speed = relative.dot(normal)
+                        let tangent = relative.subtract(normal.multiply(normal_speed))
+                        let tangent_speed = tangent.length()
+                        let friction = Math.sqrt(body.settings.friction*rigid.friction)
+                        var velocity_change = Math.Vec3()
+                        if tangent_speed > 1e-8 {
+                            velocity_change = tangent.multiply(Math.min(friction*penetration/(tangent_speed*delta),1.0))
+                        }
+                        // Separating contacts receive no normal impulse.
+                        if normal_speed < 0.0 {
+                            var speed_change = normal_speed
+                            let previous_speed = previous_velocity.subtract(rigid_velocity).dot(normal)
+                            if previous_speed < -2.0*gravity.length()*delta {
+                                speed_change += Math.max(body.settings.restitution,rigid.restitution)*previous_speed
+                            }
+                            velocity_change = velocity_change.add(normal.multiply(speed_change))
+                        }
+                        let angular_arm = arm.cross(normal)
+                        let denominator = particle.inverse_mass+rigid.inverse_mass+
+                            angular_arm.dot(rigid.inverse_inertia_times(angular_arm))
+                        let impulse = velocity_change.divide(denominator)
+                        particle.velocity = particle.velocity.subtract(impulse.multiply(particle.inverse_mass))
+                        if rigid.body_type == BodyType3D.dynamic && impulse.length_squared() > 0.0 {
+                            rigid.wake()
+                            rigid.linear_velocity = rigid.linear_velocity.add(impulse.multiply(rigid.inverse_mass))
+                            rigid.angular_velocity = rigid.angular_velocity.add(rigid.inverse_inertia_times(arm.cross(impulse)))
+                        }
+                    }
+                }
+            }
+        }
+        body.particles[index] = particle; index++
+    }
+}
+
+struct SoftStep3D:Threading.ParallelJob {
+    var bodies:SoftBodyState3D?[]
+    let gravity:Math.Vec3
+    let delta:float
+    let fraction:float
+    func execute(start:int, end:int) {
+        var i = start
+        while i < end {
+            if var body = self.bodies[i] {
+                if body.settings.is_enabled { predict_and_constrain(body,self.gravity,self.delta,self.fraction) }
+            }
+            i++
+        }
+    }
+}

@@ -235,3 +235,14 @@ public use GFX.Physics.VehicleTrack3D.VehicleTrackState3D
 public use GFX.Physics.TrackedVehicle3D.TrackedWheel3DSettings
 public use GFX.Physics.TrackedVehicle3D.TrackedVehicle3DSettings
 public use GFX.Physics.TrackedVehicle3D.TrackedVehicle3D
+
+public use GFX.Physics.SoftBody3D.SoftBody3D
+public use GFX.Physics.SoftBody3D.SoftBody3DSettings
+public use GFX.Physics.SoftBody3D.SoftPose3D
+public use GFX.Physics.SoftBody3D.Definition.SoftBody3DDefinition
+public use GFX.Physics.SoftBody3D.Definition.SoftEdge3D
+public use GFX.Physics.SoftBody3D.Definition.SoftBend3D
+public use GFX.Physics.SoftBody3D.Definition.SoftVolume3D
+public use GFX.Physics.SoftBody3D.Definition.SoftTether3D
+
+public use GFX.Physics.SoftBodyMesh3D.SoftBodyMesh3D

@@ -1,0 +1,101 @@
+use GFX.Physics
+use STD.Math
+
+func angular_contact() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.2)))
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-1.0,0.3,0.0)]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(3.0,0.0,0.0) ..linear_damping=0.0 ..friction=0.0)
+    var i=0
+    while i<20 { world.step(1.0/60.0);i++ }
+    assert(Math.abs(rigid.angular_velocity().z)>0.1)
+    let momentum=rigid.linear_velocity().add(body.velocity(0))
+    assert(momentum.nearly_equal(Math.Vec3(3.0,0.0,0.0),0.0002))
+}
+
+func friction_torque() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..soft_body_substeps=1)
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+        ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.2)) ..friction=1.0)
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-0.52,0.2,0.0)]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(1.0,-1.0,0.0) ..linear_damping=0.0 ..friction=1.0)
+    world.step(0.0001)
+    let position=body.position(0)
+    let momentum=body.velocity(0).add(rigid.linear_velocity())
+    let expected=position.cross(momentum)
+    let observed=position.cross(body.velocity(0)).add(rigid.angular_velocity().multiply(0.2))
+    print("expected=",expected.z," observed=",observed.z," difference=",observed.subtract(expected).length())
+    assert(observed.nearly_equal(expected,0.00002))
+}
+
+func filtered_contacts() {
+    var index=0
+    while index<3 {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var settings=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        if index==0 { settings.is_sensor=true }
+        if index==1 { settings.is_enabled=false }
+        if index==2 { settings.collision_filter=Physics.CollisionFilter3D(category_bits:2,mask_bits:2) }
+        var rigid=world.create_rigid_body(settings)
+        var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-1.0,0.0,0.0)]),
+            Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(6.0,0.0,0.0) ..linear_damping=0.0)
+        var frame=0
+        while frame<20 { world.step(1.0/60.0);frame++ }
+        assert(body.position(0).x>0.9 && Math.abs(body.velocity(0).x-6.0)<0.001)
+        assert(rigid.is_valid());index++
+    }
+}
+
+func fast_contact() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..soft_body_substeps=1)
+    var wall=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.04,4.0,4.0))))
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-1.0,0.0,0.0)]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(120.0,0.0,0.0) ..linear_damping=0.0)
+    world.step(1.0/60.0)
+    assert(body.position(0).x<=-0.0499 && Math.abs(body.velocity(0).x)<0.001)
+    assert(wall.is_valid())
+}
+
+func parallel_rigid_exchange() {
+    var first=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var second=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());second.enable_parallelism(4)
+    let settings=Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(0.3,2.0,2.0)))
+    var rigid1=first.create_rigid_body(settings);var rigid4=second.create_rigid_body(settings)
+    var definition=Physics.SoftBody3DDefinition(positions:[Math.Vec3()])
+    var bodies1:Physics.SoftBody3D[]=[];var bodies4:Physics.SoftBody3D[]=[];var i=0
+    while i<256 {
+        let options=Physics.SoftBody3DSettings() ..linear_damping=0.0 ..linear_velocity=Math.Vec3(3.0,0.0,0.0)
+            ..transform=Physics.Transform3D(Math.Vec3(-1.0,((i%16) as float-7.5)*0.1,((i/16) as float-7.5)*0.1))
+        bodies1.append(first.create_soft_body(definition,options));bodies4.append(second.create_soft_body(definition,options));i++
+    }
+    var frame=0
+    while frame<20 {
+        first.step(1.0/60.0);second.step(1.0/60.0)
+        let a=rigid1.linear_velocity();let b=rigid4.linear_velocity()
+        let av=rigid1.angular_velocity();let bv=rigid4.angular_velocity()
+        assert(a.x==b.x && a.y==b.y && a.z==b.z && av.x==bv.x && av.y==bv.y && av.z==bv.z)
+        assert(rigid1.position().nearly_equal(rigid4.position(),0.0))
+        i=0
+        while i<256 {
+            assert(bodies1[i].position(0).nearly_equal(bodies4[i].position(0),0.0))
+            assert(bodies1[i].velocity(0).nearly_equal(bodies4[i].velocity(0),0.0));i++
+        }
+        frame++
+    }
+    assert(rigid1.linear_velocity().length()>0.01)
+}
+
+test "soft off-centre impulse respects rigid inertia and linear momentum" { angular_contact() }
+test "soft tangential contact balances the impulse torque" { friction_torque() }
+
+test "soft collisions respect sensors, disabled bodies and filters" { filtered_contacts() }
+test "soft swept vertices cannot cross a thin fixed wall" { fast_contact() }
+test "soft dynamic contact gather is deterministic across workers" { parallel_rigid_exchange() }
+package func verify() { angular_contact();friction_torque();filtered_contacts();fast_contact();parallel_rigid_exchange();print("Soft rigid contact checks passed") }
+
+func main() { verify() }

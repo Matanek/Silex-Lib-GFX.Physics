@@ -1,0 +1,64 @@
+use GFX.Physics
+use STD.Math
+
+func hull() Physics.ConvexHull3D {
+    var points:Math.Vec3[]=[]
+    var x = -1
+    while x<=1 {
+        var y = -1
+        while y<=1 {
+            var z = -1
+            while z<=1 { points.append(Math.Vec3(x as float,y as float,z as float).multiply(0.5));z+=2 }
+            y+=2
+        }
+        x+=2
+    }
+    return Physics.ConvexHull3D(points)
+}
+func inclusion() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.convex(hull()))
+    var particle=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(0.4,0.0,0.0)]))
+    world.step(1.0/60.0)
+    assert(Math.abs(particle.position(0).x-0.53)<0.0001)
+    assert(particle.velocity(0).length()<0.0001 && rigid.is_valid())
+}
+func triangle_shape(mesh:bool) Physics.Shape3D {
+    let triangle=Physics.Triangle3D(Math.Vec3(-2.0,0.0,-2.0),Math.Vec3(0.0,0.0,2.0),Math.Vec3(2.0,0.0,-2.0))
+    if mesh { return Physics.Shape3D.mesh(Physics.TriangleMesh3D([triangle])) }
+    return Physics.Shape3D.triangle(triangle)
+}
+func surface(mesh:bool) {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=triangle_shape(mesh))
+    // The fixed point keeps the body's broad-phase bounds intersecting the surface.
+    var particle=world.create_soft_body(Physics.SoftBody3DDefinition(
+        positions:[Math.Vec3(0.0,-0.08,0.0),Math.Vec3(0.0,0.2,0.0)],inverse_masses:[1.0,0.0]))
+    world.step(1.0/60.0)
+    assert(Math.abs(particle.position(0).y-0.03)<0.0001)
+    var edge=world.create_soft_body(Physics.SoftBody3DDefinition(
+        positions:[Math.Vec3(0.0,-0.02,2.01),Math.Vec3(0.0,0.2,0.0)],inverse_masses:[1.0,0.0]))
+    world.step(1.0/60.0)
+    assert(edge.position(0).nearly_equal(Math.Vec3(0.0,-0.02,2.01),0.0001))
+    assert(rigid.is_valid())
+}
+func sweep(mesh:bool, front:bool) {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..soft_body_substeps=1)
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=triangle_shape(mesh))
+    var sign=1.0
+    if !front { sign = -1.0 }
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(0.0,sign,0.0)]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(0.0,-120.0*sign,0.0) ..linear_damping=0.0)
+    world.step(1.0/60.0)
+    if front { assert(body.position(0).y>=0.0299 && body.position(0).y<=0.0301);assert(Math.abs(body.velocity(0).y)<0.001) }
+    else { assert(body.position(0).y>0.99 && body.velocity(0).y>119.9) }
+    assert(rigid.is_valid())
+}
+
+test "soft particle exits an included convex along the signed response normal" { inclusion() }
+test "soft triangle and mesh recover shallow backing penetration and ignore back edges" { surface(false);surface(true) }
+test "soft triangle and mesh sweeps retain front-face policy" { sweep(false,true);sweep(false,false);sweep(true,true);sweep(true,false) }
+package func verify() { inclusion();surface(false);surface(true);sweep(false,true);sweep(false,false);sweep(true,true);sweep(true,false);print("Soft surface checks passed") }
+
+func main() { verify() }

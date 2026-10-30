@@ -1,0 +1,183 @@
+use STD.Math
+use STD.Threading
+use GFX.Physics.RigidBody3D.BodyStore3D
+
+package func begin_soft_frame3d(state:SoftBodyState3D, store:BodyStore3D) {
+    var body = state
+    var i = 0
+    while i < body.particles.count() {
+        var particle = body.particles[i]
+        particle.frame_start = particle.position
+        if let id = particle.attached_body {
+            if store.contains(id) {
+                particle.fixed_target = store.require(id).transform.point(particle.local_anchor)
+            } else {
+                particle.attached_body = null; particle.fixed_target = particle.position
+            }
+        }
+        body.particles[i] = particle
+        i++
+    }
+}
+
+package func predict_and_constrain(state:SoftBodyState3D, gravity:Math.Vec3, delta:float, fraction:float) {
+    var body = state
+    if body.settings.pressure > 0.0 { apply_pressure(body,delta) }
+    let damping = Math.max(0.0,1.0-body.settings.linear_damping*delta)
+    var i = 0
+    while i < body.particles.count() {
+        var particle = body.particles[i]
+        particle.previous = particle.position
+        if particle.inverse_mass > 0.0 {
+            particle.velocity = particle.velocity.multiply(damping).add(gravity.multiply(body.settings.gravity_scale*delta))
+            particle.position = particle.position.add(particle.velocity.multiply(delta))
+        } else {
+            particle.position = particle.frame_start.add(particle.fixed_target.subtract(particle.frame_start).multiply(fraction))
+            particle.velocity = particle.position.subtract(particle.previous).divide(delta)
+        }
+        body.particles[i] = particle; i++
+    }
+    solve_volumes(body,delta)
+    solve_bends(body,delta)
+    solve_edges(body,delta)
+    for tether in body.definition.tethers {
+        let origin = body.particles[tether.anchor].position
+        let offset = body.particles[tether.vertex].position.subtract(origin)
+        let length = offset.length()
+        if length > tether.max_distance {
+            body.particles[tether.vertex].position = origin.add(offset.multiply(tether.max_distance/length))
+        }
+    }
+    for target in body.pose {
+        var position = body.particles[target.vertex].position
+        let offset = position.subtract(target.position)
+        let length = offset.length()
+        if length > target.max_distance {
+            position = target.position.add(offset.multiply(target.max_distance/length))
+        }
+        if let distance = target.back_stop_distance {
+            let center = target.position.subtract(target.normal.multiply(distance+target.back_stop_radius))
+            let from_center = position.subtract(center)
+            let radius = from_center.length()
+            if radius < target.back_stop_radius {
+                var direction = target.normal
+                if radius > 1e-8 { direction = from_center.divide(radius) }
+                position = center.add(direction.multiply(target.back_stop_radius))
+            }
+        }
+        body.particles[target.vertex].position = position
+    }
+}
+
+package func publish_soft_frame3d(state:SoftBodyState3D) {
+    var body=state
+    for particle in body.particles {
+        if particle.position.x!=particle.frame_start.x || particle.position.y!=particle.frame_start.y ||
+            particle.position.z!=particle.frame_start.z { body.revision++;return }
+    }
+}
+
+func solve_edges(state:SoftBodyState3D, delta:float) {
+    var body = state
+    var index = 0
+    for edge in body.definition.edges {
+        let a = body.particles[edge.first]; let b = body.particles[edge.second]
+        let difference = b.position.subtract(a.position)
+        let length = difference.length()
+        let denominator = length*(a.inverse_mass+b.inverse_mass+edge.compliance/(delta*delta))
+        if denominator > 1e-12 {
+            let correction = difference.multiply((length-body.definition.edge_lengths[index])/denominator)
+            body.particles[edge.first].position = a.position.add(correction.multiply(a.inverse_mass))
+            body.particles[edge.second].position = b.position.subtract(correction.multiply(b.inverse_mass))
+        }
+        index++
+    }
+}
+
+func solve_volumes(state:SoftBodyState3D, delta:float) {
+    var body = state
+    var index = 0
+    for volume in body.definition.volumes {
+        let a = body.particles[volume.first]; let b = body.particles[volume.second]
+        let c = body.particles[volume.third]; let d = body.particles[volume.fourth]
+        let ab = b.position.subtract(a.position); let ac = c.position.subtract(a.position)
+        let ad = d.position.subtract(a.position)
+        let ga = d.position.subtract(b.position).cross(c.position.subtract(b.position))
+        let gb = ac.cross(ad); let gc = ad.cross(ab); let gd = ab.cross(ac)
+        let denominator = a.inverse_mass*ga.length_squared()+b.inverse_mass*gb.length_squared()+
+            c.inverse_mass*gc.length_squared()+d.inverse_mass*gd.length_squared()+volume.compliance/(delta*delta)
+        if denominator > 1e-12 {
+            let correction = (ab.cross(ac).dot(ad)-body.definition.six_volumes[index])/denominator
+            body.particles[volume.first].position = a.position.subtract(ga.multiply(correction*a.inverse_mass))
+            body.particles[volume.second].position = b.position.subtract(gb.multiply(correction*b.inverse_mass))
+            body.particles[volume.third].position = c.position.subtract(gc.multiply(correction*c.inverse_mass))
+            body.particles[volume.fourth].position = d.position.subtract(gd.multiply(correction*d.inverse_mass))
+        }
+        index++
+    }
+}
+
+func solve_bends(state:SoftBodyState3D, delta:float) {
+    var body = state
+    var index = 0
+    for bend in body.definition.bends {
+        let a = body.particles[bend.first]; let b = body.particles[bend.second]
+        let c = body.particles[bend.third]; let d = body.particles[bend.fourth]
+        let edge = b.position.subtract(a.position); let length = edge.length()
+        let bc = c.position.subtract(b.position); let bd = d.position.subtract(b.position)
+        let n1 = c.position.subtract(a.position).cross(bc)
+        let n2 = bd.cross(d.position.subtract(a.position))
+        let n1sq = n1.length_squared(); let n2sq = n2.length_squared()
+        if length > 1e-6 && n1sq*n2sq > 1e-24 {
+            var sign = 1.0
+            if n2.cross(n1).dot(edge) < 0.0 { sign = -1.0 }
+            var error = sign*Math.acos(Math.clamp(n1.dot(n2)/Math.sqrt(n1sq*n2sq),-1.0,1.0))-body.definition.bend_angles[index]
+            if error > Math.pi() { error -= 2.0*Math.pi() }
+            if error < -Math.pi() { error += 2.0*Math.pi() }
+            let first_normal = n1.divide(n1sq); let second_normal = n2.divide(n2sq)
+            let ga = first_normal.multiply(bc.dot(edge)).add(second_normal.multiply(bd.dot(edge))).divide(length)
+            let gc = first_normal.multiply(length); let gd = second_normal.multiply(length)
+            let gb = ga.add(gc).add(gd).negated()
+            let denominator = a.inverse_mass*ga.length_squared()+b.inverse_mass*gb.length_squared()+
+                c.inverse_mass*gc.length_squared()+d.inverse_mass*gd.length_squared()+bend.compliance/(delta*delta)
+            if denominator > 1e-12 {
+                let correction = error/denominator
+                body.particles[bend.first].position = a.position.subtract(ga.multiply(correction*a.inverse_mass))
+                body.particles[bend.second].position = b.position.subtract(gb.multiply(correction*b.inverse_mass))
+                body.particles[bend.third].position = c.position.subtract(gc.multiply(correction*c.inverse_mass))
+                body.particles[bend.fourth].position = d.position.subtract(gd.multiply(correction*d.inverse_mass))
+            }
+        }
+        index++
+    }
+}
+
+func apply_pressure(state:SoftBodyState3D, delta:float) {
+    var body = state
+    let faces = body.definition.triangles
+    var six_volume = 0.0; var i = 0
+    // Relative origin avoids cancellation far from the world origin.
+    let origin = body.particles[0].position
+    while i < faces.count() {
+        let a = body.particles[faces[i]].position.subtract(origin)
+        let b = body.particles[faces[i+1]].position.subtract(origin)
+        let c = body.particles[faces[i+2]].position.subtract(origin)
+        six_volume += a.dot(b.cross(c)); i += 3
+    }
+    if six_volume <= 1e-12 { return }
+    let coefficient = body.settings.pressure*delta/six_volume
+    i = 0
+    while i < faces.count() {
+        let a = body.particles[faces[i]].position
+        let b = body.particles[faces[i+1]].position
+        let c = body.particles[faces[i+2]].position
+        let impulse = b.subtract(a).cross(c.subtract(a)).multiply(coefficient)
+        var corner = 0
+        while corner < 3 {
+            let vertex = faces[i+corner]
+            body.particles[vertex].velocity = body.particles[vertex].velocity.add(impulse.multiply(body.particles[vertex].inverse_mass))
+            corner++
+        }
+        i += 3
+    }
+}

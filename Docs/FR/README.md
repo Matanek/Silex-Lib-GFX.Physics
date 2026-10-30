@@ -217,3 +217,5 @@ Un [rail sur charnière avec chariot mobile](HingedRail3D.md) transmet la charge
 - [Terrains et assemblages de contraintes qualifiés](TerrainConstraintQualification3D.md)
 
 - [Simulation 3D parallèle](Parallel3D.md) : workers, ordre déterministe et accès au monde.
+
+- [Corps souples et tissus 3D](SoftBodies3D.md).

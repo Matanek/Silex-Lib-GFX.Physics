@@ -1,0 +1,72 @@
+use STD.Math
+use GFX.Physics.Shape3D.Shape3D
+use GFX.Physics.Triangle3D.Triangle3D
+use GFX.Physics.Transform3D.Transform3D
+use GFX.Physics.Geometry3D.Geometry3D
+use GFX.Physics.Geometry3D.DistanceResult3D
+use GFX.Physics.Geometry3D.ShapePlacement3D
+use GFX.Physics.Geometry3D.compound_child_transform
+
+func soft_surface_margin3d(shape:Shape3D) float {
+    match shape {
+        triangle(_) => { return 0.1 }
+        mesh(_) => { return 0.1 }
+        compound(compound) => {
+            var margin=0.0;var i=0
+            while i<compound.child_count() { margin=Math.max(margin,soft_surface_margin3d(compound.child(i).shape));i++ }
+            return margin
+        }
+        else => { return 0.0 }
+    }
+}
+
+func soft_distance3d(particle:ShapePlacement3D, target:ShapePlacement3D) DistanceResult3D {
+    match target.shape() {
+        compound(compound) => {
+            var best=empty_soft_distance3d();var i=0
+            while i<compound.child_count() {
+                let child=compound.child(i)
+                let distance=soft_distance3d(particle,ShapePlacement3D(child.shape,compound_child_transform(target.transform(),child)))
+                if distance.separation<best.separation { best=distance }
+                i++
+            }
+            return best
+        }
+        else => {}
+    }
+    let distance=Geometry3D.distance(particle,target)
+    match target.shape() {
+        triangle(triangle) => { return soft_triangle_distance3d(particle,triangle,target.transform(),distance) }
+        mesh(mesh) => {
+            if distance.second_child_id>=0 {
+                return soft_triangle_distance3d(particle,mesh.triangle(distance.second_child_id),target.transform(),distance)
+            }
+            return distance
+        }
+        else => {
+            return DistanceResult3D(distance.first_point,distance.second_point,
+                contact_normal3d(particle,target,distance.normal),distance.separation)
+        }
+    }
+}
+
+func soft_triangle_distance3d(particle:ShapePlacement3D, triangle:Triangle3D,
+    pose:Transform3D, distance:DistanceResult3D) DistanceResult3D {
+    let center=particle.transform().position
+    let normal=pose.vector(triangle.normal())
+    let signed_distance=center.subtract(pose.point(triangle.first)).dot(normal)
+    // Jolt's CPU soft triangle policy: a 0.1 m backing layer, front edges only.
+    if signed_distance < -0.1 { return empty_soft_distance3d() }
+    let projection=center.subtract(normal.multiply(signed_distance))
+    if projection.subtract(distance.second_point).length_squared()<=1e-10 {
+        var radius=0.0
+        match particle.shape() { sphere(sphere)=>{ radius=sphere.radius };else=>{} }
+        return DistanceResult3D(center.subtract(normal.multiply(radius)),projection,normal.negated(),signed_distance-radius)
+    }
+    if signed_distance<0.0 { return empty_soft_distance3d() }
+    return distance
+}
+
+func empty_soft_distance3d() DistanceResult3D {
+    return DistanceResult3D(Math.Vec3(),Math.Vec3(),Math.Vec3.up(),3.4e38)
+}

@@ -337,3 +337,5 @@ A [hinged rail carrying a moving carriage](HingedRail3D.md) transmits the radial
 - [Terrain and constraint assembly qualification](TerrainConstraintQualification3D.md)
 
 - [Parallel 3D simulation](Parallel3D.md): workers, deterministic ordering and world access.
+
+- [Soft bodies and cloth in 3D](SoftBodies3D.md).

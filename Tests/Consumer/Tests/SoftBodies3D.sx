@@ -1,0 +1,329 @@
+use GFX.Physics
+use STD.Math
+use STD.Process
+use STD.Text
+use GFX.Scene3D.Meshes.Meshes
+use Module.SoftBodyContacts3D.verify as verify_contacts
+use Module.SoftBodySurfaces3D.verify as verify_surfaces
+
+func anchor_case() {
+    var definition = Physics.SoftBody3DDefinition(
+        positions:[Math.Vec3(0.0,2.0,0.0),Math.Vec3(0.0,1.0,0.0)],
+        inverse_masses:[0.0,1.0], edges:[Physics.SoftEdge3D(0,1)])
+    var world = Physics.World3D()
+    var first = world.create_soft_body(definition)
+    var second = world.create_soft_body(definition,Physics.SoftBody3DSettings()
+        ..transform=Physics.Transform3D(Math.Vec3(4.0,0.0,0.0)))
+    var frame = 0
+    while frame < 60 { world.step(1.0/60.0); frame++ }
+    assert(Math.abs(first.position(0).y-2.0)<0.000001)
+    assert(Math.abs(first.position(1).y-1.0)<0.00001)
+    assert(Math.abs(second.position(1).x-4.0)<0.00001)
+    first.set_enabled(false)
+    let revision = first.revision()
+    first.apply_impulse(1,Math.Vec3(1.0,0.0,0.0))
+    world.step(1.0/60.0)
+    assert(first.revision()==revision)
+    assert(Math.abs(first.position(1).x)<0.000001)
+    first.set_enabled(true)
+    world.step(1.0/60.0)
+    assert(first.position(1).x>0.0)
+    world.destroy_soft_body(first)
+    assert(!first.is_valid() && second.is_valid())
+}
+
+test "soft edge, fixed anchor, pause and definition instances" { anchor_case() }
+
+func floor_case() {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var definition = Physics.SoftBody3DDefinition(positions:[Math.Vec3(0.0,1.0,0.0)])
+    var body = world.create_soft_body(definition)
+    var frame = 0
+    while frame < 90 { world.step(1.0/60.0); frame++ }
+    assert(Math.abs(body.position(0).y-0.03)<0.00001)
+    assert(Math.abs(body.velocity(0).y)<0.00001)
+    assert(floor.is_valid())
+}
+
+test "soft particles collide with a rigid support" { floor_case() }
+
+func advance(world:Physics.World3D, frames:int) {
+    var frame = 0
+    while frame < frames { world.step(1.0/60.0); frame++ }
+}
+func surface_volume(body:Physics.SoftBody3D) float {
+    let positions = body.positions(); let faces = body.definition().indices()
+    let origin = positions[0]; var six = 0.0; var i = 0
+    while i < faces.count() {
+        six += positions[faces[i]].subtract(origin).dot(positions[faces[i+1]].subtract(origin).cross(positions[faces[i+2]].subtract(origin)))
+        i += 3
+    }
+    return six/6.0
+}
+func volume_case() {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var body = world.create_soft_body(Physics.SoftBody3DDefinition.cube(),Physics.SoftBody3DSettings()
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,3.0,0.0)) ..linear_velocity=Math.Vec3(1.0,-3.0,0.0))
+    advance(world,180)
+    let volume = surface_volume(body)
+    print("cube_volume=",volume)
+    assert(volume>0.9 && volume<1.1)
+    for position in body.positions() { assert(position.y>=0.0299 && position.y<1.2) }
+    assert(floor.is_valid())
+}
+func cloth_case(drape:bool) {
+    var world = Physics.World3D()
+    var floor = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var fixed:int[] = [0,6]
+    if drape { fixed=[] }
+    var definition = Physics.SoftBody3DDefinition.cloth(7,7,0.25,fixed_vertices:fixed)
+    var body = world.create_soft_body(definition,Physics.SoftBody3DSettings()
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,2.0,0.0)))
+    if drape {
+        var obstacle = world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+            ..shape=Physics.Shape3D.sphere(Physics.Sphere3D(0.55)) ..transform=Physics.Transform3D(Math.Vec3(0.0,0.6,0.0)))
+        assert(obstacle.is_valid())
+    }
+    advance(world,120)
+    var minimum = 3.0
+    for position in body.positions() {
+        minimum=Math.min(minimum,position.y)
+        assert(position.y>=0.0299)
+        if drape { assert(position.subtract(Math.Vec3(0.0,0.6,0.0)).length()>=0.5799) }
+    }
+    assert(minimum<1.9)
+    let rest = definition.positions(); let faces = definition.indices(); var maximum_ratio=0.0; var i=0
+    while i<faces.count() {
+        var corner=0
+        while corner<3 {
+            let a=faces[i+corner];let b=faces[i+(corner+1)%3]
+            let ratio=body.position(a).subtract(body.position(b)).length()/rest[a].subtract(rest[b]).length()
+            maximum_ratio=Math.max(maximum_ratio,ratio); corner++
+        }
+        i+=3
+    }
+    print("cloth_drape=",drape," strain=",maximum_ratio," minimum=",minimum)
+    assert(maximum_ratio<=1.2)
+    if !drape {
+        assert(body.position(0).nearly_equal(rest[0].add(Math.Vec3(0.0,2.0,0.0)),0.000001))
+        assert(body.position(6).nearly_equal(rest[6].add(Math.Vec3(0.0,2.0,0.0)),0.000001))
+    }
+    assert(floor.is_valid())
+}
+func attachment_case() {
+    var world=Physics.World3D()
+    var anchor=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.kinematic
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,2.0,0.0)) ..linear_velocity=Math.Vec3(0.5,0.0,0.0))
+    var definition=Physics.SoftBody3DDefinition(positions:[Math.Vec3(0.0,2.0,0.0),Math.Vec3(0.0,1.0,0.0)],
+        inverse_masses:[0.0,1.0],edges:[Physics.SoftEdge3D(0,1)],tethers:[Physics.SoftTether3D(0,1,1.05)])
+    var body=world.create_soft_body(definition)
+    body.attach(0,anchor,Math.Vec3())
+    advance(world,60)
+    assert(body.position(0).nearly_equal(anchor.position(),0.000001))
+    assert(body.position(1).subtract(body.position(0)).length()<=1.050001)
+    let last=body.position(0)
+    world.destroy_rigid_body(anchor)
+    var replacement=world.create_rigid_body(Physics.RigidBody3DSettings() ..transform=Physics.Transform3D(Math.Vec3(10.0)))
+    advance(world,1)
+    assert(body.position(0).nearly_equal(last,0.000001))
+    body.set_fixed_position(0,last.add(Math.Vec3(1.0,0.0,0.0)))
+    advance(world,1)
+    assert(body.position(0).nearly_equal(last.add(Math.Vec3(1.0,0.0,0.0)),0.000001))
+    assert(replacement.is_valid())
+}
+func pose_case() {
+    var world=Physics.World3D()
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(0.0,2.0,0.0),Math.Vec3(1.0,2.0,0.0)]))
+    body.set_pose([Physics.SoftPose3D(0,Math.Vec3(0.0,2.0,0.0),0.3,back_stop_distance:0.1)])
+    advance(world,60)
+    assert(body.position(0).y>=1.8999 && body.position(0).y<=2.3)
+    assert(body.position(1).y<0.0)
+    body.set_pose([Physics.SoftPose3D(0,Math.Vec3(0.0,3.0,0.0))])
+    advance(world,1)
+    assert(body.position(0).nearly_equal(Math.Vec3(0.0,3.0,0.0),0.000001))
+    body.set_pose([])
+    advance(world,4)
+    assert(body.position(0).y<3.0)
+    // A connected cloth must follow two pose targets through its constraints.
+    var cloth_definition=Physics.SoftBody3DDefinition.cloth(3,3,0.25,bend_compliance:0.05)
+    let rest=cloth_definition.positions()
+    var cloth=world.create_soft_body(cloth_definition,Physics.SoftBody3DSettings()
+        ..transform=Physics.Transform3D(Math.Vec3(0.0,2.0,0.0)))
+    cloth.set_pose([Physics.SoftPose3D(0,rest[0].add(Math.Vec3(0.0,2.0,0.0))),
+        Physics.SoftPose3D(2,rest[2].add(Math.Vec3(0.0,2.0,0.0)))])
+    advance(world,120)
+    assert(cloth.position(8).y<1.99 && cloth.position(8).y>1.0)
+    var frame=0
+    while frame<60 {
+        let offset=Math.Vec3(((frame+1) as float)*0.01,2.0,0.0)
+        cloth.set_pose([Physics.SoftPose3D(0,rest[0].add(offset)),Physics.SoftPose3D(2,rest[2].add(offset))])
+        world.step(1.0/60.0);frame++
+    }
+    assert(cloth.position(0).nearly_equal(rest[0].add(Math.Vec3(0.6,2.0,0.0)),0.0001))
+    assert(cloth.position(8).x>rest[8].x+0.1)
+    let faces=cloth_definition.indices();var face=0
+    while face<faces.count() {
+        var corner=0
+        while corner<3 {
+            let first=faces[face+corner];let second=faces[face+(corner+1)%3]
+            assert(cloth.position(first).subtract(cloth.position(second)).length()<=
+                1.2*rest[first].subtract(rest[second]).length());corner++
+        }
+        face+=3
+    }
+    cloth.set_pose([])
+    var vertex=0
+    while vertex<cloth.vertex_count() { cloth.apply_impulse(vertex,Math.Vec3(0.0,-0.2,0.0));vertex++ }
+    advance(world,4)
+    assert(cloth.position(0).y<1.95)
+}
+func dynamic_case() {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var rigid=world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+        ..mass_properties=Physics.MassProperties3D(1.0,Math.Vec3(0.1)))
+    var soft=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-1.0,0.0,0.0)]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(3.0,0.0,0.0) ..linear_damping=0.0)
+    advance(world,30)
+    print("dynamic_speed=",rigid.linear_velocity().x," momentum=",rigid.linear_velocity().x+soft.velocity(0).x)
+    assert(rigid.linear_velocity().x>0.1)
+    assert(Math.abs(rigid.linear_velocity().x+soft.velocity(0).x-3.0)<0.0002)
+}
+func mesh_case() {
+    var world=Physics.World3D()
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition.cloth(3,3,0.25,fixed_vertices:[0,2]))
+    var meshes=Meshes()
+    var presenter=Physics.SoftBodyMesh3D(body,meshes)
+    let handle=presenter.mesh(); let revision=meshes.revision(handle)
+    assert(!presenter.update(meshes))
+    world.step(1.0/60.0)
+    assert(presenter.update(meshes) && meshes.revision(handle)==revision+1)
+    let vertices=meshes.snapshot(handle).vertices(); var i=0
+    while i<vertices.count() {
+        assert(vertices[i].position.nearly_equal(body.position(i),0.0))
+        assert(Math.abs(vertices[i].normal.length()-1.0)<0.0001); i++
+    }
+    body.set_enabled(false); world.step(1.0/60.0); assert(!presenter.update(meshes))
+    world.step(0.0); assert(!presenter.update(meshes))
+    world.destroy_soft_body(body); assert(!presenter.update(meshes))
+    presenter.remove(meshes); assert(!meshes.contains(handle))
+    var still_world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var still=still_world.create_soft_body(Physics.SoftBody3DDefinition.cube())
+    var static_presenter=Physics.SoftBodyMesh3D(still,meshes)
+    let static_revision=meshes.revision(static_presenter.mesh())
+    still_world.step(1.0/60.0)
+    assert(!static_presenter.update(meshes) && meshes.revision(static_presenter.mesh())==static_revision)
+    static_presenter.remove(meshes)
+}
+func stale_body() Physics.SoftBody3D {
+    var world=Physics.World3D()
+    return world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3()]))
+}
+func lifetime_case() {
+    var stale=stale_body(); assert(!stale.is_valid())
+    var definition=Physics.SoftBody3DDefinition.cube()
+    var world=Physics.World3D(); var body=world.create_soft_body(definition)
+    var positions=definition.positions(); positions[0]=Math.Vec3(99.0)
+    var state=body.positions(); state[0]=Math.Vec3(98.0)
+    assert(body.position(0).x==-0.5 && definition.positions()[0].x==-0.5)
+    var i=0
+    while i<40 {
+        world.destroy_soft_body(body); assert(!body.is_valid())
+        body=world.create_soft_body(definition); i++
+    }
+}
+func parallel_case() {
+    var one=Physics.World3D(); var four=Physics.World3D(); four.enable_parallelism(4)
+    var definition=Physics.SoftBody3DDefinition.cube(size:0.2)
+    var first:Physics.SoftBody3D[]=[]; var second:Physics.SoftBody3D[]=[]; var i=0
+    while i<256 {
+        let settings=Physics.SoftBody3DSettings() ..transform=Physics.Transform3D(Math.Vec3((i as float)*0.4,1.0,0.0))
+        first.append(one.create_soft_body(definition,settings)); second.append(four.create_soft_body(definition,settings)); i++
+    }
+    var floor1=one.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var floor4=four.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()))
+    var frame=0
+    while frame<36 {
+        one.step(1.0/60.0); four.step(1.0/60.0); i=0
+        while i<256 {
+            var vertex=0
+            while vertex<8 {
+                let a=first[i].position(vertex);let b=second[i].position(vertex)
+                let av=first[i].velocity(vertex);let bv=second[i].velocity(vertex)
+                assert(a.x==b.x && a.y==b.y && a.z==b.z)
+                assert(av.x==bv.x && av.y==bv.y && av.z==bv.z); vertex++
+            }
+            i++
+        }
+        frame++
+    }
+    assert(floor1.is_valid() && floor4.is_valid())
+}
+
+test "soft tetrahedral cube falls, deforms and retains volume" { volume_case() }
+test "suspended cloth stretches within its bound" { cloth_case(false) }
+test "cloth drapes over a rigid sphere without vertex penetration" { cloth_case(true) }
+test "moving anchors, tethers and destroyed rigid handles" { attachment_case() }
+test "partial skin pose and backstop leave other vertices free" { pose_case() }
+test "soft contact transfers linear momentum to a dynamic rigid" { dynamic_case() }
+test "deformed Scene3D mesh follows physics and pause" { mesh_case() }
+test "soft snapshots and lifetimes preserve world ownership" { lifetime_case() }
+test "soft instances match exactly with one and four workers" { parallel_case() }
+
+func oracle_case(name:str) {
+    var positions:Math.Vec3[]=[]; var faces:int[]=[]; var masses:float[]=[]
+    var edges:Physics.SoftEdge3D[]=[]; var bends:Physics.SoftBend3D[]=[]
+    var volumes:Physics.SoftVolume3D[]=[]; var tethers:Physics.SoftTether3D[]=[]
+    if name=="edge" || name=="tether" {
+        positions=[Math.Vec3(),Math.Vec3(1.0,0.0,0.0)]; masses=[0.0,1.0]
+        if name=="edge" { edges=[Physics.SoftEdge3D(0,1,0.001)] }
+        else { tethers=[Physics.SoftTether3D(0,1,1.1)] }
+    } else if name=="bend" {
+        positions=[Math.Vec3(),Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,-1.0,0.0)]
+        bends=[Physics.SoftBend3D(0,1,2,3,0.001)]
+    } else {
+        positions=[Math.Vec3(),Math.Vec3(1.0,0.0,0.0),Math.Vec3(0.0,1.0,0.0),Math.Vec3(0.0,0.0,1.0)]
+        faces=[0,2,1,0,1,3,0,3,2,1,2,3]
+        if name=="volume" { volumes=[Physics.SoftVolume3D(0,1,2,3,0.001)] }
+    }
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    var settings=Physics.SoftBody3DSettings() ..linear_damping=0.0
+    if name=="pressure" { settings.pressure=0.1 }
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition(positions,faces,masses,edges,bends,volumes,tethers),settings)
+    if name=="edge" || name=="tether" { body.apply_impulse(1,Math.Vec3(1.0,0.0,0.0)) }
+    else { body.apply_impulse(3,Math.Vec3(0.0,0.0,0.6)) }
+    advance(world,12)
+    var i=0
+    while i<body.vertex_count() {
+        let p=body.position(i);let v=body.velocity(i)
+        print(p.x," ",p.y," ",p.z," ",v.x," ",v.y," ",v.z);i++
+    }
+}
+func invalid_case(name:str) {
+    var world=Physics.World3D()
+    if name=="invalid-index" { var d=Physics.SoftBody3DDefinition(positions:[Math.Vec3()],edges:[Physics.SoftEdge3D(0,1)]);return }
+    if name=="invalid-mass" { var d=Physics.SoftBody3DDefinition(positions:[Math.Vec3()],inverse_masses:[-1.0]);return }
+    if name=="invalid-triangle" { var d=Physics.SoftBody3DDefinition(positions:[Math.Vec3(),Math.Vec3(1.0),Math.Vec3(2.0)],triangles:[0,1,2]);return }
+    if name=="invalid-volume" { var d=Physics.SoftBody3DDefinition(positions:[Math.Vec3(),Math.Vec3(1.0),Math.Vec3(2.0),Math.Vec3(3.0)],volumes:[Physics.SoftVolume3D(0,1,2,3)]);return }
+    if name=="invalid-pressure" { var body=world.create_soft_body(Physics.SoftBody3DDefinition.cloth(2,2,0.25),Physics.SoftBody3DSettings() ..pressure=1.0);return }
+    if name=="invalid-radius" { var body=world.create_soft_body(Physics.SoftBody3DDefinition.cube(),Physics.SoftBody3DSettings() ..vertex_radius=0.0);return }
+    var body=world.create_soft_body(Physics.SoftBody3DDefinition.cube())
+    if name=="invalid-owner" { var other=Physics.World3D();other.destroy_soft_body(body);return }
+    if name=="invalid-pose" { body.set_pose([Physics.SoftPose3D(99,Math.Vec3())]);return }
+    if name=="invalid-anchor" { body.set_fixed_position(0,Math.Vec3());return }
+    world.destroy_soft_body(body);body.positions()
+}
+func main() {
+    for argument in Process.arguments() {
+        if argument=="edge" || argument=="volume" || argument=="bend" || argument=="pressure" || argument=="tether" { oracle_case(argument);return }
+        if Text.starts_with(argument,"invalid-") { invalid_case(argument);return }
+    }
+    anchor_case();floor_case();volume_case(); cloth_case(false); cloth_case(true); attachment_case(); pose_case()
+    dynamic_case(); mesh_case(); lifetime_case(); parallel_case()
+    verify_contacts();verify_surfaces()
+    print("Soft body qualification passed")
+}

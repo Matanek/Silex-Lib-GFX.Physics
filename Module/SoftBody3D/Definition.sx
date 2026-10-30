@@ -1,0 +1,244 @@
+use STD.Math
+use GFX.Physics.RigidBody3D.finite_body3d_point
+use GFX.Physics.RigidBody3D.finite_body3d_value
+
+public struct SoftEdge3D {
+    let first:int
+    let second:int
+    let compliance:float
+    init(first:int, second:int, compliance:float = 0.0) {
+        self.first = first; self.second = second; self.compliance = compliance
+    }
+}
+
+// The first two vertices form the common edge of the two triangles.
+public struct SoftBend3D {
+    let first:int
+    let second:int
+    let third:int
+    let fourth:int
+    let compliance:float
+    init(first:int, second:int, third:int, fourth:int, compliance:float = 0.0) {
+        self.first = first; self.second = second; self.third = third
+        self.fourth = fourth; self.compliance = compliance
+    }
+}
+
+public struct SoftVolume3D {
+    let first:int
+    let second:int
+    let third:int
+    let fourth:int
+    let compliance:float
+    init(first:int, second:int, third:int, fourth:int, compliance:float = 0.0) {
+        self.first = first; self.second = second; self.third = third
+        self.fourth = fourth; self.compliance = compliance
+    }
+}
+
+public struct SoftTether3D {
+    let anchor:int
+    let vertex:int
+    let max_distance:float
+    init(anchor:int, vertex:int, max_distance:float) {
+        self.anchor = anchor; self.vertex = vertex; self.max_distance = max_distance
+    }
+}
+
+public class SoftBody3DDefinition {
+    package let rest_positions:Math.Vec3[]
+    package let inverse_masses:float[]
+    package let triangles:int[]
+    package let edges:SoftEdge3D[]
+    package let edge_lengths:float[]
+    package let bends:SoftBend3D[]
+    package let bend_angles:float[]
+    package let volumes:SoftVolume3D[]
+    package let six_volumes:float[]
+    package let tethers:SoftTether3D[]
+    package let closed_surface:bool
+
+    init(positions:Math.Vec3[], triangles:int[] = [], inverse_masses:float[] = [],
+        edges:SoftEdge3D[] = [], bends:SoftBend3D[] = [],
+        volumes:SoftVolume3D[] = [], tethers:SoftTether3D[] = []) {
+        let count = positions.count()
+        if count == 0 || triangles.count() % 3 != 0 {
+            panic("GFX.Physics.SoftBody3DDefinition requires vertices and complete triangles")
+        }
+        var masses = inverse_masses
+        if masses.is_empty() { for _ in positions { masses.append(1.0) } }
+        if masses.count() != count { panic("GFX.Physics soft masses must match vertices") }
+        var i = 0
+        while i < count {
+            if !finite_body3d_point(positions[i]) || !finite_body3d_value(masses[i]) || masses[i] < 0.0 {
+                panic("GFX.Physics soft vertices require finite positions and non-negative inverse masses")
+            }
+            i++
+        }
+        i = 0
+        while i < triangles.count() {
+            let a = triangles[i]; let b = triangles[i+1]; let c = triangles[i+2]
+            require_vertex(a,count); require_vertex(b,count); require_vertex(c,count)
+            if positions[b].subtract(positions[a]).cross(positions[c].subtract(positions[a])).length_squared() < 1e-16 {
+                panic("GFX.Physics soft triangle is degenerate")
+            }
+            i += 3
+        }
+        var lengths:float[] = []
+        for edge in edges {
+            require_vertex(edge.first,count); require_vertex(edge.second,count)
+            require_compliance(edge.compliance)
+            let length = positions[edge.second].subtract(positions[edge.first]).length()
+            if length < 1e-8 { panic("GFX.Physics soft edge is degenerate") }
+            lengths.append(length)
+        }
+        var angles:float[] = []
+        for bend in bends {
+            require_vertex(bend.first,count); require_vertex(bend.second,count)
+            require_vertex(bend.third,count); require_vertex(bend.fourth,count)
+            require_compliance(bend.compliance)
+            let x0 = positions[bend.first]; let x1 = positions[bend.second]
+            let x2 = positions[bend.third]; let x3 = positions[bend.fourth]
+            let n1 = x2.subtract(x0).cross(x2.subtract(x1))
+            let n2 = x3.subtract(x1).cross(x3.subtract(x0))
+            if bend.third == bend.fourth || n1.length_squared() < 1e-16 || n2.length_squared() < 1e-16 {
+                panic("GFX.Physics soft bend is degenerate")
+            }
+            angles.append(signed_bend_angle(n1,n2,x1.subtract(x0)))
+        }
+        var rest_volumes:float[] = []
+        for volume in volumes {
+            require_vertex(volume.first,count); require_vertex(volume.second,count)
+            require_vertex(volume.third,count); require_vertex(volume.fourth,count)
+            require_compliance(volume.compliance)
+            let a = positions[volume.first]
+            let six = positions[volume.second].subtract(a).cross(positions[volume.third].subtract(a)).dot(positions[volume.fourth].subtract(a))
+            if Math.abs(six) < 1e-12 { panic("GFX.Physics soft tetrahedron is degenerate") }
+            rest_volumes.append(six)
+        }
+        for tether in tethers {
+            require_vertex(tether.anchor,count); require_vertex(tether.vertex,count)
+            if masses[tether.anchor] != 0.0 || masses[tether.vertex] <= 0.0 ||
+                !finite_body3d_value(tether.max_distance) || tether.max_distance <= 0.0 {
+                panic("GFX.Physics soft tether requires a fixed anchor, dynamic vertex and positive length")
+            }
+        }
+        self.rest_positions = positions; self.inverse_masses = masses
+        self.triangles = triangles; self.edges = edges; self.edge_lengths = lengths
+        self.bends = bends; self.bend_angles = angles
+        self.volumes = volumes; self.six_volumes = rest_volumes; self.tethers = tethers
+        self.closed_surface = is_closed_surface(triangles)
+    }
+
+    func vertex_count() int { return self.rest_positions.count() }
+    func positions() Math.Vec3[] { return self.rest_positions }
+    func indices() int[] { return self.triangles }
+
+    static func cloth(columns:int, rows:int, spacing:float, vertex_mass:float = 0.05,
+        compliance:float = 0.00001, bend_compliance:float = 0.001,
+        fixed_vertices:int[] = []) SoftBody3DDefinition {
+        if columns < 2 || rows < 2 || columns > 1024 || rows > 1024 ||
+            !finite_body3d_value(spacing) || spacing <= 0.0 ||
+            !finite_body3d_value(vertex_mass) || vertex_mass <= 0.0 {
+            panic("GFX.Physics cloth requires a valid grid, spacing and vertex mass")
+        }
+        var positions:Math.Vec3[] = []; var masses:float[] = []; var faces:int[] = []
+        var edges:SoftEdge3D[] = []; var bends:SoftBend3D[] = []
+        var row = 0
+        while row < rows {
+            var column = 0
+            while column < columns {
+                positions.append(Math.Vec3(((column as float)-((columns-1) as float)*0.5)*spacing,0.0,
+                    ((row as float)-((rows-1) as float)*0.5)*spacing))
+                masses.append(1.0/vertex_mass)
+                let a = row*columns+column
+                if column+1 < columns { edges.append(SoftEdge3D(a,a+1,compliance)) }
+                if row+1 < rows { edges.append(SoftEdge3D(a,a+columns,compliance)) }
+                if column+1 < columns && row+1 < rows {
+                    let b = a+1; let c = a+columns; let d = c+1
+                    faces.append(a); faces.append(c); faces.append(b)
+                    faces.append(b); faces.append(c); faces.append(d)
+                    edges.append(SoftEdge3D(a,d,compliance)); edges.append(SoftEdge3D(b,c,compliance))
+                    bends.append(SoftBend3D(b,c,a,d,bend_compliance))
+                    if row+2 < rows { bends.append(SoftBend3D(c,d,b,c+columns,bend_compliance)) }
+                    if column+2 < columns { bends.append(SoftBend3D(b,d,c,b+1,bend_compliance)) }
+                }
+                column++
+            }
+            row++
+        }
+        for vertex in fixed_vertices { require_vertex(vertex,positions.count()); masses[vertex] = 0.0 }
+        return SoftBody3DDefinition(positions,faces,masses,edges,bends)
+    }
+
+    static func cube(size:float = 1.0, vertex_mass:float = 0.125,
+        compliance:float = 0.00001, volume_compliance:float = 0.0) SoftBody3DDefinition {
+        if !finite_body3d_value(size) || size <= 0.0 || !finite_body3d_value(vertex_mass) || vertex_mass <= 0.0 {
+            panic("GFX.Physics soft cube requires a positive size and vertex mass")
+        }
+        let h = size*0.5
+        let positions:Math.Vec3[] = [Math.Vec3(-h,-h,-h),Math.Vec3(h,-h,-h),Math.Vec3(h,h,-h),Math.Vec3(-h,h,-h),
+            Math.Vec3(-h,-h,h),Math.Vec3(h,-h,h),Math.Vec3(h,h,h),Math.Vec3(-h,h,h)]
+        let faces = [0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5]
+        let tetrahedra:SoftVolume3D[] = [SoftVolume3D(0,1,2,6,volume_compliance),SoftVolume3D(0,2,3,6,volume_compliance),
+            SoftVolume3D(0,3,7,6,volume_compliance),SoftVolume3D(0,7,4,6,volume_compliance),
+            SoftVolume3D(0,4,5,6,volume_compliance),SoftVolume3D(0,5,1,6,volume_compliance)]
+        var masses:float[] = []; for _ in positions { masses.append(1.0/vertex_mass) }
+        var edges:SoftEdge3D[] = []
+        // All tetrahedron edges, deduplicated once while building the definition.
+        for tetrahedron in tetrahedra {
+            let indices:int[] = [tetrahedron.first,tetrahedron.second,tetrahedron.third,tetrahedron.fourth]
+            var i = 0
+            while i < 4 {
+                var j = i+1
+                while j < 4 {
+                    let a = indices[i]; let b = indices[j]; var found = false
+                    for edge in edges { if (edge.first==a && edge.second==b) || (edge.first==b && edge.second==a) { found = true } }
+                    if !found { edges.append(SoftEdge3D(a,b,compliance)) }
+                    j++
+                }
+                i++
+            }
+        }
+        return SoftBody3DDefinition(positions,faces,masses,edges,volumes:tetrahedra)
+    }
+}
+
+func require_vertex(index:int, count:int) {
+    if index < 0 || index >= count { panic("GFX.Physics soft vertex index is out of range") }
+}
+func require_compliance(value:float) {
+    if !finite_body3d_value(value) || value < 0.0 { panic("GFX.Physics soft compliance must be finite and non-negative") }
+}
+func signed_bend_angle(first:Math.Vec3, second:Math.Vec3, edge:Math.Vec3) float {
+    let cosine = Math.clamp(first.dot(second) / Math.sqrt(first.length_squared()*second.length_squared()),-1.0,1.0)
+    var sign = 1.0
+    if second.cross(first).dot(edge) < 0.0 { sign = -1.0 }
+    return sign * Math.acos(cosine)
+}
+func is_closed_surface(indices:int[]) bool {
+    if indices.is_empty() { return false }
+    // Definition-time only: every directed edge needs exactly one reverse.
+    var i = 0
+    while i < indices.count() {
+        var corner = 0
+        while corner < 3 {
+            let a = indices[i+corner]; let b = indices[i+(corner+1)%3]
+            var reverse = 0; var same = 0; var j = 0
+            while j < indices.count() {
+                var other = 0
+                while other < 3 {
+                    let c = indices[j+other]; let d = indices[j+(other+1)%3]
+                    if c == a && d == b { same++ }
+                    if c == b && d == a { reverse++ }
+                    other++
+                }
+                j += 3
+            }
+            if same != 1 || reverse != 1 { return false }
+            corner++
+        }
+        i += 3
+    }
+    return true
+}

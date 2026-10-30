@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Corps souples et tissus CPU : définitions partagées, distances/flexion/volumes, attaches et pose partielle, pression, contacts avec les rigides et maillage Scene3D déformé. Les instances indépendantes utilisent les workers du monde ; pause et durées de vie restent explicites.
+
 - `World3D.enable_parallelism` répartit l’intégration, la géométrie et les lignes indépendantes du solveur de vitesses sur les workers STD. Les états et observations conservent leur ordre ; `step` reste synchrone et le retour à un worker ferme le pool. Guide et qualifications dédiés.
 
 - Qualification des terrains édités et des assemblages SixDOF/poulie/sol et chemin/charnière/obstacle : témoins analytiques et Jolt, budgets de position explicites, mutations et retrait des corps. Le guide bilingue récapitule les douze familles et les limites des recettes.

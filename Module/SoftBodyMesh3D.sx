@@ -1,0 +1,55 @@
+use STD.Math
+use GFX.Color
+use GFX.Physics.SoftBody3D.SoftBody3D
+use GFX.Scene3D.Meshes.Meshes
+use GFX.Scene3D.MeshHandle.MeshHandle
+use GFX.Scene3D.Geometry.Mesh as GeometryMesh
+use GFX.Scene3D.Geometry.Vertex as Vertex
+
+// One owned mesh asset, refreshed only after a physical deformation. Geometry
+// is in world space: render with an identity object transform.
+public class SoftBodyMesh3D {
+    private var body:SoftBody3D
+    private let asset:MeshHandle
+    private let color:Color
+    private var last_revision:int
+    init(body:SoftBody3D, meshes:&Meshes, color:Color = Color.white()) {
+        self.body = body; self.color = color
+        self.asset = meshes.add(deformed_mesh(body,color))
+        self.last_revision = body.revision()
+    }
+    func mesh() MeshHandle { return self.asset }
+    func update(meshes:&Meshes) bool {
+        if !self.body.is_valid() || !meshes.contains(self.asset) { return false }
+        if self.last_revision == self.body.revision() { return false }
+        meshes.replace(self.asset,deformed_mesh(self.body,self.color))
+        self.last_revision = self.body.revision()
+        return true
+    }
+    func remove(meshes:&Meshes) { meshes.remove(self.asset) }
+}
+
+func deformed_mesh(body:SoftBody3D, color:Color) GeometryMesh {
+    let positions = body.positions()
+    let faces = body.definition().indices()
+    if faces.is_empty() { panic("GFX.Physics soft rendering requires a triangulated surface") }
+    var normals:Math.Vec3[] = []
+    for _ in positions { normals.append(Math.Vec3()) }
+    var i = 0
+    while i < faces.count() {
+        let a = faces[i]; let b = faces[i+1]; let c = faces[i+2]
+        let normal = positions[b].subtract(positions[a]).cross(positions[c].subtract(positions[a]))
+        normals[a] = normals[a].add(normal); normals[b] = normals[b].add(normal); normals[c] = normals[c].add(normal)
+        i += 3
+    }
+    var vertices:Vertex[] = []
+    i = 0
+    while i < positions.count() {
+        var normal = Math.Vec3.up()
+        if normals[i].length_squared() > 1e-16 { normal = normals[i].normalized() }
+        vertices.append(Vertex(position:positions[i],normal:normal,color:color)); i++
+    }
+    var indices:uint32[] = []
+    for index in faces { indices.append(index as uint32) }
+    return GeometryMesh(vertices:vertices,indices:indices)
+}
