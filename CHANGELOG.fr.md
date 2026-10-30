@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Évite les requêtes de distance et balayages souples/rigides lorsque le segment du sommet ne peut pas atteindre le plan ou la surface convexe. Conserve le maillage, les sous-pas et la politique des surfaces triangulées.
+
 - Corps souples et tissus CPU : définitions partagées, distances/flexion/volumes, attaches et pose partielle, pression, contacts avec les rigides et maillage Scene3D déformé. Les instances indépendantes utilisent les workers du monde ; pause et durées de vie restent explicites.
 
 - `World3D.enable_parallelism` répartit l’intégration, la géométrie et les lignes indépendantes du solveur de vitesses sur les workers STD. Les états et observations conservent leur ordre ; `step` reste synchrone et le retour à un worker ferme le pool. Guide et qualifications dédiés.

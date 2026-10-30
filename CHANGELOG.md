@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Skip soft/rigid distance queries and sweeps when the vertex segment cannot reach a plane or convex surface, preserving mesh resolution, substeps and triangle surface policy.
+
 - CPU soft bodies and cloth: shared definitions, distance/bend/volume constraints, attachments and partial pose control, pressure, rigid contacts and deformed Scene3D meshes. Independent instances use world workers; pause and lifetimes remain explicit.
 
 - `World3D.enable_parallelism` distributes integration, geometry and independent velocity solver rows over STD workers. States and observations retain their order; `step` stays synchronous and returning to one worker closes the pool. Dedicated guide and qualification.

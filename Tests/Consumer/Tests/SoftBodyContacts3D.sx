@@ -60,6 +60,38 @@ func fast_contact() {
     assert(wall.is_valid())
 }
 
+func conservative_sweeps() {
+    // Endpoints outside the solid must still detect a complete crossing.
+    var shapes:Physics.Shape3D[]=[Physics.Shape3D.sphere(Physics.Sphere3D(0.5)),
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.5,0.5))]
+    for shape in shapes {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..soft_body_substeps=1)
+        var solid=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed ..shape=shape)
+        var particle=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[Math.Vec3(-2.0,0.0,0.0)]),
+            Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(240.0,0.0,0.0) ..linear_damping=0.0)
+        world.step(1.0/60.0)
+        assert(particle.position(0).x<=-0.5299 && Math.abs(particle.velocity(0).x)<0.001)
+        assert(solid.is_valid())
+    }
+    // A transformed, offset plane uses its actual world-space half-space.
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3() ..soft_body_substeps=1)
+    let rotation=Math.Quat.angle_axis(0.7,Math.Vec3.back())
+    let normal=rotation.rotate(Math.Vec3.up())
+    let origin=Math.Vec3(4.0,2.0,1.0).add(normal.multiply(0.4))
+    var floor=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D(offset:0.4))
+        ..transform=Physics.Transform3D(Math.Vec3(4.0,2.0,1.0),rotation))
+    var crossing=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[origin.add(normal.multiply(1.0))]),
+        Physics.SoftBody3DSettings() ..linear_velocity=normal.multiply(-120.0) ..linear_damping=0.0)
+    var clearing=world.create_soft_body(Physics.SoftBody3DDefinition(positions:[origin.add(normal.multiply(5.0))]),
+        Physics.SoftBody3DSettings() ..linear_velocity=Math.Vec3(0.0,0.0,3.0) ..linear_damping=0.0)
+    world.step(1.0/60.0)
+    assert(crossing.position(0).subtract(origin).dot(normal)>=0.0299)
+    assert(Math.abs(crossing.velocity(0).dot(normal))<0.001)
+    assert(clearing.velocity(0).nearly_equal(Math.Vec3(0.0,0.0,3.0),0.0001))
+    assert(floor.is_valid())
+}
+
 func parallel_rigid_exchange() {
     var first=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
     var second=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3());second.enable_parallelism(4)
@@ -95,7 +127,8 @@ test "soft tangential contact balances the impulse torque" { friction_torque() }
 
 test "soft collisions respect sensors, disabled bodies and filters" { filtered_contacts() }
 test "soft swept vertices cannot cross a thin fixed wall" { fast_contact() }
+test "soft conservative rejections retain convex crossings and placed plane contacts" { conservative_sweeps() }
 test "soft dynamic contact gather is deterministic across workers" { parallel_rigid_exchange() }
-package func verify() { angular_contact();friction_torque();filtered_contacts();fast_contact();parallel_rigid_exchange();print("Soft rigid contact checks passed") }
+package func verify() { angular_contact();friction_torque();filtered_contacts();fast_contact();conservative_sweeps();parallel_rigid_exchange();print("Soft rigid contact checks passed") }
 
 func main() { verify() }
