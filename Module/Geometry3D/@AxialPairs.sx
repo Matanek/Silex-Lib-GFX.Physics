@@ -39,7 +39,7 @@ func support_volume3d(shape:Shape3D) SupportVolume3D {
         else => { panic("GFX.Physics support query requires a convex leaf") }
     }
 }
-struct AxialPoint3D {
+package struct AxialPoint3D {
     let point:Math.Vec3
     let normal:Math.Vec3
     let separation:float
@@ -47,18 +47,92 @@ struct AxialPoint3D {
         self.point = point; self.normal = normal; self.separation = separation
     }
 }
-func axial_point3d(point:Math.Vec3, target:ShapePlacement3D) AxialPoint3D {
-    let pose = target.transform(); let local_point = pose.inverse_point(point)
+// A placed primitive is immutable during a soft-body pass. Its normalized
+// profile is shared by every particle query instead of being rebuilt per vertex.
+package struct AxialPointQuery3D {
+    private let pose:Transform3D
+    private let scale:float
+    private let dimensions:AxialDimensions3D
+    private let rounded:bool
+
+    init(target:ShapePlacement3D) {
+        let dimensions=axial_dimensions3d(target.shape())
+        let scale=dimensions.half_height+Math.max(dimensions.top_radius,dimensions.bottom_radius)
+        self.pose=target.transform();self.scale=scale
+        self.dimensions=AxialDimensions3D(dimensions.half_height/scale,
+            dimensions.top_radius/scale,dimensions.bottom_radius/scale)
+        self.rounded=axial_rounded3d(target.shape())
+    }
+    func point(value:Math.Vec3) AxialPoint3D {
+        return axial_profile_point3d(value,self.pose,self.scale,self.dimensions,self.rounded)
+    }
+    func sphere_distance(center:Math.Vec3,radius:float) DistanceResult3D {
+        let distance=axial_profile_point3d(center,self.pose,self.scale,self.dimensions,self.rounded,true)
+        let normal=distance.normal.negated()
+        return DistanceResult3D(center.add(normal.multiply(radius)),distance.point,
+            normal,distance.separation-radius)
+    }
+}
+
+func axial_point3d(point:Math.Vec3,target:ShapePlacement3D) AxialPoint3D {
+    return AxialPointQuery3D(target).point(point)
+}
+
+func axial_profile_point3d(point:Math.Vec3,pose:Transform3D,scale:float,
+    dimensions:AxialDimensions3D,rounded:bool,direct:bool=false) AxialPoint3D {
+    let local_point=pose.inverse_point(point)
     let radial = Math.sqrt(local_point.x * local_point.x + local_point.z * local_point.z)
-    let dimensions = axial_dimensions3d(target.shape())
-    let scale = dimensions.half_height + Math.max(dimensions.top_radius, dimensions.bottom_radius)
-    let profile = axial_signed_profile3d(Math.Vec2(radial, local_point.y).divide(scale),
-        AxialDimensions3D(dimensions.half_height / scale, dimensions.top_radius / scale, dimensions.bottom_radius / scale), axial_rounded3d(target.shape()))
+    let profile=axial_query_profile3d(Math.Vec2(radial,local_point.y).divide(scale),dimensions,rounded,direct)
     var axis = Math.Vec3.right()
     if radial > 0.0 { axis = Math.Vec3(local_point.x / radial, 0.0, local_point.z / radial) }
     let closest = axis.multiply(profile.point.x * scale).add(Math.Vec3(0.0, profile.point.y * scale, 0.0))
     let normal = axis.multiply(profile.normal.x).add(Math.Vec3(0.0, profile.normal.y, 0.0))
     return AxialPoint3D(pose.point(closest), pose.vector(normal), profile.signed_distance * scale)
+}
+
+func axial_query_profile3d(point:Math.Vec2,dimensions:AxialDimensions3D,
+    rounded:bool,direct:bool) AxialProfile3D {
+    let edge=2.0*dimensions.half_height
+    let radius=dimensions.top_radius
+    if direct && !rounded && radius==dimensions.bottom_radius && radius*radius>0.0 && edge*edge>0.0 {
+        return axial_cylinder_profile3d(point,radius,dimensions.half_height)
+    }
+    return axial_signed_profile3d(point,dimensions,rounded)
+}
+
+// Scalar spelling of the same projections, floating operation order and tie
+// rules. Retain the stable Vec2 normalization without temporary vectors.
+func axial_cylinder_profile3d(point:Math.Vec2,radius:float,half_height:float) AxialProfile3D {
+    let squared=radius*radius;let height=2.0*half_height
+    let bottom_fraction=Math.clamp((point.x*radius+(point.y+half_height)*0.0)/squared,0.0,1.0)
+    var x=radius*bottom_fraction;var y= -half_height
+    var dx=point.x-x;var dy=point.y-y
+    var distance=Math.sqrt(dx*dx+dy*dy)
+    var nx=0.0;var ny= -1.0
+    let top_fraction=Math.clamp(((point.x-radius)*(-radius)+(point.y-half_height)*0.0)/squared,0.0,1.0)
+    let top_x=radius+(-radius)*top_fraction
+    let top_dx=point.x-top_x;let top_dy=point.y-half_height
+    let top_distance=Math.sqrt(top_dx*top_dx+top_dy*top_dy)
+    if top_distance<distance { x=top_x;y=half_height;distance=top_distance;ny=1.0 }
+    let side_fraction=Math.clamp(((point.x-radius)*0.0+(point.y+half_height)*height)/(height*height),0.0,1.0)
+    let side_y= -half_height+height*side_fraction
+    let side_dx=point.x-radius;let side_dy=point.y-side_y
+    let side_distance=Math.sqrt(side_dx*side_dx+side_dy*side_dy)
+    if side_distance<distance {
+        x=radius;y=side_y;distance=side_distance
+        nx=1.0;ny= -0.0
+    }
+    let inside=point.y>= -half_height && point.y<=half_height && point.x<=radius
+    dx=point.x-x;dy=point.y-y
+    if dx*dx+dy*dy>0.000000000001 {
+        let scale=Math.max(Math.abs(dx),Math.abs(dy))
+        let sx=dx/scale;let sy=dy/scale
+        let length=Math.sqrt(sx*sx+sy*sy)
+        nx=sx/length;ny=sy/length
+        if inside { nx= -nx;ny= -ny }
+    }
+    if inside { distance= -distance }
+    return AxialProfile3D(Math.Vec2(x,y),Math.Vec2(nx,ny),distance)
 }
 func axial_pair_distance3d(first:ShapePlacement3D, second:ShapePlacement3D) DistanceResult3D {
     match first.shape() {

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les contacts des sommets souples avec les cylindres et formes axiales réutilisent un profil préparé pour le pas, y compris les composés entièrement axiaux. Les distances, normales et réactions conservent leur ordre et leurs conventions.
+
 - Les prédictions de quelques corps souples coûteux peuvent occuper plusieurs workers, sans exiger un grand nombre d'instances. Les contacts restent ordonnés et le pas synchrone ; une seule instance conserve sa résolution interne séquentielle.
 
 - Évite les requêtes de distance et balayages souples/rigides lorsque le segment du sommet ne peut pas atteindre le plan ou la surface convexe. Conserve le maillage, les sous-pas et la politique des surfaces triangulées.

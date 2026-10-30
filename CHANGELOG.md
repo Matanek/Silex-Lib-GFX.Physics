@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Soft vertex contacts with cylinders and axial shapes reuse a profile prepared for the step, including entirely axial compounds. Distances, normals and reactions preserve their ordering and conventions.
+
 - Predictions for a few expensive soft bodies can use multiple workers without requiring a large instance count. Contacts remain ordered and stepping stays synchronous; each instance retains sequential internal resolution.
 
 - Skip soft/rigid distance queries and sweeps when the vertex segment cannot reach a plane or convex surface, preserving mesh resolution, substeps and triangle surface policy.

@@ -11,6 +11,9 @@ use GFX.Physics.RigidBody3D.BodyState3D
 use GFX.Physics.RigidBody3D.BodyType3D
 use GFX.Physics.Geometry3D.ShapePlacement3D
 use GFX.Physics.Geometry3D.motion_distance3d
+use GFX.Physics.Geometry3D.axial_shape3d
+use GFX.Physics.Geometry3D.AxialPointQuery3D
+use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
@@ -24,6 +27,7 @@ struct SoftCollider3D {
     let plane_normal:Math.Vec3
     let plane_origin:Math.Vec3
     let is_plane:bool
+    var axial_queries:AxialPointQuery3D[]
     init(body:BodyState3D) {
         self.body = body
         self.surface_margin = soft_surface_margin3d(body.shape)
@@ -39,6 +43,27 @@ struct SoftCollider3D {
         }
         self.plane_normal=normal;self.plane_origin=origin;self.is_plane=is_plane
         self.bounds = bounds
+        var queries:AxialPointQuery3D[]=[]
+        if axial_shape3d(body.shape) {
+            queries.append(AxialPointQuery3D(ShapePlacement3D(body.shape,body.transform)))
+        } else {
+            match body.shape {
+                compound(compound)=>{
+                    var index=0;var all_axial=true
+                    while index<compound.child_count() && all_axial {
+                        let child=compound.child(index)
+                        if axial_shape3d(child.shape) {
+                            queries.append(AxialPointQuery3D(ShapePlacement3D(child.shape,
+                                compound_child_transform(body.transform,child))))
+                        } else { all_axial=false }
+                        index++
+                    }
+                    if !all_axial { queries=[] }
+                }
+                else=>{}
+            }
+        }
+        self.axial_queries=queries
     }
 }
 
@@ -82,9 +107,17 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
                     if maximum.x < bounds.lower.x || minimum.x > bounds.upper.x ||
                         maximum.y < bounds.lower.y || minimum.y > bounds.upper.y ||
                         maximum.z < bounds.lower.z || minimum.z > bounds.upper.z { continue }
-                    let target = ShapePlacement3D(rigid.shape,rigid.transform)
-                    let placement = ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(particle.position))
-                    let distance = soft_distance3d(placement,target)
+                    var distance=empty_soft_distance3d()
+                    if !collider.axial_queries.is_empty() {
+                        for query in collider.axial_queries {
+                            let next=query.sphere_distance(particle.position,radius)
+                            if next.separation<distance.separation { distance=next }
+                        }
+                    } else {
+                        let target=ShapePlacement3D(rigid.shape,rigid.transform)
+                        let placement=ShapePlacement3D(Shape3D.sphere(sphere),Transform3D(particle.position))
+                        distance=soft_distance3d(placement,target)
+                    }
                     var normal = distance.normal.negated()
                     var penetration = -distance.separation
                     if penetration <= 0.0 {
@@ -100,7 +133,8 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
                             if let fraction=continuous_fraction3d(Shape3D.sphere(sphere),start,Transform3D(particle.position),
                                 rigid.shape,rigid.transform,rigid.transform) {
                                 let witness=motion_distance3d(ShapePlacement3D(Shape3D.sphere(sphere),
-                                    Transform3D(particle.previous.add(motion.multiply(fraction)))),target,start,rigid.transform)
+                                    Transform3D(particle.previous.add(motion.multiply(fraction)))),
+                                    ShapePlacement3D(rigid.shape,rigid.transform),start,rigid.transform)
                                 normal=witness.normal.negated()
                                 penetration=Math.max(0.0,-motion.multiply(1.0-fraction).dot(normal))+0.000001
                             }

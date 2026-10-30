@@ -1,0 +1,37 @@
+use GFX.Physics
+use GFX.Physics.Geometry3D.AxialPointQuery3D
+use STD.Math
+
+func compare(radius:float,height:float,pose:Physics.Transform3D) {
+    let shape=Physics.Shape3D.cylinder(Physics.Cylinder3D(radius,height))
+    let target=Physics.ShapePlacement3D(shape,pose)
+    let query=AxialPointQuery3D(target)
+    let values:float[]=[-1.5,-1.0,-0.811,-0.5,-0.317,0.0,0.213,0.5,0.917,1.0,1.5]
+    for x in values { for y in values { for z in values {
+        let center=pose.point(Math.Vec3(x*radius,y*height,z*radius))
+        let actual=query.sphere_distance(center,0.035)
+        let expected=Physics.Geometry3D.distance(Physics.ShapePlacement3D(
+            Physics.Shape3D.sphere(Physics.Sphere3D(0.035)),Physics.Transform3D(center)),target)
+        if !actual.second_point.nearly_equal(expected.second_point,0.0) ||
+            !actual.normal.nearly_equal(expected.normal,0.0) || actual.separation!=expected.separation {
+            print("query mismatch r=",radius," h=",height," grid=",x,",",y,",",z)
+            print("point actual=",actual.second_point.x,",",actual.second_point.y,",",actual.second_point.z,
+                " expected=",expected.second_point.x,",",expected.second_point.y,",",expected.second_point.z)
+            print("normal actual=",actual.normal.x,",",actual.normal.y,",",actual.normal.z,
+                " expected=",expected.normal.x,",",expected.normal.y,",",expected.normal.z,
+                " separation=",actual.separation," / ",expected.separation)
+        }
+        assert(actual.first_point.nearly_equal(expected.first_point,0.0))
+        assert(actual.second_point.nearly_equal(expected.second_point,0.0))
+        assert(actual.normal.nearly_equal(expected.normal,0.0))
+        assert(actual.separation==expected.separation)
+    } } }
+}
+
+test "prepared cylinder queries preserve exact points, normals and separation" {
+    compare(0.64,0.25,Physics.Transform3D())
+    compare(0.64,0.0175,Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),
+        Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())))
+    compare(0.001,0.0002,Physics.Transform3D())
+    compare(1000.0,20.0,Physics.Transform3D(Math.Vec3(-500.0,30.0,100.0)))
+}
