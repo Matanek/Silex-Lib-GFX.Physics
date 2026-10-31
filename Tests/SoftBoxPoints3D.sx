@@ -44,4 +44,18 @@ test "prepared soft box contacts refresh pose shape enable and removal" {
     assert(soft.position(0).nearly_equal(Math.Vec3(0.0,2.0,0.0),0.00001))
     rigid.set_enabled(true);world.destroy_rigid_body(rigid);world.step(1.0/120.0)
     assert(soft.position(0).nearly_equal(Math.Vec3(0.0,2.0,0.0),0.00001))
+    var replacement=world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0))))
+    soft.set_pose([Physics.SoftPose3D(0,Math.Vec3(0.0,0.525,0.0))]);world.step(1.0/120.0)
+    assert(soft.position(0).nearly_equal(Math.Vec3(0.0,0.55,0.0),0.00001))
+    replacement.set_shape(Physics.Shape3D.sphere(Physics.Sphere3D(1.0)))
+    soft.set_pose([Physics.SoftPose3D(0,Math.Vec3(0.0,1.025,0.0))]);world.step(1.0/120.0)
+    assert(soft.position(0).nearly_equal(Math.Vec3(0.0,1.05,0.0),0.00001))
+    replacement.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0))
+    soft.set_pose([Physics.SoftPose3D(0,Math.Vec3())]);world.step(1.0/120.0)
+    assert(soft.position(0).nearly_equal(Math.Vec3(),0.00001))
+    replacement.set_collision_filter(Physics.CollisionFilter3D());replacement.set_sensor(true)
+    world.step(1.0/120.0)
+    assert(soft.position(0).nearly_equal(Math.Vec3(),0.00001))
+
 }

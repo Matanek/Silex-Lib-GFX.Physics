@@ -1,0 +1,45 @@
+use GFX.Physics
+use STD.Math
+
+func eligibility(count:int,plane:bool,workers:int) {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    if workers>1 { world.enable_parallelism(workers) }
+    var fixed:Physics.RigidBody3D[]=[]
+    for _ in 0...count { fixed.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed)) }
+    if plane { fixed.append(world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.fixed ..shape=Physics.Shape3D.plane(Physics.Plane3D()))) }
+    world.step(1.0/120.0);assert(world.contact_count()==0)
+    // Dense fixed scenery still reports every overlap of a kinematic sensor.
+    var sensor=world.create_rigid_body(Physics.RigidBody3DSettings()
+        ..body_type=Physics.BodyType3D.kinematic ..is_sensor=true)
+    let expected=fixed.count()
+    world.step(1.0/120.0);assert(world.contact_count()==expected)
+    var begins:Physics.Contact3D[]=[];world.write_contact_begin_events(begins)
+    var index=0
+    for contact in begins { assert(contact.first_body().same_body(fixed[index]) && contact.is_sensor());index++ }
+    sensor.set_sensor(false);world.step(1.0/120.0);assert(world.contact_count()==0)
+    fixed[0].set_sensor(true);world.step(1.0/120.0);assert(world.contact_count()==1)
+    fixed[0].set_sensor(false);sensor.set_sensor(true)
+    sensor.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0))
+    world.step(1.0/120.0);assert(world.contact_count()==0)
+    sensor.set_collision_filter(Physics.CollisionFilter3D());sensor.set_enabled(false)
+    world.step(1.0/120.0);assert(world.contact_count()==0)
+    sensor.set_enabled(true);world.step(1.0/120.0);assert(world.contact_count()==expected)
+    world.destroy_rigid_body(sensor)
+    var moving=world.create_rigid_body(Physics.RigidBody3DSettings() ..is_sensor=true)
+    world.step(1.0/120.0);assert(world.contact_count()==expected)
+    moving.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0,group_index:5))
+    fixed[0].set_collision_filter(Physics.CollisionFilter3D(mask_bits:0,group_index:5))
+    world.step(1.0/120.0);assert(world.contact_count()==1)
+    moving.set_collision_filter(Physics.CollisionFilter3D(mask_bits:0,group_index:-5))
+    fixed[0].set_collision_filter(Physics.CollisionFilter3D(mask_bits:0,group_index:-5))
+    world.step(1.0/120.0);assert(world.contact_count()==0)
+}
+
+test "dense scenery retains dynamic sensors filters and ordered kinematic overlaps" {
+    for workers in [1,4] {
+        eligibility(8,false,workers);eligibility(8,true,workers)
+        eligibility(130,false,workers);eligibility(130,true,workers)
+    }
+}

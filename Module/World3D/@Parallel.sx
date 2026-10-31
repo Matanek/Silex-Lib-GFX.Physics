@@ -74,9 +74,7 @@ class ContactGeometryBatch3D {
         let pair = self.candidates[index]
         if var first = self.store.slots[pair.first] {
             if var second = self.store.slots[pair.second] {
-                if !first.is_enabled || !second.is_enabled || !body_collision_allows3d(first,second) { return }
-                if first.body_type != BodyType3D.dynamic && second.body_type != BodyType3D.dynamic &&
-                    !((first.is_sensor || second.is_sensor) && (first.body_type == BodyType3D.kinematic || second.body_type == BodyType3D.kinematic)) { return }
+                if !first.is_enabled || !second.is_enabled || !broad_pair_allows3d(first,second) { return }
                 var result = self.results[index]
                 let first_placement = ShapePlacement3D(first.shape,first.transform)
                 let second_placement = ShapePlacement3D(second.shape,second.transform)

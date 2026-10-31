@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Filter impossible 3D broad-phase pairs before sorting: fixed scenery, masks and groups are rejected early while preserving kinematic sensors and contact order.
+
 - Reject compound cylinder leaves separated from a box along a face axis before convex contact search. Near, tangent and penetrating contacts retain the same exact query.
 
 - Reuse a prepared box query during soft contacts instead of reconstructing and redispatching the same shapes per vertex, particularly on slopes. Distances, normals, reactions and continuous sweeps are preserved.

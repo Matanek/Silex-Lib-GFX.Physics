@@ -4065,14 +4065,25 @@ func advance_pose3d(state:BodyState3D, delta:float) {
     )
 }
 
+// Eligibility is invariant while a synchronous step gathers contacts. Reject
+// pairs before sorting them, with the same sensor exception as narrow phase.
+func broad_pair_allows3d(first:@BodyState3D,second:@BodyState3D) bool {
+    if !body_collision_allows3d(first,second) { return false }
+    return first.body_type==BodyType3D.dynamic || second.body_type==BodyType3D.dynamic ||
+        ((first.is_sensor || second.is_sensor) &&
+            (first.body_type==BodyType3D.kinematic || second.body_type==BodyType3D.kinematic))
+}
+
 struct BroadProxy3D {
+    var body:BodyState3D
     let slot:int
     let position:Math.Vec3
     let radius:float
     let lower:Math.Vec3
     let upper:Math.Vec3
 
-    init(slot:int, position:Math.Vec3, radius:float, extent:Math.Vec3) {
+    init(body:BodyState3D, slot:int, position:Math.Vec3, radius:float, extent:Math.Vec3) {
+        self.body=body
         self.slot = slot
         self.position = position
         self.radius = radius
@@ -4211,7 +4222,8 @@ func grid_bucket3d(x:int, y:int, z:int, count:int) int {
     return value
 }
 
-func append_broad_pair3d(first:BroadProxy3D, second:BroadProxy3D, pairs:&BroadPair3D[]) {
+func append_broad_pair3d(first:@BroadProxy3D, second:@BroadProxy3D, pairs:&BroadPair3D[]) {
+    if !broad_pair_allows3d(first.body,second.body) { return }
     if first.upper.x + 0.000001 < second.lower.x ||
         second.upper.x + 0.000001 < first.lower.x ||
         first.upper.y + 0.000001 < second.lower.y ||
@@ -4296,7 +4308,7 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
             if body.is_enabled && plane_shape3d(body.shape) { plane_slots.append(slot) }
             if body.is_enabled && !plane_shape3d(body.shape) {
                 let radius = shape_bounding_radius3d(body.shape)
-                proxies.append(BroadProxy3D(slot, body.transform.position,
+                proxies.append(BroadProxy3D(body, slot, body.transform.position,
                     radius, broad_extent3d(body.shape, body.transform, radius)))
             }
         }
@@ -4327,7 +4339,8 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
         while second_index < proxies.count() {
             let proxy = proxies[second_index]
             if previous.upper.x + 0.000001 < proxy.lower.x { break }
-            if previous.upper.y + 0.000001 >= proxy.lower.y &&
+            if broad_pair_allows3d(previous.body,proxy.body) &&
+                previous.upper.y + 0.000001 >= proxy.lower.y &&
                 proxy.upper.y + 0.000001 >= previous.lower.y &&
                 previous.upper.z + 0.000001 >= proxy.lower.z &&
                 proxy.upper.z + 0.000001 >= previous.lower.z &&
@@ -4575,7 +4588,8 @@ func include_plane_pairs3d(store:@BodyStore3D, plane_slots:int[], pairs:BroadPai
         var other_slot = 0
         while other_slot < store.slots.count() {
             if let other = store.slots[other_slot] {
-                if other.is_enabled && !plane_shape3d(other.shape) {
+                if other.is_enabled && !plane_shape3d(other.shape) &&
+                    broad_pair_allows3d(store.slots[slot]!,other) {
                     if slot < other_slot { result.append(BroadPair3D(slot,other_slot)) }
                     else { result.append(BroadPair3D(other_slot,slot)) }
                 }
