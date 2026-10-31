@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fix EPA non-convergence at almost tangent inclined faces: use transformed feature planes and wide orientation predicates to seed a truly enclosing tetrahedron. Actual penetrations retain the EPA solve.
+
 - Filter impossible 3D broad-phase pairs before sorting: fixed scenery, masks and groups are rejected early while preserving kinematic sensors and contact order.
 
 - Reject compound cylinder leaves separated from a box along a face axis before convex contact search. Near, tangent and penetrating contacts retain the same exact query.

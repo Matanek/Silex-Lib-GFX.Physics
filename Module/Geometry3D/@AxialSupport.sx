@@ -353,7 +353,7 @@ func support_seed3d(first:SupportPlacement3D, second:SupportPlacement3D, simplex
     let directions:Math.Vec3[] = [Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back(),
         Math.Vec3(1.0, 1.0, 1.0), Math.Vec3(1.0, -1.0, 1.0), Math.Vec3(1.0, 1.0, -1.0), Math.Vec3(-1.0, 1.0, 1.0)]
     for direction in directions { support_append_support3d(pool, first, second, direction); support_append_support3d(pool, first, second, direction.negated()) }
-    var best:SupportVertex3D[] = []; var quality = -1.0
+    var best:SupportVertex3D[] = []; var quality:float64 = -1.0
     var a = 0
     while a < pool.count() {
         var b = a + 1
@@ -362,15 +362,16 @@ func support_seed3d(first:SupportPlacement3D, second:SupportPlacement3D, simplex
             while c < pool.count() {
                 var d = c + 1
                 while d < pool.count() {
-                    let ab = pool[b].difference.subtract(pool[a].difference)
-                    let ac = pool[c].difference.subtract(pool[a].difference)
-                    let ad = pool[d].difference.subtract(pool[a].difference)
-                    let determinant = ab.dot(ac.cross(ad))
+                    let pa=pool[a].difference;let pb=pool[b].difference
+                    let pc=pool[c].difference;let pd=pool[d].difference
+                    // GJK may enter its near-zero region just outside a surface.
+                    // Only a genuinely enclosing tetrahedron can seed EPA.
+                    let determinant = support_orientation64_3d(pa,pb,pc,pd)
                     if Math.abs(determinant) > 0.000000000001 {
-                        let offset = pool[a].difference.negated()
-                        let u = offset.dot(ac.cross(ad)) / determinant
-                        let v = ab.dot(offset.cross(ad)) / determinant
-                        let w = ab.dot(ac.cross(offset)) / determinant
+                        let origin=Math.Vec3()
+                        let u = support_orientation64_3d(pa,origin,pc,pd) / determinant
+                        let v = support_orientation64_3d(pa,pb,origin,pd) / determinant
+                        let w = support_orientation64_3d(pa,pb,pc,origin) / determinant
                         let t = 1.0 - u - v - w
                         let score = Math.min(t, Math.min(u, Math.min(v, w)))
                         if score >= 0.0 && score > quality { best = [pool[a], pool[b], pool[c], pool[d]]; quality = score }
@@ -545,14 +546,8 @@ func support_axis_penetration3d(first:SupportPlacement3D, second:SupportPlacemen
 func support_near_touch3d(first:SupportPlacement3D, second:SupportPlacement3D,
     simplex:SupportSimplex3D) SupportDistance3D? {
     var directions:Math.Vec3[] = [Math.Vec3.right(), Math.Vec3.up(), Math.Vec3.back()]
-    match first.volume {
-        triangle(value) => { directions.append(first.rotation.rotate(value.normal())) }
-        else => {}
-    }
-    match second.volume {
-        triangle(value) => { directions.append(second.rotation.rotate(value.normal())) }
-        else => {}
-    }
+    support_face_directions3d(first,directions)
+    support_face_directions3d(second,directions)
     let witness = simplex.witness()
     if witness.difference.length_squared() > 0.0 { directions.append(witness.difference.normalized()) }
     for direction in directions {
@@ -567,4 +562,23 @@ func support_near_touch3d(first:SupportPlacement3D, second:SupportPlacement3D,
         }
     }
     return null
+}
+
+// Include actual feature planes after a common rigid transform. World XYZ
+// alone cannot certify a near tangency on an inclined box or convex facet.
+func support_face_directions3d(placed:SupportPlacement3D,directions:&Math.Vec3[]) {
+    match placed.volume {
+        box(_) => {
+            directions.append(placed.rotation.rotate(Math.Vec3.right()))
+            directions.append(placed.rotation.rotate(Math.Vec3.up()))
+            directions.append(placed.rotation.rotate(Math.Vec3.back()))
+        }
+        triangle(value) => {directions.append(placed.rotation.rotate(value.normal()))}
+        convex(value) => {
+            for index in 0...value.face_count() {directions.append(placed.rotation.rotate(value.face_normal(index)))}
+        }
+        cylinder(_) => {directions.append(placed.rotation.rotate(Math.Vec3.up()))}
+        tapered_cylinder(_) => {directions.append(placed.rotation.rotate(Math.Vec3.up()))}
+        else => {}
+    }
 }

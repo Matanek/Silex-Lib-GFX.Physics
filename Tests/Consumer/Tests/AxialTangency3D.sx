@@ -1,0 +1,49 @@
+use GFX.Physics
+use STD.Math
+
+func captured_gap(gap:float,common:Physics.Transform3D,scale:float=1.0,reversed:bool=false) {
+    let i=336
+    let yaw=((i*37)%101) as float/100.0*6.28
+    let rotation=common.rotation.multiply(Math.Quat.angle_axis(yaw,Math.Vec3.up())).multiply(
+        Math.Quat.angle_axis(Math.half_pi()+0.0000001,Math.Vec3.back())).multiply(
+        Math.Quat.angle_axis(((i*53)%97) as float,Math.Vec3.up()))
+    let axis=common.inverse_vector(rotation.rotate(Math.Vec3.up()))
+    let top=0.78*Math.sqrt(Math.max(0.0,1.0-axis.y*axis.y))+0.54*Math.abs(axis.y)
+    let pose=Physics.Transform3D(common.point(Math.Vec3(0.0,1.5+top+gap,0.0).multiply(scale)),rotation)
+    let box=Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(12.0,3.0,3.178).multiply(scale))),common)
+    let cylinder=Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.78*scale,0.54*scale)),pose)
+    var result=Physics.Geometry3D.distance(box,cylinder)
+    var normal=common.vector(Math.Vec3.up())
+    if reversed {result=Physics.Geometry3D.distance(cylinder,box);normal=normal.negated()}
+    assert(Math.abs(result.separation-gap*scale)<0.00002*scale)
+    assert(result.normal.dot(normal)>0.999)
+    assert(result.second_point.subtract(result.first_point).subtract(result.normal.multiply(result.separation)).length()<0.00005*scale)
+}
+
+test "captured almost tangent rim on an inclined box does not enter a stalled EPA hull" {
+    captured_gap(0.000003,Physics.Transform3D(Math.Vec3(17.0,3.0,55.0),
+        Math.Quat.angle_axis(-0.3366748,Math.Vec3.right())))
+}
+
+
+func verify_transforms() {
+    let gaps:float[]=[-0.03,-0.001,-0.00001,-0.000003,0.0,0.000003,0.00001,0.001,0.03]
+    let scales:float[]=[0.01,1.0,1000.0]
+    for scale in scales {
+        let poses:Physics.Transform3D[]=[Physics.Transform3D(),
+            Physics.Transform3D(Math.Vec3(17.0,3.0,55.0).multiply(scale),Math.Quat.angle_axis(-0.3366748,Math.Vec3.right())),
+            Physics.Transform3D(Math.Vec3(-5.0,12.0,-8.0).multiply(scale),Math.Quat.angle_axis(0.73,Math.Vec3(1.0,2.0,3.0).normalized()))]
+        for pose in poses {for gap in gaps {
+            captured_gap(gap,pose,scale);captured_gap(gap,pose,scale,reversed:true)
+        }}
+    }
+}
+
+
+test "near tangent and penetrating rim faces preserve signed depth under common poses scales and reversal" {verify_transforms()}
+
+func main() {
+    captured_gap(0.000003,Physics.Transform3D(Math.Vec3(17.0,3.0,55.0),Math.Quat.angle_axis(-0.3366748,Math.Vec3.right())))
+    verify_transforms()
+    print("Axial tangency regression and signed transformed witnesses passed")
+}
