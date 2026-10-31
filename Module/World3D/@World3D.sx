@@ -4299,6 +4299,23 @@ func grid_pairs3d(proxies:@BroadProxy3D[], cell_size:float) BroadPair3D[] {
     return pairs
 }
 
+// Few moving bodies among fixed scenery: visit only pairs with a moving
+// endpoint. This avoids sorting and comparing the whole unchanged scenery on
+// every position pass. Dense populations retain their grid/sweep algorithms.
+func sparse_broad_pairs3d(proxies:@BroadProxy3D[]) BroadPair3D[] {
+    var pairs:BroadPair3D[]=[]
+    for first in proxies {
+        if first.body.body_type==BodyType3D.fixed { continue }
+        for second in proxies {
+            if first.slot==second.slot { continue }
+            if second.body.body_type!=BodyType3D.fixed && second.slot<first.slot { continue }
+            append_broad_pair3d(first,second,pairs)
+        }
+    }
+    Sort.sort<BroadPair3D>(&pairs[0:pairs.count()],broad_pair_before3d)
+    return pairs
+}
+
 func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
     var proxies:BroadProxy3D[] = []
     var plane_slots:int[] = []
@@ -4313,6 +4330,11 @@ func broadphase_pairs3d(store:@BodyStore3D) BroadPair3D[] {
             }
         }
         slot++
+    }
+    var moving=0
+    for proxy in proxies { if proxy.body.body_type!=BodyType3D.fixed { moving++ } }
+    if moving*4<proxies.count() {
+        return include_plane_pairs3d(store,plane_slots,sparse_broad_pairs3d(proxies))
     }
     if proxies.count() >= 128 {
         var dynamic_radius = 0.0

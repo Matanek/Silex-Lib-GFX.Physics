@@ -8,6 +8,8 @@ puis traduits dans `CHANGELOG.md`.
 
 - Corriger une non-convergence EPA sur les contacts presque tangents de faces inclinées : plans de faces transformés et orientations en précision élargie pour construire un tétraèdre réellement contenant. Les pénétrations réelles restent résolues par EPA.
 
+- Les mondes comportant peu de corps mobiles évitent de trier et comparer entre eux tous les obstacles fixes à chaque passe de position, en conservant filtres, capteurs et ordre canonique des contacts.
+
 - Filtrer les paires impossibles avant leur tri dans la broad phase 3D : décors fixes, masques et groupes sont écartés tôt, en conservant les capteurs cinématiques et l’ordre des contacts.
 
 - Écarter les feuilles cylindriques de composés séparées d’une boîte par un axe de face, avant la recherche convexe. Les contacts proches, tangents et pénétrants restent traités par la même requête exacte.
