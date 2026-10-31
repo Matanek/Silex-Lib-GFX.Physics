@@ -1,0 +1,52 @@
+use GFX.Physics
+use GFX.Physics.Geometry3D.BoxPointQuery3D
+use STD.Math
+
+test "box face bounds retain intersecting rotated cylinders and reject separated rim faces" {
+    let scales:float[]=[0.001,1.0,1000.0]
+    let offsets:float[]=[-2.0,-1.05,-1.0,-0.5,0.0,0.5,1.0,1.05,2.0]
+    let angles:float[]=[0.0,0.3,Math.half_pi()]
+    for scale in scales {
+        let box=Physics.Box3D(Math.Vec3(4.0,0.24,8.0).multiply(scale))
+        let cylinder=Physics.Cylinder3D(0.78*scale,0.0175*scale)
+        let pose=Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),Math.Quat.angle_axis(-0.3,Math.Vec3.right()))
+        let query=BoxPointQuery3D(box,pose)
+        let target=Physics.ShapePlacement3D(Physics.Shape3D.box(box),pose)
+        for angle in angles { for x in offsets { for y in offsets { for plane in 0...3 {
+            var offset=Math.Vec3(x,y,0.0)
+            if plane==1 { offset=Math.Vec3(0.0,x,y) }
+            if plane==2 { offset=Math.Vec3(y,0.0,x) }
+            let placed=Physics.Transform3D(pose.point(offset.multiply(scale)),
+                pose.rotation.multiply(Math.Quat.angle_axis(angle,Math.Vec3.back())))
+            let distance=Physics.Geometry3D.distance(Physics.ShapePlacement3D(Physics.Shape3D.cylinder(cylinder),placed),target)
+            if distance.separation<=0.000001 { assert(!query.separates_cylinder(cylinder,placed)) }
+        } } } }
+        let clear=Physics.Transform3D(pose.point(Math.Vec3(0.0,1.05,0.0).multiply(scale)),
+            pose.rotation.multiply(Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back())))
+        assert(query.separates_cylinder(cylinder,clear))
+        let touch=Physics.Transform3D(pose.point(Math.Vec3(0.0,0.9,0.0).multiply(scale)),clear.rotation)
+        assert(!query.separates_cylinder(cylinder,touch))
+        let side=Physics.Transform3D(pose.point(Math.Vec3(0.0,0.0,5.0).multiply(scale)),clear.rotation)
+        assert(query.separates_cylinder(cylinder,side))
+    }
+}
+
+func compound_contact(reversed:bool) {
+    var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+    let pose=Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),Math.Quat.angle_axis(-0.3,Math.Vec3.right()))
+    let fixed=Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(4.0,0.24,8.0))) ..transform=pose
+    var children:Physics.CompoundChild3D[]=[Physics.CompoundChild3D(7,
+        Physics.Shape3D.cylinder(Physics.Cylinder3D(0.78,0.0175)))]
+    let dynamic=Physics.RigidBody3DSettings() ..shape=Physics.Shape3D.compound(Physics.Compound3D(children))
+        ..transform=Physics.Transform3D(pose.point(Math.Vec3(0.0,0.89,0.0)),
+            pose.rotation.multiply(Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back())))
+    if reversed { world.create_rigid_body(dynamic);world.create_rigid_body(fixed) }
+    else { world.create_rigid_body(fixed);world.create_rigid_body(dynamic) }
+    world.step(1.0/120.0)
+    assert(world.contact_count()>0)
+}
+
+test "compound rim contacts survive box face rejection in both creation orders" {
+    compound_contact(false);compound_contact(true)
+}

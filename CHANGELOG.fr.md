@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Écarter les feuilles cylindriques de composés séparées d’une boîte par un axe de face, avant la recherche convexe. Les contacts proches, tangents et pénétrants restent traités par la même requête exacte.
+
 - Réutiliser une requête de boîte préparée pendant les contacts souples évite de reconstruire et redistribuer les mêmes formes par sommet, notamment sur les plans inclinés. Distances, normales, réactions et balayages continus sont conservés.
 
 - Les cylindres utilisent leur boîte orientée pour les enveloppes de collision au lieu de leur sphère englobante, ce qui évite des recherches de contacts éloignés autour des obstacles longs et des rebords minces. Les points extrêmes analytiques, contacts composés et balayages axiaux sont vérifiés.

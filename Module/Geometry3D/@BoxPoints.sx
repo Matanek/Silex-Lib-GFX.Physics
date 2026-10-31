@@ -1,4 +1,5 @@
 use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Cylinder3D.Cylinder3D
 use GFX.Physics.Transform3D.Transform3D
 use STD.Math
 
@@ -9,5 +10,20 @@ package struct BoxPointQuery3D {
     init(box:Box3D,pose:Transform3D) { self.half=box.half_size();self.pose=pose }
     func sphere_distance(center:Math.Vec3,radius:float) DistanceResult3D {
         return sphere_box_point_distance3d(center,radius,self.half,self.pose)
+    }
+    // A separating box-face axis proves that no contact can exist. This bound
+    // is conservative near tangency and never replaces an intersecting query.
+    func separates_cylinder(cylinder:Cylinder3D,pose:Transform3D) bool {
+        let center=self.pose.inverse_point(pose.position)
+        let axis=self.pose.inverse_vector(pose.vector(Math.Vec3.up()))
+        let radius=cylinder.radius;let height=cylinder.half_height
+        let magnitude=Math.max(Math.abs(center.x),Math.max(Math.abs(center.y),Math.abs(center.z)))
+        let margin=0.00001*Math.max(1.0,magnitude+radius+height+self.half.length())
+        let y=Math.abs(axis.y)*height+radius*Math.sqrt(Math.max(0.0,1.0-axis.y*axis.y))
+        if Math.abs(center.y)>self.half.y+y+margin { return true }
+        let x=Math.abs(axis.x)*height+radius*Math.sqrt(Math.max(0.0,1.0-axis.x*axis.x))
+        if Math.abs(center.x)>self.half.x+x+margin { return true }
+        let z=Math.abs(axis.z)*height+radius*Math.sqrt(Math.max(0.0,1.0-axis.z*axis.z))
+        return Math.abs(center.z)>self.half.z+z+margin
     }
 }

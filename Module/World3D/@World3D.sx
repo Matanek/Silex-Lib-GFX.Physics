@@ -1,3 +1,4 @@
+use GFX.Physics.Geometry3D.BoxPointQuery3D
 use GFX.Physics.SoftBody3D.SoftBody3D
 use GFX.Physics.SoftBody3D.SoftBody3DSettings
 use GFX.Physics.SoftBody3D.SoftBodyState3D
@@ -2721,6 +2722,26 @@ func write_surface_pairs3d(first:ShapePlacement3D, second:ShapePlacement3D,
     }
 }
 
+// A box-face separating axis rejects only geometrically disjoint leaves.
+func separated_cylinder_box3d(first:ShapePlacement3D,second:ShapePlacement3D) bool {
+    match first.shape() {
+        cylinder(cylinder)=>{
+            match second.shape() {
+                box(box)=>{ return BoxPointQuery3D(box,second.transform()).separates_cylinder(cylinder,first.transform()) }
+                else=>{}
+            }
+        }
+        box(box)=>{
+            match second.shape() {
+                cylinder(cylinder)=>{ return BoxPointQuery3D(box,first.transform()).separates_cylinder(cylinder,second.transform()) }
+                else=>{}
+            }
+        }
+        else=>{}
+    }
+    return false
+}
+
 // Compound leaves and distinct mesh support planes, once per detection pass.
 // Child poses change with their parent, so distances cannot persist across steps.
 func write_leaf_contacts3d(
@@ -2773,6 +2794,7 @@ func write_leaf_contacts3d(
         tapered_capsule(_) => {}
         plane(_) => {}
     }
+    if separated_cylinder_box3d(first,second) { return }
     if supports_mesh_manifolds3d(first.shape(), second.shape()) {
         var contacts:DistanceResult3D[] = []
         write_surface_pairs3d(first, second, contacts)

@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reject compound cylinder leaves separated from a box along a face axis before convex contact search. Near, tangent and penetrating contacts retain the same exact query.
+
 - Reuse a prepared box query during soft contacts instead of reconstructing and redispatching the same shapes per vertex, particularly on slopes. Distances, normals, reactions and continuous sweeps are preserved.
 
 - Cylinders use their oriented box for collision bounds instead of their bounding sphere, avoiding distant contact searches around long obstacles and thin flanges. Analytical support points, compound contacts and axial sweeps are checked.
