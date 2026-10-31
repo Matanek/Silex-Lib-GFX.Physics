@@ -4151,7 +4151,16 @@ func broad_extent3d(shape:Shape3D, transform:Transform3D, radius:float) Math.Vec
                 Math.max(Math.abs(bounds.lower.z), Math.abs(bounds.upper.z)))
         }
         convex(_) => {}
-        cylinder(_) => {}
+        cylinder(cylinder) => {
+            // A cylinder fits in its oriented local box. Its bounding sphere
+            // is unnecessarily wide for long obstacles and thin rim flanges.
+            let x=transform.vector(Math.Vec3(cylinder.radius,0.0,0.0))
+            let y=transform.vector(Math.Vec3(0.0,cylinder.half_height,0.0))
+            let z=transform.vector(Math.Vec3(0.0,0.0,cylinder.radius))
+            return Math.Vec3(Math.abs(x.x)+Math.abs(y.x)+Math.abs(z.x),
+                Math.abs(x.y)+Math.abs(y.y)+Math.abs(z.y),
+                Math.abs(x.z)+Math.abs(y.z)+Math.abs(z.z))
+        }
         tapered_cylinder(_) => {}
         tapered_capsule(_) => {}
         plane(_) => { panic("GFX.Physics an infinite plane has no finite extent") }

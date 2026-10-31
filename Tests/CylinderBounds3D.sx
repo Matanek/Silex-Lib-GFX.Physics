@@ -1,0 +1,36 @@
+use GFX.Physics
+use GFX.Physics.World3D.shape_pose_bounds3d
+use STD.Math
+
+func inspect(radius:float,height:float,pose:Physics.Transform3D) {
+    let shape=Physics.Shape3D.cylinder(Physics.Cylinder3D(radius,height))
+    let bounds=shape_pose_bounds3d(shape,pose)
+    let tolerance=0.00001*Math.max(1.0,radius+height)
+    let axes:Math.Vec3[]=[Math.Vec3.right(),Math.Vec3.up(),Math.Vec3.back()]
+    let signs:float[]=[1.0,-1.0]
+    for axis in axes { for sign in signs {
+        let direction=pose.inverse_vector(axis.multiply(sign))
+        let radial=Math.sqrt(direction.x*direction.x+direction.z*direction.z)
+        var point=Math.Vec3(0.0,height,0.0)
+        if direction.y<0.0 { point.y= -height }
+        if radial>0.00000001 { point.x=radius*direction.x/radial;point.z=radius*direction.z/radial }
+        let world=pose.point(point)
+        assert(world.x>=bounds.lower.x-tolerance && world.x<=bounds.upper.x+tolerance)
+        assert(world.y>=bounds.lower.y-tolerance && world.y<=bounds.upper.y+tolerance)
+        assert(world.z>=bounds.lower.z-tolerance && world.z<=bounds.upper.z+tolerance)
+    } }
+}
+
+test "cylinder bounds retain analytical support points at three scales and rotated poses" {
+    let scales:float[]=[0.001,1.0,1000.0]
+    for scale in scales {
+        let poses:Physics.Transform3D[]=[Physics.Transform3D(),
+            Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())),
+            Physics.Transform3D(Math.Vec3(-20.0,0.25,30.0),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back()))]
+        for pose in poses { inspect(0.42*scale,2.8*scale,pose);inspect(0.78*scale,0.0175*scale,pose) }
+    }
+    let bounds=shape_pose_bounds3d(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.42,2.8)),
+        Physics.Transform3D(Math.Vec3(),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back())))
+    assert(bounds.upper.x>2.799 && bounds.upper.x<2.801)
+    assert(bounds.upper.y<0.421 && bounds.upper.z<0.421)
+}

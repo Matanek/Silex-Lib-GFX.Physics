@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les cylindres utilisent leur boîte orientée pour les enveloppes de collision au lieu de leur sphère englobante, ce qui évite des recherches de contacts éloignés autour des obstacles longs et des rebords minces. Les points extrêmes analytiques, contacts composés et balayages axiaux sont vérifiés.
+
 - Écarter les segments de sommets souples qui ne peuvent pas atteindre une feuille axiale, avant les distances et balayages exacts. Les contacts possibles conservent leurs fractions CCD et leur ordre de réaction.
 
 - Réduit le coût des contacts souples/rigides en réutilisant les requêtes de balayage axiales et les données stables des contacts. Les fractions de CCD et l'ordre des réactions sont conservés.
