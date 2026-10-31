@@ -75,6 +75,10 @@ impulses, including their inertia. A sweep protects fast vertex movement through
 fixed obstacles. Rigid movement is resolved before the soft-body phase of each
 step; this is not a simultaneous solve of all rigid and soft constraints.
 
+Fixed obstacles reuse prepared geometry while their shape and pose remain
+unchanged. Filters, enabled state and materials remain live body state. The
+number of substeps and contact order do not change.
+
 Triangular surfaces use a 0.1 m backing recovery layer and front-facing edges,
 following Jolt’s CPU policy. Existing world queries and rigid contact lists
 concern rigid bodies; the Scene3D mesh supports visual cloth selection.

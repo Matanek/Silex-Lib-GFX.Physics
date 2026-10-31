@@ -87,6 +87,11 @@ obstacles fixes. Les mouvements rigides sont résolus avant le lot souple du
 pas ; il ne s’agit pas d’une résolution simultanée de toutes les contraintes
 rigides et souples.
 
+Les obstacles fixes réutilisent leur préparation géométrique tant que leur
+forme et leur pose ne changent pas. Les filtres, l’activation et les matériaux
+restent ceux des corps courants. Le nombre de sous-pas et l’ordre des contacts
+ne changent pas.
+
 Les surfaces triangulées ont une couche arrière de récupération de 0,1 m, avec
 des arêtes actives du côté avant, suivant la politique CPU de Jolt. Les requêtes
 de monde existantes et les listes de contacts rigides concernent les rigides ;

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- La préparation géométrique des obstacles fixes est réutilisée pendant les contacts souples 3D. Un changement de forme ou de pose, une désactivation, une suppression ou un remplacement invalide cette préparation ; filtres, matériaux et vitesses restent lus sur les corps courants. Les paramètres et l’ordre du solveur restent identiques. [Mesures locales et limites](Benchmarks/Baselines/2026-10-31-soft-collider-cache-debug.jsonl).
+
 - Corriger une non-convergence EPA sur les contacts presque tangents de faces inclinées : plans de faces transformés et orientations en précision élargie pour construire un tétraèdre réellement contenant. Les pénétrations réelles restent résolues par EPA.
 
 - Les mondes comportant peu de corps mobiles évitent de trier et comparer entre eux tous les obstacles fixes à chaque passe de position, en conservant filtres, capteurs et ordre canonique des contacts.

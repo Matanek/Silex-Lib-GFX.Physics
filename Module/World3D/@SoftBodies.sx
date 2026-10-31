@@ -20,10 +20,13 @@ use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
 use GFX.Physics.Transform3D.Transform3D
 
-// Snapshot the geometric broad phase once per world step. Dynamic velocities
-// remain live, but soft contact gather never runs concurrently with rigid work.
-struct SoftCollider3D {
+// Share prepared geometry between the cache and candidate lists instead of
+// copying its query arrays. Dynamic velocities remain live, but soft contact
+// gather never runs concurrently with rigid work.
+class SoftCollider3D {
     var body:BodyState3D
+    let shape_revision:int
+    let pose:Transform3D
     let bounds:ShapeBounds3D
     let surface_margin:float
     let plane_normal:Math.Vec3
@@ -35,6 +38,8 @@ struct SoftCollider3D {
     var axial_motion_queries:AxialPointQuery3D[]
     init(body:BodyState3D) {
         self.body = body
+        self.shape_revision=body.shape_revision
+        self.pose=body.transform
         var box_query:BoxPointQuery3D?=null
         match body.shape { box(box)=>{ box_query=BoxPointQuery3D(box,body.transform) };else=>{} }
         self.box_query=box_query

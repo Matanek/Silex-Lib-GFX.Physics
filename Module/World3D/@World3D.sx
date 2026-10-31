@@ -185,6 +185,7 @@ package struct CharacterShape3D {
 
 public class World3D {
     private var soft_bodies:SoftBodyState3D?[] = []
+    private var soft_collider_cache:SoftCollider3D?[] = []
     private let soft_body_substeps:int
     private var store:BodyStore3D
     private var parallel_executor:Threading.Executor? = null
@@ -218,6 +219,7 @@ public class World3D {
         self.parallel_executor = null
         for slot in self.soft_bodies { if var body = slot { body.alive = false } }
         self.soft_bodies = []
+        self.soft_collider_cache = []
         self.distance_constraints.invalidate_all()
         self.slider_constraints.invalidate_all()
         self.fixed_constraints.invalidate_all()
@@ -794,6 +796,8 @@ public class World3D {
         }
         self.physical_characters = retained_characters
         self.store.destroy(body.body_id())
+        let slot=body.body_id().slot
+        if slot<self.soft_collider_cache.count() { self.soft_collider_cache[slot]=null }
         var retained:Contact3D[] = []
         for contact in self.contacts {
             if !contact.first_body().same_body(body) &&
@@ -1095,6 +1099,35 @@ public class World3D {
             index++
         }
     }
+    private func prepare_soft_colliders() SoftCollider3D[] {
+        var colliders:SoftCollider3D[] = []
+        // Static geometry survives substeps. Runtime filters and material/body
+        // state stay live; only shape/pose-derived queries are reused. A new
+        // body in a recycled slot cannot reuse its predecessor's geometry.
+        while self.soft_collider_cache.count()<self.store.slots.count() { self.soft_collider_cache.append(null) }
+        for index,slot in self.store.slots.indexed() {
+            if var body = slot {
+                if body.is_enabled && !body.is_sensor {
+                    if body.body_type==BodyType3D.fixed {
+                        if let prepared=self.soft_collider_cache[index] {
+                            if prepared.body==body && prepared.shape_revision==body.shape_revision &&
+                                prepared.pose==body.transform {
+                                colliders.append(prepared);continue
+                            }
+                        }
+                        var prepared=SoftCollider3D(body)
+                        self.soft_collider_cache[index]=prepared;colliders.append(prepared)
+                    } else {
+                        self.soft_collider_cache[index]=null;colliders.append(SoftCollider3D(body))
+                    }
+                    continue
+                }
+            }
+            self.soft_collider_cache[index]=null
+        }
+        return colliders
+    }
+
     private func simulate_soft_bodies(delta:float) {
         var active = false
         for slot in self.soft_bodies {
@@ -1102,11 +1135,8 @@ public class World3D {
                 if body.settings.is_enabled { begin_soft_frame3d(body,self.store); active = true }
             }
         }
-        if !active { return }
-        var colliders:SoftCollider3D[] = []
-        for slot in self.store.slots {
-            if var body = slot { if body.is_enabled && !body.is_sensor { colliders.append(SoftCollider3D(body)) } }
-        }
+        if !active { self.soft_collider_cache=[];return }
+        var colliders=self.prepare_soft_colliders()
         // These sets are stable while the synchronous world step owns mutation.
         var heavy:SoftBodyState3D[]=[];var light:SoftBodyState3D[]=[]
         if self.parallel_executor!=null && self.soft_bodies.count()<64 {

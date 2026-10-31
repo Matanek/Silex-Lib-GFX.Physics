@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Soft 3D contacts reuse prepared geometry for fixed obstacles. Shape or pose changes, disabling, removal and replacement invalidate this preparation; filters, materials and velocities remain live body state. Solver settings and order remain unchanged. [Local measurements and limits](Benchmarks/Baselines/2026-10-31-soft-collider-cache-debug.jsonl).
+
 - Fix EPA non-convergence at almost tangent inclined faces: use transformed feature planes and wide orientation predicates to seed a truly enclosing tetrahedron. Actual penetrations retain the EPA solve.
 
 - Worlds with few moving bodies avoid sorting and comparing all fixed obstacles during each position pass while retaining filters, sensors and canonical contact order.
