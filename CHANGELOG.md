@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reuse a prepared box query during soft contacts instead of reconstructing and redispatching the same shapes per vertex, particularly on slopes. Distances, normals, reactions and continuous sweeps are preserved.
+
 - Cylinders use their oriented box for collision bounds instead of their bounding sphere, avoiding distant contact searches around long obstacles and thin flanges. Analytical support points, compound contacts and axial sweeps are checked.
 
 - Reject soft vertex segments that cannot reach an axial leaf before exact distance and sweep queries. Possible contacts preserve their CCD fractions and reaction ordering.

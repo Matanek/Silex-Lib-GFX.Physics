@@ -465,8 +465,11 @@ func sphere_box_distance(
     box:Box3D,
     box_transform:Transform3D
 ) DistanceResult3D {
-    let local_center = box_transform.inverse_point(sphere_transform.position)
-    let half = box.half_size()
+    return sphere_box_point_distance3d(sphere_transform.position,sphere.radius,box.half_size(),box_transform)
+}
+
+func sphere_box_point_distance3d(center:Math.Vec3,radius:float,half:Math.Vec3,box_transform:Transform3D) DistanceResult3D {
+    let local_center = box_transform.inverse_point(center)
     let local_closest = local_center.clamped(half.negated(), half)
     let offset = local_closest.subtract(local_center)
     let squared = offset.length_squared()
@@ -474,10 +477,10 @@ func sphere_box_distance(
         let length = Math.sqrt(squared)
         let normal = box_transform.vector(offset.divide(length))
         return DistanceResult3D(
-            sphere_transform.position.add(normal.multiply(sphere.radius)),
+            center.add(normal.multiply(radius)),
             box_transform.point(local_closest),
             normal,
-            length - sphere.radius
+            length - radius
         )
     }
 
@@ -496,10 +499,10 @@ func sphere_box_distance(
     // A negative separation moves the first shape opposite the normal.
     let normal = box_transform.vector(local_normal).negated()
     return DistanceResult3D(
-        sphere_transform.position.add(normal.multiply(sphere.radius)),
+        center.add(normal.multiply(radius)),
         box_transform.point(local_center.add(local_normal.multiply(face_distance))),
         normal,
-        -face_distance - sphere.radius
+        -face_distance - radius
     )
 }
 

@@ -14,6 +14,7 @@ use GFX.Physics.Geometry3D.DistanceResult3D
 use GFX.Physics.Geometry3D.motion_distance3d
 use GFX.Physics.Geometry3D.axial_shape3d
 use GFX.Physics.Geometry3D.AxialPointQuery3D
+use GFX.Physics.Geometry3D.BoxPointQuery3D
 use GFX.Physics.Geometry3D.compound_child_transform
 use GFX.Physics.Shape3D.Shape3D
 use GFX.Physics.Sphere3D.Sphere3D
@@ -28,11 +29,15 @@ struct SoftCollider3D {
     let plane_normal:Math.Vec3
     let plane_origin:Math.Vec3
     let is_plane:bool
+    let box_query:BoxPointQuery3D?
     var axial_queries:AxialPointQuery3D[]
     let contact_bounds:ShapeBounds3D
     var axial_motion_queries:AxialPointQuery3D[]
     init(body:BodyState3D) {
         self.body = body
+        var box_query:BoxPointQuery3D?=null
+        match body.shape { box(box)=>{ box_query=BoxPointQuery3D(box,body.transform) };else=>{} }
+        self.box_query=box_query
         let margin=soft_surface_margin3d(body.shape)
         self.surface_margin = margin
         var bounds = ShapeBounds3D(Math.Vec3(-3.4e38),Math.Vec3(3.4e38))
@@ -171,7 +176,9 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
                     continue
                 }
                 var distance=empty_soft_distance3d()
-                if !collider.axial_queries.is_empty() {
+                if let query=collider.box_query {
+                    distance=query.sphere_distance(particle.position,radius)
+                } else if !collider.axial_queries.is_empty() {
                     distance=soft_axial_distance3d(collider.axial_queries,particle.position,radius)
                 } else {
                     let target=ShapePlacement3D(rigid.shape,rigid.transform)

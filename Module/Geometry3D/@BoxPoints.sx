@@ -1,0 +1,13 @@
+use GFX.Physics.Box3D.Box3D
+use GFX.Physics.Transform3D.Transform3D
+use STD.Math
+
+// A box and its pose are immutable throughout one soft-body contact pass.
+package struct BoxPointQuery3D {
+    private let half:Math.Vec3
+    private let pose:Transform3D
+    init(box:Box3D,pose:Transform3D) { self.half=box.half_size();self.pose=pose }
+    func sphere_distance(center:Math.Vec3,radius:float) DistanceResult3D {
+        return sphere_box_point_distance3d(center,radius,self.half,self.pose)
+    }
+}
