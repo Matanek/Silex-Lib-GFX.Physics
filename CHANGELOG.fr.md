@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Écarter les segments de sommets souples qui ne peuvent pas atteindre une feuille axiale, avant les distances et balayages exacts. Les contacts possibles conservent leurs fractions CCD et leur ordre de réaction.
+
 - Réduit le coût des contacts souples/rigides en réutilisant les requêtes de balayage axiales et les données stables des contacts. Les fractions de CCD et l'ordre des réactions sont conservés.
 
 - Les contacts des sommets souples avec les cylindres et formes axiales réutilisent un profil préparé pour le pas, y compris les composés entièrement axiaux. Les distances, normales et réactions conservent leur ordre et leurs conventions.

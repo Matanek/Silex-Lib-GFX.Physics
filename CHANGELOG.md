@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Reject soft vertex segments that cannot reach an axial leaf before exact distance and sweep queries. Possible contacts preserve their CCD fractions and reaction ordering.
+
 - Reduce soft/rigid contact cost by reusing axial sweep queries and stable contact data. CCD fractions and reaction ordering are preserved.
 
 - Soft vertex contacts with cylinders and axial shapes reuse a profile prepared for the step, including entirely axial compounds. Distances, normals and reactions preserve their ordering and conventions.

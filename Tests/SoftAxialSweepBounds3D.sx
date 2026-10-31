@@ -1,0 +1,41 @@
+use GFX.Physics
+use GFX.Physics.Geometry3D.AxialPointQuery3D
+use GFX.Physics.World3D.continuous_fraction3d
+use STD.Math
+
+func compare(shape:Physics.Shape3D,pose:Physics.Transform3D,scale:float) {
+    let target=Physics.ShapePlacement3D(shape,pose)
+    let query=AxialPointQuery3D(target)
+    let points:Math.Vec3[]=[Math.Vec3(-3.0,0.0,0.0),Math.Vec3(3.0,0.0,0.0),
+        Math.Vec3(0.0,-3.0,0.0),Math.Vec3(0.0,3.0,0.0),Math.Vec3(0.0,0.0,0.0),
+        Math.Vec3(-3.0,0.0,0.675),Math.Vec3(3.0,0.0,0.675),
+        Math.Vec3(-3.0,0.285,0.0),Math.Vec3(3.0,0.285,0.0),
+        Math.Vec3(4.0,3.0,4.0),Math.Vec3(4.0,-3.0,4.0)]
+    let radius=0.035*scale
+    for first in points { for second in points {
+        let a=pose.point(first.multiply(scale));let b=pose.point(second.multiply(scale))
+        let sphere=Physics.Shape3D.sphere(Physics.Sphere3D(radius))
+        let start=Physics.Geometry3D.distance(Physics.ShapePlacement3D(sphere,Physics.Transform3D(a)),target)
+        let end=Physics.Geometry3D.distance(Physics.ShapePlacement3D(sphere,Physics.Transform3D(b)),target)
+        let impact=continuous_fraction3d(sphere,Physics.Transform3D(a),Physics.Transform3D(b),shape,pose,pose)
+        if start.separation<=0.000001 || end.separation<=0.000001 || impact!=null {
+            assert(query.may_touch_sphere_segment(a,b,radius))
+        }
+    } }
+    let miss_a=pose.point(Math.Vec3(4.0,3.0,4.0).multiply(scale))
+    let miss_b=pose.point(Math.Vec3(4.0,-3.0,4.0).multiply(scale))
+    assert(!query.may_touch_sphere_segment(miss_a,miss_b,radius))
+}
+
+test "axial sweep bounds retain endpoints crossings tangencies and zero motion" {
+    let scales:float[]=[0.001,1.0,1000.0]
+    for scale in scales {
+        let poses:Physics.Transform3D[]=[Physics.Transform3D(),
+            Physics.Transform3D(Math.Vec3(2.0,3.0,-1.0),Math.Quat.angle_axis(0.7,Math.Vec3(1.0,2.0,3.0).normalized())),
+            Physics.Transform3D(Math.Vec3(-20.0,0.25,30.0),Math.Quat.angle_axis(Math.half_pi(),Math.Vec3.back()))]
+        var shapes:Physics.Shape3D[]=[Physics.Shape3D.cylinder(Physics.Cylinder3D(0.64*scale,0.25*scale)),
+            Physics.Shape3D.tapered_cylinder(Physics.TaperedCylinder3D(1.0*scale,0.5*scale,0.5*scale)),
+            Physics.Shape3D.tapered_capsule(Physics.TaperedCapsule3D(1.0*scale,0.5*scale,0.5*scale))]
+        for pose in poses { for shape in shapes { compare(shape,pose,scale) } }
+    }
+}

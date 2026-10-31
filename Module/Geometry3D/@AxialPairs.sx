@@ -54,6 +54,8 @@ package struct AxialPointQuery3D {
     private let scale:float
     private let dimensions:AxialDimensions3D
     private let rounded:bool
+    private let bounding_radius:float
+    private let bounding_height:float
 
     init(target:ShapePlacement3D) {
         let dimensions=axial_dimensions3d(target.shape())
@@ -62,9 +64,34 @@ package struct AxialPointQuery3D {
         self.dimensions=AxialDimensions3D(dimensions.half_height/scale,
             dimensions.top_radius/scale,dimensions.bottom_radius/scale)
         self.rounded=axial_rounded3d(target.shape())
+        self.bounding_radius=Math.max(dimensions.top_radius,dimensions.bottom_radius)
+        var height=dimensions.half_height
+        if self.rounded { height+=self.bounding_radius }
+        self.bounding_height=height
     }
     func point(value:Math.Vec3) AxialPoint3D {
         return axial_profile_point3d(value,self.pose,self.scale,self.dimensions,self.rounded)
+    }
+    // Necessary sweep bounds only: keep the exact distance and CCD path for
+    // every segment that may reach the finite enclosing cylinder.
+    func may_touch_sphere_segment(start:Math.Vec3,end:Math.Vec3,radius:float) bool {
+        let a=self.pose.inverse_point(start);let b=self.pose.inverse_point(end)
+        let first=Math.max(Math.abs(a.x),Math.max(Math.abs(a.y),Math.abs(a.z)))
+        let second=Math.max(Math.abs(b.x),Math.max(Math.abs(b.y),Math.abs(b.z)))
+        let scale=Math.max(1.0,2.0*Math.max(first,second)+self.bounding_radius+self.bounding_height+radius)
+        let margin=radius+0.00001*scale
+        let height=self.bounding_height+margin
+        if Math.min(a.y,b.y)>height || Math.max(a.y,b.y)< -height { return false }
+        let dx=b.x-a.x;let dz=b.z-a.z
+        let length=dx*dx+dz*dz
+        if !Math.is_finite(length) { return true }
+        var fraction=0.0
+        if length>0.0 { fraction=Math.clamp(-(a.x*dx+a.z*dz)/length,0.0,1.0) }
+        let x=a.x+dx*fraction;let z=a.z+dz*fraction
+        let bound=self.bounding_radius+margin
+        let squared=x*x+z*z
+        if !Math.is_finite(squared) || !Math.is_finite(bound) { return true }
+        return squared<=bound*bound
     }
     func sphere_distance(center:Math.Vec3,radius:float) DistanceResult3D {
         let distance=axial_profile_point3d(center,self.pose,self.scale,self.dimensions,self.rounded,true)

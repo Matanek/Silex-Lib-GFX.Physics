@@ -120,6 +120,13 @@ package func soft_axial_fraction3d(initial_queries:@AxialPointQuery3D[],
     return null
 }
 
+func soft_axial_may_touch3d(queries:@AxialPointQuery3D[],start:Math.Vec3,end:Math.Vec3,radius:float) bool {
+    for query in queries {
+        if query.may_touch_sphere_segment(start,end,radius) { return true }
+    }
+    return false
+}
+
 func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], delta:float, gravity:Math.Vec3) {
     var body = state
     let radius = body.settings.vertex_radius
@@ -159,6 +166,10 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
                 if maximum.x < bounds.lower.x || minimum.x > bounds.upper.x ||
                     maximum.y < bounds.lower.y || minimum.y > bounds.upper.y ||
                     maximum.z < bounds.lower.z || minimum.z > bounds.upper.z { continue }
+                if !collider.axial_queries.is_empty() &&
+                    !soft_axial_may_touch3d(collider.axial_queries,particle.previous,particle.position,radius) {
+                    continue
+                }
                 var distance=empty_soft_distance3d()
                 if !collider.axial_queries.is_empty() {
                     distance=soft_axial_distance3d(collider.axial_queries,particle.position,radius)
