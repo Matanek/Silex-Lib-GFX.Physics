@@ -227,11 +227,11 @@ package class VehiclePowertrain3D {
             index++
         }
     }
-    func step(delta:float,throttle:float,brake:float,handbrake:float) {
+    func step(delta:float,throttle:float,brake:float,handbrake:float,torque_scale:float=1.0,clutch:float=1.0) {
         let old_rpm=self.rpm;let conversion=60.0/Math.two_pi()
         self.rpm=Math.clamp(self.rpm*Math.max(0.0,1.0-self.engine.angular_damping*delta),self.engine.minimum_rpm,self.engine.maximum_rpm)
         var input=Math.abs(throttle);if self.transmission.mode==VehicleTransmissionMode3D.automatic { input*=self.gearbox.clutch }
-        self.engine_torque=self.engine.torque(self.rpm,input);self.distribute()
+        self.engine_torque=self.engine.torque(self.rpm,input)*torque_scale;self.distribute()
         let e0=self.rpm/conversion+delta*self.engine_torque/self.engine.inertia
         var average=0.0;var compliance=0.0;let count=self.driven.count() as float
         for i in self.driven {
@@ -242,7 +242,7 @@ package class VehiclePowertrain3D {
             average+=self.ratios[i]*(self.speeds[i]-impulse/self.inertias[i])/count
             compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count
         }
-        var strength=0.0;if self.gearbox.gear!=0 { strength=self.gearbox.clutch*self.transmission.clutch_strength }
+        var strength=0.0;if self.gearbox.gear!=0 { strength=self.gearbox.clutch*self.transmission.clutch_strength*clutch }
         let torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
         self.rpm=Math.clamp((e0-delta*torque/self.engine.inertia)*conversion,self.engine.minimum_rpm,self.engine.maximum_rpm)
         var slipping=false

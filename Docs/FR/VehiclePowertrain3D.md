@@ -136,3 +136,47 @@ l’arrêt, les états primaires et formules restent contrôlés ; les vitesses 
 contact sont comparées par moyennes de phase. Aucune parité instantanée de
 vitesse de contact ou d’angle mal conditionné n’est revendiquée. Les autres détecteurs de
 roue, anti-roulis, chenilles et équilibre moto restent des capacités distinctes.
+
+## Entraîner ses propres roues rigides
+
+`WheelDrive3D` utilise ce même moteur, embrayage et boîte lorsque les jantes et
+les pneus sont simulés séparément, par exemple avec des pneus souples. Le
+[consommateur exécutable](../../Tests/Consumer/Smokes/WheelDrive3D.sx) vérifie
+le couplage à des rotors externes. Fragment pour quatre roues déjà simulées :
+
+```sx
+var drive=Physics.WheelDrive3D(
+    Physics.VehicleEngine3DSettings(maximum_torque:145.0),
+    Physics.VehicleTransmission3DSettings(gear_ratios:[3.2,2.3,1.6]),
+    wheel_inertias:[16.0,16.0,16.0,16.0],
+    differentials:[Physics.VehicleDifferential3DSettings(0,2,engine_torque_ratio:0.5),
+        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)])
+```
+
+À chaque sous-pas, appeler `set_wheel(index,angular_velocity,grounded:...,slipping:...)`
+pour chaque roue, puis `step(delta,throttle,torque_scale:1,clutch:1)`. Fournir la
+vitesse angulaire **relative au châssis**, en rad/s, avec le même sens positif
+pour toutes les roues. Les inerties sont les inerties effectives autour de cet
+axe, en kg·m² ; elles incluent les éléments entraînés avec la jante. Les indices
+et les parts de différentiel suivent les règles ci-dessus. Les tableaux sont
+retenus indépendamment des modifications ultérieures du consommateur.
+
+Appliquer ensuite `wheel_torque(index)` en N·m à la roue et sa réaction opposée
+au châssis, puis avancer le monde du même `delta`. Ce contrôleur n’avance aucun
+corps lui-même. Relire les vitesses réelles après contacts au pas suivant ; ne
+pas appliquer une deuxième correction de vitesse ni le couple moteur brut.
+Les freins restent à la charge du montage. `grounded` et `slipping` renseignent
+la protection de montée de rapport, sans créer de force de contact.
+
+Le pas est fini dans [0,1] seconde et un pas nul conserve l’état et les couples.
+`torque_scale` est fini et positif ou nul ; il multiplie le couple de combustion,
+par exemple pour un boost. `clutch`, fini dans [0,1], multiplie l’embrayage de la
+boîte : il permet une prise progressive au démarrage ou une ouverture pendant
+le freinage. Le ralenti imposé peut autrement pousser des roues immobiles.
+En mode manuel, `set_transmission(gear,clutch:...)` conserve son rôle ; la
+pression passée à `step` se multiplie à cette commande. Les entrées invalides
+provoquent un panic.
+
+`state()` fournit `VehiclePowertrainState3D` : régime, rapport, embrayage effectif,
+transition et couple moteur. Ces observations peuvent alimenter un tableau de
+bord ou un moteur sonore. GFX.Physics ne dépend d’aucune bibliothèque audio.

@@ -1,0 +1,72 @@
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrain3D
+use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
+use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.RigidBody3D.finite_body3d_value
+use STD.Math
+
+// Drive externally simulated wheel rotors with the same engine/clutch solver
+// used by WheeledVehicle3D. The caller applies the returned torques to bodies.
+public class WheelDrive3D {
+    private var motor:VehiclePowertrain3D
+    private var pressure:float=1.0
+    init(engine:VehicleEngine3DSettings, transmission:VehicleTransmission3DSettings,
+        wheel_inertias:float[], differentials:VehicleDifferential3DSettings[]) {
+        if wheel_inertias.count()==0 || differentials.count()==0 { panic("GFX.Physics.WheelDrive3D requires wheels and differentials") }
+        var radii:float[]=[];var zeros:float[]=[];var used:bool[]=[]
+        var inertias:float[]=[];var retained:VehicleDifferential3DSettings[]=[]
+        for inertia in wheel_inertias {
+            if !finite_body3d_value(inertia) || inertia<=0.0 || !finite_body3d_value(1.0/inertia) {
+                panic("GFX.Physics.WheelDrive3D requires positive representable wheel inertias")
+            }
+            inertias.append(inertia);radii.append(1.0);zeros.append(0.0);used.append(false)
+        }
+        var share=0.0
+        for d in differentials {
+            let indices:int[]=[d.left_wheel,d.right_wheel]
+            for index in indices {
+                if index<0 { continue }
+                if index>=used.count() || used[index] { panic("GFX.Physics.WheelDrive3D requires unique valid driven-wheel indices") }
+                used[index]=true
+            }
+            for i in 0...transmission.forward_gear_count() {
+                let gear=i+1
+                let ratio=transmission.gear_ratio(gear)*d.ratio
+                if !finite_body3d_value(ratio*ratio) { panic("GFX.Physics.WheelDrive3D requires representable combined ratios") }
+            }
+            for i in 0...transmission.reverse_gear_count() {
+                let ratio=transmission.gear_ratio(-i-1)*d.ratio
+                if !finite_body3d_value(ratio*ratio) { panic("GFX.Physics.WheelDrive3D requires representable combined ratios") }
+            }
+            retained.append(d);share+=d.engine_torque_ratio
+        }
+        if Math.abs(share-1.0)>0.0001 { panic("GFX.Physics.WheelDrive3D differential shares must sum to one") }
+        self.motor=VehiclePowertrain3D(engine,transmission,retained,null,inertias,radii,zeros,zeros)
+    }
+    func wheel_count() int { return self.motor.speeds.count() }
+    func set_wheel(index:int,angular_velocity:float,grounded:bool=true,slipping:bool=false) {
+        self.require_wheel(index)
+        if !finite_body3d_value(angular_velocity) { panic("GFX.Physics.WheelDrive3D requires finite wheel speed") }
+        self.motor.speeds[index]=angular_velocity;self.motor.contacts[index]=grounded
+        var slip=0.0;if slipping { slip=1.0 }
+        self.motor.slips[index]=slip
+    }
+    func step(delta:float,throttle:float,torque_scale:float=1.0,clutch:float=1.0) {
+        if !finite_body3d_value(delta) || delta<0.0 || delta>1.0 || !finite_body3d_value(throttle) || Math.abs(throttle)>1.0 ||
+            !finite_body3d_value(torque_scale) || torque_scale<0.0 || !finite_body3d_value(clutch) || clutch<0.0 || clutch>1.0 ||
+            !finite_body3d_value(delta*torque_scale*self.motor.engine.maximum_torque/self.motor.engine.inertia) {
+            panic("GFX.Physics.WheelDrive3D requires delta in [0,1], throttle in [-1,1] and finite nonnegative torque scale")
+        }
+        if delta>0.0 { self.pressure=clutch;self.motor.step(delta,throttle,0.0,0.0,torque_scale,clutch) }
+    }
+    func state() VehiclePowertrainState3D {
+        let state=self.motor.state()
+        return VehiclePowertrainState3D(state.engine_rpm,state.gear,state.clutch*self.pressure,state.switching_gear,state.engine_torque)
+    }
+    func wheel_torque(index:int) float { self.require_wheel(index);return self.motor.drive_torques[index] }
+    func set_transmission(gear:int,clutch:float=1.0) { self.motor.set_transmission(gear,clutch) }
+    private func require_wheel(index:int) {
+        if index<0 || index>=self.motor.speeds.count() { panic("GFX.Physics.WheelDrive3D wheel index is out of range") }
+    }
+}

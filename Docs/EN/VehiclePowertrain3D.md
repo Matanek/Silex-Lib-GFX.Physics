@@ -132,3 +132,45 @@ solutions, body reactions, copies and lifetime checks. Near a stop, primary stat
 contact velocities are compared through phase means. Instantaneous parity of
 contact velocity or ill-conditioned angles is not claimed. Other wheel detectors, anti-roll bars, tracked vehicles and
 motorcycle balance remain separate capabilities.
+
+## Drive your own rigid wheels
+
+`WheelDrive3D` uses the same engine, clutch and gearbox when rims and tires are
+simulated separately, for example with soft tires. The
+[executable consumer](../../Tests/Consumer/Smokes/WheelDrive3D.sx) checks coupling
+to external rotors. Fragment for four wheels already being simulated:
+
+```sx
+var drive=Physics.WheelDrive3D(
+    Physics.VehicleEngine3DSettings(maximum_torque:145.0),
+    Physics.VehicleTransmission3DSettings(gear_ratios:[3.2,2.3,1.6]),
+    wheel_inertias:[16.0,16.0,16.0,16.0],
+    differentials:[Physics.VehicleDifferential3DSettings(0,2,engine_torque_ratio:0.5),
+        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)])
+```
+
+Each substep, call `set_wheel(index,angular_velocity,grounded:...,slipping:...)`
+for every wheel, then `step(delta,throttle,torque_scale:1,clutch:1)`. Supply
+angular velocity **relative to the chassis**, in rad/s, using the same positive
+sense for all wheels. Inertias are the effective inertias around that axis, in
+kg·m², including parts rotating with the rim. Differential indices and shares
+follow the rules above. Arrays are retained independently of later caller edits.
+
+Apply `wheel_torque(index)` in N·m to each wheel and its opposite reaction to
+the chassis, then advance the world by the same `delta`. This controller does
+not advance bodies itself. Read actual post-contact speeds for the next step;
+do not apply another velocity correction or the raw engine torque. Brakes
+belong to the wheel assembly. `grounded` and `slipping` inform upshift protection
+without creating contact forces.
+
+The step must be finite in [0,1] seconds; a zero step preserves state and torques.
+`torque_scale` is finite and nonnegative; it multiplies combustion torque, for
+example for a boost. `clutch`, finite in [0,1], multiplies the gearbox clutch,
+allowing progressive launch or disengagement during braking. Otherwise, the
+imposed idle can push stationary wheels. In manual mode,
+`set_transmission(gear,clutch:...)` retains its role; the pressure supplied to
+`step` multiplies that command. Invalid inputs panic.
+
+`state()` returns `VehiclePowertrainState3D`: RPM, gear, effective clutch,
+transition and engine torque. These observations can drive a dashboard or a
+sound engine. GFX.Physics has no audio library dependency.

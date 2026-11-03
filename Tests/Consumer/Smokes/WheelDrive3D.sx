@@ -1,0 +1,66 @@
+use GFX.Physics
+use STD.Math
+
+func drive(final:float=3.0,automatic:bool=false) Physics.WheelDrive3D {
+    var mode=Physics.VehicleTransmissionMode3D.manual;if automatic { mode=Physics.VehicleTransmissionMode3D.automatic }
+    return Physics.WheelDrive3D(
+        Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:0.0,inertia:0.5,angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]),
+        Physics.VehicleTransmission3DSettings(mode:mode,gear_ratios:[1.0,0.5],reverse_gear_ratios:[-1.0],shift_up_rpm:100.0,shift_down_rpm:50.0),
+        wheel_inertias:[0.9,0.9,0.9,0.9],differentials:[
+            Physics.VehicleDifferential3DSettings(0,2,ratio:final,limited_slip_ratio:null,engine_torque_ratio:0.5),
+            Physics.VehicleDifferential3DSettings(1,3,ratio:final,limited_slip_ratio:null,engine_torque_ratio:0.5)])
+}
+func main() {
+    for rate in [60,120,960] {
+        var motor=drive();motor.set_transmission(1)
+        var omega:float=0.0;let dt=1.0/rate as float
+        for step in 0...rate {
+            for i in 0...4 { motor.set_wheel(i,omega) }
+            motor.step(dt,1.0)
+            let torque=motor.wheel_torque(0)
+            for i in 1...4 { assert(Math.abs(motor.wheel_torque(i)-torque)<0.0001) }
+            omega+=dt*torque/0.9
+            let momentum=0.5*motor.state().engine_rpm*Math.two_pi()/60.0+4.0*0.9*omega/3.0
+            assert(Math.abs(momentum-12.0*(step+1) as float*dt)<0.001,"external-wheel drive violated angular momentum")
+        }
+        let before=motor.state();motor.step(0.0,1.0)
+        assert(motor.state().engine_rpm==before.engine_rpm)
+    }
+    var long=drive(2.0);var short=drive(4.0)
+    long.set_transmission(1);short.set_transmission(1)
+    for _ in 0...600 {
+        for i in 0...4 { long.set_wheel(i,10.0);short.set_wheel(i,10.0) }
+        long.step(1.0/120.0,0.0);short.step(1.0/120.0,0.0)
+    }
+    assert(Math.abs(long.state().engine_rpm-20.0*60.0/Math.two_pi())<0.1)
+    assert(Math.abs(short.state().engine_rpm-40.0*60.0/Math.two_pi())<0.1)
+    var automatic=drive(1.0,true);var omega:float=0.0
+    for _ in 0...600 {
+        for i in 0...4 { automatic.set_wheel(i,omega,grounded:false) }
+        automatic.step(1.0/120.0,1.0);omega+=automatic.wheel_torque(0)/0.9/120.0
+    }
+    assert(automatic.state().gear==1,"automatic gearbox must not shift up in the air")
+    for _ in 0...240 {
+        for i in 0...4 { automatic.set_wheel(i,omega) }
+        automatic.step(1.0/120.0,1.0);omega+=automatic.wheel_torque(0)/0.9/120.0
+    }
+    assert(automatic.state().gear==2)
+    var normal=drive();var boost=drive();var disconnected=drive();var reverse=drive()
+    normal.set_transmission(1);boost.set_transmission(1);disconnected.set_transmission(1);reverse.set_transmission(-1)
+    normal.step(1.0/120.0,1.0);boost.step(1.0/120.0,1.0,torque_scale:2.0)
+    disconnected.step(1.0/120.0,1.0,clutch:0.0);reverse.step(1.0/120.0,1.0)
+    assert(Math.abs(boost.wheel_torque(0)-2.0*normal.wheel_torque(0))<0.0001)
+    assert(Math.abs(boost.state().engine_rpm-2.0*normal.state().engine_rpm)<0.0001)
+    assert(disconnected.wheel_torque(0)==0.0 && disconnected.state().clutch==0.0)
+    assert(disconnected.state().engine_rpm>normal.state().engine_rpm)
+    assert(Math.abs(reverse.wheel_torque(0)+normal.wheel_torque(0))<0.0001)
+    var manual=drive();var external=drive();manual.set_transmission(1,clutch:0.5);external.set_transmission(1)
+    manual.step(1.0/120.0,1.0);external.step(1.0/120.0,1.0,clutch:0.5)
+    assert(manual.wheel_torque(0)==external.wheel_torque(0) && manual.state().clutch==external.state().clutch)
+    var inertias:float[]=[0.9];var differentials:Physics.VehicleDifferential3DSettings[]=[Physics.VehicleDifferential3DSettings(0)]
+    var retained=Physics.WheelDrive3D(Physics.VehicleEngine3DSettings(),Physics.VehicleTransmission3DSettings(),inertias,differentials)
+    inertias[0]=0.0;inertias.append(0.0);differentials.append(Physics.VehicleDifferential3DSettings(10))
+    assert(retained.wheel_count()==1);retained.step(1.0/120.0,1.0)
+    assert(Math.is_finite(retained.wheel_torque(0)))
+    print("WheelDrive3D passed: momentum at 60/120/960 Hz, zero step, ratio coupling airborne shift protection, boost, clutch, reverse and retained settings")
+}
