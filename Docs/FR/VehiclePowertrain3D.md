@@ -113,8 +113,12 @@ Chaque `VehicleDifferential3DSettings` utilise un ratio positif (3,42 par défau
 un partage `left_right_split` (0,5 : moitié de chaque côté) et une part moteur
 `engine_torque_ratio` (1 par défaut). `limited_slip_ratio` vaut 1,4 ; `null`
 donne un différentiel ouvert. Une limite finie supérieure à 1 redirige le couple
-vers le côté le plus lent lorsque l’écart de vitesse augmente. La configuration
-du véhicule offre aussi `differential_limited_slip_ratio` (1,4 par défaut, ou
+vers le côté le plus lent en motricité, et vers le plus rapide lorsque le couple
+s’oppose à la rotation, notamment au frein moteur ou lors d’une inversion de
+marche. Les roues encore à contresens restent distinguées de celles déjà
+entraînées dans le nouveau sens. La redistribution réduit ainsi l’écart de
+vitesse dans les deux cas. La configuration du véhicule offre aussi
+`differential_limited_slip_ratio` (1,4 par défaut, ou
 `null`) pour répartir le couple entre ponts selon le même principe.
 
 Le partage et les parts moteur sont nominaux : le glissement limité peut les

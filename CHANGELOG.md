@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Limited-slip differentials favour faster wheels and axles when torque opposes their rotation, during engine braking and direction reversals. Propulsion retains its bias towards slower wheels; open differentials retain their nominal shares. The same solver serves integrated vehicles and `WheelDrive3D`.
+
 - `WheelDrive3D` can redistribute torque between axles through `differential_limited_slip_ratio`, reusing the integrated wheeled vehicle behavior. Its `null` default retains nominal shares.
 
 - `WheelDrive3D` drives separately simulated wheels using the existing engine, clutch and gearbox: actual wheel speeds in, wheel torques out, adjustable clutch pressure and torque multiplier. It exposes RPM and gear without an audio dependency. [Guide](Docs/EN/VehiclePowertrain3D.md#drive-your-own-rigid-wheels).

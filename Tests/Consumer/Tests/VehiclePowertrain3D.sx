@@ -1,7 +1,8 @@
 use GFX.Physics
 use STD.Math
 
-func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,allow_sleep:bool=false,combined:bool=false) Physics.WheeledVehicle3D {
+func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,allow_sleep:bool=false,combined:bool=false,
+    limited:float?=null,center:float?=null) Physics.WheeledVehicle3D {
     var wheels:Physics.Wheel3DSettings[]=[]
     let sides:int[]=[-1,1]
     for x in sides { for z in sides {
@@ -16,8 +17,29 @@ func powered_vehicle(world:Physics.World3D,air:bool=true,automatic:bool=false,al
             ..linear_damping=0.0 ..angular_damping=0.0,wheels,
         engine:Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:0.0,angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]),
         transmission:Physics.VehicleTransmission3DSettings(mode:mode,gear_ratios:[1.0,0.5],reverse_gear_ratios:[-1.0],shift_up_rpm:100.0,shift_down_rpm:50.0),
-        differentials:[Physics.VehicleDifferential3DSettings(0,2,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5),
-            Physics.VehicleDifferential3DSettings(1,3,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5)],differential_limited_slip_ratio:null))
+        differentials:[Physics.VehicleDifferential3DSettings(0,2,ratio:3.0,limited_slip_ratio:limited,engine_torque_ratio:0.5),
+            Physics.VehicleDifferential3DSettings(1,3,ratio:3.0,limited_slip_ratio:limited,engine_torque_ratio:0.5)],differential_limited_slip_ratio:center))
+}
+
+test "limited slip resists faster integrated rotors under engine braking and an opposing gear" {
+    let directions:int[]=[-1,1]
+    for rate in [60,120,960] { for bridge in [false,true] { for direction in directions { for counter in [false,true] {
+        var world=Physics.World3D(Physics.World3DSettings() ..gravity=Math.Vec3())
+        var axle:float?=1.4;var center:float?=null;if bridge { axle=null;center=1.4 }
+        var vehicle=powered_vehicle(world,limited:axle,center:center)
+        var gear=direction;var gas=0.0;if counter { gear= -direction;gas=1.0 }
+        vehicle.set_transmission(gear);vehicle.set_controls(throttle:gas)
+        for i in 0...4 {
+            var fast=i<2;if bridge { fast=i==0 || i==2 }
+            var speed=5.0;if fast { speed=10.0 }
+            vehicle.set_wheel_angular_velocity(i,speed*(direction as float))
+        }
+        world.step(1.0/rate as float)
+        var slow=2;if bridge { slow=1 }
+        let a=vehicle.wheel(0).drive_torque;let b=vehicle.wheel(slow).drive_torque
+        assert(a*(direction as float)<0.0 && Math.abs(a)>Math.abs(b),
+            "integrated limited slip must damp rotor differences when wheel torque opposes rotation")
+    } } } }
 }
 
 test "engine clutch and symmetric free rotors follow an independent implicit solution and momentum balance" {

@@ -1,0 +1,88 @@
+use GFX.Physics
+use STD.Math
+
+func drive(center:bool,limited:bool) Physics.WheelDrive3D {
+    var axle:float?=null;var bridge:float?=null
+    if limited { if center { bridge=1.4 } else { axle=1.4 } }
+    return Physics.WheelDrive3D(
+        Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:1000.0,angular_damping:0.0),
+        Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,gear_ratios:[1.0],reverse_gear_ratios:[-1.0]),
+        wheel_inertias:[1.0,1.0,1.0,1.0],differentials:[
+            Physics.VehicleDifferential3DSettings(0,1,ratio:3.0,limited_slip_ratio:axle,engine_torque_ratio:0.5),
+            Physics.VehicleDifferential3DSettings(2,3,ratio:3.0,limited_slip_ratio:axle,engine_torque_ratio:0.5)],
+        differential_limited_slip_ratio:bridge)
+}
+
+func dissipative(motor:Physics.WheelDrive3D,speeds:float[]) {
+    var mean=0.0;var total=0.0;var power=0.0
+    for i,speed in speeds.indexed() {
+        let torque=motor.wheel_torque(i);mean+=speed/4.0;total+=torque;power+=torque*speed
+    }
+    // With equal nominal shares and ratios, equal wheel torques provide the
+    // ideal differential reference. Limited slip may dissipate extra power,
+    // but must not create power by favouring the wrong rotor under braking.
+    let ideal=mean*total
+    assert(power<=ideal+0.00001*Math.max(1.0,Math.abs(ideal)),"limited slip must not generate differential power")
+}
+
+func inspect(center:bool,gear:int,direction:float,fast:float,gas:float,braking:bool,mirror:bool,slow_ratio:float) bool {
+    var motor=drive(center,true);var open=drive(center,false)
+    motor.set_transmission(gear);open.set_transmission(gear)
+    var speeds:float[]=[]
+    for i in 0...4 {
+        var speed=fast
+        if center { if (i>=2)!=mirror { speed*=slow_ratio } }
+        else if (i%2==1)!=mirror { speed*=slow_ratio }
+        motor.set_wheel(i,speed*direction);open.set_wheel(i,speed*direction)
+        speeds.append(speed*direction)
+    }
+    motor.step(0.001,gas);open.step(0.001,gas)
+    dissipative(motor,speeds);dissipative(open,speeds)
+    var quick=0;var slow=1;if center { slow=2 }
+    if mirror { quick=slow;slow=0 }
+    let a=motor.wheel_torque(quick);let b=motor.wheel_torque(slow)
+    assert(Math.abs(open.wheel_torque(quick)-open.wheel_torque(slow))<0.0001,
+        "open differentials must retain equal torque for equal configured shares")
+    var passed=Math.abs(a)<Math.abs(b)
+    if braking { passed=Math.abs(a)>Math.abs(b) && (a+b)*direction<0.0 }
+    print("DIFFERENTIAL center=",center," gear=",gear," direction=",direction," braking=",braking," mirror=",mirror," slow_ratio=",slow_ratio,
+        " fast_torque=",a," slow_torque=",b," passed=",passed)
+    return passed
+}
+
+func mixed(center:bool,gear:int,mirror:bool) bool {
+    var motor=drive(center,true);motor.set_transmission(gear)
+    var speeds:float[]=[]
+    var opposing=0;var aligned=1;if center { aligned=2 }
+    if mirror { opposing=aligned;aligned=0 }
+    for i in 0...4 {
+        var first=i%2==0;if center { first=i<2 }
+        var speed=10.0*(gear as float)
+        if first!=mirror { speed= -speed }
+        motor.set_wheel(i,speed)
+        speeds.append(speed)
+    }
+    motor.step(0.001,1.0)
+    dissipative(motor,speeds)
+    let a=motor.wheel_torque(opposing);let b=motor.wheel_torque(aligned)
+    let passed=Math.abs(a)>Math.abs(b)
+    print("DIFFERENTIAL mixed center=",center," gear=",gear," mirror=",mirror,
+        " opposing_torque=",a," aligned_torque=",b," passed=",passed)
+    return passed
+}
+
+func main() {
+    let gears:int[]=[-1,1];var failures=0
+    let ratios:float[]=[0.5,0.9]
+    for center in [false,true] { for gear in gears { for mirror in [false,true] { for ratio in ratios {
+        let direction=gear as float
+        if !inspect(center,gear,direction,10.0,1.0,false,mirror,ratio) { failures++ }
+        if !inspect(center,gear,-direction,10.0,1.0,true,mirror,ratio) { failures++ }
+        if !inspect(center,gear,direction,100.0,0.0,true,mirror,ratio) { failures++ }
+    } } } }
+    for center in [false,true] { for gear in gears { for mirror in [false,true] {
+        if !mixed(center,gear,mirror) { failures++ }
+    } } }
+    assert(failures==0,"limited slip must bias slower wheels under propulsion and faster wheels under opposing torque")
+    print("WheelDrive3D limited slip passed: propulsion, opposing gear and engine braking in both directions, axle and center, open reference")
+}

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Les différentiels à glissement limité privilégient les roues et ponts rapides lorsque le couple s’oppose à leur rotation, au frein moteur comme lors d’une inversion. La motricité conserve le biais vers les roues lentes ; les différentiels ouverts conservent leurs parts nominales. Le même solveur sert les véhicules intégrés et `WheelDrive3D`.
+
 - `WheelDrive3D` peut redistribuer le couple entre les ponts avec `differential_limited_slip_ratio`, en réutilisant le comportement des véhicules à roues intégrés. Le défaut `null` conserve les parts nominales.
 
 - `WheelDrive3D` entraîne des roues simulées séparément avec le moteur, l’embrayage et la boîte existants : vitesses réelles en entrée, couples de roue en sortie, prise d’embrayage et multiplicateur de couple réglables. Le contrôleur expose le régime et le rapport sans dépendance audio. [Guide](Docs/FR/VehiclePowertrain3D.md#entraîner-ses-propres-roues-rigides).

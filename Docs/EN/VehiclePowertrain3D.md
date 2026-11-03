@@ -110,7 +110,11 @@ Each `VehicleDifferential3DSettings` has a positive ratio (default 3.42), a
 `left_right_split` (0.5 splits equally) and an `engine_torque_ratio` share
 (default 1). `limited_slip_ratio` defaults to 1.4; `null` gives an open
 differential. A finite limit greater than 1 redirects torque towards the slower
-side as the speed difference grows. Vehicle settings also provide
+side under propulsion, and towards the faster side when torque opposes
+rotation, including engine braking and a direction reversal. Wheels still
+spinning the opposite way remain distinct from those already driven in the
+new direction. Redistribution therefore reduces the speed difference in
+either case. Vehicle settings also provide
 `differential_limited_slip_ratio` (default 1.4, or `null`) to distribute torque
 between axles using the same principle.
 

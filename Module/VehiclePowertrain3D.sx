@@ -127,12 +127,19 @@ public struct VehicleDifferential3DSettings {
         self.left_wheel=left_wheel;self.right_wheel=right_wheel;self.ratio=ratio
         self.left_right_split=left_right_split;self.limited_slip_ratio=limited_slip_ratio;self.engine_torque_ratio=engine_torque_ratio
     }
-    package func right_fraction(left:float,right:float) float {
+    package func right_fraction(left:float,right:float,direction:float=0.0) float {
         var fraction=self.left_right_split
         if let limit=self.limited_slip_ratio {
             let a=Math.max(0.001,Math.abs(left));let b=Math.max(0.001,Math.abs(right))
-            let alpha=Math.min(1.0,(Math.max(a,b)/Math.min(a,b)-1.0)/(limit-1.0))
-            fraction*=1.0-alpha;if a>=b { fraction+=alpha }
+            var alpha=Math.min(1.0,(Math.max(a,b)/Math.min(a,b)-1.0)/(limit-1.0))
+            var prefer_right=a>=b
+            if direction!=0.0 {
+                if (left<0.0 && right>0.0) || (left>0.0 && right<0.0) {
+                    alpha=Math.min(1.0,Math.abs(left-right)/Math.min(a,b)/(limit-1.0))
+                }
+                prefer_right=left*direction>=right*direction
+            }
+            fraction*=1.0-alpha;if prefer_right { fraction+=alpha }
         }
         return fraction
     }
@@ -197,13 +204,15 @@ package class VehiclePowertrain3D {
         return throttle==0.0 && self.rpm<=1.01*self.engine.minimum_rpm && self.gearbox.allow_sleep()
     }
     func set_transmission(gear:int,clutch:float) bool { return self.gearbox.set(gear,clutch) }
-    private func distribute() {
+    private func distribute(direction:float=0.0) {
         var low=0.0;var high=0.0;var index=0
         for d in self.differentials {
             var omega=0.0;var count=0
             if d.left_wheel>=0 { omega+=self.speeds[d.left_wheel];count++ }
             if d.right_wheel>=0 { omega+=self.speeds[d.right_wheel];count++ }
-            omega=Math.abs(omega*d.ratio/count as float);self.differential_speeds[index]=omega
+            omega=omega*d.ratio/count as float
+            if direction==0.0 { omega=Math.abs(omega) } else { omega*=direction }
+            self.differential_speeds[index]=omega
             if index==0 { low=omega;high=omega }
             else { low=Math.min(low,omega);high=Math.max(high,omega) }
             index++
@@ -212,7 +221,9 @@ package class VehiclePowertrain3D {
         if let limit=self.center_limit {
             if high>low {
                 for omega in self.differential_speeds { factor_sum+=(high-omega)/(high-low) }
-                alpha=Math.min(1.0,(Math.max(0.001,high)/Math.max(0.001,low)-1.0)/(limit-1.0))
+                let a=Math.max(0.001,Math.abs(high));let b=Math.max(0.001,Math.abs(low))
+                alpha=Math.min(1.0,(Math.max(a,b)/Math.min(a,b)-1.0)/(limit-1.0))
+                if low<0.0 && high>0.0 { alpha=Math.min(1.0,(high-low)/Math.min(a,b)/(limit-1.0)) }
             }
         }
         index=0;let ratio=self.transmission.gear_ratio(self.gearbox.gear)
@@ -220,7 +231,7 @@ package class VehiclePowertrain3D {
             var share=d.engine_torque_ratio
             if factor_sum>0.0 { share=share*(1.0-alpha)+alpha*(high-self.differential_speeds[index])/(high-low)/factor_sum }
             var right=1.0
-            if d.left_wheel>=0 && d.right_wheel>=0 { right=d.right_fraction(self.speeds[d.left_wheel],self.speeds[d.right_wheel]) }
+            if d.left_wheel>=0 && d.right_wheel>=0 { right=d.right_fraction(self.speeds[d.left_wheel],self.speeds[d.right_wheel],direction) }
             else if d.left_wheel>=0 { right=0.0 }
             if d.left_wheel>=0 { self.ratios[d.left_wheel]=ratio*d.ratio;self.fractions[d.left_wheel]=share*(1.0-right) }
             if d.right_wheel>=0 { self.ratios[d.right_wheel]=ratio*d.ratio;self.fractions[d.right_wheel]=share*right }
@@ -241,6 +252,19 @@ package class VehiclePowertrain3D {
             if self.contacts[i] { impulse+=self.previous_impulses[i]*self.previous_inverse_deltas[i]*delta*self.radii[i] }
             average+=self.ratios[i]*(self.speeds[i]-impulse/self.inertias[i])/count
             compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count
+        }
+        // A rotor opposing wheel torque needs signed comparison: this favours
+        // fast rotors under braking, including wheels not yet through a reversal.
+        // Homogeneous propulsion retains its original distribution and order.
+        var direction=1.0
+        if self.transmission.gear_ratio(self.gearbox.gear)*(e0-average)<0.0 { direction= -1.0 }
+        var opposing=false
+        if e0!=average && self.gearbox.gear!=0 {
+            for i in self.driven { if self.speeds[i]*direction<0.0 { opposing=true;break } }
+        }
+        if opposing {
+            self.distribute(direction);compliance=0.0
+            for i in self.driven { compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count }
         }
         var strength=0.0;if self.gearbox.gear!=0 { strength=self.gearbox.clutch*self.transmission.clutch_strength*clutch }
         let torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
