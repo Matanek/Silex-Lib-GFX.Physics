@@ -150,7 +150,8 @@ var drive=Physics.WheelDrive3D(
     Physics.VehicleTransmission3DSettings(gear_ratios:[3.2,2.3,1.6]),
     wheel_inertias:[16.0,16.0,16.0,16.0],
     differentials:[Physics.VehicleDifferential3DSettings(0,2,engine_torque_ratio:0.5),
-        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)])
+        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)],
+    differential_limited_slip_ratio:1.4)
 ```
 
 À chaque sous-pas, appeler `set_wheel(index,angular_velocity,grounded:...,slipping:...)`
@@ -176,6 +177,14 @@ le freinage. Le ralenti imposé peut autrement pousser des roues immobiles.
 En mode manuel, `set_transmission(gear,clutch:...)` conserve son rôle ; la
 pression passée à `step` se multiplie à cette commande. Les entrées invalides
 provoquent un panic.
+
+
+`differential_limited_slip_ratio` règle aussi la redistribution entre vos ponts.
+Le défaut `null` conserve leurs parts nominales ; une valeur finie supérieure à
+1, par exemple 1.4, dirige davantage de couple vers le pont qui tourne le moins
+vite lorsque les vitesses divergent. Ce réglage est indépendant du glissement
+limité gauche/droite propre à chaque différentiel. Il permet d’alimenter les
+roues chargées lorsqu’un autre essieu patine.
 
 `state()` fournit `VehiclePowertrainState3D` : régime, rapport, embrayage effectif,
 transition et couple moteur. Ces observations peuvent alimenter un tableau de

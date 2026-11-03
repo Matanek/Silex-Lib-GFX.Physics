@@ -3,6 +3,7 @@ use GFX.Physics.VehiclePowertrain3D.VehicleEngine3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehicleTransmission3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehicleDifferential3DSettings
 use GFX.Physics.VehiclePowertrain3D.VehiclePowertrainState3D
+use GFX.Physics.VehiclePowertrain3D.validate_slip_ratio3d
 use GFX.Physics.RigidBody3D.finite_body3d_value
 use STD.Math
 
@@ -12,7 +13,8 @@ public class WheelDrive3D {
     private var motor:VehiclePowertrain3D
     private var pressure:float=1.0
     init(engine:VehicleEngine3DSettings, transmission:VehicleTransmission3DSettings,
-        wheel_inertias:float[], differentials:VehicleDifferential3DSettings[]) {
+        wheel_inertias:float[], differentials:VehicleDifferential3DSettings[], differential_limited_slip_ratio:float?=null) {
+        validate_slip_ratio3d(differential_limited_slip_ratio)
         if wheel_inertias.count()==0 || differentials.count()==0 { panic("GFX.Physics.WheelDrive3D requires wheels and differentials") }
         var radii:float[]=[];var zeros:float[]=[];var used:bool[]=[]
         var inertias:float[]=[];var retained:VehicleDifferential3DSettings[]=[]
@@ -42,7 +44,7 @@ public class WheelDrive3D {
             retained.append(d);share+=d.engine_torque_ratio
         }
         if Math.abs(share-1.0)>0.0001 { panic("GFX.Physics.WheelDrive3D differential shares must sum to one") }
-        self.motor=VehiclePowertrain3D(engine,transmission,retained,null,inertias,radii,zeros,zeros)
+        self.motor=VehiclePowertrain3D(engine,transmission,retained,differential_limited_slip_ratio,inertias,radii,zeros,zeros)
     }
     func wheel_count() int { return self.motor.speeds.count() }
     func set_wheel(index:int,angular_velocity:float,grounded:bool=true,slipping:bool=false) {

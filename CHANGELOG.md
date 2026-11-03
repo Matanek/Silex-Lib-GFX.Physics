@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- `WheelDrive3D` can redistribute torque between axles through `differential_limited_slip_ratio`, reusing the integrated wheeled vehicle behavior. Its `null` default retains nominal shares.
+
 - `WheelDrive3D` drives separately simulated wheels using the existing engine, clutch and gearbox: actual wheel speeds in, wheel torques out, adjustable clutch pressure and torque multiplier. It exposes RPM and gear without an audio dependency. [Guide](Docs/EN/VehiclePowertrain3D.md#drive-your-own-rigid-wheels).
 
 - Soft 3D contacts reuse prepared geometry for fixed obstacles. Shape or pose changes, disabling, removal and replacement invalidate this preparation; filters, materials and velocities remain live body state. Solver settings and order remain unchanged. [Local measurements and limits](Benchmarks/Baselines/2026-10-31-soft-collider-cache-debug.jsonl).

@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- `WheelDrive3D` peut redistribuer le couple entre les ponts avec `differential_limited_slip_ratio`, en réutilisant le comportement des véhicules à roues intégrés. Le défaut `null` conserve les parts nominales.
+
 - `WheelDrive3D` entraîne des roues simulées séparément avec le moteur, l’embrayage et la boîte existants : vitesses réelles en entrée, couples de roue en sortie, prise d’embrayage et multiplicateur de couple réglables. Le contrôleur expose le régime et le rapport sans dépendance audio. [Guide](Docs/FR/VehiclePowertrain3D.md#entraîner-ses-propres-roues-rigides).
 
 - La préparation géométrique des obstacles fixes est réutilisée pendant les contacts souples 3D. Un changement de forme ou de pose, une désactivation, une suppression ou un remplacement invalide cette préparation ; filtres, matériaux et vitesses restent lus sur les corps courants. Les paramètres et l’ordre du solveur restent identiques. [Mesures locales et limites](Benchmarks/Baselines/2026-10-31-soft-collider-cache-debug.jsonl).

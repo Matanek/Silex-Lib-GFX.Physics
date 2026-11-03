@@ -146,7 +146,8 @@ var drive=Physics.WheelDrive3D(
     Physics.VehicleTransmission3DSettings(gear_ratios:[3.2,2.3,1.6]),
     wheel_inertias:[16.0,16.0,16.0,16.0],
     differentials:[Physics.VehicleDifferential3DSettings(0,2,engine_torque_ratio:0.5),
-        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)])
+        Physics.VehicleDifferential3DSettings(1,3,engine_torque_ratio:0.5)],
+    differential_limited_slip_ratio:1.4)
 ```
 
 Each substep, call `set_wheel(index,angular_velocity,grounded:...,slipping:...)`
@@ -170,6 +171,13 @@ allowing progressive launch or disengagement during braking. Otherwise, the
 imposed idle can push stationary wheels. In manual mode,
 `set_transmission(gear,clutch:...)` retains its role; the pressure supplied to
 `step` multiplies that command. Invalid inputs panic.
+
+
+`differential_limited_slip_ratio` also controls redistribution between your
+axles. Its `null` default retains nominal shares; a finite value above 1, such
+as 1.4, sends more torque to the slower axle as speeds diverge. This is separate
+from each differential’s left/right limited slip. It can supply loaded wheels
+when another axle spins.
 
 `state()` returns `VehiclePowertrainState3D`: RPM, gear, effective clutch,
 transition and engine torque. These observations can drive a dashboard or a
