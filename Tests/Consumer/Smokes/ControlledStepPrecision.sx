@@ -1,0 +1,19 @@
+use GFX.Application
+use GFX.Application.Session
+use GFX.Physics
+use GFX.Plugins
+use STD.Process
+
+func main() {
+    var two_dimensional = false
+    for argument in Process.arguments() { if argument == "--2d" { two_dimensional = true } }
+    var application = Application(1)
+    if two_dimensional {
+        application.add_plugin(Plugins.Physics2D(Plugins.Physics2D.Settings()..fixed_delta = 1.0e-30))
+    } else {
+        application.add_plugin(Plugins.Physics3D(Plugins.Physics3D.Settings()..fixed_delta = 1.0e-30))
+    }
+    var session = Session(application)
+    session.step(1.0)
+    panic("an unrepresentable controlled physics step must be rejected")
+}

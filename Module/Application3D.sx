@@ -278,7 +278,9 @@ func reconcile_physics3d_bodies(
 
 func update_application_physics3d(application:Application) {
     var time_resources = application.resources()
-    let delta = time_resources.get<FrameTime>().delta
+    let frame_time = time_resources.get<FrameTime>()
+    let delta = frame_time.delta
+    let controlled = frame_time.is_controlled()
     var physics_resources = application.resources()
     var runtime_resources = application.resources()
     var event_resources = application.resources()
@@ -288,9 +290,14 @@ func update_application_physics3d(application:Application) {
     var events = event_resources.get_mut<Physics3DFrameEvents>()
     var world = world_resources.get_mut<ECS.World>()
     runtime.accumulator += Math.max(0.0, delta)
+    // Realtime work is bounded by its catch-up count. A controlled drain must
+    // also reject an unrepresentable subtraction rather than loop forever.
+    if controlled && runtime.accumulator >= runtime.fixed_delta &&
+        runtime.accumulator - runtime.fixed_delta == runtime.accumulator
+    { panic("controlled physics fixed delta is too small for this frame interval") }
     var step = 0
     while runtime.accumulator >= runtime.fixed_delta &&
-        step < runtime.maximum_catch_up_steps
+        (controlled || step < runtime.maximum_catch_up_steps)
     {
         synchronize_physics3d_targets(world, runtime)
         {

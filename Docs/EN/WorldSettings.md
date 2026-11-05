@@ -111,3 +111,17 @@ intentions separately.
 Disabling warm start clears impulses carried from the previous step.
 Impulses accumulated during the current step are still reused between its
 substeps, for both contacts and joints.
+
+## Export and controlled time
+
+With `Application.Session`, `FrameTime.is_controlled()` is true. Physics2D and
+Physics3D then finish all due fixed steps before rendering an image:
+`maximum_catch_up_steps` limits the realtime loop only. The fixed step, its
+callbacks and pause retain their behavior. A low output frame rate may therefore
+require more computation per image.
+
+The fixed step must allow a representable subtraction from the accumulator for
+the requested interval. An extreme configuration that cannot make progress is
+rejected using the Physics configuration-error convention instead of looping
+forever. The [negative case](../../Tests/Consumer/Smokes/ControlledStepPrecision.sx)
+covers both 2D and 3D paths.

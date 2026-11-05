@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- In controlled time, 2D/3D plugins finish every due fixed step before rendering; catch-up limits still apply to realtime loops and non-progressing subtraction is rejected.
+
 - Limited-slip differentials favour faster wheels and axles when torque opposes their rotation, during engine braking and direction reversals. Propulsion retains its bias towards slower wheels; open differentials retain their nominal shares. The same solver serves integrated vehicles and `WheelDrive3D`.
 
 - `WheelDrive3D` can redistribute torque between axles through `differential_limited_slip_ratio`, reusing the integrated wheeled vehicle behavior. Its `null` default retains nominal shares.

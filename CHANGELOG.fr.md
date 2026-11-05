@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- En temps contrôlé, les plugins 2D/3D terminent tous les pas fixes dus avant le rendu ; la limite de rattrapage reste réservée au temps réel et une soustraction sans progrès est refusée.
+
 - Les différentiels à glissement limité privilégient les roues et ponts rapides lorsque le couple s’oppose à leur rotation, au frein moteur comme lors d’une inversion. La motricité conserve le biais vers les roues lentes ; les différentiels ouverts conservent leurs parts nominales. Le même solveur sert les véhicules intégrés et `WheelDrive3D`.
 
 - `WheelDrive3D` peut redistribuer le couple entre les ponts avec `differential_limited_slip_ratio`, en réutilisant le comportement des véhicules à roues intégrés. Le défaut `null` conserve les parts nominales.

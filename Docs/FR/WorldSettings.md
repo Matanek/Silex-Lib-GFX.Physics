@@ -113,3 +113,17 @@ intentions séparément.
 Désactiver le warm start efface les impulsions provenant du pas précédent.
 Les impulsions accumulées pendant le pas courant restent réutilisées entre
 ses sous-pas, pour les contacts comme pour les joints.
+
+## Export et temps contrôlé
+
+Avec `Application.Session`, `FrameTime.is_controlled()` est vrai. Les plugins
+Physics2D et Physics3D terminent alors tous les pas fixes dus avant de rendre
+l’image : `maximum_catch_up_steps` limite uniquement la boucle temps réel.
+Le pas fixe, ses callbacks et la pause gardent leur comportement. Une cadence
+vidéo basse peut donc demander davantage de calcul par image.
+
+Le pas fixe doit permettre une soustraction représentable dans l’accumulateur
+pour l’intervalle demandé. Une configuration extrême qui ne peut plus progresser
+est rejetée selon la convention d’erreur de configuration Physics, au lieu de
+boucler indéfiniment. Le [cas négatif](../../Tests/Consumer/Smokes/ControlledStepPrecision.sx)
+couvre les chemins 2D et 3D.
