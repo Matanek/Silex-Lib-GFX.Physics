@@ -40,6 +40,9 @@ func main() {
     if selected("trans-forward-inf") { Physics.VehicleTransmission3DSettings(gear_ratios:[1.0/0.0]);return }
     if selected("trans-reverse-positive") { Physics.VehicleTransmission3DSettings(reverse_gear_ratios:[1.0]);return }
     if selected("trans-reverse-nan") { Physics.VehicleTransmission3DSettings(reverse_gear_ratios:[Math.sqrt(-1.0)]);return }
+    if selected("trans-clutch-torque-negative") { Physics.VehicleTransmission3DSettings(clutch_torque_limit:-1.0);return }
+    if selected("trans-clutch-torque-nan") { Physics.VehicleTransmission3DSettings(clutch_torque_limit:Math.sqrt(-1.0));return }
+    if selected("trans-clutch-torque-inf") { Physics.VehicleTransmission3DSettings(clutch_torque_limit:1.0/0.0);return }
     if selected("trans-clutch_strength") { Physics.VehicleTransmission3DSettings(clutch_strength:-1.0);return }
     if selected("trans-switch_time") { Physics.VehicleTransmission3DSettings(switch_time:-0.1);return }
     if selected("trans-clutch_release_time") { Physics.VehicleTransmission3DSettings(clutch_release_time:Math.sqrt(-1.0));return }

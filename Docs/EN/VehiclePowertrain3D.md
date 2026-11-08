@@ -97,12 +97,25 @@ The main parameters are:
 | `gear_ratios` | [2.66, 1.78, 1.3, 1, 0.74], all strictly positive |
 | `reverse_gear_ratios` | [−2.9], all strictly negative |
 | `clutch_strength` | 10 kg·m²/s, nonnegative |
+| `clutch_torque_limit` | `null`; finite nonnegative engine-side torque limit in N·m |
 | `switch_time` / `clutch_release_time` / `switch_latency` | 0.5 / 0.3 / 0.5 s |
 | `shift_up_rpm` / `shift_down_rpm` | 4000 / 2000 RPM |
 
 Times must be nonnegative, thresholds ordered and lists nonempty.
 `set_transmission` requires manual mode. Invalid or unrepresentable inputs
 panic, including throttle on a vehicle without an engine.
+
+`clutch_torque_limit` bounds actual transmitted clutch torque in both drive and
+braking, before gearbox and differential ratios. Its capacity is multiplied by
+current engagement and the `clutch` input to `WheelDrive3D.step`. The solver uses
+the same bounded torque for engine and wheels, preserving their angular momentum
+balance. `null` preserves the previous coupling without an explicit limit; `0`
+prevents torque transfer. This setting applies to `WheeledVehicle3D` and
+`WheelDrive3D`, which own this clutch. Tracked vehicles retain their separately
+documented direct coupling.
+The [consumer test](../../Tests/Consumer/Smokes/WheelDriveClutchLimit3D.sx) checks
+saturation in both directions, pressure and angular momentum balance at 60,
+120 and 960 Hz.
 
 ## Distribute torque and observe the result
 

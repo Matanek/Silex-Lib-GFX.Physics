@@ -1,0 +1,53 @@
+use GFX.Physics
+use STD.Math
+
+func limited(limit:float?,pressure:float,speed:float,gear:int,rate:int) {
+    var motor=Physics.WheelDrive3D(
+        Physics.VehicleEngine3DSettings(maximum_torque:12.0,minimum_rpm:0.0,inertia:0.5,
+            angular_damping:0.0,torque_curve:[Math.Vec2(0.0,1.0)]),
+        Physics.VehicleTransmission3DSettings(mode:Physics.VehicleTransmissionMode3D.manual,
+            gear_ratios:[1.0],reverse_gear_ratios:[-1.0],clutch_torque_limit:limit),
+        wheel_inertias:[0.9,0.9,0.9,0.9],differentials:[
+            Physics.VehicleDifferential3DSettings(0,2,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5),
+            Physics.VehicleDifferential3DSettings(1,3,ratio:3.0,limited_slip_ratio:null,engine_torque_ratio:0.5)])
+    motor.set_transmission(gear)
+    for _ in 0...120 { motor.step(1.0/120.0,1.0,clutch:0.0) }
+    let engine_before=motor.state().engine_rpm*Math.two_pi()/60.0
+    let ratio=3.0*(gear as float);let omega=speed*(gear as float)
+    for i in 0...4 { motor.set_wheel(i,omega) }
+    let dt=1.0/(rate as float)
+    motor.step(dt,1.0,clutch:pressure)
+    var delivered=0.0;var momentum=0.5*motor.state().engine_rpm*Math.two_pi()/60.0
+    for i in 0...4 {
+        let torque=motor.wheel_torque(i)
+        delivered+=torque/ratio
+        momentum+=0.9*(omega+dt*torque/0.9)/ratio
+    }
+    let initial=0.5*engine_before+4.0*0.9*omega/ratio
+    assert(Math.abs(momentum-initial-12.0*dt)<0.001,"clutch saturation must use the same torque for engine and wheel angular momentum")
+    if let maximum=limit {
+        let capacity=maximum*pressure
+        assert(Math.abs(Math.abs(delivered)-capacity)<0.001,"clutch limit must scale with engagement pressure")
+        if capacity>0.0 {
+            if speed==0.0 { assert(delivered>0.0) } else { assert(delivered<0.0) }
+        }
+    } else { assert(Math.abs(delivered)>8.0,"null must preserve the original unconstrained clutch") }
+    let before=motor.state();let torque=motor.wheel_torque(0)
+    motor.step(0.0,1.0)
+    assert(motor.state().engine_rpm==before.engine_rpm && motor.wheel_torque(0)==torque)
+}
+func main() {
+    let pressures:float[]=[0.25,1.0]
+    let gears:int[]=[-1,1]
+    for rate in [60,120,960] {
+        for gear in gears {
+            for pressure in pressures {
+                limited(8.0,pressure,0.0,gear,rate)
+                limited(8.0,pressure,40.0,gear,rate)
+            }
+            limited(0.0,1.0,0.0,gear,rate)
+            limited(null,1.0,0.0,gear,rate)
+        }
+    }
+    print("Clutch torque limit passed: forward/reverse, drive/braking, pressure, zero/null limits, zero step and angular momentum at 60/120/960 Hz")
+}

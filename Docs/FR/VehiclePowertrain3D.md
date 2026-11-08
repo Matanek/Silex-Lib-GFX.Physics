@@ -100,12 +100,25 @@ permettent d’inspecter une configuration. Les paramètres principaux sont :
 | `gear_ratios` | [2,66; 1,78; 1,3; 1; 0,74], tous strictement positifs |
 | `reverse_gear_ratios` | [−2,9], tous strictement négatifs |
 | `clutch_strength` | 10 kg·m²/s, positif ou nul |
+| `clutch_torque_limit` | `null` ; limite de couple côté moteur en N·m, finie et positive ou nulle |
 | `switch_time` / `clutch_release_time` / `switch_latency` | 0,5 / 0,3 / 0,5 s |
 | `shift_up_rpm` / `shift_down_rpm` | 4000 / 2000 RPM |
 
 Les durées sont positives ou nulles, les seuils ordonnés et les listes non
 vides. `set_transmission` exige le mode manuel. Les entrées invalides ou non
 représentables provoquent un panic, comme un accélérateur sur un véhicule sans moteur.
+
+`clutch_torque_limit` borne le couple effectivement transmis par l’embrayage,
+en traction comme en retenue, avant les rapports de boîte et de pont. Sa
+capacité est multipliée par l’engagement courant et par le paramètre `clutch`
+de `WheelDrive3D.step`. Le solveur applique le même couple borné au moteur et
+aux roues ; il conserve leur bilan de moment cinétique. `null` conserve le
+couplage précédent sans limite explicite ; `0` empêche la transmission du couple.
+Ce réglage s’applique à `WheeledVehicle3D` et `WheelDrive3D`, qui possèdent cet
+embrayage. Les chenilles conservent leur couplage direct documenté séparément.
+Le [test consommateur](../../Tests/Consumer/Smokes/WheelDriveClutchLimit3D.sx)
+vérifie la saturation dans les deux sens, la pression et le bilan de moment
+cinétique à 60, 120 et 960 Hz.
 
 ## Répartir le couple et observer le résultat
 

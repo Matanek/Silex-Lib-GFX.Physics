@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Ajouter `VehicleTransmission3DSettings.clutch_torque_limit` : capacité optionnelle en N·m côté moteur, modulée par la prise d’embrayage, en traction comme en retenue. Le couple borné est commun aux équations du moteur et des roues ; `null` conserve le comportement précédent.
+
 - En temps contrôlé, les plugins 2D/3D terminent tous les pas fixes dus avant le rendu ; la limite de rattrapage reste réservée au temps réel et une soustraction sans progrès est refusée.
 
 - Les différentiels à glissement limité privilégient les roues et ponts rapides lorsque le couple s’oppose à leur rotation, au frein moteur comme lors d’une inversion. La motricité conserve le biais vers les roues lentes ; les différentiels ouverts conservent leurs parts nominales. Le même solveur sert les véhicules intégrés et `WheelDrive3D`.

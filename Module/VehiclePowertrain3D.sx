@@ -59,6 +59,7 @@ public struct VehicleEngine3DSettings {
 public struct VehicleTransmission3DSettings {
     let mode:VehicleTransmissionMode3D
     let clutch_strength:float
+    let clutch_torque_limit:float?
     let switch_time:float
     let clutch_release_time:float
     let switch_latency:float
@@ -69,7 +70,8 @@ public struct VehicleTransmission3DSettings {
     init(mode:VehicleTransmissionMode3D=VehicleTransmissionMode3D.automatic,
         gear_ratios:float[]=[2.66,1.78,1.3,1.0,0.74], reverse_gear_ratios:float[]=[-2.9],
         clutch_strength:float=10.0, switch_time:float=0.5, clutch_release_time:float=0.3,
-        switch_latency:float=0.5, shift_up_rpm:float=4000.0, shift_down_rpm:float=2000.0) {
+        switch_latency:float=0.5, shift_up_rpm:float=4000.0, shift_down_rpm:float=2000.0,
+        clutch_torque_limit:float?=null) {
         if gear_ratios.count()==0 || reverse_gear_ratios.count()==0 { panic("GFX.Physics.VehicleTransmission3DSettings requires forward and reverse ratios") }
         var forward:float[]=[];var reverse:float[]=[]
         for ratio in gear_ratios {
@@ -92,7 +94,11 @@ public struct VehicleTransmission3DSettings {
             !finite_body3d_value(shift_up_rpm) || shift_up_rpm<=shift_down_rpm {
             panic("GFX.Physics.VehicleTransmission3DSettings requires finite nonnegative clutch/times and ordered shift RPM")
         }
+        if let limit=clutch_torque_limit {
+            if !finite_body3d_value(limit) || limit<0.0 { panic("GFX.Physics.VehicleTransmission3DSettings clutch torque limit must be finite and nonnegative, or null") }
+        }
         self.mode=mode;self.forward=forward;self.reverse=reverse;self.clutch_strength=clutch_strength
+        self.clutch_torque_limit=clutch_torque_limit
         self.switch_time=switch_time;self.clutch_release_time=clutch_release_time;self.switch_latency=switch_latency
         self.shift_up_rpm=shift_up_rpm;self.shift_down_rpm=shift_down_rpm
     }
@@ -267,7 +273,11 @@ package class VehiclePowertrain3D {
             for i in self.driven { compliance+=self.ratios[i]*self.ratios[i]*self.fractions[i]/self.inertias[i]/count }
         }
         var strength=0.0;if self.gearbox.gear!=0 { strength=self.gearbox.clutch*self.transmission.clutch_strength*clutch }
-        let torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
+        var torque=strength*(e0-average)/(1.0+strength*delta*(1.0/self.engine.inertia+compliance))
+        if let limit=self.transmission.clutch_torque_limit {
+            let capacity=limit*self.gearbox.clutch*clutch
+            torque=Math.clamp(torque,-capacity,capacity)
+        }
         self.rpm=Math.clamp((e0-delta*torque/self.engine.inertia)*conversion,self.engine.minimum_rpm,self.engine.maximum_rpm)
         var slipping=false
         for i in self.driven {
