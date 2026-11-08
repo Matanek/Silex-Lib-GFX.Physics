@@ -32,7 +32,7 @@ silex install GFX.Physics
 - [English documentation](Docs/EN/README.md)
 - [Release notes](CHANGELOG.md) · [Nouveautés](CHANGELOG.fr.md)
 
-The package requires Silex 0.47.1 or newer.
+The package requires Silex 0.48.0 or newer.
 
 Combined angle/velocity hinge targets: [English](Docs/EN/HingeCombined3D.md) · [Français](Docs/FR/HingeCombined3D.md).
 

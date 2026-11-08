@@ -1,0 +1,95 @@
+use GFX.Physics
+use GFX.Physics.World3D.StepObserver3D
+use STD.Math
+use STD.Time
+
+class ContactWitness:StepObserver3D {
+    let expected:int
+    var entered:int=0
+    var active:int=0
+    var peak:int=0
+    var timeout:bool=false
+    init(expected:int) { self.expected=expected }
+    func executing(phase:int,start:int,end:int) {
+        if phase!=6 { return }
+        mutex { self.entered++;self.active++;if self.active>self.peak { self.peak=self.active } }
+        var clock=Time.Stopwatch();clock.start();var waiting=true
+        while waiting && clock.get_elapsed_seconds()<2.0 { mutex { waiting=self.entered<self.expected } }
+        mutex { if waiting { self.timeout=true }
+            self.active-- }
+    }
+}
+
+struct Scene {
+    var rigid:Physics.RigidBody3D[]
+    var soft:Physics.SoftBody3D[]
+}
+
+func scene(world:Physics.World3D,shared:bool) Scene {
+    var rigid:Physics.RigidBody3D[]=[];var soft:Physics.SoftBody3D[]=[]
+    world.create_rigid_body(Physics.RigidBody3DSettings() ..body_type=Physics.BodyType3D.fixed
+        ..shape=Physics.Shape3D.plane(Physics.Plane3D()) ..transform=Physics.Transform3D(Math.Vec3(0.0,-2.0,0.0)))
+    if shared {
+        rigid.append(world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+            ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(16.0,1.0,2.0)))
+            ..transform=Physics.Transform3D(Math.Vec3(6.0,0.0,0.0))))
+    }
+    var cloth=Physics.SoftBody3DDefinition.cloth(9,9,0.1)
+    for index in 0...4 {
+        let x=(index as float)*4.0
+        if !shared {
+            rigid.append(world.create_rigid_body(Physics.RigidBody3DSettings() ..allow_sleep=false
+                ..shape=Physics.Shape3D.box(Physics.Box3D(Math.Vec3(2.0,1.0,2.0)))
+                ..transform=Physics.Transform3D(Math.Vec3(x,0.0,0.0))))
+        }
+        soft.append(world.create_soft_body(cloth,Physics.SoftBody3DSettings()
+            ..transform=Physics.Transform3D(Math.Vec3(x,0.52,0.0))
+            ..linear_velocity=Math.Vec3(0.2,-0.5,0.0) ..friction=1.0))
+    }
+    return Scene(rigid:rigid,soft:soft)
+}
+
+func overlap(shared:bool) {
+    var world=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=1)
+    world.enable_parallelism(4);var bodies=scene(world,shared)
+    var expected=4;if shared { expected=1 }
+    var witness=ContactWitness(expected)
+    world.observe_parallelism(witness);world.step(1.0/120.0);world.observe_parallelism(null)
+    assert(!witness.timeout && witness.entered==4 && witness.peak==expected && witness.active==0)
+    assert(bodies.soft[0].velocity(0).y!= -0.5)
+}
+
+func deterministic(shared:bool) {
+    var first=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=2)
+    var second=Physics.World3D(Physics.World3DSettings() ..soft_body_substeps=2)
+    second.enable_parallelism(4)
+    var a=scene(first,shared);var b=scene(second,shared)
+    var point=Math.Vec3(30.0,0.52,0.0);if shared { point.x=0.0 }
+    var light1=first.create_soft_body(Physics.SoftBody3DDefinition(positions:[point]))
+    var light4=second.create_soft_body(Physics.SoftBody3DDefinition(positions:[point]))
+    for frame in 0...24 {
+        if frame==8 { a.soft[0].set_enabled(false);b.soft[0].set_enabled(false) }
+        if frame==16 { a.soft[0].set_enabled(true);b.soft[0].set_enabled(true) }
+        first.step(1.0/120.0);second.step(1.0/120.0)
+        assert(light1.position(0)==light4.position(0) && light1.velocity(0)==light4.velocity(0))
+        for index in 0...a.rigid.count() {
+            assert(a.rigid[index].transform()==b.rigid[index].transform())
+            assert(a.rigid[index].linear_velocity()==b.rigid[index].linear_velocity())
+            assert(a.rigid[index].angular_velocity()==b.rigid[index].angular_velocity())
+        }
+        for index in 0...4 { for vertex in 0...a.soft[index].vertex_count() {
+            assert(a.soft[index].position(vertex)==b.soft[index].position(vertex))
+            assert(a.soft[index].velocity(vertex)==b.soft[index].velocity(vertex))
+        } }
+    }
+}
+
+test "soft contacts sharing only fixed scenery execute concurrently" { overlap(false) }
+test "soft contacts sharing a dynamic body retain serial impulse order" { overlap(true) }
+test "independent soft contacts remain exact across worker counts and enable changes" { deterministic(false) }
+test "shared dynamic contacts and light bodies remain exact across worker counts" { deterministic(true) }
+
+func main() {
+    overlap(false);overlap(true);deterministic(false);deterministic(true)
+    print("Soft contact worker checks passed")
+}

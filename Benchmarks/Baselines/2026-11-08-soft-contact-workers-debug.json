@@ -1,0 +1,1435 @@
+{
+  "configuration": {
+    "date": "2026-11-08",
+    "host": "Apple M3 Pro, 12 physical cores, macOS 26.6.2",
+    "target": "macos-arm64",
+    "backend": "native",
+    "mode": "Debug",
+    "workers": 4,
+    "tires": 4,
+    "vertices_per_tire": 192,
+    "controller_hz": 120,
+    "coupling_hz": 960,
+    "soft_substeps": 1,
+    "rigid_velocity_iterations": 8,
+    "physics_baseline": "ae3f12e466ed9a9745afa54e78ce5c6a23c6cf86",
+    "compiler_candidate": "52f89684c281d7a153b4b4e03cfe0c81d884609f",
+    "examples_candidate": "1d655e9a5447369970f168926b98105ab61ca5af",
+    "physics_candidate_sources": {
+      "Module/World3D/@SoftBodies.sx": "b461da4834c5eb8bb1c740d7b351fa12acc2d96825fc6248873ce356db35b4a3",
+      "Module/World3D/@World3D.sx": "e17c9d333878fda5ab3b94675e94edff54d56bb1e95b80d59ec22db013112a4f"
+    },
+    "binaries": {
+      "monster-modules-before": "513fe8c7e7fa00eeb8d8d1df901910eeddae9f948b894b675409ada561a0b2f8",
+      "monster-modules-caller": "1d1955c2167ca72bcc4415c9ae6b381b98fbf5f34f5a82f6ddc675f3139d5758",
+      "monster-bumps-before-debug": "04bf2128e1d00ca46cfde0a2d9963040e6d903f9e2d64bf109c8f0e289b7cf6c",
+      "monster-bumps-after-debug": "8b2c25846d81d363cf18d982f77970df99042c53c21f676477ae14838be518dc"
+    }
+  },
+  "physical_summary": [
+    {
+      "case": 0,
+      "baseline_seconds_per_simulated_second": 0.7631690333333333,
+      "candidate_seconds_per_simulated_second": 0.7070752816666667,
+      "reduction_percent": 7.350108457842297,
+      "physical_checkpoints_exact": true
+    },
+    {
+      "case": 2,
+      "baseline_seconds_per_simulated_second": 0.8783626883333333,
+      "candidate_seconds_per_simulated_second": 0.8347947566666667,
+      "reduction_percent": 4.9601300516686875,
+      "physical_checkpoints_exact": true
+    },
+    {
+      "case": 8,
+      "baseline_seconds_per_simulated_second": 0.9168395,
+      "candidate_seconds_per_simulated_second": 0.84952302,
+      "reduction_percent": 7.342231655595121,
+      "physical_checkpoints_exact": true
+    }
+  ],
+  "physical_abba": [
+    {
+      "case": 0,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "0",
+          "tick": "120",
+          "seconds": "0.7605879",
+          "maximum": "0.013309",
+          "x": "-0.00073435175",
+          "y": "1.9923718",
+          "z": "-9.960315",
+          "speed": "0.03569607",
+          "bead": "0.0049813376"
+        },
+        {
+          "case": "0",
+          "tick": "240",
+          "seconds": "0.75938594",
+          "maximum": "0.006918",
+          "x": "-0.0008438659",
+          "y": "1.9530265",
+          "z": "-9.911129",
+          "speed": "0.049528893",
+          "bead": "0.0049905153"
+        },
+        {
+          "case": "0",
+          "tick": "360",
+          "seconds": "0.7636491",
+          "maximum": "0.006474",
+          "x": "-0.0008223716",
+          "y": "1.9517965",
+          "z": "-9.86825",
+          "speed": "0.03636312",
+          "bead": "0.0049946215"
+        },
+        {
+          "case": "0",
+          "tick": "480",
+          "seconds": "0.7631121",
+          "maximum": "0.006773",
+          "x": "-0.000768534",
+          "y": "1.9520224",
+          "z": "-9.838478",
+          "speed": "0.025337769",
+          "bead": "0.0050011673"
+        }
+      ]
+    },
+    {
+      "case": 0,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "0",
+          "tick": "120",
+          "seconds": "0.7115758",
+          "maximum": "0.008062",
+          "x": "-0.00073435175",
+          "y": "1.9923718",
+          "z": "-9.960315",
+          "speed": "0.03569607",
+          "bead": "0.0049813376"
+        },
+        {
+          "case": "0",
+          "tick": "240",
+          "seconds": "0.71044",
+          "maximum": "0.006036",
+          "x": "-0.0008438659",
+          "y": "1.9530265",
+          "z": "-9.911129",
+          "speed": "0.049528893",
+          "bead": "0.0049905153"
+        },
+        {
+          "case": "0",
+          "tick": "360",
+          "seconds": "0.7094151",
+          "maximum": "0.006091",
+          "x": "-0.0008223716",
+          "y": "1.9517965",
+          "z": "-9.86825",
+          "speed": "0.03636312",
+          "bead": "0.0049946215"
+        },
+        {
+          "case": "0",
+          "tick": "480",
+          "seconds": "0.70155996",
+          "maximum": "0.005976",
+          "x": "-0.000768534",
+          "y": "1.9520224",
+          "z": "-9.838478",
+          "speed": "0.025337769",
+          "bead": "0.0050011673"
+        }
+      ]
+    },
+    {
+      "case": 0,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "0",
+          "tick": "120",
+          "seconds": "0.7058977",
+          "maximum": "0.006505",
+          "x": "-0.00073435175",
+          "y": "1.9923718",
+          "z": "-9.960315",
+          "speed": "0.03569607",
+          "bead": "0.0049813376"
+        },
+        {
+          "case": "0",
+          "tick": "240",
+          "seconds": "0.70169383",
+          "maximum": "0.005949",
+          "x": "-0.0008438659",
+          "y": "1.9530265",
+          "z": "-9.911129",
+          "speed": "0.049528893",
+          "bead": "0.0049905153"
+        },
+        {
+          "case": "0",
+          "tick": "360",
+          "seconds": "0.7095759",
+          "maximum": "0.005984",
+          "x": "-0.0008223716",
+          "y": "1.9517965",
+          "z": "-9.86825",
+          "speed": "0.03636312",
+          "bead": "0.0049946215"
+        },
+        {
+          "case": "0",
+          "tick": "480",
+          "seconds": "0.7097669",
+          "maximum": "0.005972",
+          "x": "-0.000768534",
+          "y": "1.9520224",
+          "z": "-9.838478",
+          "speed": "0.025337769",
+          "bead": "0.0050011673"
+        }
+      ]
+    },
+    {
+      "case": 0,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "0",
+          "tick": "120",
+          "seconds": "0.75993603",
+          "maximum": "0.006669",
+          "x": "-0.00073435175",
+          "y": "1.9923718",
+          "z": "-9.960315",
+          "speed": "0.03569607",
+          "bead": "0.0049813376"
+        },
+        {
+          "case": "0",
+          "tick": "240",
+          "seconds": "0.7609452",
+          "maximum": "0.006456",
+          "x": "-0.0008438659",
+          "y": "1.9530265",
+          "z": "-9.911129",
+          "speed": "0.049528893",
+          "bead": "0.0049905153"
+        },
+        {
+          "case": "0",
+          "tick": "360",
+          "seconds": "0.7664349",
+          "maximum": "0.006765",
+          "x": "-0.0008223716",
+          "y": "1.9517965",
+          "z": "-9.86825",
+          "speed": "0.03636312",
+          "bead": "0.0049946215"
+        },
+        {
+          "case": "0",
+          "tick": "480",
+          "seconds": "0.76548696",
+          "maximum": "0.00675",
+          "x": "-0.000768534",
+          "y": "1.9520224",
+          "z": "-9.838478",
+          "speed": "0.025337769",
+          "bead": "0.0050011673"
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "2",
+          "tick": "120",
+          "seconds": "0.83098894",
+          "maximum": "0.008057",
+          "x": "-0.0000014116813",
+          "y": "2.1516414",
+          "z": "101.72768",
+          "speed": "0.5914472",
+          "bead": "0.005031975"
+        },
+        {
+          "case": "2",
+          "tick": "240",
+          "seconds": "0.87661374",
+          "maximum": "0.007939",
+          "x": "-0.00017690829",
+          "y": "2.1002536",
+          "z": "102.136",
+          "speed": "0.297397",
+          "bead": "0.0050357007"
+        },
+        {
+          "case": "2",
+          "tick": "360",
+          "seconds": "0.88163894",
+          "maximum": "0.007474",
+          "x": "-0.000007991577",
+          "y": "2.0814128",
+          "z": "102.39776",
+          "speed": "0.21034297",
+          "bead": "0.0050430764"
+        },
+        {
+          "case": "2",
+          "tick": "480",
+          "seconds": "0.873895",
+          "maximum": "0.00739",
+          "x": "0.000024242952",
+          "y": "2.0866",
+          "z": "102.53392",
+          "speed": "0.06113594",
+          "bead": "0.005033807"
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "2",
+          "tick": "120",
+          "seconds": "0.7906862",
+          "maximum": "0.007509",
+          "x": "-0.0000014116813",
+          "y": "2.1516414",
+          "z": "101.72768",
+          "speed": "0.5914472",
+          "bead": "0.005031975"
+        },
+        {
+          "case": "2",
+          "tick": "240",
+          "seconds": "0.8298288",
+          "maximum": "0.007137",
+          "x": "-0.00017690829",
+          "y": "2.1002536",
+          "z": "102.136",
+          "speed": "0.297397",
+          "bead": "0.0050357007"
+        },
+        {
+          "case": "2",
+          "tick": "360",
+          "seconds": "0.8503632",
+          "maximum": "0.009682",
+          "x": "-0.000007991577",
+          "y": "2.0814128",
+          "z": "102.39776",
+          "speed": "0.21034297",
+          "bead": "0.0050430764"
+        },
+        {
+          "case": "2",
+          "tick": "480",
+          "seconds": "0.8280827",
+          "maximum": "0.006975",
+          "x": "0.000024242952",
+          "y": "2.0866",
+          "z": "102.53392",
+          "speed": "0.06113594",
+          "bead": "0.005033807"
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "2",
+          "tick": "120",
+          "seconds": "0.7917419",
+          "maximum": "0.007543",
+          "x": "-0.0000014116813",
+          "y": "2.1516414",
+          "z": "101.72768",
+          "speed": "0.5914472",
+          "bead": "0.005031975"
+        },
+        {
+          "case": "2",
+          "tick": "240",
+          "seconds": "0.8301528",
+          "maximum": "0.007142",
+          "x": "-0.00017690829",
+          "y": "2.1002536",
+          "z": "102.136",
+          "speed": "0.297397",
+          "bead": "0.0050357007"
+        },
+        {
+          "case": "2",
+          "tick": "360",
+          "seconds": "0.8417702",
+          "maximum": "0.007111",
+          "x": "-0.000007991577",
+          "y": "2.0814128",
+          "z": "102.39776",
+          "speed": "0.21034297",
+          "bead": "0.0050430764"
+        },
+        {
+          "case": "2",
+          "tick": "480",
+          "seconds": "0.82857084",
+          "maximum": "0.006987",
+          "x": "0.000024242952",
+          "y": "2.0866",
+          "z": "102.53392",
+          "speed": "0.06113594",
+          "bead": "0.005033807"
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "2",
+          "tick": "120",
+          "seconds": "0.8333349",
+          "maximum": "0.008002",
+          "x": "-0.0000014116813",
+          "y": "2.1516414",
+          "z": "101.72768",
+          "speed": "0.5914472",
+          "bead": "0.005031975"
+        },
+        {
+          "case": "2",
+          "tick": "240",
+          "seconds": "0.87405515",
+          "maximum": "0.007462",
+          "x": "-0.00017690829",
+          "y": "2.1002536",
+          "z": "102.136",
+          "speed": "0.297397",
+          "bead": "0.0050357007"
+        },
+        {
+          "case": "2",
+          "tick": "360",
+          "seconds": "0.8872401",
+          "maximum": "0.007642",
+          "x": "-0.000007991577",
+          "y": "2.0814128",
+          "z": "102.39776",
+          "speed": "0.21034297",
+          "bead": "0.0050430764"
+        },
+        {
+          "case": "2",
+          "tick": "480",
+          "seconds": "0.8767332",
+          "maximum": "0.007407",
+          "x": "0.000024242952",
+          "y": "2.0866",
+          "z": "102.53392",
+          "speed": "0.06113594",
+          "bead": "0.005033807"
+        }
+      ]
+    },
+    {
+      "case": 8,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "8",
+          "tick": "120",
+          "seconds": "0.828532",
+          "maximum": "0.010652",
+          "x": "25.186865",
+          "y": "1.9979773",
+          "z": "20.236277",
+          "speed": "1.6490775",
+          "bead": "0.03073538"
+        },
+        {
+          "case": "8",
+          "tick": "240",
+          "seconds": "0.929577",
+          "maximum": "0.008013",
+          "x": "25.55842",
+          "y": "2.1988935",
+          "z": "19.624327",
+          "speed": "0.5958324",
+          "bead": "0.012561731"
+        },
+        {
+          "case": "8",
+          "tick": "360",
+          "seconds": "0.93923813",
+          "maximum": "0.007982",
+          "x": "25.799263",
+          "y": "2.171183",
+          "z": "19.203482",
+          "speed": "0.48595244",
+          "bead": "0.009712807"
+        },
+        {
+          "case": "8",
+          "tick": "480",
+          "seconds": "0.919141",
+          "maximum": "0.007959",
+          "x": "26.007292",
+          "y": "2.1093693",
+          "z": "18.863016",
+          "speed": "0.34994513",
+          "bead": "0.008999224"
+        }
+      ]
+    },
+    {
+      "case": 8,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "8",
+          "tick": "120",
+          "seconds": "0.7792321",
+          "maximum": "0.00782",
+          "x": "25.186865",
+          "y": "1.9979773",
+          "z": "20.236277",
+          "speed": "1.6490775",
+          "bead": "0.03073538"
+        },
+        {
+          "case": "8",
+          "tick": "240",
+          "seconds": "0.8527249",
+          "maximum": "0.007318",
+          "x": "25.55842",
+          "y": "2.1988935",
+          "z": "19.624327",
+          "speed": "0.5958324",
+          "bead": "0.012561731"
+        },
+        {
+          "case": "8",
+          "tick": "360",
+          "seconds": "0.8552161",
+          "maximum": "0.007453",
+          "x": "25.799263",
+          "y": "2.171183",
+          "z": "19.203482",
+          "speed": "0.48595244",
+          "bead": "0.009712807"
+        },
+        {
+          "case": "8",
+          "tick": "480",
+          "seconds": "0.8377877",
+          "maximum": "0.007083",
+          "x": "26.007292",
+          "y": "2.1093693",
+          "z": "18.863016",
+          "speed": "0.34994513",
+          "bead": "0.008999224"
+        }
+      ]
+    },
+    {
+      "case": 8,
+      "variant": "caller",
+      "rows": [
+        {
+          "case": "8",
+          "tick": "120",
+          "seconds": "0.7803071",
+          "maximum": "0.007594",
+          "x": "25.186865",
+          "y": "1.9979773",
+          "z": "20.236277",
+          "speed": "1.6490775",
+          "bead": "0.03073538"
+        },
+        {
+          "case": "8",
+          "tick": "240",
+          "seconds": "0.85573316",
+          "maximum": "0.007972",
+          "x": "25.55842",
+          "y": "2.1988935",
+          "z": "19.624327",
+          "speed": "0.5958324",
+          "bead": "0.012561731"
+        },
+        {
+          "case": "8",
+          "tick": "360",
+          "seconds": "0.85669416",
+          "maximum": "0.007399",
+          "x": "25.799263",
+          "y": "2.171183",
+          "z": "19.203482",
+          "speed": "0.48595244",
+          "bead": "0.009712807"
+        },
+        {
+          "case": "8",
+          "tick": "480",
+          "seconds": "0.8389821",
+          "maximum": "0.007097",
+          "x": "26.007292",
+          "y": "2.1093693",
+          "z": "18.863016",
+          "speed": "0.34994513",
+          "bead": "0.008999224"
+        }
+      ]
+    },
+    {
+      "case": 8,
+      "variant": "before",
+      "rows": [
+        {
+          "case": "8",
+          "tick": "120",
+          "seconds": "0.832472",
+          "maximum": "0.010541",
+          "x": "25.186865",
+          "y": "1.9979773",
+          "z": "20.236277",
+          "speed": "1.6490775",
+          "bead": "0.03073538"
+        },
+        {
+          "case": "8",
+          "tick": "240",
+          "seconds": "0.91448396",
+          "maximum": "0.008372",
+          "x": "25.55842",
+          "y": "2.1988935",
+          "z": "19.624327",
+          "speed": "0.5958324",
+          "bead": "0.012561731"
+        },
+        {
+          "case": "8",
+          "tick": "360",
+          "seconds": "0.90723085",
+          "maximum": "0.008416",
+          "x": "25.799263",
+          "y": "2.171183",
+          "z": "19.203482",
+          "speed": "0.48595244",
+          "bead": "0.009712807"
+        },
+        {
+          "case": "8",
+          "tick": "480",
+          "seconds": "0.89136606",
+          "maximum": "0.0088",
+          "x": "26.007292",
+          "y": "2.1093693",
+          "z": "18.863016",
+          "speed": "0.34994513",
+          "bead": "0.008999224"
+        }
+      ]
+    }
+  ],
+  "graphical_abba": [
+    {
+      "variant": "before",
+      "rows": [
+        {
+          "elapsed": "0.502014",
+          "fps": "81.671036",
+          "physics_ms_per_tick": "6.744917",
+          "maximum_update_ms": "23.855999",
+          "focused": "true",
+          "focus_changed": "true"
+        },
+        {
+          "elapsed": "1.007431",
+          "fps": "92.99252",
+          "physics_ms_per_tick": "7.1164923",
+          "maximum_update_ms": "15.61",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "1.512428",
+          "fps": "122.773",
+          "physics_ms_per_tick": "6.9196057",
+          "maximum_update_ms": "7.3250003",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.0185497",
+          "fps": "110.64547",
+          "physics_ms_per_tick": "7.1803994",
+          "maximum_update_ms": "14.871",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.5272274",
+          "fps": "98.29399",
+          "physics_ms_per_tick": "7.1888857",
+          "maximum_update_ms": "15.106",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.0351536",
+          "fps": "100.40832",
+          "physics_ms_per_tick": "7.111114",
+          "maximum_update_ms": "14.943",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.5429738",
+          "fps": "108.30611",
+          "physics_ms_per_tick": "7.037263",
+          "maximum_update_ms": "14.648",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.051193",
+          "fps": "102.31811",
+          "physics_ms_per_tick": "7.0941153",
+          "maximum_update_ms": "14.658999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.5523143",
+          "fps": "95.785255",
+          "physics_ms_per_tick": "7.213116",
+          "maximum_update_ms": "15.0199995",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.0595007",
+          "fps": "96.6113",
+          "physics_ms_per_tick": "7.1621323",
+          "maximum_update_ms": "14.941999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.560713",
+          "fps": "97.76283",
+          "physics_ms_per_tick": "7.175783",
+          "maximum_update_ms": "14.926",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.0761967",
+          "fps": "93.11654",
+          "physics_ms_per_tick": "7.226436",
+          "maximum_update_ms": "14.941999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.577316",
+          "fps": "101.77224",
+          "physics_ms_per_tick": "7.1627326",
+          "maximum_update_ms": "14.860001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.0844126",
+          "fps": "100.57268",
+          "physics_ms_per_tick": "7.151147",
+          "maximum_update_ms": "14.661",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.5859113",
+          "fps": "99.7013",
+          "physics_ms_per_tick": "7.189866",
+          "maximum_update_ms": "15.049001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.101368",
+          "fps": "85.361465",
+          "physics_ms_per_tick": "7.3116775",
+          "maximum_update_ms": "15.098",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.603035",
+          "fps": "87.70741",
+          "physics_ms_per_tick": "7.30705",
+          "maximum_update_ms": "15.168",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.109386",
+          "fps": "78.99659",
+          "physics_ms_per_tick": "7.3309193",
+          "maximum_update_ms": "15.105",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.61173",
+          "fps": "63.70111",
+          "physics_ms_per_tick": "7.5003996",
+          "maximum_update_ms": "15.493",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.120048",
+          "fps": "68.85429",
+          "physics_ms_per_tick": "7.4363604",
+          "maximum_update_ms": "15.359",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.628555",
+          "fps": "66.86266",
+          "physics_ms_per_tick": "7.4453287",
+          "maximum_update_ms": "15.367001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.135506",
+          "fps": "65.095184",
+          "physics_ms_per_tick": "7.453541",
+          "maximum_update_ms": "15.379001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.643766",
+          "fps": "64.92702",
+          "physics_ms_per_tick": "7.4529667",
+          "maximum_update_ms": "15.419",
+          "focused": "true",
+          "focus_changed": "false"
+        }
+      ],
+      "stdout": "Engine: Chev. 454 V8, mode: follow\n\nprofile slope_contacts=2 speed=2.0524533 elapsed=0.502014 fps=81.671036 z=101.47739 y=1.9586921 simulated_seconds=0.5 physics_seconds=0.404695 x=-0.00046139528 sector=Petites bosses physics_ms_per_tick=6.744917 maximum_update_ms=23.855999 focused=true focus_changed=true up=0.9975489\nprofile slope_contacts=2 speed=0.56521314 elapsed=1.007431 fps=92.99252 z=101.73093 y=2.1545656 simulated_seconds=1.0083333 physics_seconds=0.838801 x=-0.000033434684 sector=Petites bosses physics_ms_per_tick=7.1164923 maximum_update_ms=15.61 focused=true focus_changed=false up=0.9987304\nprofile slope_contacts=4 speed=0.39685667 elapsed=1.512428 fps=122.773 z=101.95703 y=2.0815916 simulated_seconds=1.5166667 physics_seconds=1.2608967 x=-0.0002984886 sector=Petites bosses physics_ms_per_tick=6.9196057 maximum_update_ms=7.3250003 focused=true focus_changed=false up=0.99971026\nprofile slope_contacts=4 speed=0.29272127 elapsed=2.0185497 fps=110.64547 z=102.14108 y=2.1005855 simulated_seconds=2.0166667 physics_seconds=1.6917207 x=-0.00018577017 sector=Petites bosses physics_ms_per_tick=7.1803994 maximum_update_ms=14.871 focused=true focus_changed=false up=0.9999417\nprofile slope_contacts=4 speed=0.23778817 elapsed=2.5272274 fps=98.29399 z=102.28156 y=2.0837538 simulated_seconds=2.525 physics_seconds=2.1302428 x=-0.00009284989 sector=Petites bosses physics_ms_per_tick=7.1888857 maximum_update_ms=15.106 focused=true focus_changed=false up=0.99999815\nprofile slope_contacts=4 speed=0.20543063 elapsed=3.0351536 fps=100.40832 z=102.40502 y=2.0815067 simulated_seconds=3.0333333 physics_seconds=2.5640218 x=-0.000008547067 sector=Petites bosses physics_ms_per_tick=7.111114 maximum_update_ms=14.943 focused=true focus_changed=false up=0.99995846\nprofile slope_contacts=4 speed=0.1266364 elapsed=3.5429738 fps=108.30611 z=102.491646 y=2.0855122 simulated_seconds=3.5416667 physics_seconds=2.9932945 x=-0.0000036450656 sector=Petites bosses physics_ms_per_tick=7.037263 maximum_update_ms=14.648 focused=true focus_changed=false up=0.9999067\nprofile slope_contacts=4 speed=0.055987462 elapsed=4.051193 fps=102.31811 z=102.5368 y=2.0865502 simulated_seconds=4.05 physics_seconds=3.426036 x=0.000038980463 sector=Petites bosses physics_ms_per_tick=7.0941153 maximum_update_ms=14.658999 focused=true focus_changed=false up=0.9998839\nprofile slope_contacts=4 speed=0.022085411 elapsed=4.5523143 fps=95.785255 z=102.55392 y=2.0863464 simulated_seconds=4.55 physics_seconds=3.8588233 x=0.0001300797 sector=Petites bosses physics_ms_per_tick=7.213116 maximum_update_ms=15.0199995 focused=true focus_changed=false up=0.9998885\nprofile slope_contacts=4 speed=0.010616865 elapsed=5.0595007 fps=96.6113 z=102.55991 y=2.0859177 simulated_seconds=5.0583334 physics_seconds=4.2957125 x=0.00016954595 sector=Petites bosses physics_ms_per_tick=7.1621323 maximum_update_ms=14.941999 focused=true focus_changed=false up=0.9998949\nprofile slope_contacts=4 speed=0.010499296 elapsed=5.560713 fps=97.76283 z=102.56355 y=2.0853527 simulated_seconds=5.5583334 physics_seconds=4.7262573 x=0.00020496262 sector=Petites bosses physics_ms_per_tick=7.175783 maximum_update_ms=14.926 focused=true focus_changed=false up=0.99989957\nprofile slope_contacts=4 speed=0.018425638 elapsed=6.0761967 fps=93.11654 z=102.57219 y=2.0849643 simulated_seconds=6.075 physics_seconds=5.1742973 x=0.00026278128 sector=Petites bosses physics_ms_per_tick=7.226436 maximum_update_ms=14.941999 focused=true focus_changed=false up=0.99989814\nprofile slope_contacts=4 speed=0.018326147 elapsed=6.577316 fps=101.77224 z=102.58287 y=2.0845666 simulated_seconds=6.575 physics_seconds=5.604063 x=0.00028077938 sector=Petites bosses physics_ms_per_tick=7.1627326 maximum_update_ms=14.860001 focused=true focus_changed=false up=0.99988616\nprofile slope_contacts=4 speed=0.018309994 elapsed=7.0844126 fps=100.57268 z=102.594376 y=2.0840995 simulated_seconds=7.0833335 physics_seconds=6.040281 x=0.00027719315 sector=Petites bosses physics_ms_per_tick=7.151147 maximum_update_ms=14.661 focused=true focus_changed=false up=0.9998748\nprofile slope_contacts=4 speed=0.00670105 elapsed=7.5859113 fps=99.7013 z=102.60001 y=2.0836847 simulated_seconds=7.5833335 physics_seconds=6.471673 x=0.00032154372 sector=Petites bosses physics_ms_per_tick=7.189866 maximum_update_ms=15.049001 focused=true focus_changed=false up=0.9998759\nprofile slope_contacts=4 speed=0.007367762 elapsed=8.101368 fps=85.361465 z=102.60363 y=2.0835197 simulated_seconds=8.1 physics_seconds=6.924997 x=0.00035324966 sector=Petites bosses physics_ms_per_tick=7.3116775 maximum_update_ms=15.098 focused=true focus_changed=false up=0.9998791\nprofile slope_contacts=4 speed=0.0016946633 elapsed=8.603035 fps=87.70741 z=102.60484 y=2.0832942 simulated_seconds=8.6 physics_seconds=7.363419 x=0.00038116064 sector=Petites bosses physics_ms_per_tick=7.30705 maximum_update_ms=15.168 focused=true focus_changed=false up=0.9998801\nprofile slope_contacts=4 speed=0.0010970283 elapsed=9.109386 fps=78.99659 z=102.60476 y=2.0833402 simulated_seconds=9.108334 physics_seconds=7.810604 x=0.00040665804 sector=Petites bosses physics_ms_per_tick=7.3309193 maximum_update_ms=15.105 focused=true focus_changed=false up=0.99988145\nprofile slope_contacts=4 speed=0.0036181328 elapsed=9.61173 fps=63.70111 z=102.604744 y=2.0833087 simulated_seconds=9.608334 physics_seconds=8.260631 x=0.0004059776 sector=Petites bosses physics_ms_per_tick=7.5003996 maximum_update_ms=15.493 focused=true focus_changed=false up=0.9998818\nprofile slope_contacts=4 speed=0.0036118361 elapsed=10.120048 fps=68.85429 z=102.60614 y=2.083199 simulated_seconds=10.116667 physics_seconds=8.714251 x=0.00044853357 sector=Petites bosses physics_ms_per_tick=7.4363604 maximum_update_ms=15.359 focused=true focus_changed=false up=0.99987984\nprofile slope_contacts=4 speed=0.0036419607 elapsed=10.628555 fps=66.86266 z=102.60632 y=2.0832272 simulated_seconds=10.625 physics_seconds=9.168414 x=0.0004792454 sector=Petites bosses physics_ms_per_tick=7.4453287 maximum_update_ms=15.367001 focused=true focus_changed=false up=0.9998806\nprofile slope_contacts=4 speed=0.0035605482 elapsed=11.135506 fps=65.095184 z=102.606865 y=2.083201 simulated_seconds=11.133333 physics_seconds=9.623077 x=0.0004908993 sector=Petites bosses physics_ms_per_tick=7.453541 maximum_update_ms=15.379001 focused=true focus_changed=false up=0.99988014\nprofile slope_contacts=4 speed=0.003639477 elapsed=11.643766 fps=64.92702 z=102.60738 y=2.0831814 simulated_seconds=11.641666 physics_seconds=10.077707 x=0.00048280577 sector=Petites bosses physics_ms_per_tick=7.4529667 maximum_update_ms=15.419 focused=true focus_changed=false up=0.9998796\nrender frames=1082 wall_seconds=12.001464 average_fps=90.15567 longest_frame_ms=35.144 physics_seconds=10.395865 simulated_seconds=12.0\ntruck x=0.0005036138 y=2.0831661 z=102.60759 bead=0.005043187\n"
+    },
+    {
+      "variant": "after",
+      "rows": [
+        {
+          "elapsed": "0.500334",
+          "fps": "125.91588",
+          "physics_ms_per_tick": "6.326624",
+          "maximum_update_ms": "25.196999",
+          "focused": "true",
+          "focus_changed": "true"
+        },
+        {
+          "elapsed": "1.0074902",
+          "fps": "114.36322",
+          "physics_ms_per_tick": "6.9740334",
+          "maximum_update_ms": "14.792",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "1.5092663",
+          "fps": "133.5257",
+          "physics_ms_per_tick": "6.752784",
+          "maximum_update_ms": "7.046",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.0097175",
+          "fps": "119.89187",
+          "physics_ms_per_tick": "7.0014334",
+          "maximum_update_ms": "7.2200003",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.517391",
+          "fps": "120.15585",
+          "physics_ms_per_tick": "6.9973116",
+          "maximum_update_ms": "7.191",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.0174673",
+          "fps": "119.98155",
+          "physics_ms_per_tick": "6.9908514",
+          "maximum_update_ms": "7.1879997",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.5252872",
+          "fps": "120.1213",
+          "physics_ms_per_tick": "6.8854914",
+          "maximum_update_ms": "7.091",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.026037",
+          "fps": "119.82027",
+          "physics_ms_per_tick": "6.8804474",
+          "maximum_update_ms": "7.0639997",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.5346913",
+          "fps": "119.924576",
+          "physics_ms_per_tick": "7.012393",
+          "maximum_update_ms": "7.236",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.0361304",
+          "fps": "119.65585",
+          "physics_ms_per_tick": "7.0546007",
+          "maximum_update_ms": "7.2070003",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.5362506",
+          "fps": "119.970726",
+          "physics_ms_per_tick": "7.042151",
+          "maximum_update_ms": "7.191",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.0363464",
+          "fps": "119.97743",
+          "physics_ms_per_tick": "7.023633",
+          "maximum_update_ms": "7.154",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.5369186",
+          "fps": "119.8631",
+          "physics_ms_per_tick": "7.02105",
+          "maximum_update_ms": "7.198",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.042855",
+          "fps": "120.56814",
+          "physics_ms_per_tick": "7.000083",
+          "maximum_update_ms": "7.216",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.5484695",
+          "fps": "98.889656",
+          "physics_ms_per_tick": "7.2085667",
+          "maximum_update_ms": "16.27",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.056868",
+          "fps": "106.21642",
+          "physics_ms_per_tick": "7.08405",
+          "maximum_update_ms": "14.502",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.565012",
+          "fps": "106.2691",
+          "physics_ms_per_tick": "7.09182",
+          "maximum_update_ms": "14.395",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.072279",
+          "fps": "98.56742",
+          "physics_ms_per_tick": "7.158065",
+          "maximum_update_ms": "14.49",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.5737",
+          "fps": "97.72207",
+          "physics_ms_per_tick": "7.1754003",
+          "maximum_update_ms": "14.528",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.081533",
+          "fps": "92.549576",
+          "physics_ms_per_tick": "7.1879992",
+          "maximum_update_ms": "15.013",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.582127",
+          "fps": "93.889206",
+          "physics_ms_per_tick": "7.1976175",
+          "maximum_update_ms": "14.583",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.089677",
+          "fps": "96.54278",
+          "physics_ms_per_tick": "7.1737695",
+          "maximum_update_ms": "14.596999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.590081",
+          "fps": "93.924286",
+          "physics_ms_per_tick": "7.192018",
+          "maximum_update_ms": "14.596999",
+          "focused": "true",
+          "focus_changed": "false"
+        }
+      ],
+      "stdout": "Engine: Chev. 454 V8, mode: follow\n\nprofile slope_contacts=2 speed=1.8646085 elapsed=0.500334 fps=125.91588 z=101.477196 y=1.9419314 simulated_seconds=0.5083333 physics_seconds=0.38592407 x=-0.00048814295 sector=Petites bosses physics_ms_per_tick=6.326624 maximum_update_ms=25.196999 focused=true focus_changed=true up=0.9972591\nprofile slope_contacts=2 speed=0.5398311 elapsed=1.0074902 fps=114.36322 z=101.73423 y=2.1572704 simulated_seconds=1.0166667 physics_seconds=0.8113401 x=-0.00006364273 sector=Petites bosses physics_ms_per_tick=6.9740334 maximum_update_ms=14.792 focused=true focus_changed=false up=0.99870956\nprofile slope_contacts=4 speed=0.39685667 elapsed=1.5092663 fps=133.5257 z=101.95703 y=2.0815916 simulated_seconds=1.5166667 physics_seconds=1.2165072 x=-0.0002984886 sector=Petites bosses physics_ms_per_tick=6.752784 maximum_update_ms=7.046 focused=true focus_changed=false up=0.99971026\nprofile slope_contacts=4 speed=0.29272127 elapsed=2.0097175 fps=119.89187 z=102.14108 y=2.1005855 simulated_seconds=2.0166667 physics_seconds=1.6365933 x=-0.00018577017 sector=Petites bosses physics_ms_per_tick=7.0014334 maximum_update_ms=7.2200003 focused=true focus_changed=false up=0.9999417\nprofile slope_contacts=4 speed=0.23778817 elapsed=2.517391 fps=120.15585 z=102.28156 y=2.0837538 simulated_seconds=2.525 physics_seconds=2.0634294 x=-0.00009284989 sector=Petites bosses physics_ms_per_tick=6.9973116 maximum_update_ms=7.191 focused=true focus_changed=false up=0.99999815\nprofile slope_contacts=4 speed=0.20679383 elapsed=3.0174673 fps=119.98155 z=102.40322 y=2.0814795 simulated_seconds=3.025 physics_seconds=2.4828804 x=-0.000007250317 sector=Petites bosses physics_ms_per_tick=6.9908514 maximum_update_ms=7.1879997 focused=true focus_changed=false up=0.99995935\nprofile slope_contacts=4 speed=0.1283369 elapsed=3.5252872 fps=120.1213 z=102.490585 y=2.0854661 simulated_seconds=3.5333333 physics_seconds=2.9028952 x=-0.0000030566734 sector=Petites bosses physics_ms_per_tick=6.8854914 maximum_update_ms=7.091 focused=true focus_changed=false up=0.9999071\nprofile slope_contacts=4 speed=0.058109324 elapsed=4.026037 fps=119.82027 z=102.535835 y=2.0865672 simulated_seconds=4.0333333 physics_seconds=3.3157225 x=0.00003274872 sector=Petites bosses physics_ms_per_tick=6.8804474 maximum_update_ms=7.0639997 focused=true focus_changed=false up=0.9998836\nprofile slope_contacts=4 speed=0.0225132 elapsed=4.5346913 fps=119.924576 z=102.55374 y=2.0863483 simulated_seconds=4.5416665 physics_seconds=3.7434776 x=0.00012777507 sector=Petites bosses physics_ms_per_tick=7.012393 maximum_update_ms=7.236 focused=true focus_changed=false up=0.9998883\nprofile slope_contacts=4 speed=0.010875683 elapsed=5.0361304 fps=119.65585 z=102.55981 y=2.0859442 simulated_seconds=5.0416665 physics_seconds=4.166753 x=0.00017043912 sector=Petites bosses physics_ms_per_tick=7.0546007 maximum_update_ms=7.2070003 focused=true focus_changed=false up=0.9998947\nprofile slope_contacts=4 speed=0.010442753 elapsed=5.5362506 fps=119.970726 z=102.563416 y=2.085364 simulated_seconds=5.5416665 physics_seconds=4.5892816 x=0.00020638618 sector=Petites bosses physics_ms_per_tick=7.042151 maximum_update_ms=7.191 focused=true focus_changed=false up=0.99989986\nprofile slope_contacts=4 speed=0.018313872 elapsed=6.0363464 fps=119.97743 z=102.57143 y=2.0849571 simulated_seconds=6.0416665 physics_seconds=5.0106997 x=0.0002586685 sector=Petites bosses physics_ms_per_tick=7.023633 maximum_update_ms=7.154 focused=true focus_changed=false up=0.9998988\nprofile slope_contacts=4 speed=0.018364191 elapsed=6.5369186 fps=119.8631 z=102.58232 y=2.084609 simulated_seconds=6.5416665 physics_seconds=5.4319615 x=0.00028216987 sector=Petites bosses physics_ms_per_tick=7.02105 maximum_update_ms=7.198 focused=true focus_changed=false up=0.9998867\nprofile slope_contacts=4 speed=0.018596964 elapsed=7.042855 fps=120.56814 z=102.59364 y=2.0841448 simulated_seconds=7.05 physics_seconds=5.8589664 x=0.00027451798 sector=Petites bosses physics_ms_per_tick=7.000083 maximum_update_ms=7.216 focused=true focus_changed=false up=0.99987584\nprofile slope_contacts=4 speed=0.0073573524 elapsed=7.5484695 fps=98.889656 z=102.59978 y=2.083691 simulated_seconds=7.55 physics_seconds=6.291481 x=0.0003189603 sector=Petites bosses physics_ms_per_tick=7.2085667 maximum_update_ms=16.27 focused=true focus_changed=false up=0.9998757\nprofile slope_contacts=4 speed=0.007936573 elapsed=8.056868 fps=106.21642 z=102.603325 y=2.0835388 simulated_seconds=8.058333 physics_seconds=6.7236075 x=0.00035589223 sector=Petites bosses physics_ms_per_tick=7.08405 maximum_update_ms=14.502 focused=true focus_changed=false up=0.9998791\nprofile slope_contacts=4 speed=0.0020202869 elapsed=8.565012 fps=106.2691 z=102.60488 y=2.0833018 simulated_seconds=8.566667 physics_seconds=7.156208 x=0.00037927207 sector=Petites bosses physics_ms_per_tick=7.09182 maximum_update_ms=14.395 focused=true focus_changed=false up=0.9998794\nprofile slope_contacts=4 speed=0.0011259454 elapsed=9.072279 fps=98.56742 z=102.60477 y=2.0833504 simulated_seconds=9.075 physics_seconds=7.5928493 x=0.0004038383 sector=Petites bosses physics_ms_per_tick=7.158065 maximum_update_ms=14.49 focused=true focus_changed=false up=0.9998814\nprofile slope_contacts=4 speed=0.0032571848 elapsed=9.5737 fps=97.72207 z=102.60474 y=2.0833087 simulated_seconds=9.575 physics_seconds=8.023373 x=0.00040144927 sector=Petites bosses physics_ms_per_tick=7.1754003 maximum_update_ms=14.528 focused=true focus_changed=false up=0.99988186\nprofile slope_contacts=4 speed=0.0036401306 elapsed=10.081533 fps=92.549576 z=102.60611 y=2.0832095 simulated_seconds=10.083333 physics_seconds=8.461843 x=0.000448872 sector=Petites bosses physics_ms_per_tick=7.1879992 maximum_update_ms=15.013 focused=true focus_changed=false up=0.9998797\nprofile slope_contacts=4 speed=0.0036721404 elapsed=10.582127 fps=93.889206 z=102.6063 y=2.0832272 simulated_seconds=10.583333 physics_seconds=8.893697 x=0.00047682237 sector=Petites bosses physics_ms_per_tick=7.1976175 maximum_update_ms=14.583 focused=true focus_changed=false up=0.9998806\nprofile slope_contacts=4 speed=0.0036606216 elapsed=11.089677 fps=96.54278 z=102.60682 y=2.0832043 simulated_seconds=11.091666 physics_seconds=9.331297 x=0.0004934947 sector=Petites bosses physics_ms_per_tick=7.1737695 maximum_update_ms=14.596999 focused=true focus_changed=false up=0.99988025\nprofile slope_contacts=4 speed=0.0036170157 elapsed=11.590081 fps=93.924286 z=102.607346 y=2.0831814 simulated_seconds=11.591666 physics_seconds=9.762817 x=0.00048193242 sector=Petites bosses physics_ms_per_tick=7.192018 maximum_update_ms=14.596999 focused=true focus_changed=false up=0.9998796\nrender frames=1338 wall_seconds=12.006842 average_fps=111.43646 longest_frame_ms=38.133 physics_seconds=10.122163 simulated_seconds=12.008333\ntruck x=0.00050352927 y=2.0831661 z=102.60759 bead=0.005041042\n"
+    },
+    {
+      "variant": "after",
+      "rows": [
+        {
+          "elapsed": "0.50737196",
+          "fps": "147.82054",
+          "physics_ms_per_tick": "6.276918",
+          "maximum_update_ms": "12.969",
+          "focused": "true",
+          "focus_changed": "true"
+        },
+        {
+          "elapsed": "1.014381",
+          "fps": "110.45168",
+          "physics_ms_per_tick": "7.0141973",
+          "maximum_update_ms": "14.918",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "1.5144994",
+          "fps": "119.971695",
+          "physics_ms_per_tick": "6.8206496",
+          "maximum_update_ms": "7.241",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.0165856",
+          "fps": "119.50144",
+          "physics_ms_per_tick": "7.0446",
+          "maximum_update_ms": "7.162",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.5174913",
+          "fps": "119.78296",
+          "physics_ms_per_tick": "7.0289335",
+          "maximum_update_ms": "7.126",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.026357",
+          "fps": "117.90923",
+          "physics_ms_per_tick": "7.01459",
+          "maximum_update_ms": "14.191",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.5265484",
+          "fps": "111.95701",
+          "physics_ms_per_tick": "6.975866",
+          "maximum_update_ms": "14.529",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.0319214",
+          "fps": "120.70293",
+          "physics_ms_per_tick": "6.928573",
+          "maximum_update_ms": "7.0290003",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.5344076",
+          "fps": "119.4063",
+          "physics_ms_per_tick": "7.0475845",
+          "maximum_update_ms": "7.218",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.035921",
+          "fps": "113.655876",
+          "physics_ms_per_tick": "7.0657163",
+          "maximum_update_ms": "14.222",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.536156",
+          "fps": "107.94925",
+          "physics_ms_per_tick": "7.069734",
+          "maximum_update_ms": "14.332",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.037025",
+          "fps": "109.80917",
+          "physics_ms_per_tick": "7.07085",
+          "maximum_update_ms": "14.268",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.546156",
+          "fps": "104.098946",
+          "physics_ms_per_tick": "7.0715413",
+          "maximum_update_ms": "14.168",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.054126",
+          "fps": "102.368256",
+          "physics_ms_per_tick": "7.077376",
+          "maximum_update_ms": "14.2890005",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.561059",
+          "fps": "102.57767",
+          "physics_ms_per_tick": "7.084737",
+          "maximum_update_ms": "14.325001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.069165",
+          "fps": "106.27704",
+          "physics_ms_per_tick": "7.09731",
+          "maximum_update_ms": "14.318",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.570506",
+          "fps": "99.73253",
+          "physics_ms_per_tick": "7.1312346",
+          "maximum_update_ms": "14.4210005",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.079262",
+          "fps": "98.27855",
+          "physics_ms_per_tick": "7.164721",
+          "maximum_update_ms": "14.486",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.5867815",
+          "fps": "94.57812",
+          "physics_ms_per_tick": "7.1794105",
+          "maximum_update_ms": "14.544",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.094815",
+          "fps": "98.41861",
+          "physics_ms_per_tick": "7.1746554",
+          "maximum_update_ms": "14.561999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.595578",
+          "fps": "97.8501",
+          "physics_ms_per_tick": "7.1743827",
+          "maximum_update_ms": "14.464001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.104254",
+          "fps": "96.3285",
+          "physics_ms_per_tick": "7.190721",
+          "maximum_update_ms": "14.516",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.611808",
+          "fps": "92.600815",
+          "physics_ms_per_tick": "7.1847863",
+          "maximum_update_ms": "14.5460005",
+          "focused": "true",
+          "focus_changed": "false"
+        }
+      ],
+      "stdout": "Engine: Chev. 454 V8, mode: follow\n\nprofile slope_contacts=2 speed=1.8646085 elapsed=0.50737196 fps=147.82054 z=101.477196 y=1.9419314 simulated_seconds=0.5083333 physics_seconds=0.382892 x=-0.00048814295 sector=Petites bosses physics_ms_per_tick=6.276918 maximum_update_ms=12.969 focused=true focus_changed=true up=0.9972591\nprofile slope_contacts=2 speed=0.5398311 elapsed=1.014381 fps=110.45168 z=101.73423 y=2.1572704 simulated_seconds=1.0166667 physics_seconds=0.81075805 x=-0.00006364273 sector=Petites bosses physics_ms_per_tick=7.0141973 maximum_update_ms=14.918 focused=true focus_changed=false up=0.99870956\nprofile slope_contacts=4 speed=0.39685667 elapsed=1.5144994 fps=119.971695 z=101.95703 y=2.0815916 simulated_seconds=1.5166667 physics_seconds=1.2199974 x=-0.0002984886 sector=Petites bosses physics_ms_per_tick=6.8206496 maximum_update_ms=7.241 focused=true focus_changed=false up=0.99971026\nprofile slope_contacts=4 speed=0.29272127 elapsed=2.0165856 fps=119.50144 z=102.14108 y=2.1005855 simulated_seconds=2.0166667 physics_seconds=1.6426739 x=-0.00018577017 sector=Petites bosses physics_ms_per_tick=7.0446 maximum_update_ms=7.162 focused=true focus_changed=false up=0.9999417\nprofile slope_contacts=4 speed=0.23823608 elapsed=2.5174913 fps=119.78296 z=102.279495 y=2.0839713 simulated_seconds=2.5166667 physics_seconds=2.0644097 x=-0.000097280834 sector=Petites bosses physics_ms_per_tick=7.0289335 maximum_update_ms=7.126 focused=true focus_changed=false up=0.99999785\nprofile slope_contacts=4 speed=0.20679383 elapsed=3.026357 fps=117.90923 z=102.40322 y=2.0814795 simulated_seconds=3.025 physics_seconds=2.4922993 x=-0.000007250317 sector=Petites bosses physics_ms_per_tick=7.01459 maximum_update_ms=14.191 focused=true focus_changed=false up=0.99995935\nprofile slope_contacts=4 speed=0.13066487 elapsed=3.5265484 fps=111.95701 z=102.48946 y=2.0854187 simulated_seconds=3.525 physics_seconds=2.910852 x=-0.0000024617912 sector=Petites bosses physics_ms_per_tick=6.975866 maximum_update_ms=14.529 focused=true focus_changed=false up=0.99990743\nprofile slope_contacts=4 speed=0.058109324 elapsed=4.0319214 fps=120.70293 z=102.535835 y=2.0865672 simulated_seconds=4.0333333 physics_seconds=3.3334947 x=0.00003274872 sector=Petites bosses physics_ms_per_tick=6.928573 maximum_update_ms=7.0290003 focused=true focus_changed=false up=0.9998836\nprofile slope_contacts=4 speed=0.02298216 elapsed=4.5344076 fps=119.4063 z=102.553566 y=2.0863502 simulated_seconds=4.5333333 physics_seconds=3.7563496 x=0.0001253792 sector=Petites bosses physics_ms_per_tick=7.0475845 maximum_update_ms=7.218 focused=true focus_changed=false up=0.9998882\nprofile slope_contacts=4 speed=0.010805616 elapsed=5.035921 fps=113.655876 z=102.55975 y=2.0859575 simulated_seconds=5.0333333 physics_seconds=4.180293 x=0.00017029728 sector=Petites bosses physics_ms_per_tick=7.0657163 maximum_update_ms=14.222 focused=true focus_changed=false up=0.9998946\nprofile slope_contacts=4 speed=0.010517791 elapsed=5.536156 fps=107.94925 z=102.56335 y=2.0853696 simulated_seconds=5.5333333 physics_seconds=4.604475 x=0.00020487278 sector=Petites bosses physics_ms_per_tick=7.069734 maximum_update_ms=14.332 focused=true focus_changed=false up=0.9999\nprofile slope_contacts=4 speed=0.018329922 elapsed=6.037025 fps=109.80917 z=102.57124 y=2.0849562 simulated_seconds=6.0333333 physics_seconds=5.028727 x=0.00025859094 sector=Petites bosses physics_ms_per_tick=7.07085 maximum_update_ms=14.268 focused=true focus_changed=false up=0.9998989\nprofile slope_contacts=4 speed=0.018364191 elapsed=6.546156 fps=104.098946 z=102.58232 y=2.084609 simulated_seconds=6.5416665 physics_seconds=5.460092 x=0.00028216987 sector=Petites bosses physics_ms_per_tick=7.0715413 maximum_update_ms=14.168 focused=true focus_changed=false up=0.9998867\nprofile slope_contacts=4 speed=0.018596964 elapsed=7.054126 fps=102.368256 z=102.59364 y=2.0841448 simulated_seconds=7.05 physics_seconds=5.8918123 x=0.00027451798 sector=Petites bosses physics_ms_per_tick=7.077376 maximum_update_ms=14.2890005 focused=true focus_changed=false up=0.99987584\nprofile slope_contacts=4 speed=0.0071993186 elapsed=7.561059 fps=102.57767 z=102.59984 y=2.0836897 simulated_seconds=7.5583334 physics_seconds=6.323981 x=0.00031928628 sector=Petites bosses physics_ms_per_tick=7.084737 maximum_update_ms=14.325001 focused=true focus_changed=false up=0.9998758\nprofile slope_contacts=4 speed=0.00785016 elapsed=8.069165 fps=106.27704 z=102.603386 y=2.083535 simulated_seconds=8.066667 physics_seconds=6.756915 x=0.00035515736 sector=Petites bosses physics_ms_per_tick=7.09731 maximum_update_ms=14.318 focused=true focus_changed=false up=0.9998791\nprofile slope_contacts=4 speed=0.0020202869 elapsed=8.570506 fps=99.73253 z=102.60488 y=2.0833018 simulated_seconds=8.566667 physics_seconds=7.184789 x=0.00037927207 sector=Petites bosses physics_ms_per_tick=7.1312346 maximum_update_ms=14.4210005 focused=true focus_changed=false up=0.9998794\nprofile slope_contacts=4 speed=0.0011259454 elapsed=9.079262 fps=98.27855 z=102.60477 y=2.0833504 simulated_seconds=9.075 physics_seconds=7.6218357 x=0.0004038383 sector=Petites bosses physics_ms_per_tick=7.164721 maximum_update_ms=14.486 focused=true focus_changed=false up=0.9998814\nprofile slope_contacts=4 speed=0.0032336998 elapsed=9.5867815 fps=94.57812 z=102.60474 y=2.0833087 simulated_seconds=9.583333 physics_seconds=8.05978 x=0.00040342266 sector=Petites bosses physics_ms_per_tick=7.1794105 maximum_update_ms=14.544 focused=true focus_changed=false up=0.99988186\nprofile slope_contacts=4 speed=0.0036276944 elapsed=10.094815 fps=98.41861 z=102.60612 y=2.0832064 simulated_seconds=10.091666 physics_seconds=8.497433 x=0.00044850144 sector=Petites bosses physics_ms_per_tick=7.1746554 maximum_update_ms=14.561999 focused=true focus_changed=false up=0.9998797\nprofile slope_contacts=4 speed=0.0036297957 elapsed=10.595578 fps=97.8501 z=102.6063 y=2.0832272 simulated_seconds=10.591666 physics_seconds=8.9278965 x=0.00047623963 sector=Petites bosses physics_ms_per_tick=7.1743827 maximum_update_ms=14.464001 focused=true focus_changed=false up=0.9998806\nprofile slope_contacts=4 speed=0.003614872 elapsed=11.104254 fps=96.3285 z=102.606834 y=2.0832033 simulated_seconds=11.1 physics_seconds=9.3665285 x=0.0004933432 sector=Petites bosses physics_ms_per_tick=7.190721 maximum_update_ms=14.516 focused=true focus_changed=false up=0.9998802\nprofile slope_contacts=4 speed=0.0036005515 elapsed=11.611808 fps=92.600815 z=102.60735 y=2.0831814 simulated_seconds=11.608334 physics_seconds=9.804801 x=0.00048021678 sector=Petites bosses physics_ms_per_tick=7.1847863 maximum_update_ms=14.5460005 focused=true focus_changed=false up=0.9998796\nrender frames=1304 wall_seconds=12.002814 average_fps=108.64119 longest_frame_ms=25.93 physics_seconds=10.143534 simulated_seconds=12.0\ntruck x=0.0005036138 y=2.0831661 z=102.60759 bead=0.005043187\n"
+    },
+    {
+      "variant": "before",
+      "rows": [
+        {
+          "elapsed": "0.5021169",
+          "fps": "129.45192",
+          "physics_ms_per_tick": "6.5615506",
+          "maximum_update_ms": "13.0390005",
+          "focused": "true",
+          "focus_changed": "true"
+        },
+        {
+          "elapsed": "1.0040488",
+          "fps": "81.684364",
+          "physics_ms_per_tick": "7.3307505",
+          "maximum_update_ms": "15.587",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "1.5043123",
+          "fps": "101.94636",
+          "physics_ms_per_tick": "7.139183",
+          "maximum_update_ms": "14.614",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.0045516",
+          "fps": "77.96273",
+          "physics_ms_per_tick": "7.345",
+          "maximum_update_ms": "14.910999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "2.5120351",
+          "fps": "78.82038",
+          "physics_ms_per_tick": "7.3341155",
+          "maximum_update_ms": "14.919",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.012895",
+          "fps": "81.8592",
+          "physics_ms_per_tick": "7.313983",
+          "maximum_update_ms": "14.9140005",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "3.5198135",
+          "fps": "88.77175",
+          "physics_ms_per_tick": "7.2469015",
+          "maximum_update_ms": "14.681001",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.0290837",
+          "fps": "86.398186",
+          "physics_ms_per_tick": "7.2738523",
+          "maximum_update_ms": "14.808",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "4.539083",
+          "fps": "74.509796",
+          "physics_ms_per_tick": "7.4002447",
+          "maximum_update_ms": "15.284",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.0625134",
+          "fps": "53.493195",
+          "physics_ms_per_tick": "7.6032414",
+          "maximum_update_ms": "22.897",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "5.5857472",
+          "fps": "43.957386",
+          "physics_ms_per_tick": "7.6876454",
+          "maximum_update_ms": "26.074",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.1088696",
+          "fps": "40.14352",
+          "physics_ms_per_tick": "7.6001263",
+          "maximum_update_ms": "23.232",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "6.6208577",
+          "fps": "41.016586",
+          "physics_ms_per_tick": "7.570065",
+          "maximum_update_ms": "22.896",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.1300025",
+          "fps": "45.17377",
+          "physics_ms_per_tick": "7.5929995",
+          "maximum_update_ms": "23.194",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "7.630065",
+          "fps": "43.994545",
+          "physics_ms_per_tick": "7.616417",
+          "maximum_update_ms": "23.139",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.131024",
+          "fps": "39.92335",
+          "physics_ms_per_tick": "7.6551495",
+          "maximum_update_ms": "23.369",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "8.646311",
+          "fps": "52.398193",
+          "physics_ms_per_tick": "7.5275474",
+          "maximum_update_ms": "22.821",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.163653",
+          "fps": "50.25679",
+          "physics_ms_per_tick": "7.5856457",
+          "maximum_update_ms": "22.914",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "9.671581",
+          "fps": "41.34452",
+          "physics_ms_per_tick": "7.6253276",
+          "maximum_update_ms": "24.126999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.195724",
+          "fps": "45.788857",
+          "physics_ms_per_tick": "7.6189356",
+          "maximum_update_ms": "22.991",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "10.704936",
+          "fps": "47.13146",
+          "physics_ms_per_tick": "7.617279",
+          "maximum_update_ms": "23.1",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.229583",
+          "fps": "45.744957",
+          "physics_ms_per_tick": "7.6162853",
+          "maximum_update_ms": "23.081999",
+          "focused": "true",
+          "focus_changed": "false"
+        },
+        {
+          "elapsed": "11.746283",
+          "fps": "48.38407",
+          "physics_ms_per_tick": "7.6058054",
+          "maximum_update_ms": "22.994001",
+          "focused": "true",
+          "focus_changed": "false"
+        }
+      ],
+      "stdout": "Engine: Chev. 454 V8, mode: follow\n\nprofile slope_contacts=2 speed=2.0524533 elapsed=0.5021169 fps=129.45192 z=101.47739 y=1.9586921 simulated_seconds=0.5 physics_seconds=0.39369303 x=-0.00046139528 sector=Petites bosses physics_ms_per_tick=6.5615506 maximum_update_ms=13.0390005 focused=true focus_changed=true up=0.9975489\nprofile slope_contacts=2 speed=0.5914472 elapsed=1.0040488 fps=81.684364 z=101.72768 y=2.1516414 simulated_seconds=1.0 physics_seconds=0.83353794 x=-0.0000014116813 sector=Petites bosses physics_ms_per_tick=7.3307505 maximum_update_ms=15.587 focused=true focus_changed=false up=0.9987588\nprofile slope_contacts=4 speed=0.41103667 elapsed=1.5043123 fps=101.94636 z=101.95028 y=2.0837917 simulated_seconds=1.5 physics_seconds=1.2618886 x=-0.00030483556 sector=Petites bosses physics_ms_per_tick=7.139183 maximum_update_ms=14.614 focused=true focus_changed=false up=0.999698\nprofile slope_contacts=4 speed=0.297397 elapsed=2.0045516 fps=77.96273 z=102.136 y=2.1002536 simulated_seconds=2.0 physics_seconds=1.7025888 x=-0.00017690829 sector=Petites bosses physics_ms_per_tick=7.345 maximum_update_ms=14.910999 focused=true focus_changed=false up=0.99993926\nprofile slope_contacts=4 speed=0.23883505 elapsed=2.5120351 fps=78.82038 z=102.27743 y=2.0841992 simulated_seconds=2.5083334 physics_seconds=2.14997 x=-0.000100555975 sector=Petites bosses physics_ms_per_tick=7.3341155 maximum_update_ms=14.919 focused=true focus_changed=false up=0.9999976\nprofile slope_contacts=4 speed=0.20882657 elapsed=3.012895 fps=81.8592 z=102.39962 y=2.0814323 simulated_seconds=3.0083334 physics_seconds=2.5888095 x=-0.000006995964 sector=Petites bosses physics_ms_per_tick=7.313983 maximum_update_ms=14.9140005 focused=true focus_changed=false up=0.99996126\nprofile slope_contacts=4 speed=0.13266377 elapsed=3.5198135 fps=88.77175 z=102.488335 y=2.0853689 simulated_seconds=3.5166667 physics_seconds=3.030871 x=-0.0000023102184 sector=Petites bosses physics_ms_per_tick=7.2469015 maximum_update_ms=14.681001 focused=true focus_changed=false up=0.9999078\nprofile slope_contacts=4 speed=0.058939774 elapsed=4.0290837 fps=86.398186 z=102.535355 y=2.086576 simulated_seconds=4.025 physics_seconds=3.4745762 x=0.000029869247 sector=Petites bosses physics_ms_per_tick=7.2738523 maximum_update_ms=14.808 focused=true focus_changed=false up=0.9998835\nprofile slope_contacts=4 speed=0.02298216 elapsed=4.539083 fps=74.509796 z=102.553566 y=2.0863502 simulated_seconds=4.5333333 physics_seconds=3.925991 x=0.0001253792 sector=Petites bosses physics_ms_per_tick=7.4002447 maximum_update_ms=15.284 focused=true focus_changed=false up=0.9998882\nprofile slope_contacts=4 speed=0.010823341 elapsed=5.0625134 fps=53.493195 z=102.55986 y=2.0859308 simulated_seconds=5.05 physics_seconds=4.3973913 x=0.00017012734 sector=Petites bosses physics_ms_per_tick=7.6032414 maximum_update_ms=22.897 focused=true focus_changed=false up=0.9998948\nprofile slope_contacts=4 speed=0.010574725 elapsed=5.5857472 fps=43.957386 z=102.56362 y=2.0853467 simulated_seconds=5.5666666 physics_seconds=4.8740263 x=0.00020455063 sector=Petites bosses physics_ms_per_tick=7.6876454 maximum_update_ms=26.074 focused=true focus_changed=false up=0.99989945\nprofile slope_contacts=4 speed=0.018474797 elapsed=6.1088696 fps=40.14352 z=102.57258 y=2.0849683 simulated_seconds=6.0916667 physics_seconds=5.352833 x=0.00026373065 sector=Petites bosses physics_ms_per_tick=7.6001263 maximum_update_ms=23.232 focused=true focus_changed=false up=0.99989766\nprofile slope_contacts=4 speed=0.018333357 elapsed=6.6208577 fps=41.016586 z=102.58349 y=2.0845246 simulated_seconds=6.608333 physics_seconds=5.8221765 x=0.0002787603 sector=Petites bosses physics_ms_per_tick=7.570065 maximum_update_ms=22.896 focused=true focus_changed=false up=0.9998857\nprofile slope_contacts=4 speed=0.018178564 elapsed=7.1300025 fps=45.17377 z=102.59492 y=2.084049 simulated_seconds=7.116667 physics_seconds=6.2853494 x=0.00027907902 sector=Petites bosses physics_ms_per_tick=7.5929995 maximum_update_ms=23.194 focused=true focus_changed=false up=0.999874\nprofile slope_contacts=4 speed=0.0057833795 elapsed=7.630065 fps=43.994545 z=102.600235 y=2.0836742 simulated_seconds=7.616667 physics_seconds=6.7423334 x=0.0003240672 sector=Petites bosses physics_ms_per_tick=7.616417 maximum_update_ms=23.139 focused=true focus_changed=false up=0.99987626\nprofile slope_contacts=4 speed=0.0073051774 elapsed=8.131024 fps=39.92335 z=102.60375 y=2.083512 simulated_seconds=8.116667 physics_seconds=7.201642 x=0.00035219805 sector=Petites bosses physics_ms_per_tick=7.6551495 maximum_update_ms=23.369 focused=true focus_changed=false up=0.9998791\nprofile slope_contacts=4 speed=0.0012194451 elapsed=8.646311 fps=52.398193 z=102.604805 y=2.0832896 simulated_seconds=8.633333 physics_seconds=7.66835 x=0.00038223842 sector=Petites bosses physics_ms_per_tick=7.5275474 maximum_update_ms=22.821 focused=true focus_changed=false up=0.9998806\nprofile slope_contacts=4 speed=0.0010322216 elapsed=9.163653 fps=50.25679 z=102.60475 y=2.083322 simulated_seconds=9.15 physics_seconds=8.138659 x=0.00040880384 sector=Petites bosses physics_ms_per_tick=7.5856457 maximum_update_ms=22.914 focused=true focus_changed=false up=0.9998816\nprofile slope_contacts=4 speed=0.0037063719 elapsed=9.671581 fps=41.34452 z=102.60491 y=2.0833087 simulated_seconds=9.658334 physics_seconds=8.603804 x=0.00041922752 sector=Petites bosses physics_ms_per_tick=7.6253276 maximum_update_ms=24.126999 focused=true focus_changed=false up=0.9998817\nprofile slope_contacts=4 speed=0.003557687 elapsed=10.195724 fps=45.788857 z=102.60615 y=2.0831842 simulated_seconds=10.183333 physics_seconds=9.083798 x=0.00045169695 sector=Petites bosses physics_ms_per_tick=7.6189356 maximum_update_ms=22.991 focused=true focus_changed=false up=0.99988014\nprofile slope_contacts=4 speed=0.0035802796 elapsed=10.704936 fps=47.13146 z=102.6064 y=2.0832212 simulated_seconds=10.691667 physics_seconds=9.548453 x=0.00048400555 sector=Petites bosses physics_ms_per_tick=7.617279 maximum_update_ms=23.1 focused=true focus_changed=false up=0.9998806\nprofile slope_contacts=4 speed=0.0036567615 elapsed=11.229583 fps=45.744957 z=102.606964 y=2.0831995 simulated_seconds=11.216666 physics_seconds=10.02828 x=0.0004937515 sector=Petites bosses physics_ms_per_tick=7.6162853 maximum_update_ms=23.081999 focused=true focus_changed=false up=0.9998801\nprofile slope_contacts=4 speed=0.0035943575 elapsed=11.746283 fps=48.38407 z=102.60748 y=2.0831814 simulated_seconds=11.733334 physics_seconds=10.49984 x=0.00048843713 sector=Petites bosses physics_ms_per_tick=7.6058054 maximum_update_ms=22.994001 focused=true focus_changed=false up=0.9998796\nrender frames=745 wall_seconds=12.020607 average_fps=61.976902 longest_frame_ms=28.944 physics_seconds=10.7513685 simulated_seconds=12.008333\ntruck x=0.00050352927 y=2.0831661 z=102.60759 bead=0.005041042\n"
+    }
+  ],
+  "validation": [
+    "Four contact scheduling tests: real overlap on independent contacts, sequential shared-dynamic fallback, exact positions and velocities across worker counts, heavy/light and enable changes. Debug tests and standalone Release passed.",
+    "Two existing soft prediction scheduling tests passed with calling-thread participation.",
+    "Six consumer soft contact tests passed in Debug and standalone Release: inertia, momentum, friction torque, filters, thin-wall CCD, conservative sweeps and worker equivalence.",
+    "All eleven module fixtures passed floor and bead assertions for 480 ticks each.",
+    "Eight loaded ramp approaches passed for 1200 ticks each.",
+    "Direction controls passed both senses, pitch orientations, final-drive ratios and alternating physical reaction.",
+    "Scene checks passed input, reset, tire meshes, HUD, travel camera and rollover horizon.",
+    "Compiler zig build check and zig build test passed; 311 native language cases passed in 122 files."
+  ],
+  "measurement_limits": [
+    "No builds, tests or profiler ran during the retained timed comparisons. OS background activity, temperature and CPU scheduling are not controlled.",
+    "Physical runs use balanced before/after/after/before order. The first 120 ticks of each run are excluded from mean computation. All four physical checkpoints match exactly in position, speed and bead error. The committed harness adds floor/bead validation after the timed step; timed binaries precede that assertion addition.",
+    "Graphical runs use the same 1280x800 scene, active engine sound and twelve-second brake-held small-roller scenario. Only intervals after two seconds with focused=true and focus_changed=false are used for foreground summaries.",
+    "Graphical baseline is non-stationary: first/last medians96.20/47.76FPS. Candidate medians119.74/105.19FPS; minima92.55/92.60FPS. These are local observations, not a general FPS speedup or a guaranteed floor.",
+    "Fixed-step headroom and catch-up amplify FPS changes relative to fixed-work physics cost.",
+    "Pure Silex scheduling applies across targets; correctness and performance measured here only on macOS ARM64. No x64 or other OS performance claim.",
+    "Rejected endpoint box filtering and earlier small geometry-cache experiments are excluded; retained solver equations and settings are unchanged."
+  ]
+}

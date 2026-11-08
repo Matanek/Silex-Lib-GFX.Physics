@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Résoudre en parallèle les contacts souples 3D lorsque les corps souples ne partagent aucun candidat rigide dynamique ; conserver l’ordre séquentiel dès qu’un corps mobile est partagé. Le thread appelant participe à la prédiction et aux contacts indépendants. Les paramètres du solveur, les impulsions et les résultats physiques restent identiques. [Mesures Debug locales et limites](Benchmarks/Baselines/2026-11-08-soft-contact-workers-debug.json).
+
 - Ajouter `VehicleTransmission3DSettings.clutch_torque_limit` : capacité optionnelle en N·m côté moteur, modulée par la prise d’embrayage, en traction comme en retenue. Le couple borné est commun aux équations du moteur et des roues ; `null` conserve le comportement précédent.
 
 - En temps contrôlé, les plugins 2D/3D terminent tous les pas fixes dus avant le rendu ; la limite de rattrapage reste réservée au temps réel et une soustraction sans progrès est refusée.

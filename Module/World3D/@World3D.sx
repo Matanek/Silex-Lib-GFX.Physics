@@ -1162,9 +1162,14 @@ public class World3D {
                     executor.submit_parallel(self.soft_bodies.count(),job).complete()
                 } else { job.execute(0,self.soft_bodies.count()) }
             } else { job.execute(0,self.soft_bodies.count()) }
-            for slot in self.soft_bodies {
-                if var body = slot {
-                    if body.settings.is_enabled { finish_soft_substep3d(body,colliders,sub_delta,self.current_gravity) }
+            if heavy.count()>=2 {
+                finish_independent_soft_contacts3d(self.parallel_executor!,self.soft_bodies,colliders,
+                    sub_delta,self.current_gravity,self.parallel_observer)
+            } else {
+                for slot in self.soft_bodies {
+                    if var body = slot {
+                        if body.settings.is_enabled { finish_soft_substep3d(body,colliders,sub_delta,self.current_gravity) }
+                    }
                 }
             }
             step++

@@ -6,7 +6,7 @@
     "fr": "Physique 2D, géométrie 3D et contacts avec friction et restitution en Silex natif pour GFX."
   },
   "authors": ["Matanek"],
-  "requires": { "silex": ">=0.47.1" },
+  "requires": { "silex": ">=0.48.0" },
   "dependencies": {
     "GFX": "^0.40.0",
     "GFX.Application": "^0.1.0",

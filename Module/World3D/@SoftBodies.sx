@@ -137,10 +137,8 @@ func soft_axial_may_touch3d(queries:@AxialPointQuery3D[],start:Math.Vec3,end:Mat
     return false
 }
 
-func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], delta:float, gravity:Math.Vec3) {
-    var body = state
-    let radius = body.settings.vertex_radius
-    let sphere = Sphere3D(radius)
+func soft_contact_candidates3d(body:SoftBodyState3D,colliders:SoftCollider3D[]) SoftCollider3D[] {
+    let radius=body.settings.vertex_radius
     var lower=body.particles[0].position;var upper=lower
     for particle in body.particles {
         let first=particle.position;let second=particle.previous
@@ -153,6 +151,17 @@ func finish_soft_substep3d(state:SoftBodyState3D, colliders:SoftCollider3D[], de
         if body.settings.collision_filter.allows(collider.body.collision_filter) &&
             linear_sweeps_overlap3d(body_bounds,collider.bounds) { candidates.append(collider) }
     }
+    return candidates
+}
+
+func finish_soft_substep3d(state:SoftBodyState3D,colliders:SoftCollider3D[],delta:float,gravity:Math.Vec3) {
+    finish_soft_contacts3d(state,soft_contact_candidates3d(state,colliders),delta,gravity)
+}
+
+func finish_soft_contacts3d(state:SoftBodyState3D,candidates:SoftCollider3D[],delta:float,gravity:Math.Vec3) {
+    var body=state
+    let radius=body.settings.vertex_radius
+    let sphere=Sphere3D(radius)
     var index = 0
     while index < body.particles.count() {
         var particle = body.particles[index]
@@ -306,10 +315,64 @@ func predict_heavy_soft_bodies3d(executor:Threading.Executor,heavy:SoftBodyState
     var handles:Threading.JobHandle<SoftPrediction3D>[]=[]
     var index=0
     for body in heavy {
+        if index==heavy.count()-1 { break }
         handles.append(executor.submit(SoftPrediction3D(body:body,gravity:gravity,delta:delta,
             fraction:fraction,index:index,observer:observer)))
         index++
     }
     for body in light { predict_and_constrain(body,gravity,delta,fraction) }
+    // The caller participates instead of waiting while an extra job is queued.
+    var caller=SoftPrediction3D(body:heavy[heavy.count()-1],gravity:gravity,delta:delta,
+        fraction:fraction,index:heavy.count()-1,observer:observer)
+    caller.execute()
+    for handle in handles { var finished=handle.complete() }
+}
+
+// Only dynamic rigid velocities are written by contact resolution. Disjoint
+// dynamic candidate sets preserve the original per-particle impulse order.
+struct SoftContacts3D:Threading.Job {
+    var body:SoftBodyState3D
+    var candidates:SoftCollider3D[]
+    let gravity:Math.Vec3
+    let delta:float
+    let index:int
+    var observer:StepObserver3D?
+    func execute() {
+        if var observer=self.observer { observer.executing(6,self.index,self.index+1) }
+        finish_soft_contacts3d(self.body,self.candidates,self.delta,self.gravity)
+    }
+}
+
+func finish_independent_soft_contacts3d(executor:Threading.Executor,bodies:SoftBodyState3D?[],
+    colliders:SoftCollider3D[],delta:float,gravity:Math.Vec3,observer:StepObserver3D?) {
+    var jobs:SoftContacts3D[]=[]
+    for index,slot in bodies.indexed() {
+        if var body=slot { if body.settings.is_enabled {
+            jobs.append(SoftContacts3D(body:body,candidates:soft_contact_candidates3d(body,colliders),
+                gravity:gravity,delta:delta,index:index,observer:observer))
+        } }
+    }
+    var independent=true
+    for index,job in jobs.indexed() {
+        for collider in job.candidates {
+            if collider.body.body_type!=BodyType3D.dynamic { continue }
+            for previous in 0...index { for other in jobs[previous].candidates {
+                if other.body==collider.body { independent=false }
+            } }
+        }
+    }
+    if !independent {
+        for job in jobs { var serial=job;serial.execute() }
+        return
+    }
+    var handles:Threading.JobHandle<SoftContacts3D>[]=[]
+    var caller_index:int?=null
+    for index,job in jobs.indexed() {
+        if job.body.particles.count()>=64 {
+            if caller_index==null { caller_index=index }
+            else { handles.append(executor.submit(job)) }
+        } else { var serial=job;serial.execute() }
+    }
+    if let index=caller_index { var caller=jobs[index];caller.execute() }
     for handle in handles { var finished=handle.complete() }
 }

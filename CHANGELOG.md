@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Resolve soft 3D contacts in parallel when soft bodies share no dynamic rigid candidate; retain sequential order whenever a moving body is shared. The calling thread participates in prediction and independent contacts. Solver settings, impulses and physical results remain unchanged. [Local Debug measurements and limits](Benchmarks/Baselines/2026-11-08-soft-contact-workers-debug.json).
+
 - Add `VehicleTransmission3DSettings.clutch_torque_limit`: optional engine-side capacity in N·m, scaled by engagement in both drive and braking. The bounded torque is shared by the engine and wheel equations; `null` preserves previous behavior.
 
 - In controlled time, 2D/3D plugins finish every due fixed step before rendering; catch-up limits still apply to realtime loops and non-progressing subtraction is rejected.
