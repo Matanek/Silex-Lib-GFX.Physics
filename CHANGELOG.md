@@ -5,6 +5,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 ## [Unreleased]
 
+- Fix EPA non-convergence when a thin rim contacts a module’s side edge: classify visible faces using wide vertex orientations instead of their rounded normals. The hull stays closed; penetration depth, normal and surface witnesses are checked on the captured case, rigid transforms, scales and reversed shape order.
+
 - Resolve soft 3D contacts in parallel when soft bodies share no dynamic rigid candidate; retain sequential order whenever a moving body is shared. The calling thread participates in prediction and independent contacts. Solver settings, impulses and physical results remain unchanged. [Local Debug measurements and limits](Benchmarks/Baselines/2026-11-08-soft-contact-workers-debug.json).
 
 - Add `VehicleTransmission3DSettings.clutch_torque_limit`: optional engine-side capacity in N·m, scaled by engagement in both drive and braking. The bounded torque is shared by the engine and wheel equations; `null` preserves previous behavior.

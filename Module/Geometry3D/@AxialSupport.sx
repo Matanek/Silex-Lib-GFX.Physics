@@ -429,7 +429,11 @@ func support_penetration3d(first:SupportPlacement3D, second:SupportPlacement3D, 
         var edges:SupportEdge3D[] = []; index = 0
         while index < faces.count() {
             let existing = faces[index]
-            if existing.normal.dot(next.difference.subtract(points[existing.a].difference)) > 0.0 {
+            // A rounded face normal can misclassify a nearly coplanar support
+            // and tear the horizon. Classify the represented vertices before
+            // rounding their edge differences, as in the GJK seed predicates.
+            if support_orientation64_3d(points[existing.a].difference,points[existing.b].difference,
+                points[existing.c].difference,next.difference) > 0.0 {
                 support_horizon3d(edges, existing.a, existing.b); support_horizon3d(edges, existing.b, existing.c); support_horizon3d(edges, existing.c, existing.a)
                 faces.take(index)
             } else { index++ }

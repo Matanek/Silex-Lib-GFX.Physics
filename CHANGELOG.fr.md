@@ -6,6 +6,8 @@ puis traduits dans `CHANGELOG.md`.
 
 ## [Unreleased]
 
+- Corriger une non-convergence EPA sur le contact d’une jante fine avec le rebord latéral d’un module : déterminer les faces visibles par une orientation des sommets en précision large, sans utiliser leur normale arrondie. L’enveloppe conserve sa fermeture ; profondeur de pénétration, normale et témoins de surface sont vérifiés sur le cas capturé, ses transformations, ses échelles et l’ordre inverse des formes.
+
 - Résoudre en parallèle les contacts souples 3D lorsque les corps souples ne partagent aucun candidat rigide dynamique ; conserver l’ordre séquentiel dès qu’un corps mobile est partagé. Le thread appelant participe à la prédiction et aux contacts indépendants. Les paramètres du solveur, les impulsions et les résultats physiques restent identiques. [Mesures Debug locales et limites](Benchmarks/Baselines/2026-11-08-soft-contact-workers-debug.json).
 
 - Ajouter `VehicleTransmission3DSettings.clutch_torque_limit` : capacité optionnelle en N·m côté moteur, modulée par la prise d’embrayage, en traction comme en retenue. Le couple borné est commun aux équations du moteur et des roues ; `null` conserve le comportement précédent.

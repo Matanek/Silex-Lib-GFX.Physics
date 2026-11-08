@@ -1,0 +1,45 @@
+use GFX.Physics
+use STD.Math
+
+func verify(common:Physics.Transform3D,scale:float=1.0,offset:float=0.0,reversed:bool=false) {
+    let box=Physics.ShapePlacement3D(Physics.Shape3D.box(Physics.Box3D(Math.Vec3(9.0,0.8,0.91).multiply(scale))),
+        Physics.Transform3D(common.point(Math.Vec3(17.0,3.0,55.0).multiply(scale)),
+            common.rotation.multiply(Math.Quat.angle_axis(-0.3366748,Math.Vec3.right()))))
+    let flange=Physics.ShapePlacement3D(Physics.Shape3D.cylinder(Physics.Cylinder3D(0.78*scale,0.0175*scale)),
+        Physics.Transform3D(common.point(Math.Vec3(22.03422+offset,2.706904,54.572342).multiply(scale)),
+            common.rotation.multiply(Math.Quat(-0.19558617,-0.40861028,-0.036948033,-0.8907404))))
+    var first=box;var second=flange
+    var normal=common.vector(Math.Vec3(0.99906161,-0.014308012,-0.040880037))
+    if reversed { first=flange;second=box;normal=normal.negated() }
+    let result=Physics.Geometry3D.distance(first,second)
+    // Independent float64 minimization of the box X/-Z edge and cylinder
+    // support intervals gives 0.24379065 m at an angle of 0.043325175 rad.
+    // Small X translations retain this edge; their linear depth change is
+    // offset*cos(angle), with second-order error below the query tolerance.
+    assert(Math.abs(result.separation+(0.24379065-offset*0.99906161)*scale)<0.0002*scale)
+    assert(result.normal.dot(normal)>0.9999)
+    assert(result.second_point.subtract(result.first_point).subtract(result.normal.multiply(result.separation)).length()<0.0002*scale)
+    let radius=0.00001*scale
+    let a=Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(radius)),Physics.Transform3D(result.first_point))
+    let b=Physics.ShapePlacement3D(Physics.Shape3D.sphere(Physics.Sphere3D(radius)),Physics.Transform3D(result.second_point))
+    assert(Math.abs(Physics.Geometry3D.distance(a,first).separation+radius)<0.0002*scale)
+    assert(Math.abs(Physics.Geometry3D.distance(b,second).separation+radius)<0.0002*scale)
+}
+
+func variants() {
+    let poses:Physics.Transform3D[]=[Physics.Transform3D(),
+        Physics.Transform3D(Math.Vec3(4.0,2.0,-3.0),Math.Quat.angle_axis(0.37,Math.Vec3(1.0,2.0,3.0).normalized())),
+        Physics.Transform3D(Math.Vec3(-5.0,12.0,8.0),Math.Quat.angle_axis(1.1,Math.Vec3.back()))]
+    let scales:float[]=[0.01,1.0,1000.0];let offsets:float[]=[-0.001,0.0,0.001]
+    for scale in scales { for pose in poses { for offset in offsets {
+        verify(pose,scale,offset);verify(pose,scale,offset,reversed:true)
+    } } }
+}
+
+test "captured thin flange preserves a closed EPA hull and analytic contact" { verify(Physics.Transform3D()) }
+test "EPA horizon retains penetration normal and surface witnesses under poses scales order and motion" { variants() }
+
+func main() {
+    verify(Physics.Transform3D());variants()
+    print("EPA horizon checks passed: captured flange, analytic depth and transformed surface witnesses")
+}
