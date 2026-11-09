@@ -4,7 +4,9 @@ Ce journal commence à 0.7.0 et couvre les changements depuis le tag 0.6.0.
 Les changements futurs sont consignés sous `## [Unreleased]` avant publication,
 puis traduits dans `CHANGELOG.md`.
 
-## [Unreleased]
+## [0.8.0] - 2026-11-09
+
+- Les balayages de sphère démarrant à l’intérieur d’une boîte rendent la normale sortante de la paroi la plus proche, y compris sur les deux côtés et après transformation de la boîte.
 
 - Corriger une non-convergence EPA sur le contact d’une jante fine avec le rebord latéral d’un module : déterminer les faces visibles par une orientation des sommets en précision large, sans utiliser leur normale arrondie. L’enveloppe conserve sa fermeture ; profondeur de pénétration, normale et témoins de surface sont vérifiés sur le cas capturé, ses transformations, ses échelles et l’ordre inverse des formes.
 
@@ -135,9 +137,8 @@ puis traduits dans `CHANGELOG.md`.
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
   ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
   anciens appels stockant un résultat et propagations deviennent explicites.
-  Cette révision requiert la toolchain de développement avec cette sémantique
-  de `try` ; sa publication doit coordonner les versions du compilateur et des
-  packages.
+  Cette version requiert Silex 0.48.0 ou supérieur et les versions coordonnées
+  de ses dépendances.
 
 - Les charnières portées par un corps tournant transportent leur couple mémorisé dans le repère courant et conservent des axes cohérents pendant le pas. Une épaule swing/twist et un coude motorisés sous gravité sont qualifiés à 60/120 Hz contre Jolt, avec budgets, réactions et bilans séparés par phase.
 

@@ -3,7 +3,9 @@
 This log starts with 0.7.0 and covers changes since tag 0.6.0. Future changes are recorded under `## [Unreleased]` before publication,
 with French authored first in `CHANGELOG.fr.md`.
 
-## [Unreleased]
+## [0.8.0] - 2026-11-09
+
+- Sphere sweeps starting inside a box return the outward normal of its nearest wall, including both sides and transformed boxes.
 
 - Fix EPA non-convergence when a thin rim contacts a module’s side edge: classify visible faces using wide vertex orientations instead of their rounded normals. The hull stays closed; penetration depth, normal and surface witnesses are checked on the captured case, rigid transforms, scales and reversed shape order.
 
@@ -133,9 +135,8 @@ with French authored first in `CHANGELOG.fr.md`.
 
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
-  storing results and propagating failures are made explicit. This revision
-  requires the development toolchain with these `try` semantics; publication
-  must coordinate compiler and package versions.
+  storing results and propagating failures are made explicit. This version
+  requires Silex 0.48.0 or newer and the coordinated dependency versions.
 
 - Hinges carried by a rotating body transport cached torque into the current frame and retain consistent axes throughout the step. A gravity-loaded swing/twist shoulder and motorized elbow are qualified against Jolt at 60/120 Hz with budgets, reactions and split-phase balances.
 

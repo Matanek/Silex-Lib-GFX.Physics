@@ -1,6 +1,6 @@
 {
   "name": "GFX.Physics",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": {
     "en": "Optional native Silex 2D physics, 3D geometry and material contact response for GFX.",
     "fr": "Physique 2D, géométrie 3D et contacts avec friction et restitution en Silex natif pour GFX."
@@ -8,12 +8,12 @@
   "authors": ["Matanek"],
   "requires": { "silex": ">=0.48.0" },
   "dependencies": {
-    "GFX": "^0.40.0",
-    "GFX.Application": "^0.1.0",
-    "GFX.Canvas": "^0.4.0",
-    "GFX.ECS": "^0.2.0",
-    "GFX.Scene2D": "^0.3.0",
-    "GFX.Scene3D": "^0.3.0",
-    "STD": "^0.22.0"
+    "GFX": "^0.41.0",
+    "GFX.Application": "^0.2.0",
+    "GFX.Canvas": "^0.5.0",
+    "GFX.ECS": "^0.3.0",
+    "GFX.Scene2D": "^0.4.0",
+    "GFX.Scene3D": "^0.4.0",
+    "STD": "^0.23.0"
   }
 }

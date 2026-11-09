@@ -112,7 +112,8 @@ func sphere_shape_cast3d(cast:SphereCast3D, target:ShapePlacement3D) CastResult3
     if start.separation <= 0.0 {
         var normal = start.normal.negated()
         match target.shape() {
-            box(_) => { if start.separation <= -cast.sphere.radius { normal = start.normal } }
+            // Convex interior queries retain an exit normal; sphere/box
+            // distance already uses the pair-oriented inward normal.
             convex(_) => { if start.separation <= -cast.sphere.radius { normal = start.normal } }
             else => {}
         }

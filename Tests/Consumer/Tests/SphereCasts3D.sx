@@ -115,6 +115,26 @@ func initial_cases() {
         Math.Vec3(0.2, 0.0, 0.0), Math.Vec3.right()), Physics.ShapePlacement3D(shapes[2])), 0.0,
         Math.Vec3(0.5, 0.0, 0.0), Math.Vec3.right())
 }
+func initial_box_normals() {
+    let box = Physics.Shape3D.box(Physics.Box3D(Math.Vec3(1.0)))
+    let poses:Physics.Transform3D[] = [Physics.Transform3D(), Physics.Transform3D(
+        Math.Vec3(2.0, -1.0, 3.0), Math.Quat.angle_axis(0.6, Math.Vec3.up()))]
+    for pose in poses {
+        let positions:float[] = [-0.2, 0.2]
+        for position in positions {
+            var sign = 1.0
+            if position < 0.0 { sign = -1.0 }
+            let outward = pose.vector(Math.Vec3(sign, 0.0, 0.0))
+            let hit = Physics.Geometry3D.sphere_cast(Physics.SphereCast3D(
+                Physics.Sphere3D(0.5), pose.point(Math.Vec3(position, 0.0, 0.0)), outward),
+                Physics.ShapePlacement3D(box, pose))
+            assert(hit.hit && hit.fraction == 0.0)
+            assert(hit.normal.nearly_equal(outward, 0.0005))
+            assert(hit.point.nearly_equal(pose.point(Math.Vec3(sign * 0.5, 0.0, 0.0)), 0.0005))
+        }
+    }
+}
+
 func transformed_cases() {
     var variant = 0
     let scales:float[] = [0.1, 1.0, 10.0]
@@ -170,7 +190,7 @@ func world_cases() {
 test "sphere sweep covers primitive sides and capsule caps" { primitive_cases() }
 test "sphere sweep distinguishes corners tangencies misses and endpoints" { corner_tangent_cases() }
 test "sphere sweep covers bilateral triangles and stable mesh faces" { triangle_cases() }
-test "sphere sweep reports initial overlap without a world step" { initial_cases() }
+test "sphere sweep reports initial overlap without a world step" { initial_cases(); initial_box_normals() }
 test "sphere sweep preserves scaled rotated compensated child poses" { transformed_cases() }
 test "sphere world query respects filters exclusion ties and snapshot lifetime" { world_cases() }
 
